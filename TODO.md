@@ -56,3 +56,58 @@ at different points in its history, then watches what happens.
    revenue, to decide between using AI and no AI.
 6. [ ] **Next steps**: choose engine/tech stack, MVP scope (human mode, a few
    eras), and art style.
+
+## Tuesday, Oct 27, 2026, 1:30 PM IST: Casual Android game research
+
+Status: **not started**. Research is on hold until Tuesday, like the item above.
+
+### The idea (as described)
+
+Research how to build simple but addictive, high-grossing casual games for
+Android, thinking like an expert, highly successful solo or small-team
+developer. The user calls these "casual platformers".
+
+- **Reference games (all on Android)**: Rumble Beavers, The War for Survival,
+  Supermarket Tycoon Empire, Last Human: Final Stand, Hero Wars: Alliance.
+- **Why they work**: the concepts are simple to build but addictive to play.
+- **Monetization**: players spend a lot on upgrades, mostly when they have to
+  make a split-second decision.
+- **User's view of the success factors**:
+  - Smoothness: everything runs very smoothly.
+  - Animations.
+  - Surprise.
+  - Fast decision-making.
+  - Replayability.
+  - Huge numbers of bullets and explosions on screen.
+  - Lots of upgrades.
+  - Upgrades that can be combined into new ones.
+
+### Agenda for Tuesday
+
+1. [ ] **Check the reference games**: confirm each title, its developer and its
+   real genre. Several may not be platformers (for example idle tycoon, RPG,
+   or survivor-like shooter), so agree on which genre we are actually building.
+   Collect public data on installs, revenue and ratings.
+2. [ ] **Break down each game**: core loop, session length, progression and meta
+   progression, upgrade and merge/combination systems, surprise mechanics,
+   monetization (IAP, rewarded ads, offers timed to decision points, passes),
+   FTUE/onboarding, LiveOps, and how their ads compare with the real gameplay.
+3. [ ] **Test the success factors**: check the user's list above against
+   evidence, and add what is missing (for example retention D1/D7/D30, ad
+   creatives and CPI, meta progression, difficulty curve).
+4. [ ] **Store policy and ethics**: Google Play rules on random rewards and odds
+   disclosure, and on misleading ads. Regional pricing (India included).
+   Monetize without dark patterns that get games banned or refunded.
+5. [ ] **Tech for a solo developer**: engine choice (for example Unity, Godot,
+   Defold), and how to keep hundreds of bullets and explosions at a steady 60 FPS
+   on low-end Android phones (object pooling, batching/instancing). APK size.
+6. [ ] **Claude can do it all?**: what Claude can do (research, design,
+   code, testing, balancing) and what needs outside tools, assets or people
+   (art, animation, sound, ad creatives, store publishing, user acquisition).
+7. [ ] **Concepts**: 3 to 5 original game concepts that combine these factors,
+   rated for addictiveness, replayability, revenue potential and build effort.
+8. [ ] **Next steps**: pick one concept, MVP scope, a short prototype, and a cheap
+   test of the ad creatives (CPI) before committing to a full build.
+
+Note: this starts 30 minutes after the Civilization Tech review above. Decide
+whether to run them back to back or move one.
