@@ -140,8 +140,9 @@ version. No code changes needed.
   (body only), `rotor`.
 - **Hero and boss:** `hero`, `boss`, `boss_turret`.
 - **Pickups:** `nuke`, `freeze`, `vacuum`, `medkit`.
+- **Ground:** `ground`, an opaque seamless tile (512×512) repeated every 512 world pixels.
 
-**Now real:** all 15 above, AI-generated with Higgsfield (GPT Image 2.5), then cropped and resized; `hero` and the pickups are 64×64 because the game draws them at texture size.
+**Now real:** all 16 above, AI-generated with Higgsfield (GPT Image 2.5), then cropped and resized (the ground made seamless); `hero` and the pickups are 64×64 because the game draws them at texture size.
 
 ## Controls
 - **Move:** drag anywhere. The joystick appears where you touch.

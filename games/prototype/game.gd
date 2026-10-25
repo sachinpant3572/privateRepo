@@ -16,6 +16,7 @@ const Overlay := preload("res://overlay.gd")
 const STRIDE := 12  # Floats per instance: 8 for the Transform2D, 4 for the color.
 const CELL := 64.0
 const GRID_PAD := 200.0
+const WORLD_BOUNDS := 1.0e7  # Culling bounds for the MultiMesh layers; the world itself is endless.
 const STAGE_TIME := 300.0
 const BOSS_HP := 9000.0
 const BOSS_RADIUS := 62.0
@@ -345,6 +346,10 @@ func _build_scene() -> void:
 	ground.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ground_mat = ShaderMaterial.new()
 	ground_mat.shader = preload("res://ground.gdshader")
+	var ground_tex := Art.sprite("ground")
+	if ground_tex != null:
+		ground_mat.set_shader_parameter("ground_tex", ground_tex)
+		ground_mat.set_shader_parameter("use_tex", true)
 	ground.material = ground_mat
 	world.add_child(ground)
 	var low := Overlay.new()
@@ -421,6 +426,10 @@ func _layer(tex: Texture2D, radius: float, additive: bool, glow_modulate: Color)
 	mm.transform_format = MultiMesh.TRANSFORM_2D
 	mm.use_colors = true
 	mm.mesh = _quad(radius)
+	# The buffers are written straight to the RenderingServer, which never
+	# recomputes the bounds, so without this the layer is culled once the
+	# camera leaves the start area.
+	mm.custom_aabb = AABB(Vector3(-WORLD_BOUNDS, -WORLD_BOUNDS, -1.0), Vector3(WORLD_BOUNDS * 2.0, WORLD_BOUNDS * 2.0, 2.0))
 	var inst := MultiMeshInstance2D.new()
 	inst.multimesh = mm
 	inst.texture = tex
@@ -1730,7 +1739,7 @@ func _update_telegraphs(dt: float) -> void:
 					var aim := ((tg[2] as Vector2) - start).normalized()
 					_ebullet(start + aim * 40.0, aim * 650.0, tg[5], 9.0)
 					_muzzle(start + aim * 44.0, aim, Color(1.0, 0.7, 0.3), 26.0)
-					for k in 4:
+					for _j in 4:
 						_vfx(start + aim * 44.0, aim.rotated(randf_range(-0.8, 0.8)) * randf_range(20.0, 70.0), 0.9, 10.0, 26.0, Color(0.5, 0.48, 0.45, 0.5), Color(0.25, 0.25, 0.25, 0.0), false)
 					sfx.play("boom", 1.4, -8.0)
 			telegraphs.remove_at(k)
