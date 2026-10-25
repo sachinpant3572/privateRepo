@@ -9,13 +9,13 @@ extends Node
 
 const TIERS := {
 	"Low": {"glow": 0.0, "glow_strength": 0.0, "trails": false, "sparks": 4, "rings": 0, "background": 0.0, "post": false, "fps_cap": 30},
-	"Medium": {"glow": 0.35, "glow_strength": 0.9, "trails": false, "sparks": 6, "rings": 0, "background": 0.5, "post": false, "fps_cap": 60},
-	"High": {"glow": 0.5, "glow_strength": 1.1, "trails": true, "sparks": 10, "rings": 150, "background": 1.0, "post": false, "fps_cap": 60},
-	"Ultra": {"glow": 1.0, "glow_strength": 1.3, "trails": true, "sparks": 16, "rings": 400, "background": 1.0, "post": true, "fps_cap": 0},
+	"Medium": {"glow": 0.35, "glow_strength": 0.7, "trails": false, "sparks": 6, "rings": 0, "background": 0.5, "post": false, "fps_cap": 60},
+	"High": {"glow": 0.5, "glow_strength": 0.8, "trails": true, "sparks": 10, "rings": 150, "background": 1.0, "post": false, "fps_cap": 60},
+	"Ultra": {"glow": 1.0, "glow_strength": 0.9, "trails": true, "sparks": 16, "rings": 400, "background": 1.0, "post": true, "fps_cap": 0},
 }
 const ORDER := ["Low", "Medium", "High", "Ultra"]
-const ABERRATION := 0.004
-const ABERRATION_SHAKE := 0.05
+const ABERRATION := 0.0025
+const ABERRATION_SHAKE := 0.01
 
 var tier: Dictionary = TIERS["Ultra"]
 var glow_scale := 0.0

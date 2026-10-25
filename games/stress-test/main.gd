@@ -9,9 +9,11 @@ extends Node2D
 const ENEMY_RADIUS := 11.0
 const BULLET_RADIUS := 4.0
 const PARTICLE_RADIUS := 3.0
-const ENEMY_SPEED := 60.0
-const ENEMY_HP := 3
-const HIT_COOLDOWN := 0.08
+const ENEMY_SPEED := 90.0
+# Enough health that enemies push into the screen before dying, so the
+# explosions happen in view rather than at the edges.
+const ENEMY_HP := 24
+const HIT_COOLDOWN := 0.1
 const BULLET_SPEED := 560.0
 const BULLET_LIFE := 1.5
 const BULLET_STREAMS := 6
@@ -139,8 +141,8 @@ func _ready() -> void:
 	smoke = "--smoke" in args or shots_dir != ""
 	world = Node2D.new()
 	add_child(world)
-	enemy_mm = _make_layer(_circle_texture(64, 0.62, 0.35), ENEMY_RADIUS, false, Color(0.35, 0.35, 0.35))
-	bullet_mm = _make_layer(_circle_texture(32, 0.35, 0.0), BULLET_RADIUS, true, Color.WHITE)
+	enemy_mm = _make_layer(_circle_texture(64, 0.62, 0.35), ENEMY_RADIUS, false, Color(0.45, 0.45, 0.45))
+	bullet_mm = _make_layer(_circle_texture(32, 0.35, 0.0), BULLET_RADIUS, true, Color(0.5, 0.5, 0.5))
 	particle_mm = _make_layer(_circle_texture(16, 0.0, 0.0), PARTICLE_RADIUS, true, Color.WHITE)
 	ring_mm = _make_layer(_ring_texture(64), RING_RADIUS, true, Color.WHITE)
 	player_sprite = Sprite2D.new()
@@ -472,7 +474,7 @@ func _hit(j: int) -> void:
 		return
 	kills += 1
 	_burst(e_pos[j])
-	trauma = minf(trauma + 0.004, 0.3)
+	trauma = minf(trauma + 0.002, 0.25)
 	_spawn_enemy(j, false)
 
 
@@ -855,7 +857,7 @@ func _run_smoke() -> void:
 	print("SMOKE: start")
 	_set_quality("Ultra")
 	_start(Mode.FIXED, 2000, 4000)
-	await _frames(180)
+	await _frames(360)
 	print("SMOKE: fixed enemies=%d bullets=%d particles=%d kills=%d logic_ms=%.2f" % [e_count, b_count, p_count, kills, sim_ms])
 	if not _check(e_count == 2000 and b_count > 1000 and kills > 0, "fixed load is running"):
 		return
@@ -886,7 +888,7 @@ func _run_shots(dir: String) -> void:
 	for tier_name in FX.ORDER:
 		_set_quality(tier_name)
 		_start(Mode.FIXED, 1000, 2000)
-		await _frames(150)
+		await _frames(420)
 		await RenderingServer.frame_post_draw
 		var path := dir.path_join("%s.png" % tier_name.to_lower())
 		get_viewport().get_texture().get_image().save_png(path)
