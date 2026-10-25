@@ -49,6 +49,18 @@ const DESCS := {
 	"crit": "+5% crit chance and +10% crit damage per level.",
 }
 
+# After level 8 an item keeps coming back as a Limit Break, with no cap.
+const LIMIT_WEAPON_DESC := "+12% damage and +4% fire rate per stack. Every 4th stack adds a projectile."
+const LIMIT_DESCS := {
+	"halo": "+12% damage per stack. Every 4th stack adds a blade.",
+	"overclock": "+3% fire rate for every weapon.",
+	"titan": "+10 max HP, and +1 armor every 2nd stack.",
+	"magnet": "+10% pickup range.",
+	"adrenaline": "+2% move speed (up to 15 stacks).",
+	"explosive": "Bigger, stronger kill explosions every 2nd stack.",
+	"crit": "+2% crit chance and +10% crit damage.",
+}
+
 # Weapon at level 8 + its paired power = evolution (at the next Power Chest).
 const EVOLUTIONS := {
 	"rifle": {"power": "overclock", "name": "Storm Rifle", "desc": "A constant stream that pierces everything."},
@@ -104,6 +116,19 @@ static func spawn_weights(t: float) -> PackedFloat32Array:
 	if t < 210.0:
 		return PackedFloat32Array([0.5, 0.15, 0.15, 0.0, 0.1, 0.1])
 	return PackedFloat32Array([0.4, 0.15, 0.15, 0.0, 0.15, 0.15])
+
+
+## Limit Break stacks on top of a weapon's level-8 (or evolved) stats.
+static func limit_break(st: Dictionary, n: int) -> void:
+	if n <= 0:
+		return
+	st["dmg"] = float(st["dmg"]) * (1.0 + 0.12 * n)
+	if st.has("cd"):
+		st["cd"] = maxf(0.06, float(st["cd"]) / (1.0 + 0.04 * n))
+	var extra := int(n / 4.0)
+	for key in ["count", "chains", "bombs"]:
+		if st.has(key):
+			st[key] = int(st[key]) + extra
 
 
 static func weapon_stats(id: String, l: int, evolved: bool) -> Dictionary:

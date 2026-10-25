@@ -19,6 +19,7 @@ const GRID_PAD := 200.0
 const WORLD_BOUNDS := 1.0e7  # Culling bounds for the MultiMesh layers; the world itself is endless.
 const STAGE_TIME := 300.0
 const BOSS_HP := 9000.0
+const BOSS_CAP := 0.02  # Share of the boss's HP per second above which damage tapers off.
 const BOSS_RADIUS := 62.0
 const BOSS_SCALE := 0.8
 const BOSS_TURRETS := [Vector2(40, -34), Vector2(40, 34), Vector2(-36, 0)]
@@ -118,6 +119,8 @@ var save := ConfigFile.new()
 var weapons := {}  # id -> level
 var powers := {}  # id -> level
 var evolved := {}  # weapon id -> true
+var limit := {}  # id -> Limit Break stacks bought after level 8
+var big_mult := 1.0  # Extra HP for Juggernauts, tanks and helicopters against strong builds.
 var w_timer := {}
 var w_stats := {}
 var halo_angle := 0.0
@@ -250,6 +253,8 @@ var boss_spawned := false
 var boss_dead_t := -1.0
 var boss_pos := Vector2.ZERO
 var boss_hp := 0.0
+var boss_max := BOSS_HP
+var boss_rate := 0.0  # Recent damage taken, decaying over about a second.
 var boss_ang := 0.0
 var boss_mode := "move"
 var boss_timer := 0.0
@@ -571,6 +576,8 @@ func _start(auto: bool) -> void:
 	weapons = {"rifle": 1}
 	powers = {}
 	evolved = {}
+	limit = {}
+	big_mult = 1.0
 	w_timer = {}
 	bonus_dmg = 0.0
 	third_left = 3
@@ -896,6 +903,8 @@ func _spawn_enemy(ty: int) -> void:
 	e_pos[i] = _spawn_point()
 	e_ang[i] = 0.0
 	e_hp[i] = t_hp[ty] * (1.0 + 0.2 * t / 60.0) * hp_mult
+	if ty >= Data.ELITE:
+		e_hp[i] *= big_mult
 	e_flash[i] = 0.0
 	e_timer[i] = t_fire[ty] * randf()
 	e_halo[i] = 0.0
@@ -1126,6 +1135,8 @@ func _kill(j: int) -> void:
 			coins = 2 + randi() % 3
 		_:
 			coins = 1 if randf() < 0.08 else 0
+	if big:
+		coins = int(coins * sqrt(big_mult))  # Tougher kills pay more.
 	for k in coins:
 		_coin(p + Vector2(randf_range(-20.0, 20.0), randf_range(-20.0, 20.0)))
 	if not big and randf() < PICKUP_CHANCE:
@@ -1222,7 +1233,11 @@ func _enemy_blast(p: Vector2, radius: float, dmg: float) -> void:
 func _spawn_boss() -> void:
 	boss_spawned = true
 	boss_on = true
-	boss_hp = BOSS_HP
+	# The Colossus is built to match you: strong builds face a bigger health
+	# bar, so the last fight is never over in a second.
+	boss_max = BOSS_HP * (1.0 + maxf(0.0, _power_score() - 16.0) / 5.0)
+	boss_hp = boss_max
+	boss_rate = 0.0
 	boss_pos = player + Vector2(0.0, -view.y * 0.55)
 	boss_ang = PI * 0.5
 	boss_mode = "move"
@@ -1230,7 +1245,8 @@ func _spawn_boss() -> void:
 	boss_cycle = 0
 	boss_flash = 0.0
 	boss_node.visible = true
-	hud.show_banner("BOSS: COLOSSUS SIEGE TANK")
+	var threat := boss_max / BOSS_HP
+	hud.show_banner("BOSS: COLOSSUS SIEGE TANK" if threat < 1.05 else "BOSS: COLOSSUS SIEGE TANK  ·  THREAT x%.1f" % threat)
 	hud.set_boss(true, 1.0)
 	sfx.play("alarm")
 
@@ -1241,8 +1257,9 @@ func _update_boss(dt: float) -> void:
 	var to := player - boss_pos
 	var d := to.length()
 	var dir := to / maxf(d, 0.001)
-	var phase2 := boss_hp < BOSS_HP * 0.5
+	var phase2 := boss_hp < boss_max * 0.5
 	boss_timer -= dt
+	boss_rate = maxf(0.0, boss_rate - boss_rate * minf(dt, 1.0))
 	match boss_mode:
 		"move":
 			boss_pos += dir * 45.0 * dt
@@ -1280,7 +1297,7 @@ func _update_boss(dt: float) -> void:
 	boss_node.modulate = Color(2.0, 2.0, 2.0) if boss_flash > 0.0 else Color.WHITE
 	for turret in boss_turret_nodes:
 		turret.rotation = dir.angle() - boss_ang
-	hud.set_boss(true, boss_hp / BOSS_HP)
+	hud.set_boss(true, boss_hp / boss_max)
 
 
 func _boss_turret_pos(k: int) -> Vector2:
@@ -1311,6 +1328,12 @@ func _damage_boss(amount: float, force_crit: bool) -> void:
 	var a := amount * dmg_mult
 	if force_crit or randf() < crit_chance:
 		a *= crit_mult
+	# Soft cap: past BOSS_CAP of its HP per second the boss's armor soaks more,
+	# so stronger builds still win faster, but never in an instant.
+	var cap := boss_max * BOSS_CAP
+	if boss_rate > cap:
+		a *= cap / boss_rate
+	boss_rate += a
 	boss_hp -= a
 	boss_flash = 0.05
 	if boss_hp <= 0.0:
@@ -1838,11 +1861,11 @@ func _open_chest() -> void:
 	while chest_rewards.size() < size:
 		var pool := []
 		for id in weapons:
-			if int(weapons[id]) < MAX_LEVEL and not taken.has(id):
-				pool.append(["weapon", id])
+			if not taken.has(id):
+				pool.append(["weapon" if int(weapons[id]) < MAX_LEVEL else "limit", id])
 		for id in powers:
-			if int(powers[id]) < MAX_LEVEL and not taken.has(id):
-				pool.append(["power", id])
+			if not taken.has(id):
+				pool.append(["power" if int(powers[id]) < MAX_LEVEL else "limit", id])
 		if pool.is_empty():
 			chest_rewards.append(["gold", "gold"])
 		else:
@@ -1873,6 +1896,8 @@ func _reward_name(r: Array) -> String:
 			return "EVOLUTION: " + String(Data.EVOLUTIONS[r[1]]["name"])
 		"gold":
 			return "+50 Gold"
+		"limit":
+			return "%s  LIMIT BREAK %d → %d" % [Data.NAMES[r[1]], _lb(r[1]), _lb(r[1]) + 1]
 	var lvl: int = (weapons if r[0] == "weapon" else powers).get(r[1], 0)
 	return "%s  Lv %d → %d" % [Data.NAMES[r[1]], lvl, lvl + 1]
 
@@ -1888,6 +1913,8 @@ func _on_chest_collected() -> void:
 				weapons[r[1]] = mini(MAX_LEVEL, int(weapons[r[1]]) + 1)
 			"power":
 				powers[r[1]] = mini(MAX_LEVEL, int(powers[r[1]]) + 1)
+			"limit":
+				limit[r[1]] = _lb(r[1]) + 1
 			"gold":
 				gold += 50
 	chest_rewards = []
@@ -1925,21 +1952,39 @@ func _recalc() -> void:
 	var titan: int = powers.get("titan", 0)
 	var mag: int = powers.get("magnet", 0)
 	var cr: int = powers.get("crit", 0)
-	fire_rate = 1.0 + 0.08 * int(powers.get("overclock", 0))
-	max_hp = PLAYER_HP + 20.0 * titan
-	armor = titan
+	fire_rate = 1.0 + 0.08 * int(powers.get("overclock", 0)) + 0.03 * _lb("overclock")
+	max_hp = PLAYER_HP + 20.0 * titan + 10.0 * _lb("titan")
+	armor = titan + int(_lb("titan") / 2.0)
 	if max_hp > old_max:
 		hp += max_hp - old_max
-	pickup = PICKUP * (1.0 + 0.3 * mag)
+	pickup = PICKUP * (1.0 + 0.3 * mag + 0.1 * _lb("magnet"))
 	magnet_all = mag >= MAX_LEVEL
-	speed = 210.0 * (1.0 + 0.07 * int(powers.get("adrenaline", 0)))
-	explosive = powers.get("explosive", 0)
-	crit_chance = 0.05 + 0.05 * cr
-	crit_mult = 2.0 + 0.1 * cr
+	speed = 210.0 * (1.0 + 0.07 * int(powers.get("adrenaline", 0)) + 0.02 * mini(_lb("adrenaline"), 15))
+	explosive = mini(int(powers.get("explosive", 0)) + int(_lb("explosive") / 2.0), 20)
+	crit_chance = minf(0.05 + 0.05 * cr + 0.02 * _lb("crit"), 0.9)
+	crit_mult = 2.0 + 0.1 * cr + 0.1 * _lb("crit")
 	dmg_mult = 1.0 + bonus_dmg
 	for id in weapons:
 		w_stats[id] = Data.weapon_stats(id, weapons[id], evolved.has(id))
+		Data.limit_break(w_stats[id], _lb(id))
+	big_mult = 1.0 + maxf(0.0, _power_score() - 24.0) / 12.0
 	hud.set_build(_build_text())
+
+
+func _lb(id: String) -> int:
+	return int(limit.get(id, 0))
+
+
+## How strong the build is: item levels, Limit Breaks and evolutions.
+func _power_score() -> float:
+	var p := 0
+	for id in weapons:
+		p += int(weapons[id])
+	for id in powers:
+		p += int(powers[id])
+	for id in limit:
+		p += int(limit[id])
+	return float(p + 6 * evolved.size())
 
 
 # --- Level-up cards ---------------------------------------------------------
@@ -2000,12 +2045,12 @@ func _make_offers(n: int, chest: bool, skip: Array) -> Array:
 
 
 func _add_candidate(pool: Array, kind: String, id: String, lvl: int, owned: int) -> void:
-	if lvl >= MAX_LEVEL or (lvl == 0 and owned >= MAX_SLOTS):
+	if lvl == 0 and owned >= MAX_SLOTS:
 		return
-	pool.append([kind, id])
-	if lvl >= 1:
+	pool.append([kind, id])  # A maxed item stays in the pool as a Limit Break.
+	if lvl >= 1 and lvl < MAX_LEVEL:
 		pool.append([kind, id])  # Owned items come up more often, so builds come together.
-	if lvl >= 3:
+	if lvl >= 3 and lvl < MAX_LEVEL:
 		pool.append([kind, id])
 
 
@@ -2024,6 +2069,8 @@ func _offer(kind: String, id: String, rarity: int) -> Dictionary:
 		var pair: String = Data.EVOLUTIONS[id]["power"]
 		if powers.has(pair) and not evolved.has(id):
 			o["evolve"] = true
+	var owned: Dictionary = weapons if kind == "weapon" else powers
+	o["limit"] = not o["evolve"] and int(owned.get(id, 0)) >= MAX_LEVEL
 	return o
 
 
@@ -2038,6 +2085,13 @@ func _offer_info(o: Dictionary) -> Dictionary:
 				info["title"] = "EVOLVE: " + String(Data.EVOLUTIONS[id]["name"])
 				info["tag"] = "Legendary"
 				info["desc"] = Data.EVOLUTIONS[id]["desc"]
+			elif o.get("limit", false):
+				var nm: String = Data.EVOLUTIONS[id]["name"] if evolved.has(id) else Data.NAMES[id]
+				info["title"] = "LIMIT BREAK: " + nm
+				info["tag"] = "%s · %d → %d" % [Data.RARITY_NAMES[rarity], _lb(id), _lb(id) + int(o["levels"])]
+				info["desc"] = Data.LIMIT_DESCS.get(id, Data.LIMIT_WEAPON_DESC)
+				if rarity == 1:
+					info["desc"] += " Bonus: +4% damage to everything."
 			else:
 				var to := mini(MAX_LEVEL, cur + int(o["levels"]))
 				info["title"] = Data.NAMES[id]
@@ -2066,10 +2120,15 @@ func _on_card(index: int) -> void:
 		"weapon":
 			if o["evolve"]:
 				_evolve(id)
+			elif o["limit"]:
+				limit[id] = _lb(id) + int(o["levels"])
 			else:
 				weapons[id] = mini(MAX_LEVEL, int(weapons.get(id, 0)) + int(o["levels"]))
 		"power":
-			powers[id] = mini(MAX_LEVEL, int(powers.get(id, 0)) + int(o["levels"]))
+			if o["limit"]:
+				limit[id] = _lb(id) + int(o["levels"])
+			else:
+				powers[id] = mini(MAX_LEVEL, int(powers.get(id, 0)) + int(o["levels"]))
 		"heal":
 			hp = minf(max_hp, hp + max_hp * 0.4)
 		"gold":
@@ -2080,9 +2139,11 @@ func _on_card(index: int) -> void:
 	var rarity: int = o["rarity"]
 	if o["kind"] == "weapon" or o["kind"] == "power":
 		var lvl: int = (weapons if o["kind"] == "weapon" else powers).get(id, 0)
-		if not o["evolve"]:
+		if o.get("limit", false):
+			hud.show_banner("%s  LIMIT BREAK %d" % [Data.NAMES[id], _lb(id)], Data.RARITY_COLORS[rarity])
+		elif not o["evolve"]:
 			hud.show_banner("%s  Lv %d" % [Data.NAMES[id], lvl], Data.RARITY_COLORS[rarity])
-		_power_moment([0.35, 0.6, 0.9, 1.3][rarity] + lvl * 0.05, Data.RARITY_COLORS[rarity])
+		_power_moment([0.35, 0.6, 0.9, 1.3][rarity] + lvl * 0.05 + _lb(id) * 0.02, Data.RARITY_COLORS[rarity])
 	if chest_cards:
 		chest_cards = false
 	else:
@@ -2523,7 +2584,7 @@ func _apply_pickup(kind: int) -> void:
 					e_hp[j] = 0.0
 					_kill(j)
 			if boss_on:
-				_damage_boss(BOSS_HP * 0.05, false)
+				_damage_boss(boss_max * 0.05, false)
 			b_count = 0
 			hud.flash(Color(1, 1, 1, 0.9))
 			trauma = 1.0
@@ -2595,12 +2656,13 @@ func _update_hud() -> void:
 func _build_text() -> String:
 	var parts := PackedStringArray()
 	for id in weapons:
+		var lb: String = (" +%d" % _lb(id)) if _lb(id) > 0 else ""
 		if evolved.has(id):
-			parts.append("%s ★" % Data.EVOLUTIONS[id]["name"])
+			parts.append("%s ★%s" % [Data.EVOLUTIONS[id]["name"], lb])
 		else:
-			parts.append("%s %d" % [Data.NAMES[id], weapons[id]])
+			parts.append("%s %d%s" % [Data.NAMES[id], weapons[id], lb])
 	for id in powers:
-		parts.append("%s %d" % [Data.NAMES[id], powers[id]])
+		parts.append("%s %d%s" % [Data.NAMES[id], powers[id], (" +%d" % _lb(id)) if _lb(id) > 0 else ""])
 	return " · ".join(parts)
 
 
@@ -2724,12 +2786,17 @@ func _run_smoke() -> void:
 	for id in Data.EVOLUTIONS:
 		evolved[id] = true
 	_recalc()
+	var lb_offers := _make_offers(2, false, [])
+	if not _check(lb_offers.all(func(o): return o.get("limit", false)), "a maxed build is offered Limit Breaks"):
+		return
 	god = true
 	t = 280.0
-	await _frames(60 * 40)
+	await _frames(60 * 70)
 	god = false
-	print("SMOKE: all-items run t=%.0f state=%d enemies=%d kills=%d boss_on=%s boss_dead=%s logic_worst=%.1f" % [t, state, e_count, kills, boss_on, boss_dead_t >= 0.0, logic_worst])
+	print("SMOKE: all-items run t=%.0f state=%d enemies=%d kills=%d boss_max=%.0f boss_fight=%.1fs boss_dead=%s logic_worst=%.1f" % [t, state, e_count, kills, boss_max, (boss_dead_t if boss_dead_t >= 0.0 else t) - STAGE_TIME, boss_dead_t >= 0.0, logic_worst])
 	if not _check(kills > 100, "the all-items run killed enemies"):
+		return
+	if not _check(boss_dead_t < 0.0 or boss_dead_t - STAGE_TIME > 8.0, "a maxed build does not kill the boss in seconds"):
 		return
 	print("SMOKE: passed")
 	get_tree().quit(0)
