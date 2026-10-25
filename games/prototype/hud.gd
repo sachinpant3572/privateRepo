@@ -9,6 +9,8 @@ signal revive_pressed
 signal give_up_pressed
 signal menu_pressed
 signal option_toggled(option: String)
+signal chest_collected
+signal double_gold_pressed
 
 const Art := preload("res://art.gd")
 const JOY_RING := 180.0
@@ -20,6 +22,18 @@ var play: Control
 var cards: ColorRect
 var death: ColorRect
 var over: ColorRect
+var chest: ColorRect
+var chest_title: Label
+var chest_reels: VBoxContainer
+var chest_gold: Label
+var chest_button: Button
+var chest_final: Array = []
+var chest_pool: Array = []
+var chest_time := 0.0
+var menu_stats: Label
+var gold_label: Label
+var combo_label: Label
+var double_button: Button
 var hp_bar: ProgressBar
 var xp_bar: ProgressBar
 var info: Label
@@ -58,6 +72,7 @@ func _ready() -> void:
 	_build_cards()
 	_build_death()
 	_build_over()
+	_build_chest()
 
 
 func _process(delta: float) -> void:
@@ -67,11 +82,15 @@ func _process(delta: float) -> void:
 		banner.visible = banner_time > 0.0
 	if damage_flash.color.a > 0.0:
 		damage_flash.color.a = maxf(0.0, damage_flash.color.a - delta * 1.5)
+	if chest.visible:
+		_spin_chest(delta)
 
 
 # --- Screens ----------------------------------------------------------------
 
-func show_menu() -> void:
+func show_menu(stats: String) -> void:
+	menu_stats.text = stats
+	menu_stats.visible = stats != ""
 	_only(menu)
 
 
@@ -102,6 +121,15 @@ func show_cards(infos: Array, third_left: int, reroll_left: int, chest: bool) ->
 			card.add_theme_stylebox_override(style_name, sb)
 		card.pressed.connect(card_chosen.emit.bind(i))
 		card_list.add_child(card)
+		# Cards fade and slide in one after another; rare ones pulse.
+		card.modulate.a = 0.0
+		var tw := card.create_tween()
+		tw.tween_interval(0.06 * i)
+		tw.tween_property(card, "modulate:a", 1.0, 0.15)
+		if col.v > 0.9 and col.s > 0.5:
+			var pulse := card.create_tween().set_loops(4)
+			pulse.tween_property(card, "self_modulate", Color(1.3, 1.2, 1.0), 0.25)
+			pulse.tween_property(card, "self_modulate", Color.WHITE, 0.25)
 	third_button.visible = infos.size() < 3 and third_left > 0
 	third_button.text = "Show 3rd card (ad) · %d left" % third_left
 	reroll_button.disabled = reroll_left <= 0
@@ -117,13 +145,42 @@ func show_death(can_revive: bool) -> void:
 	death.visible = true
 
 
-func show_results(victory: bool, text: String) -> void:
+func show_results(victory: bool, text: String, gold: int) -> void:
 	results = text
 	over_title.text = "STAGE CLEARED!" if victory else "DEFEATED"
 	over_title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.35) if victory else Color(1.0, 0.4, 0.35))
 	over_text.text = text
 	copy_button.text = "Copy results"
+	double_button.visible = gold > 0
+	double_button.disabled = false
+	double_button.text = "Double your %d gold (watch ad)" % gold
 	_only(over)
+
+
+func show_results_gold(gold: int) -> void:
+	double_button.disabled = true
+	double_button.text = "Doubled! %d gold" % gold
+
+
+## The treasure chest: reels spin through item names and stop one by one.
+func show_chest(names: Array, pool: Array, gold: int) -> void:
+	chest_final = names
+	chest_pool = pool
+	chest_time = 0.0
+	var colors := {1: Color(0.4, 0.7, 1.0), 3: Color(0.8, 0.45, 1.0), 5: Color(1.0, 0.8, 0.25)}
+	chest_title.text = {1: "TREASURE!", 3: "BIG TREASURE!", 5: "JACKPOT!!"}.get(names.size(), "TREASURE!")
+	chest_title.add_theme_color_override("font_color", colors.get(names.size(), Color.WHITE))
+	for child in chest_reels.get_children():
+		child.queue_free()
+	for n in names.size():
+		var reel := _label("", 30)
+		reel.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		chest_reels.add_child(reel)
+	chest_gold.text = "+%d gold" % gold
+	chest_gold.visible = false
+	chest_button.visible = false
+	play.visible = true
+	chest.visible = true
 
 
 # --- In-game updates --------------------------------------------------------
@@ -154,7 +211,22 @@ func show_banner(text: String) -> void:
 
 
 func flash_damage() -> void:
-	damage_flash.color.a = 0.3
+	flash(Color(1.0, 0.0, 0.0, 0.3))
+
+
+func flash(color: Color) -> void:
+	damage_flash.color = color
+
+
+func set_gold(gold: int) -> void:
+	gold_label.text = "● %d" % gold
+
+
+func set_combo(count: int, frac: float) -> void:
+	combo_label.visible = count >= 10
+	combo_label.text = "x%d COMBO" % count
+	combo_label.modulate.a = clampf(frac * 2.0, 0.3, 1.0)
+	combo_label.add_theme_font_size_override("font_size", 26 + mini(count / 50, 14))
 
 
 func set_joystick(on: bool, origin: Vector2, knob: Vector2) -> void:
@@ -201,6 +273,17 @@ func _build_play() -> void:
 	row.add_child(info)
 	clock = _label("5:00", 36)
 	row.add_child(clock)
+	var row2 := HBoxContainer.new()
+	row2.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top.add_child(row2)
+	combo_label = _label("", 26)
+	combo_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	combo_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
+	combo_label.visible = false
+	row2.add_child(combo_label)
+	gold_label = _label("● 0", 26)
+	gold_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.25))
+	row2.add_child(gold_label)
 	build_label = _label("", 18)
 	build_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	top.add_child(build_label)
@@ -251,6 +334,10 @@ func _build_menu() -> void:
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(help)
+	menu_stats = _label("", 22)
+	menu_stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	menu_stats.add_theme_color_override("font_color", Color(1.0, 0.82, 0.25))
+	box.add_child(menu_stats)
 	_button(box, "Play Stage 1", start_pressed.emit.bind(false))
 	_button(box, "Watch auto-play", start_pressed.emit.bind(true))
 	quality_button = _button(box, "", option_toggled.emit.bind("quality"))
@@ -305,9 +392,54 @@ func _build_over() -> void:
 	over_text = _label("", 22)
 	over_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(over_text)
+	double_button = _button(box, "", double_gold_pressed.emit)
 	copy_button = _button(box, "Copy results", _copy_results)
 	_button(box, "Play again", start_pressed.emit.bind(false))
 	_button(box, "Menu", menu_pressed.emit)
+
+
+func _build_chest() -> void:
+	chest = ColorRect.new()
+	chest.color = Color(0.0, 0.0, 0.0, 0.75)
+	_full(chest)
+	chest.mouse_filter = Control.MOUSE_FILTER_STOP
+	chest.visible = false
+	root.add_child(chest)
+	var box := _centered_box(chest)
+	chest_title = _label("TREASURE!", 54)
+	chest_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(chest_title)
+	chest_reels = VBoxContainer.new()
+	chest_reels.add_theme_constant_override("separation", 14)
+	box.add_child(chest_reels)
+	chest_gold = _label("", 34)
+	chest_gold.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	chest_gold.add_theme_color_override("font_color", Color(1.0, 0.82, 0.25))
+	box.add_child(chest_gold)
+	chest_button = _button(box, "Collect", _collect_chest)
+
+
+func _collect_chest() -> void:
+	chest.visible = false
+	chest_collected.emit()
+
+
+func _spin_chest(delta: float) -> void:
+	chest_time += delta
+	var reels := chest_reels.get_children()
+	for i in reels.size():
+		var reel: Label = reels[i]
+		var stop_at := 0.6 + 0.35 * i
+		if chest_time < stop_at:
+			if not chest_pool.is_empty():
+				reel.text = chest_pool[int(chest_time * 18.0 + i * 3) % chest_pool.size()]
+			reel.modulate = Color(0.7, 0.7, 0.7)
+		elif reel.text != chest_final[i]:
+			reel.text = chest_final[i]
+			reel.modulate = Color(1.0, 0.9, 0.5)
+	var done := chest_time >= 0.6 + 0.35 * reels.size()
+	chest_gold.visible = done
+	chest_button.visible = done
 
 
 func _copy_results() -> void:
@@ -316,7 +448,7 @@ func _copy_results() -> void:
 
 
 func _only(screen: Control) -> void:
-	for s in [menu, play, cards, death, over]:
+	for s in [menu, play, cards, death, over, chest]:
 		s.visible = s == screen
 
 

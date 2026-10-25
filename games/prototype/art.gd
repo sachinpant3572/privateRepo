@@ -1,7 +1,7 @@
 extends RefCounted
 ## Placeholder art drawn in code, top-down, with units facing +x (the game
-## rotates them). Units are drawn into one atlas image, then split into one
-## texture per cell; real sprites can replace these later.
+## rotates them). Any PNG in res://sprites/ with a matching name replaces the
+## code-drawn version (see README.md for the list and specs).
 
 const CELL := 128
 const COLS := 4
@@ -23,6 +23,23 @@ const CRIMSON := Color(0.66, 0.1, 0.12)
 const STEEL := Color(0.58, 0.63, 0.7)
 const OLIVE := Color(0.28, 0.31, 0.23)
 const OLIVE_LIGHT := Color(0.34, 0.37, 0.28)
+const OUTLINE := Color(0.02, 0.02, 0.03)
+const CELL_NAMES := ["trooper", "shield", "grenadier", "elite", "tank", "turret", "heli", "rotor"]
+const PICKUP_NAMES := ["nuke", "freeze", "vacuum", "medkit"]
+
+
+## A sprite from res://sprites/<name>.png, or null if there isn't one.
+static func sprite(name: String) -> Texture2D:
+	var path := "res://sprites/%s.png" % name
+	if ResourceLoader.exists(path):
+		return load(path)
+	return null
+
+
+## The real sprite if there is one, otherwise the code-drawn fallback.
+static func pick(name: String, fallback: Texture2D) -> Texture2D:
+	var real := sprite(name)
+	return real if real != null else fallback
 
 
 ## One texture per atlas cell, in cell order.
@@ -30,8 +47,15 @@ static func cell_textures() -> Array:
 	var img := atlas_image()
 	var out := []
 	for cell in COLS * ROWS:
+		var real := sprite(CELL_NAMES[cell])
+		if real != null:
+			out.append(real)
+			continue
 		var region := Rect2i((cell % COLS) * CELL, int(cell / COLS) * CELL, CELL, CELL)
-		out.append(ImageTexture.create_from_image(img.get_region(region)))
+		var cell_img := img.get_region(region)
+		if cell != ROTOR:
+			_outline(cell_img)
+		out.append(ImageTexture.create_from_image(cell_img))
 	return out
 
 
@@ -64,7 +88,10 @@ static func atlas_image() -> Image:
 	return img
 
 
-static func boss() -> ImageTexture:
+static func boss() -> Texture2D:
+	var real := sprite("boss")
+	if real != null:
+		return real
 	var img := Image.create_empty(256, 192, false, Image.FORMAT_RGBA8)
 	var o := Vector2.ZERO
 	_box(img, o, Vector2(8, 10), Vector2(248, 44), DARK)
@@ -76,16 +103,66 @@ static func boss() -> ImageTexture:
 	_box(img, o, Vector2(28, 50), Vector2(228, 142), Color(0.42, 0.14, 0.14))
 	_box(img, o, Vector2(212, 40), Vector2(244, 152), Color(0.5, 0.5, 0.53))
 	_box(img, o, Vector2(40, 90), Vector2(200, 102), Color(0.95, 0.6, 0.1))
+	_outline(img)
 	return ImageTexture.create_from_image(img)
 
 
-static func turret_texture() -> ImageTexture:
+static func turret_texture() -> Texture2D:
+	var real := sprite("boss_turret")
+	if real != null:
+		return real
 	var img := Image.create_empty(CELL, CELL, false, Image.FORMAT_RGBA8)
 	_turret(img, Vector2.ZERO)
+	_outline(img)
 	return ImageTexture.create_from_image(img)
 
 
-static func hero(size: int) -> ImageTexture:
+static func coin(size: int) -> ImageTexture:
+	var img := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
+	var c := Vector2(size, size) * 0.5
+	_disc(img, c, size * 0.46, Color(0.55, 0.38, 0.05))
+	_disc(img, c, size * 0.4, Color(1.0, 0.8, 0.2))
+	_disc(img, c, size * 0.26, Color(0.9, 0.65, 0.1))
+	_disc(img, c - Vector2(size * 0.12, size * 0.12), size * 0.1, Color(1.0, 1.0, 0.85))
+	return ImageTexture.create_from_image(img)
+
+
+## Screen-clear pickup icons: 0 nuke, 1 freeze, 2 vacuum, 3 medkit.
+static func pickup_icon(kind: int, size: int) -> Texture2D:
+	var real := sprite(PICKUP_NAMES[kind])
+	if real != null:
+		return real
+	var img := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
+	var c := Vector2(size, size) * 0.5
+	var bases := [Color(1.0, 0.85, 0.1), Color(0.3, 0.8, 1.0), Color(0.7, 0.35, 1.0), Color(0.95, 0.95, 0.95)]
+	_disc(img, c, size * 0.48, Color(0, 0, 0, 0.6))
+	_disc(img, c, size * 0.42, bases[kind])
+	for y in size:
+		for x in size:
+			var v := Vector2(x + 0.5, y + 0.5) - c
+			var r := v.length() / (size * 0.42)
+			var mark := false
+			match kind:
+				0:
+					mark = (r > 0.25 and r < 0.8 and cos(3.0 * v.angle()) > 0.5) or r < 0.15
+				1:
+					for k in 3:
+						var axis := Vector2.from_angle(PI * k / 3.0)
+						mark = mark or (absf(v.dot(axis.orthogonal())) < size * 0.035 and r < 0.75)
+				2:
+					mark = r > 0.4 and r < 0.68 and v.y > -size * 0.05
+					mark = mark or (absf(absf(v.x) - size * 0.22) < size * 0.06 and v.y < 0.0 and v.y > -size * 0.25)
+				3:
+					mark = (absf(v.x) < size * 0.08 and absf(v.y) < size * 0.26) or (absf(v.y) < size * 0.08 and absf(v.x) < size * 0.26)
+			if mark:
+				img.set_pixel(x, y, Color(0.85, 0.1, 0.1) if kind == 3 else Color(0.05, 0.05, 0.08))
+	return ImageTexture.create_from_image(img)
+
+
+static func hero(size: int) -> Texture2D:
+	var real := sprite("hero")
+	if real != null:
+		return real
 	var img := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
 	var c := Vector2(size, size) * 0.5
 	_disc(img, c, size * 0.48, Color(0.3, 0.8, 1.0, 0.3))
@@ -165,6 +242,24 @@ static func enemy_bullet(size: int) -> ImageTexture:
 	_disc(img, c, size * 0.46, Color(1.0, 0.25, 0.12, 0.85))
 	_disc(img, c, size * 0.24, Color(1.0, 0.92, 0.8))
 	return ImageTexture.create_from_image(img)
+
+
+## Draws a dark edge around everything opaque, so sprites read clearly
+## against the ground and each other.
+static func _outline(img: Image) -> void:
+	var w := img.get_width()
+	var h := img.get_height()
+	var src := img.duplicate()
+	var offsets := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1), Vector2i(2, 0), Vector2i(-2, 0), Vector2i(0, 2), Vector2i(0, -2)]
+	for y in range(2, h - 2):
+		for x in range(2, w - 2):
+			if src.get_pixel(x, y).a > 0.5:
+				continue
+			var near := 0.0
+			for d in offsets:
+				near = maxf(near, src.get_pixel(x + d.x, y + d.y).a)
+			if near > 0.3:
+				img.set_pixel(x, y, img.get_pixel(x, y).blend(Color(OUTLINE.r, OUTLINE.g, OUTLINE.b, near)))
 
 
 static func _infantry(img: Image, o: Vector2, helmet: Color) -> void:

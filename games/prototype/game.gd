@@ -42,8 +42,18 @@ const ROCKET_COLOR := Color(1.0, 0.6, 0.25)
 const SPARK_COLOR := Color(1.0, 0.65, 0.25)
 const RING_COLOR := Color(1.0, 0.85, 0.6)
 const BLADE_COLOR := Color(0.7, 0.95, 1.0)
+const COIN_CAP := 400
+const PICKUP_CAP := 6
+const PICKUP_LIFE := 20.0
+const PICKUP_CHANCE := 0.004
+const COMBO_TIME := 2.0
+const FREEZE_TIME := 5.0
+const SAVE_PATH := "user://save.cfg"
+const GEM_BLUE := Color(0.45, 0.75, 1.0)
+const GEM_GREEN := Color(0.4, 1.0, 0.55)
+const GEM_RED := Color(1.0, 0.4, 0.4)
 
-enum State { MENU, PLAYING, CARDS, DEAD, OVER }
+enum State { MENU, PLAYING, CARDS, DEAD, OVER, CHEST }
 
 var state := State.MENU
 var autoplay := false
@@ -82,6 +92,16 @@ var kills := 0
 var revived := false
 var trauma := 0.0
 var hitstop := 0.0
+var gold := 0
+var gold_doubled := false
+var combo := 0
+var combo_timer := 0.0
+var combo_best := 0
+var combo_step := 0
+var freeze_t := 0.0
+var events_done := 0
+var chest_rewards: Array = []
+var save := ConfigFile.new()
 
 # Build.
 var weapons := {}  # id -> level
@@ -171,6 +191,11 @@ var g_mag := PackedInt32Array()
 var g_count := 0
 var c_pos := PackedVector2Array()
 var c_count := 0
+var co_pos := PackedVector2Array()
+var co_mag := PackedInt32Array()
+var co_count := 0
+var pickups: Array = []  # [kind, position, time left, Sprite2D]
+var pickup_textures := []
 
 # Effects.
 var p_pos := PackedVector2Array()
@@ -222,6 +247,10 @@ var chest_mm: MultiMesh
 var spark_mm: MultiMesh
 var ring_mm: MultiMesh
 var blade_mm: MultiMesh
+var coin_mm: MultiMesh
+var co_buf := PackedFloat32Array()
+var numbers
+var sfx
 var u_buf := PackedFloat32Array()
 var s_buf := PackedFloat32Array()
 var k_buf := PackedFloat32Array()
@@ -262,6 +291,7 @@ func _ready() -> void:
 	t_range = PackedFloat32Array(Data.ENEMY_RANGE)
 	t_xp = PackedInt32Array(Data.ENEMY_XP)
 	t_capn = PackedInt32Array(Data.ENEMY_CAP)
+	save.load(SAVE_PATH)
 	_build_scene()
 	get_viewport().size_changed.connect(_on_resized)
 	_on_resized()
@@ -286,8 +316,11 @@ func _build_scene() -> void:
 	low.game = self
 	world.add_child(low)
 
-	gem_mm = _layer(Art.gem(24), 7.0, true, Color(0.4, 0.4, 0.4))
-	chest_mm = _layer(Art.chest(48), 18.0, false, Color(0.6, 0.6, 0.6))
+	gem_mm = _layer(Art.gem(24), 8.0, true, Color(0.4, 0.4, 0.4))
+	coin_mm = _layer(Art.coin(32), 9.0, false, Color(0.5, 0.4, 0.1))
+	chest_mm = _layer(Art.chest(48), 22.0, false, Color(0.6, 0.6, 0.6))
+	for kind in 4:
+		pickup_textures.append(Art.pickup_icon(kind, 64))
 	for tex in Art.cell_textures():
 		unit_mms.append(_layer(tex, 0.5, false, Color(0.25, 0.25, 0.25)))
 	shot_mm = _layer(Art.soft_disc(32, 0.35), 5.0, true, Color(0.6, 0.6, 0.6))
@@ -312,7 +345,7 @@ func _build_scene() -> void:
 
 	hero = Sprite2D.new()
 	hero.texture = Art.hero(64)
-	hero.scale = Vector2(0.6, 0.6)
+	hero.scale = Vector2(0.75, 0.75)
 	world.add_child(hero)
 	# Enemy bullets go on top so they are always readable.
 	eb_mm = _layer(Art.enemy_bullet(32), 6.0, true, Color.WHITE)
@@ -320,6 +353,11 @@ func _build_scene() -> void:
 	top.game = self
 	top.top = true
 	world.add_child(top)
+	numbers = preload("res://numbers.gd").new()
+	world.add_child(numbers)
+	sfx = preload("res://sfx.gd").new()
+	add_child(sfx)
+	sfx.muted = smoke
 
 	fx = FX.new()
 	add_child(fx)
@@ -336,6 +374,8 @@ func _build_scene() -> void:
 	hud.give_up_pressed.connect(_game_over.bind(false))
 	hud.menu_pressed.connect(_to_menu)
 	hud.option_toggled.connect(_on_option)
+	hud.chest_collected.connect(_on_chest_collected)
+	hud.double_gold_pressed.connect(_on_double_gold)
 
 
 func _layer(tex: Texture2D, radius: float, additive: bool, glow_modulate: Color) -> MultiMesh:
@@ -462,7 +502,7 @@ func _to_menu() -> void:
 	_clear_entities()
 	hero.visible = false
 	boss_node.visible = false
-	hud.show_menu()
+	hud.show_menu(_save_summary())
 
 
 func _start(auto: bool) -> void:
@@ -501,6 +541,15 @@ func _start(auto: bool) -> void:
 	elites_spawned = 0
 	spawn_acc = 0.0
 	shot_budget = 0.0
+	gold = 0
+	gold_doubled = false
+	combo = 0
+	combo_timer = 0.0
+	combo_best = 0
+	combo_step = 0
+	freeze_t = 0.0
+	events_done = 0
+	numbers.clear()
 	frame_ms = PackedFloat32Array()
 	logic_sum = 0.0
 	logic_worst = 0.0
@@ -566,6 +615,10 @@ func _alloc() -> void:
 	c_pos.resize(CHEST_CAP)
 	chest_mm.instance_count = CHEST_CAP
 	c_buf = _buffer(CHEST_CAP, Color.WHITE)
+	co_pos.resize(COIN_CAP)
+	co_mag.resize(COIN_CAP)
+	coin_mm.instance_count = COIN_CAP
+	co_buf = _buffer(COIN_CAP, Color.WHITE)
 	p_cap = mini(SPARK_CAP, 600 + int(int(fx.tier["enemies"]) * int(fx.tier["sparks"]) / 2.0))
 	p_pos.resize(p_cap)
 	p_vel.resize(p_cap)
@@ -589,6 +642,7 @@ func _clear_entities() -> void:
 	b_count = 0
 	g_count = 0
 	c_count = 0
+	co_count = 0
 	p_count = 0
 	r_count = 0
 	bl_count = 0
@@ -598,6 +652,9 @@ func _clear_entities() -> void:
 	bolts.clear()
 	bombs.clear()
 	blasts.clear()
+	for pk in pickups:
+		pk[3].queue_free()
+	pickups.clear()
 	if unit_cap.size() > 0:
 		_upload()
 
@@ -608,8 +665,12 @@ func _game_over(victory: bool) -> void:
 	state = State.OVER
 	joy_on = false
 	hud.set_joystick(false, Vector2.ZERO, Vector2.ZERO)
+	if victory:
+		gold += 100
+	_record_run(victory)
 	last_results = _results_text(victory)
-	hud.show_results(victory, last_results)
+	hud.show_results(victory, last_results, gold)
+	sfx.play("fanfare" if victory else "hurt")
 	if autoplay:
 		print(last_results)
 
@@ -652,6 +713,13 @@ func _process(delta: float) -> void:
 		return
 	var t0 := Time.get_ticks_usec()
 	t += dt
+	freeze_t = maxf(freeze_t - dt, 0.0)
+	if combo > 0:
+		combo_timer -= dt
+		if combo_timer <= 0.0:
+			combo = 0
+			combo_step = 0
+	_run_events()
 	_update_player(dt)
 	grid_origin = cam - view * 0.5 - Vector2(GRID_PAD, GRID_PAD)
 	_update_enemies(dt)
@@ -665,11 +733,14 @@ func _process(delta: float) -> void:
 	_update_enemy_bullets(dt)
 	_update_telegraphs(dt)
 	_update_pickups(dt)
+	_update_coins(dt)
+	_update_powerups(dt)
 	_compact_enemies()
 	_update_sparks(dt)
 	_update_rings(dt)
 	_render_units()
 	_upload()
+	numbers.step(dt)
 	_update_camera(dt)
 	sim_ms = (Time.get_ticks_usec() - t0) / 1000.0
 	logic_sum += sim_ms
@@ -678,7 +749,7 @@ func _process(delta: float) -> void:
 	hud.set_bars(hp / max_hp, xp / xp_need)
 	hud_timer -= dt
 	if hud_timer <= 0.0:
-		hud_timer = 0.25
+		hud_timer = 0.1
 		_update_hud()
 	if hp <= 0.0:
 		_on_death()
@@ -726,7 +797,9 @@ func _hurt(amount: float) -> void:
 	hp -= maxf(1.0, amount - armor)
 	invuln = INVULN
 	trauma = minf(trauma + 0.35, 1.0)
+	combo = int(combo / 2.0)
 	hud.flash_damage()
+	sfx.play("hurt")
 	if not smoke:
 		Input.vibrate_handheld(35)
 
@@ -766,6 +839,7 @@ func _spawn_director(dt: float) -> void:
 		elites_spawned += 1
 		_spawn_enemy(Data.ELITE)
 		hud.show_banner("JUGGERNAUT INCOMING")
+		sfx.play("alarm")
 	var budget := int(fx.tier["enemies"])
 	var target := int(lerpf(18.0, budget * 0.7, clampf(t / 240.0, 0.0, 1.0)))
 	if boss_on:
@@ -779,6 +853,28 @@ func _spawn_director(dt: float) -> void:
 		if t_capn[ty] > 0 and type_alive[ty] >= t_capn[ty]:
 			ty = Data.TROOPER
 		_spawn_enemy(ty)
+
+
+func _run_events() -> void:
+	if events_done >= Data.EVENTS.size():
+		return
+	var ev: Array = Data.EVENTS[events_done]
+	if t < float(ev[0]):
+		return
+	events_done += 1
+	hud.show_banner(ev[1])
+	sfx.play("alarm")
+	var n: int = ev[3]
+	var side := Vector2.from_angle(randf() * TAU)
+	for k in n:
+		_spawn_enemy(ev[2])
+		var i := e_count - 1
+		if i < 0:
+			break
+		if ev[4] == "ring":
+			e_pos[i] = player + Vector2.from_angle(TAU * k / n) * 420.0
+		else:
+			e_pos[i] = player + side * 560.0 + side.orthogonal() * (k - n * 0.5) * 60.0
 
 
 func _pick(weights: PackedFloat32Array) -> int:
@@ -814,7 +910,7 @@ func _update_enemies(dt: float) -> void:
 			d2 = to.length_squared()
 		var d := sqrt(d2)
 		var dir := to / maxf(d, 0.001)
-		var sp := t_speed[ty]
+		var sp := 0.0 if freeze_t > 0.0 else t_speed[ty]
 		var v := dir * sp
 		match ty:
 			Data.GRENADIER:
@@ -852,19 +948,19 @@ func _update_enemies(dt: float) -> void:
 		if ty == Data.TANK:
 			if v.length_squared() > 1.0:
 				e_ang[i] = lerp_angle(e_ang[i], v.angle(), minf(1.0, dt * 3.0))
-		else:
+		elif freeze_t <= 0.0:
 			e_ang[i] = dir.angle()
 		if e_flash[i] > 0.0:
 			e_flash[i] -= dt
 		if e_halo[i] > 0.0:
 			e_halo[i] -= dt
-		if d < rad + PLAYER_RADIUS:
+		if d < rad + PLAYER_RADIUS and freeze_t <= 0.0:
 			_hurt(t_touch[ty])
 		if d2 < best:
 			best = d2
 			nearest = i
 		var fire := t_fire[ty]
-		if fire > 0.0:
+		if fire > 0.0 and freeze_t <= 0.0:
 			var tm := e_timer[i] - dt
 			if tm <= 0.0:
 				if d < t_range[ty]:
@@ -911,13 +1007,19 @@ func _telegraph(kind: int, start: Vector2, end: Vector2, time: float, dmg: float
 func _damage(j: int, amount: float, from: Vector2, force_crit: bool) -> void:
 	var ty := e_type[j]
 	var a := amount * dmg_mult
-	if force_crit or randf() < crit_chance:
+	var crit := force_crit or randf() < crit_chance
+	if crit:
 		a *= crit_mult
 	if ty == Data.SHIELD and Vector2.from_angle(e_ang[j]).dot(from - e_pos[j]) > 0.0:
 		a *= 0.25  # The shield blocks most damage from the front.
 	var h := e_hp[j] - a
 	e_hp[j] = h
 	e_flash[j] = 0.06
+	if ty <= Data.GRENADIER:
+		# Light knockback for infantry, away from the hit.
+		e_pos[j] += (e_pos[j] - from).normalized() * 5.0
+	numbers.add(e_pos[j], a, crit)
+	sfx.play("hit", randf_range(0.8, 1.3), -8.0)
 	if h <= 0.0:
 		_kill(j)
 
@@ -928,7 +1030,22 @@ func _kill(j: int) -> void:
 	kills += 1
 	type_alive[ty] -= 1
 	_gem(p, t_xp[ty])
+	_add_combo()
 	var big := ty >= Data.ELITE
+	var coins := 0
+	match ty:
+		Data.ELITE:
+			coins = 15
+			_drop_pickup(p, randi() % 4)
+		Data.TANK, Data.HELI:
+			coins = 2 + randi() % 3
+		_:
+			coins = 1 if randf() < 0.08 else 0
+	for k in coins:
+		_coin(p + Vector2(randf_range(-20.0, 20.0), randf_range(-20.0, 20.0)))
+	if not big and randf() < PICKUP_CHANCE:
+		_drop_pickup(p, randi() % 4)
+	sfx.play("big_boom" if big else "boom", randf_range(0.85, 1.15), -2.0 if big else -10.0)
 	_sparks(p, int(fx.tier["sparks"]) * (3 if big else 1))
 	_ring(p, 3.5 if big else 1.8)
 	trauma = minf(trauma + (0.25 if big else 0.01), 0.6)
@@ -998,6 +1115,7 @@ func _blast(p: Vector2, radius: float, dmg: float, force_crit: bool) -> void:
 	_ring(p, radius / RING_SIZE * 1.1)
 	_sparks(p, int(fx.tier["sparks"]))
 	trauma = minf(trauma + 0.03, 0.6)
+	sfx.play("boom", randf_range(0.7, 1.0), -6.0)
 
 
 func _enemy_blast(p: Vector2, radius: float, dmg: float) -> void:
@@ -1022,6 +1140,7 @@ func _spawn_boss() -> void:
 	boss_node.visible = true
 	hud.show_banner("BOSS: COLOSSUS SIEGE TANK")
 	hud.set_boss(true, 1.0)
+	sfx.play("alarm")
 
 
 func _update_boss(dt: float) -> void:
@@ -1121,6 +1240,10 @@ func _boss_killed() -> void:
 	hitstop = 0.2
 	hud.set_boss(false, 0.0)
 	hud.show_banner("COLOSSUS DESTROYED")
+	hud.flash(Color(1, 1, 1, 0.8))
+	sfx.play("big_boom")
+	for k in 60:
+		_coin(boss_pos + Vector2.from_angle(randf() * TAU) * randf_range(0.0, 140.0))
 
 
 # --- Weapons ----------------------------------------------------------------
@@ -1155,6 +1278,7 @@ func _fire(id: String, st: Dictionary) -> bool:
 				return false
 			var a0 := (_target() - player).angle()
 			var n: int = st["count"]
+			sfx.play("shot", randf_range(0.9, 1.1), -14.0)
 			for k in n:
 				var a: float = a0 + (k - (n - 1) * 0.5) * float(st["spread"])
 				_shot(Vector2.from_angle(a) * float(st["speed"]), st["dmg"], st["pierce"], st["life"])
@@ -1428,6 +1552,7 @@ func _bolt(points: PackedVector2Array) -> void:
 			jagged.append(a.lerp(b, s / 4.0) + side * randf_range(-12.0, 12.0))
 	jagged.append(points[points.size() - 1])
 	bolts.append([jagged, 0.15])
+	sfx.play("zap", randf_range(0.9, 1.2), -6.0)
 
 
 func _airstrike(st: Dictionary) -> void:
@@ -1543,6 +1668,7 @@ func _update_pickups(dt: float) -> void:
 			var d := sqrt(d2)
 			if d < PLAYER_RADIUS + 10.0:
 				_gain_xp(g_val[i])
+				sfx.play("gem", 1.0 + minf(combo, 500) / 500.0, -10.0)
 				g_count -= 1
 				g_pos[i] = g_pos[g_count]
 				g_val[i] = g_val[g_count]
@@ -1553,6 +1679,14 @@ func _update_pickups(dt: float) -> void:
 		var o := i * STRIDE
 		g_buf[o + 3] = p.x
 		g_buf[o + 7] = p.y
+		var val := g_val[i]
+		var col := GEM_RED if val >= 25 else (GEM_GREEN if val >= 5 else GEM_BLUE)
+		var gs := 1.5 if val >= 25 else (1.2 if val >= 5 else 1.0)
+		g_buf[o] = gs
+		g_buf[o + 5] = gs
+		g_buf[o + 8] = col.r
+		g_buf[o + 9] = col.g
+		g_buf[o + 10] = col.b
 		i += 1
 	var k := 0
 	while k < c_count:
@@ -1572,7 +1706,7 @@ func _xp_need(l: int) -> float:
 
 
 func _gain_xp(value: int) -> void:
-	xp += value
+	xp += value * (1.0 + minf(combo, 1000) / 1000.0)
 	while xp >= xp_need:
 		xp -= xp_need
 		level += 1
@@ -1580,12 +1714,77 @@ func _gain_xp(value: int) -> void:
 		pending_levels += 1
 
 
+## Treasure chest: a slot-machine roll for 1, 3 or 5 rewards. An evolution
+## that is ready always comes first.
 func _open_chest() -> void:
+	if state != State.PLAYING:
+		return
+	var size: int = Data.CHEST_SIZES[_pick(PackedFloat32Array(Data.CHEST_ODDS))]
+	chest_rewards = []
+	var taken := {}
 	var ready := _evolution_ready()
 	if ready != "":
-		_evolve(ready)
-	elif state == State.PLAYING:
-		_open_cards(true)
+		chest_rewards.append(["evolve", ready])
+		taken[ready] = true
+	while chest_rewards.size() < size:
+		var pool := []
+		for id in weapons:
+			if int(weapons[id]) < MAX_LEVEL and not taken.has(id):
+				pool.append(["weapon", id])
+		for id in powers:
+			if int(powers[id]) < MAX_LEVEL and not taken.has(id):
+				pool.append(["power", id])
+		if pool.is_empty():
+			chest_rewards.append(["gold", "gold"])
+		else:
+			var pick: Array = pool[randi() % pool.size()]
+			chest_rewards.append(pick)
+			taken[pick[1]] = true
+	var bonus := 25 * size
+	gold += bonus
+	state = State.CHEST
+	joy_on = false
+	joy_vec = Vector2.ZERO
+	hud.set_joystick(false, Vector2.ZERO, Vector2.ZERO)
+	var names := []
+	for r in chest_rewards:
+		names.append(_reward_name(r))
+	var all_names := []
+	for id in Data.NAMES:
+		all_names.append(Data.NAMES[id])
+	hud.show_chest(names, all_names, bonus)
+	sfx.play("fanfare")
+	if autoplay and bot_cards:
+		call_deferred("_on_chest_collected")
+
+
+func _reward_name(r: Array) -> String:
+	match String(r[0]):
+		"evolve":
+			return "EVOLUTION: " + String(Data.EVOLUTIONS[r[1]]["name"])
+		"gold":
+			return "+50 Gold"
+	var lvl: int = (weapons if r[0] == "weapon" else powers).get(r[1], 0)
+	return "%s  Lv %d → %d" % [Data.NAMES[r[1]], lvl, lvl + 1]
+
+
+func _on_chest_collected() -> void:
+	if state != State.CHEST:
+		return
+	for r in chest_rewards:
+		match String(r[0]):
+			"evolve":
+				_evolve(r[1])
+			"weapon":
+				weapons[r[1]] = mini(MAX_LEVEL, int(weapons[r[1]]) + 1)
+			"power":
+				powers[r[1]] = mini(MAX_LEVEL, int(powers[r[1]]) + 1)
+			"gold":
+				gold += 50
+	chest_rewards = []
+	_recalc()
+	state = State.PLAYING
+	hud.show_play()
 
 
 func _evolution_ready() -> String:
@@ -1601,6 +1800,8 @@ func _evolve(id: String) -> void:
 	weapons[id] = MAX_LEVEL
 	_recalc()
 	hud.show_banner("EVOLUTION: " + String(Data.EVOLUTIONS[id]["name"]))
+	hud.flash(Color(1.0, 0.85, 0.3, 0.6))
+	sfx.play("powerup")
 	trauma = minf(trauma + 0.5, 1.0)
 	hitstop = 0.12
 	_ring(player, 10.0)
@@ -1638,6 +1839,7 @@ func _open_cards(chest: bool) -> void:
 	hud.set_joystick(false, Vector2.ZERO, Vector2.ZERO)
 	offers = _make_offers(2, chest, [])
 	_show_cards()
+	sfx.play("level")
 	if autoplay and bot_cards:
 		call_deferred("_bot_pick")
 
@@ -1868,19 +2070,20 @@ func _render_units() -> void:
 	for i in e_count:
 		var ty := e_type[i]
 		var p := e_pos[i]
-		var bright := 1.9 if e_flash[i] > 0.0 else 1.0
+		var tint := Color(1.9, 1.9, 1.9) if e_flash[i] > 0.0 else (Color(0.55, 0.85, 1.4) if freeze_t > 0.0 else Color.WHITE)
+		var spin := 0.0 if freeze_t > 0.0 else t * 25.0
 		match ty:
 			Data.TANK:
-				_put_unit(Art.TANK, p, e_ang[i], t_size[ty], bright)
-				_put_unit(Art.TURRET, p, (player - p).angle(), t_size[ty], bright)
+				_put_unit(Art.TANK, p, e_ang[i], t_size[ty], tint)
+				_put_unit(Art.TURRET, p, (player - p).angle(), t_size[ty], tint)
 			Data.HELI:
-				_put_unit(Art.HELI, p, e_ang[i], t_size[ty], bright)
-				_put_unit(Art.ROTOR, p, t * 25.0 + i, t_size[ty] * 1.15, bright)
+				_put_unit(Art.HELI, p, e_ang[i], t_size[ty], tint)
+				_put_unit(Art.ROTOR, p, spin + i, t_size[ty] * 1.15, tint)
 			_:
-				_put_unit(ty, p, e_ang[i], t_size[ty], bright)
+				_put_unit(ty, p, e_ang[i], t_size[ty], tint)
 
 
-func _put_unit(cell: int, p: Vector2, ang: float, size: float, bright: float) -> void:
+func _put_unit(cell: int, p: Vector2, ang: float, size: float, tint: Color) -> void:
 	var n := unit_n[cell]
 	if n >= unit_cap[cell]:
 		return
@@ -1894,9 +2097,9 @@ func _put_unit(cell: int, p: Vector2, ang: float, size: float, bright: float) ->
 	u_buf[o + 4] = s
 	u_buf[o + 5] = c
 	u_buf[o + 7] = p.y
-	u_buf[o + 8] = bright
-	u_buf[o + 9] = bright
-	u_buf[o + 10] = bright
+	u_buf[o + 8] = tint.r
+	u_buf[o + 9] = tint.g
+	u_buf[o + 10] = tint.b
 
 
 func _upload() -> void:
@@ -1922,6 +2125,167 @@ func _upload() -> void:
 		RenderingServer.multimesh_set_buffer(ring_mm.get_rid(), r_buf)
 	blade_mm.visible_instance_count = bl_count
 	RenderingServer.multimesh_set_buffer(blade_mm.get_rid(), bl_buf)
+	coin_mm.visible_instance_count = co_count
+	RenderingServer.multimesh_set_buffer(coin_mm.get_rid(), co_buf)
+
+
+# --- Combo, coins and screen-clear pickups ---------------------------------
+
+## Kills within COMBO_TIME of each other chain into a combo. It boosts XP
+## (up to double at 1,000) and pays gold at each milestone.
+func _add_combo() -> void:
+	combo += 1
+	combo_timer = COMBO_TIME
+	combo_best = maxi(combo_best, combo)
+	if combo_step < Data.COMBO_MILESTONES.size() and combo >= int(Data.COMBO_MILESTONES[combo_step][0]):
+		var m: Array = Data.COMBO_MILESTONES[combo_step]
+		combo_step += 1
+		gold += int(m[2])
+		hud.show_banner("%s  x%d  +%d gold" % [m[1], m[0], m[2]])
+		sfx.play("fanfare")
+
+
+func _coin(p: Vector2) -> void:
+	if co_count >= COIN_CAP:
+		gold += 1
+		return
+	co_pos[co_count] = p
+	co_mag[co_count] = 0
+	co_count += 1
+
+
+func _update_coins(dt: float) -> void:
+	var pr2 := pickup * pickup
+	var i := 0
+	while i < co_count:
+		var p := co_pos[i]
+		var to := player - p
+		var d2 := to.length_squared()
+		if co_mag[i] == 0 and d2 < pr2:
+			co_mag[i] = 1
+		if co_mag[i] == 1:
+			var d := sqrt(d2)
+			if d < PLAYER_RADIUS + 10.0:
+				gold += 1
+				sfx.play("coin", randf_range(0.95, 1.1), -8.0)
+				co_count -= 1
+				co_pos[i] = co_pos[co_count]
+				co_mag[i] = co_mag[co_count]
+				continue
+			p += to / maxf(d, 0.001) * minf(d, 1000.0 * dt)
+			co_pos[i] = p
+		var o := i * STRIDE
+		var spin := absf(cos(t * 5.0 + i))
+		co_buf[o] = maxf(spin, 0.15)
+		co_buf[o + 3] = p.x
+		co_buf[o + 7] = p.y
+		i += 1
+
+
+func _drop_pickup(p: Vector2, kind: int) -> void:
+	if pickups.size() >= PICKUP_CAP:
+		return
+	var icon := Sprite2D.new()
+	icon.texture = pickup_textures[kind]
+	icon.position = p
+	icon.scale = Vector2(0.75, 0.75)
+	world.add_child(icon)
+	pickups.append([kind, p, PICKUP_LIFE, icon])
+
+
+func _update_powerups(dt: float) -> void:
+	var k := pickups.size() - 1
+	while k >= 0:
+		var pk: Array = pickups[k]
+		pk[2] = float(pk[2]) - dt
+		var icon: Sprite2D = pk[3]
+		var pos: Vector2 = pk[1]
+		icon.position = pos + Vector2(0.0, sin(t * 4.0 + k) * 5.0)
+		icon.rotation = sin(t * 2.0 + k) * 0.2
+		icon.visible = float(pk[2]) > 4.0 or int(t * 8.0) % 2 == 0
+		if pos.distance_to(player) < 46.0:
+			_apply_pickup(int(pk[0]))
+			icon.queue_free()
+			pickups.remove_at(k)
+		elif float(pk[2]) <= 0.0:
+			icon.queue_free()
+			pickups.remove_at(k)
+		k -= 1
+
+
+func _apply_pickup(kind: int) -> void:
+	hud.show_banner(Data.PICKUP_LABELS[kind])
+	match kind:
+		Data.NUKE:
+			# Wipes every normal enemy near the screen; elites and the boss
+			# lose a quarter of their health.
+			var reach2 := pow(view.length() * 0.6, 2.0)
+			for j in e_count:
+				if e_hp[j] <= 0.0 or player.distance_squared_to(e_pos[j]) > reach2:
+					continue
+				if e_type[j] == Data.ELITE:
+					_damage(j, t_hp[Data.ELITE] * 0.25, player, false)
+				else:
+					e_hp[j] = 0.0
+					_kill(j)
+			if boss_on:
+				_damage_boss(BOSS_HP * 0.05, false)
+			b_count = 0
+			hud.flash(Color(1, 1, 1, 0.9))
+			trauma = 1.0
+			hitstop = 0.15
+			sfx.play("big_boom")
+		Data.FREEZE:
+			freeze_t = FREEZE_TIME
+			b_count = 0
+			telegraphs.clear()
+			hud.flash(Color(0.5, 0.85, 1.0, 0.5))
+			sfx.play("freeze")
+		Data.VACUUM:
+			for i in g_count:
+				g_mag[i] = 1
+			for i in co_count:
+				co_mag[i] = 1
+			sfx.play("powerup")
+		Data.MEDKIT:
+			hp = minf(max_hp, hp + max_hp * 0.3)
+			sfx.play("powerup")
+
+
+# --- Saved progress ---------------------------------------------------------
+
+func _record_run(victory: bool) -> void:
+	save.set_value("stats", "gold", int(save.get_value("stats", "gold", 0)) + gold)
+	save.set_value("stats", "runs", int(save.get_value("stats", "runs", 0)) + 1)
+	save.set_value("stats", "wins", int(save.get_value("stats", "wins", 0)) + (1 if victory else 0))
+	save.set_value("stats", "best_kills", maxi(int(save.get_value("stats", "best_kills", 0)), kills))
+	save.set_value("stats", "best_combo", maxi(int(save.get_value("stats", "best_combo", 0)), combo_best))
+	save.set_value("stats", "best_time", maxf(float(save.get_value("stats", "best_time", 0.0)), t))
+	if not smoke:
+		save.save(SAVE_PATH)
+
+
+func _save_summary() -> String:
+	var runs := int(save.get_value("stats", "runs", 0))
+	if runs == 0:
+		return ""
+	var best := float(save.get_value("stats", "best_time", 0.0))
+	return "Gold %d   Runs %d   Wins %d\nBest: %d:%02d survived, %d kills, x%d combo" % [
+		int(save.get_value("stats", "gold", 0)), runs, int(save.get_value("stats", "wins", 0)),
+		int(best) / 60, int(best) % 60, int(save.get_value("stats", "best_kills", 0)), int(save.get_value("stats", "best_combo", 0))]
+
+
+## "Watch an ad to double your gold" (free in this build).
+func _on_double_gold() -> void:
+	if state != State.OVER or gold_doubled:
+		return
+	gold_doubled = true
+	save.set_value("stats", "gold", int(save.get_value("stats", "gold", 0)) + gold)
+	if not smoke:
+		save.save(SAVE_PATH)
+	gold *= 2
+	hud.show_results_gold(gold)
+	sfx.play("coin")
 
 
 # --- HUD and results --------------------------------------------------------
@@ -1930,6 +2294,8 @@ func _update_hud() -> void:
 	var left := maxf(0.0, STAGE_TIME - t)
 	var clock := "BOSS" if boss_spawned else "%d:%02d" % [int(left) / 60, int(left) % 60]
 	hud.set_info("Lv %d   Kills %d" % [level, kills], clock)
+	hud.set_gold(gold)
+	hud.set_combo(combo, combo_timer / COMBO_TIME)
 
 
 func _build_text() -> String:
@@ -1948,6 +2314,7 @@ func _results_text(victory: bool) -> String:
 	var lines := PackedStringArray()
 	lines.append("Stage 1: %s" % ("cleared" if victory else "failed"))
 	lines.append("Time %d:%02d   Level %d   Kills %d%s" % [int(t) / 60, int(t) % 60, level, kills, "   (revived)" if revived else ""])
+	lines.append("Gold %d   Best combo x%d" % [gold, combo_best])
 	lines.append("Build: " + _build_text())
 	var n := frame_ms.size()
 	if n > 0:
@@ -2097,8 +2464,13 @@ func _run_shots(dir: String) -> void:
 			pending_levels += 1
 			await _frames(3)
 			await _save_shot(dir, "cards")
-			bot_cards = true
 			_bot_pick()
+			_grant({"rifle": 8, "overclock": 3})
+			_open_chest()
+			await _frames(90)
+			await _save_shot(dir, "chest")
+			_on_chest_collected()
+			bot_cards = true
 			t = STAGE_TIME - 1.0
 			await _frames(5)
 			bot_still = true

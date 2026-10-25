@@ -8,8 +8,8 @@ enum { TROOPER, SHIELD, GRENADIER, ELITE, TANK, HELI }
 const ENEMY_NAMES := ["Trooper", "Shield Trooper", "Grenadier", "Juggernaut", "Battle Tank", "Attack Helicopter"]
 const ENEMY_HP := [10.0, 24.0, 14.0, 700.0, 170.0, 70.0]
 const ENEMY_SPEED := [72.0, 56.0, 62.0, 52.0, 34.0, 125.0]
-const ENEMY_RADIUS := [12.0, 14.0, 12.0, 24.0, 26.0, 22.0]
-const ENEMY_SIZE := [32.0, 36.0, 32.0, 60.0, 68.0, 60.0]  # On-screen size of the sprite.
+const ENEMY_RADIUS := [14.0, 16.0, 14.0, 28.0, 30.0, 26.0]
+const ENEMY_SIZE := [42.0, 46.0, 42.0, 76.0, 84.0, 76.0]  # On-screen size of the sprite.
 const ENEMY_XP := [1, 2, 2, 30, 10, 6]
 const ENEMY_TOUCH := [8.0, 10.0, 8.0, 25.0, 20.0, 10.0]  # Contact damage.
 const ENEMY_FIRE := [2.6, 0.0, 3.6, 3.0, 4.2, 3.2]  # Seconds between attacks; 0 = none.
@@ -61,6 +61,32 @@ const RARITY_NAMES := ["Common", "Rare", "Epic", "Legendary"]
 const RARITY_COLORS := [Color(0.75, 0.78, 0.82), Color(0.3, 0.6, 1.0), Color(0.75, 0.4, 1.0), Color(1.0, 0.72, 0.2)]
 const RARITY_LEVELS := [1, 1, 2, 3]
 const RARE_BONUS := 0.04  # Rare cards also give +4% damage to everything.
+
+# Screen-clear pickups.
+enum { NUKE, FREEZE, VACUUM, MEDKIT }
+const PICKUP_LABELS := ["NUKE!", "FREEZE!", "VACUUM!", "MEDKIT"]
+
+# Kill-combo milestones: count, banner, gold reward.
+const COMBO_MILESTONES := [
+	[50, "KILLING SPREE", 10],
+	[100, "RAMPAGE", 20],
+	[250, "MASSACRE", 50],
+	[500, "UNSTOPPABLE", 100],
+	[1000, "GODLIKE", 200],
+	[2000, "APOCALYPSE", 400],
+]
+
+# Timed events: time, banner, enemy type, count, formation.
+const EVENTS := [
+	[90.0, "AMBUSH!", TROOPER, 30, "ring"],
+	[150.0, "SHIELD WALL!", SHIELD, 24, "line"],
+	[195.0, "TANK COLUMN!", TANK, 5, "line"],
+	[270.0, "AIR RAID!", HELI, 6, "ring"],
+]
+
+# Treasure chests give 1, 3 or 5 rewards.
+const CHEST_SIZES := [1, 3, 5]
+const CHEST_ODDS := [70.0, 25.0, 5.0]
 
 
 ## Card rarity odds shift from mostly Common toward Epic and Legendary.
