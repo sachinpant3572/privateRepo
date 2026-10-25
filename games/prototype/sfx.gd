@@ -37,24 +37,24 @@ func _ready() -> void:
 
 
 ## Plays a sound unless it played less than its minimum gap ago.
-func play(name: String, pitch: float = 1.0, volume_db: float = 0.0) -> void:
-	if muted or not sounds.has(name):
+func play(sound: String, pitch: float = 1.0, volume_db: float = 0.0) -> void:
+	if muted or not sounds.has(sound):
 		return
 	var now := Time.get_ticks_msec() / 1000.0
-	if now - float(last_played.get(name, -10.0)) < float(gaps[name]):
+	if now - float(last_played.get(sound, -10.0)) < float(gaps[sound]):
 		return
-	last_played[name] = now
+	last_played[sound] = now
 	var p := players[next_player]
 	next_player = (next_player + 1) % VOICES
-	p.stream = sounds[name]
+	p.stream = sounds[sound]
 	p.pitch_scale = pitch
 	p.volume_db = volume_db
 	p.play()
 
 
-func _add(name: String, stream: AudioStreamWAV, gap: float) -> void:
-	sounds[name] = stream
-	gaps[name] = gap
+func _add(sound: String, stream: AudioStreamWAV, gap: float) -> void:
+	sounds[sound] = stream
+	gaps[sound] = gap
 
 
 ## A sweep from f0 to f1 Hz. noise_mix blends in noise (1 = pure noise).

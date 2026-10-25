@@ -110,10 +110,10 @@ func show_play() -> void:
 	_only(play)
 
 
-func show_cards(infos: Array, third_left: int, reroll_left: int, chest: bool, banish_left: int, banish_mode: bool) -> void:
+func show_cards(infos: Array, third_left: int, reroll_left: int, is_chest: bool, banish_left: int, banish_mode: bool) -> void:
 	for child in card_list.get_children():
 		child.queue_free()
-	card_title.text = "TAP A CARD TO BANISH IT" if banish_mode else ("POWER CHEST!" if chest else "LEVEL UP!")
+	card_title.text = "TAP A CARD TO BANISH IT" if banish_mode else ("POWER CHEST!" if is_chest else "LEVEL UP!")
 	for i in infos.size():
 		var info_d: Dictionary = infos[i]
 		var card := Button.new()
@@ -245,7 +245,7 @@ func set_combo(count: int, frac: float) -> void:
 	combo_label.visible = count >= 10
 	combo_label.text = "x%d COMBO" % count
 	combo_label.modulate.a = clampf(frac * 2.0, 0.3, 1.0)
-	combo_label.add_theme_font_size_override("font_size", 26 + mini(count / 50, 14))
+	combo_label.add_theme_font_size_override("font_size", 26 + mini(floori(count / 50.0), 14))
 
 
 func set_joystick(on: bool, origin: Vector2, knob: Vector2) -> void:

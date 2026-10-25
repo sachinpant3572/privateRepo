@@ -2445,10 +2445,10 @@ func _open_chest() -> void:
 	var size: int = Data.CHEST_SIZES[_pick(PackedFloat32Array(Data.CHEST_ODDS))]
 	chest_rewards = []
 	var taken := {}
-	var ready := _evolution_ready()
-	if ready != "":
-		chest_rewards.append(["evolve", ready])
-		taken[ready] = true
+	var evo := _evolution_ready()
+	if evo != "":
+		chest_rewards.append(["evolve", evo])
+		taken[evo] = true
 	while chest_rewards.size() < size:
 		var pool := []
 		for id in weapons:
@@ -3007,11 +3007,11 @@ func _update_sparks(dt: float) -> void:
 		if stretch_on:
 			var sp := v.length()
 			var u := v / maxf(sp, 0.001)
-			var len := k * (1.0 + sp * 0.012)
+			var streak := k * (1.0 + sp * 0.012)
 			var wid := k * 0.7
-			p_buf[o] = u.x * len
+			p_buf[o] = u.x * streak
 			p_buf[o + 1] = -u.y * wid
-			p_buf[o + 4] = u.y * len
+			p_buf[o + 4] = u.y * streak
 			p_buf[o + 5] = u.x * wid
 		else:
 			p_buf[o] = k
@@ -3425,7 +3425,7 @@ func _save_summary() -> String:
 	var found: Array = save.get_value("stats", "synergies", [])
 	return "Gold %d   Runs %d   Wins %d   Synergies found %d/%d\nBest: %d:%02d survived, %d kills, x%d combo" % [
 		int(save.get_value("stats", "gold", 0)), runs, int(save.get_value("stats", "wins", 0)), found.size(), Data.SYNERGIES.size(),
-		int(best) / 60, int(best) % 60, int(save.get_value("stats", "best_kills", 0)), int(save.get_value("stats", "best_combo", 0))]
+		floori(best / 60.0), int(best) % 60, int(save.get_value("stats", "best_kills", 0)), int(save.get_value("stats", "best_combo", 0))]
 
 
 ## "Watch an ad to double your gold" (free in this build).
@@ -3445,7 +3445,7 @@ func _on_double_gold() -> void:
 
 func _update_hud() -> void:
 	var left := maxf(0.0, STAGE_TIME - t)
-	var clock := "BOSS" if boss_spawned else "%d:%02d" % [int(left) / 60, int(left) % 60]
+	var clock := "BOSS" if boss_spawned else "%d:%02d" % [floori(left / 60.0), int(left) % 60]
 	hud.set_info("Lv %d   Kills %d" % [level, kills], clock)
 	hud.set_gold(gold)
 	hud.set_combo(combo, combo_timer / COMBO_TIME)
@@ -3467,7 +3467,7 @@ func _build_text() -> String:
 func _results_text(victory: bool) -> String:
 	var lines := PackedStringArray()
 	lines.append("Stage 1: %s" % ("cleared" if victory else "failed"))
-	lines.append("Time %d:%02d   Level %d   Kills %d%s" % [int(t) / 60, int(t) % 60, level, kills, "   (revived)" if revived else ""])
+	lines.append("Time %d:%02d   Level %d   Kills %d%s" % [floori(t / 60.0), int(t) % 60, level, kills, "   (revived)" if revived else ""])
 	lines.append("Gold %d   Best combo x%d" % [gold, combo_best])
 	lines.append("Build: " + _build_text())
 	if not synergies.is_empty():
@@ -3690,9 +3690,9 @@ func _showcase() -> void:
 		e_hp[i] = 1.0e6
 
 
-func _save_shot(dir: String, name: String) -> void:
+func _save_shot(dir: String, shot_name: String) -> void:
 	await RenderingServer.frame_post_draw
-	var path := dir.path_join(name + ".png")
+	var path := dir.path_join(shot_name + ".png")
 	get_viewport().get_texture().get_image().save_png(path)
 	var units := 0
 	for n in unit_n:

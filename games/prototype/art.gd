@@ -51,7 +51,7 @@ static func cell_textures() -> Array:
 		if real != null:
 			out.append(real)
 			continue
-		var region := Rect2i((cell % COLS) * CELL, int(cell / COLS) * CELL, CELL, CELL)
+		var region := Rect2i((cell % COLS) * CELL, floori(cell / float(COLS)) * CELL, CELL, CELL)
 		var cell_img := img.get_region(region)
 		if cell != ROTOR:
 			_outline(cell_img)
@@ -62,7 +62,7 @@ static func cell_textures() -> Array:
 static func atlas_image() -> Image:
 	var img := Image.create_empty(CELL * COLS, CELL * ROWS, false, Image.FORMAT_RGBA8)
 	for cell in COLS * ROWS:
-		var o := Vector2(float((cell % COLS) * CELL), float(int(cell / COLS) * CELL))
+		var o := Vector2(float((cell % COLS) * CELL), float(floori(cell / float(COLS)) * CELL))
 		match cell:
 			TROOPER:
 				_infantry(img, o, CRIMSON)

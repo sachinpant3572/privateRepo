@@ -213,8 +213,8 @@ func _layer(tex: Texture2D, pos: Vector2, px: float) -> Sprite2D:
 	return s
 
 
-func _set_tex(s: Sprite2D, name: String, px: float) -> void:
-	var tex := Art.sprite(name)
+func _set_tex(s: Sprite2D, tex_name: String, px: float) -> void:
+	var tex := Art.sprite(tex_name)
 	if tex == null:
 		return
 	s.texture = tex

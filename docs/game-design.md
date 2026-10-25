@@ -23,6 +23,7 @@ Draft 1: every number here is a starting point for testing.
 15. [Art and audio list for World 1](#15-art-and-audio-list-for-world-1)
 16. [Production plan](#16-production-plan)
 17. [Open decisions](#17-open-decisions)
+18. [Future plans (TODO)](#18-future-plans-todo)
 
 ---
 
@@ -541,3 +542,51 @@ Start the Play Console account and recruit testers during M1–M2, because the
 | Card count | Pick 1 of 2 (+ paid 3rd), or pick 1 of 3 | Start with 2 + paid 3rd; A/B test against 3 |
 | Stage length | 5 min + boss, or longer | 5 min + boss |
 | Energy | None, or light | None at launch |
+
+---
+
+## 18. Future plans (TODO)
+
+Not scheduled yet. Pick these up after all World 1 stages are built and tested.
+
+### Storyline (proposal, to finalize later)
+
+Builds on [Story and hero](#2-story-and-hero). Goal: players feel connected to
+the lore, replay runs, and stay longer, which also supports purchases.
+
+**Premise:** the Fracture shattered the multiverse; in every broken world a
+tyrant seized the power leaking out. The Anomaly wakes in the rubble with no
+memory, made of Fracture energy, able to absorb a world's Core.
+
+**The mystery:** each Core absorbed restores one memory. Over the worlds the
+player learns that the Anomaly is a fragment of whoever caused the Fracture,
+and that the real enemy, **the Hollow**, is a parasite riding inside each
+world's tyrant, collecting the Cores to remake reality. World 1 ends when the
+Iron General falls and the Hollow leaves his body.
+
+**Systems that carry the story (and retention):**
+
+| System | Why players come back |
+|---|---|
+| **Costumes are alternate Anomalies** from other broken worlds (Frost Warden from a frozen timeline, etc.), each with a short backstory | Costumes become lore to collect, not just cosmetics |
+| **Memory shards**: rare drops from elites, chests and secret stages; a full set per world unlocks a secret ending panel and a costume | Replays and build variety |
+| **Two endings per world**: absorb the Core (power path, corrupted look) or free the world (hero path, radiant look), each with its own bonus and dialogue | Replay for the other path |
+| **Haven**: a home base where rescued survivors open shops (gear smith, costume tailor, codex researcher) | Visible progress; shops live inside the story |
+| **ECHO**: a broken robot companion who narrates in a few lines between stages | Character and humor without long cutscenes |
+| **Lore codex**: entries for every enemy, boss and weapon, with completion rewards | Collecting |
+| **Rift Events**: seasonal broken worlds that bleed in for a limited time, each with a story chapter | Events and battle-pass retention |
+
+**Delivery:** 3–4 comic panels per boss and a few ECHO lines per stage, made in
+one consistent style with Higgsfield (about 20 images, about 10 credits, per
+world).
+
+**Open questions:** tone (epic, or heroic with ECHO's humor); a silent,
+player-named hero or a voiced, named one; whether the twist above stays.
+
+### Code health
+
+- Split `games/prototype/game.gd` (about 3,700 lines) into modules: weapons,
+  enemies, pickups, progression, effects. Do it at a quiet moment, because it
+  touches every line other work is changing.
+- Long lines: the lint config does not enforce a limit yet; wrap lines over
+  about 120 characters when touching them.
