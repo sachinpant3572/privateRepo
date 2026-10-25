@@ -31,8 +31,25 @@ How it's built:
 | 5-minute heat soak | 500 + 1,000 for 5 minutes. Logs FPS and the phone's heat level every 10 s, to show whether the phone slows down as it warms up |
 | Heavy / Extreme | 1,000 + 2,000 and 2,000 + 4,000 |
 
+## Graphics quality
+
+| | Low | Medium | High | Ultra |
+|---|---|---|---|---|
+| Glow (bloom) | off | 35% resolution | 50% resolution | full resolution, stronger |
+| Bullets | dots | dots | streaks | streaks |
+| Sparks per kill | 4 | 6 | 10, stretched | 16, stretched |
+| Shockwave rings | off | off | up to 150 | up to 400 |
+| Background | plain | grid and nebula, dim | grid and nebula | grid and nebula, pulses on hits |
+| Screen effects | off | off | off | vignette, color fringing that grows with shake |
+| Frame-rate cap | 30 | 60 | 60 | none (screen max) |
+
+- **Default tier:** Ultra on phones with a 90 Hz or faster screen, Medium on
+  the rest. Tap **Graphics quality** to cycle through them.
+- **How the glow works:** it uses canvas shaders only (`fx.gd`, `blur.gdshader`),
+  not Godot's built-in glow, so every tier runs on the Compatibility renderer.
+
 Settings:
-- **Effects:** turn explosions, flashes and shake on or off.
+- **Graphics quality:** Low, Medium, High or Ultra (table above).
 - **Frame-rate cap:** 60, 30, or none. With no cap, the test runs at the
   screen's refresh rate (e.g. 120 Hz), which shows how much headroom a fast
   phone has.
@@ -71,5 +88,8 @@ folder:
    SHA-512 checksums.
 2. Runs a headless smoke test (`godot --headless -- --smoke`). This runs each
    test mode briefly and fails on any script error.
-3. Exports a release APK (arm64-v8a and armeabi-v7a).
-4. Uploads the APK as a build artifact and to the `stress-test-builds` branch.
+3. Renders a screenshot of each quality tier with software OpenGL under Xvfb.
+   This compiles the shaders and fails on any shader error.
+4. Exports a release APK (arm64-v8a and armeabi-v7a).
+5. Uploads the APK and screenshots as build artifacts and to the
+   `stress-test-builds` branch.

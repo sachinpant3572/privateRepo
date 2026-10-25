@@ -4,6 +4,7 @@ extends Node2D
 ##
 ## Each type is drawn with one MultiMesh (one draw call). Positions live in
 ## packed arrays, and bullet hits use a spatial hash grid instead of physics.
+## Visual quality tiers (Low to Ultra) live in fx.gd.
 
 const ENEMY_RADIUS := 11.0
 const BULLET_RADIUS := 4.0
@@ -14,8 +15,11 @@ const HIT_COOLDOWN := 0.08
 const BULLET_SPEED := 560.0
 const BULLET_LIFE := 1.5
 const BULLET_STREAMS := 6
-const PARTICLES_PER_KILL := 8
 const PARTICLE_LIFE := 0.4
+const PARTICLE_MAX := 8000
+const RING_RADIUS := 14.0
+const RING_LIFE := 0.35
+const TRAIL_STRETCH := 3.0
 const CELL := 48.0
 const MARGIN := 40.0
 const STRIDE := 12  # Floats per instance: 8 for the Transform2D, 4 for the color.
@@ -35,12 +39,15 @@ const HEAT_NAMES := ["none", "light", "moderate", "severe", "critical", "emergen
 const ENEMY_COLOR := Color(1.0, 0.31, 0.55)
 const BULLET_COLOR := Color(0.5, 0.9, 1.0)
 const PARTICLE_COLOR := Color(1.0, 0.65, 0.25)
+const RING_COLOR := Color(1.0, 0.85, 0.6)
+
+const FX := preload("res://fx.gd")
 
 enum Mode { MENU, FIXED, RAMP, SOAK }
 
 var mode := Mode.MENU
 var smoke := false
-var effects_on := true
+var quality := "Ultra"
 var fps_cap := 60  # 0 means no cap: the screen's refresh rate.
 var heat_on := true
 
@@ -72,6 +79,11 @@ var p_life := PackedFloat32Array()
 var p_count := 0
 var p_cap := 0
 
+var r_pos := PackedVector2Array()
+var r_life := PackedFloat32Array()
+var r_count := 0
+var r_cap := 0
+
 var grid_cols := 1
 var grid_rows := 1
 var cell_head := PackedInt32Array()
@@ -81,10 +93,14 @@ var player_sprite: Sprite2D
 var enemy_mm: MultiMesh
 var bullet_mm: MultiMesh
 var particle_mm: MultiMesh
+var ring_mm: MultiMesh
 var e_buf := PackedFloat32Array()
 var b_buf := PackedFloat32Array()
 var p_buf := PackedFloat32Array()
+var r_buf := PackedFloat32Array()
 var noise := FastNoiseLite.new()
+var glow_layers := []
+var fx
 var ui
 
 # Frame stats for the current run.
@@ -115,29 +131,42 @@ var heat_worst := -1
 
 
 func _ready() -> void:
-	smoke = "--smoke" in OS.get_cmdline_user_args()
+	var args := OS.get_cmdline_user_args()
+	var shots_dir := ""
+	for arg in args:
+		if arg.begins_with("--shots="):
+			shots_dir = arg.trim_prefix("--shots=")
+	smoke = "--smoke" in args or shots_dir != ""
 	world = Node2D.new()
 	add_child(world)
-	enemy_mm = _make_layer(_circle_texture(32, 0.7), ENEMY_RADIUS, false)
-	bullet_mm = _make_layer(_circle_texture(16, 0.35), BULLET_RADIUS, true)
-	particle_mm = _make_layer(_circle_texture(16, 0.0), PARTICLE_RADIUS, true)
+	enemy_mm = _make_layer(_circle_texture(64, 0.62, 0.35), ENEMY_RADIUS, false, Color(0.35, 0.35, 0.35))
+	bullet_mm = _make_layer(_circle_texture(32, 0.35, 0.0), BULLET_RADIUS, true, Color.WHITE)
+	particle_mm = _make_layer(_circle_texture(16, 0.0, 0.0), PARTICLE_RADIUS, true, Color.WHITE)
+	ring_mm = _make_layer(_ring_texture(64), RING_RADIUS, true, Color.WHITE)
 	player_sprite = Sprite2D.new()
-	player_sprite.texture = _circle_texture(48, 0.8)
+	player_sprite.texture = _circle_texture(48, 0.8, 0.0)
 	player_sprite.modulate = Color(0.85, 1.0, 1.0)
 	player_sprite.visible = false
 	world.add_child(player_sprite)
 
+	fx = FX.new()
+	add_child(fx)
+	fx.setup(glow_layers, player_sprite.texture)
+
 	ui = preload("res://ui.gd").new()
+	ui.layer = 10
 	add_child(ui)
 	ui.start_requested.connect(_on_start_requested)
 	ui.stop_requested.connect(_finish)
 	ui.option_toggled.connect(_on_option_toggled)
-	ui.set_options(effects_on, fps_cap, heat_on)
 
 	get_viewport().size_changed.connect(_on_resized)
 	_on_resized()
-	Engine.max_fps = fps_cap
-	if smoke:
+	# Fast screens get Ultra by default; others start at Medium.
+	_set_quality("Ultra" if DisplayServer.screen_get_refresh_rate() >= 90.0 else "Medium")
+	if shots_dir != "":
+		_run_shots(shots_dir)
+	elif smoke:
 		_run_smoke()
 
 
@@ -160,6 +189,8 @@ func _on_resized() -> void:
 	grid_cols = int(ceil((arena.x + MARGIN * 2.0) / CELL)) + 1
 	grid_rows = int(ceil((arena.y + MARGIN * 2.0) / CELL)) + 1
 	cell_head.resize(grid_cols * grid_rows)
+	if fx != null:
+		fx.resize(arena)
 
 
 func _on_start_requested(kind: String, enemies: int, bullets: int) -> void:
@@ -174,8 +205,9 @@ func _on_start_requested(kind: String, enemies: int, bullets: int) -> void:
 
 func _on_option_toggled(option: String) -> void:
 	match option:
-		"effects":
-			effects_on = not effects_on
+		"quality":
+			_set_quality(FX.ORDER[(FX.ORDER.find(quality) + 1) % FX.ORDER.size()])
+			return
 		"cap":
 			match fps_cap:
 				60:
@@ -187,7 +219,15 @@ func _on_option_toggled(option: String) -> void:
 			Engine.max_fps = fps_cap
 		"heat":
 			heat_on = not heat_on
-	ui.set_options(effects_on, fps_cap, heat_on)
+	ui.set_options(quality, fps_cap, heat_on)
+
+
+func _set_quality(tier_name: String) -> void:
+	quality = tier_name
+	fx.apply(quality, arena)
+	fps_cap = fx.tier["fps_cap"]
+	Engine.max_fps = fps_cap
+	ui.set_options(quality, fps_cap, heat_on)
 
 
 func _start(new_mode: Mode, enemies: int, bullets: int) -> void:
@@ -200,6 +240,7 @@ func _start(new_mode: Mode, enemies: int, bullets: int) -> void:
 	e_count = 0
 	b_count = 0
 	p_count = 0
+	r_count = 0
 	frame_ms = PackedFloat32Array()
 	hud_timer = 0.0
 	level_time = 0.0
@@ -246,13 +287,20 @@ func _set_load(enemies: int, bullets: int) -> void:
 	bullet_mm.instance_count = b_cap
 	b_buf = _instance_buffer(b_cap, BULLET_COLOR)
 
-	p_cap = enemies * 2 + 200
+	p_cap = mini(PARTICLE_MAX, 200 + enemies * int(fx.tier["sparks"]) / 4)
 	p_pos.resize(p_cap)
 	p_vel.resize(p_cap)
 	p_life.resize(p_cap)
 	p_count = mini(p_count, p_cap)
 	particle_mm.instance_count = p_cap
 	p_buf = _instance_buffer(p_cap, PARTICLE_COLOR)
+
+	r_cap = int(fx.tier["rings"])
+	r_pos.resize(r_cap)
+	r_life.resize(r_cap)
+	r_count = mini(r_count, r_cap)
+	ring_mm.instance_count = r_cap
+	r_buf = _instance_buffer(r_cap, RING_COLOR)
 
 
 func _instance_buffer(count: int, color: Color) -> PackedFloat32Array:
@@ -305,6 +353,7 @@ func _process(delta: float) -> void:
 	_fire(dt)
 	_update_bullets(dt)
 	_update_particles(dt)
+	_update_rings(dt)
 	_upload()
 	_shake(dt)
 	sim_ms = (Time.get_ticks_usec() - t0) / 1000.0
@@ -349,7 +398,7 @@ func _update_enemies(dt: float) -> void:
 		var o := i * STRIDE
 		e_buf[o + 3] = p.x
 		e_buf[o + 7] = p.y
-		if cool > 0.0 and effects_on:
+		if cool > 0.0:
 			e_buf[o + 9] = 1.0
 			e_buf[o + 10] = 1.0
 		else:
@@ -377,6 +426,7 @@ func _update_bullets(dt: float) -> void:
 	var hit_r2 := (ENEMY_RADIUS + BULLET_RADIUS) * (ENEMY_RADIUS + BULLET_RADIUS)
 	var lo := -MARGIN
 	var hi := arena + Vector2(MARGIN, MARGIN)
+	var trails: bool = fx.tier["trails"]
 	var i := 0
 	while i < b_count:
 		var life := b_life[i] - dt
@@ -405,6 +455,13 @@ func _update_bullets(dt: float) -> void:
 		var o := i * STRIDE
 		b_buf[o + 3] = p.x
 		b_buf[o + 7] = p.y
+		if trails:
+			# Stretch the bullet along its direction into a streak.
+			var d := b_vel[i] / BULLET_SPEED
+			b_buf[o] = d.x * TRAIL_STRETCH
+			b_buf[o + 1] = -d.y
+			b_buf[o + 4] = d.y * TRAIL_STRETCH
+			b_buf[o + 5] = d.x
 		i += 1
 
 
@@ -414,14 +471,17 @@ func _hit(j: int) -> void:
 	if e_hp[j] > 0:
 		return
 	kills += 1
-	if effects_on:
-		_burst(e_pos[j])
-		trauma = minf(trauma + 0.004, 0.3)
+	_burst(e_pos[j])
+	trauma = minf(trauma + 0.004, 0.3)
 	_spawn_enemy(j, false)
 
 
 func _burst(at: Vector2) -> void:
-	for k in PARTICLES_PER_KILL:
+	if r_count < r_cap:
+		r_pos[r_count] = at
+		r_life[r_count] = RING_LIFE
+		r_count += 1
+	for k in int(fx.tier["sparks"]):
 		if p_count >= p_cap:
 			return
 		p_pos[p_count] = at
@@ -432,6 +492,7 @@ func _burst(at: Vector2) -> void:
 
 func _update_particles(dt: float) -> void:
 	var drag := maxf(0.0, 1.0 - 3.0 * dt)
+	var sparks: bool = fx.tier["trails"]
 	var i := 0
 	while i < p_count:
 		var life := p_life[i] - dt
@@ -448,11 +509,44 @@ func _update_particles(dt: float) -> void:
 		p_life[i] = life
 		var k := life / PARTICLE_LIFE
 		var o := i * STRIDE
-		p_buf[o] = k
-		p_buf[o + 5] = k
+		if sparks:
+			# Stretch along the direction of travel, longer when faster.
+			var speed := v.length()
+			var u := v / maxf(speed, 0.001)
+			var stretch := k * (1.0 + speed * 0.012)
+			var width := k * 0.7
+			p_buf[o] = u.x * stretch
+			p_buf[o + 1] = -u.y * width
+			p_buf[o + 4] = u.y * stretch
+			p_buf[o + 5] = u.x * width
+		else:
+			p_buf[o] = k
+			p_buf[o + 5] = k
 		p_buf[o + 3] = p.x
 		p_buf[o + 7] = p.y
 		p_buf[o + 11] = k
+		i += 1
+
+
+func _update_rings(dt: float) -> void:
+	var i := 0
+	while i < r_count:
+		var life := r_life[i] - dt
+		if life <= 0.0:
+			r_count -= 1
+			r_pos[i] = r_pos[r_count]
+			r_life[i] = r_life[r_count]
+			continue
+		r_life[i] = life
+		var k := life / RING_LIFE
+		var s := lerpf(2.4, 0.4, k)
+		var p := r_pos[i]
+		var o := i * STRIDE
+		r_buf[o] = s
+		r_buf[o + 5] = s
+		r_buf[o + 3] = p.x
+		r_buf[o + 7] = p.y
+		r_buf[o + 11] = k * 0.8
 		i += 1
 
 
@@ -463,15 +557,16 @@ func _upload() -> void:
 	RenderingServer.multimesh_set_buffer(bullet_mm.get_rid(), b_buf)
 	particle_mm.visible_instance_count = p_count
 	RenderingServer.multimesh_set_buffer(particle_mm.get_rid(), p_buf)
+	ring_mm.visible_instance_count = r_count
+	if r_cap > 0:
+		RenderingServer.multimesh_set_buffer(ring_mm.get_rid(), r_buf)
 
 
 func _shake(dt: float) -> void:
 	trauma = maxf(trauma - dt * 1.2, 0.0)
-	if not effects_on or trauma <= 0.0:
-		world.position = Vector2.ZERO
-		return
 	var s := trauma * trauma * 14.0
 	world.position = Vector2(noise.get_noise_2d(run_time * 60.0, 0.0), noise.get_noise_2d(0.0, run_time * 60.0)) * s
+	fx.update(world.position, player, true, trauma)
 
 
 func _track(delta: float) -> void:
@@ -544,9 +639,11 @@ func _finish() -> void:
 	e_count = 0
 	b_count = 0
 	p_count = 0
+	r_count = 0
 	_upload()
 	world.position = Vector2.ZERO
 	player_sprite.visible = false
+	fx.update(Vector2.ZERO, player, false, 0.0)
 	ui.show_menu(last_results)
 
 
@@ -561,7 +658,7 @@ func _hud_text() -> String:
 	var fps := (n - from) * 1000.0 / maxf(sum, 0.001)
 	var lines := PackedStringArray()
 	lines.append("FPS %.0f   worst %.0f ms   game logic %.1f ms" % [fps, worst, sim_ms])
-	lines.append("Enemies %d   Bullets %d   Particles %d" % [e_count, b_count, p_count])
+	lines.append("%s   Enemies %d   Bullets %d   Sparks %d" % [quality, e_count, b_count, p_count])
 	lines.append("Kills %d   Draw calls %d" % [kills, Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)])
 	match mode:
 		Mode.RAMP:
@@ -595,7 +692,7 @@ func _results_text(title: String) -> String:
 	lines.append("GPU: %s (%s)" % [RenderingServer.get_video_adapter_name(), RenderingServer.get_video_adapter_api_version()])
 	var ram := _ram_gb()
 	lines.append("RAM: %s   Screen: %.0f Hz   Android: %s" % ["%.1f GB usable" % ram if ram > 0.0 else "unknown", DisplayServer.screen_get_refresh_rate(), OS.get_version()])
-	lines.append("Settings: effects %s, FPS cap %s" % ["on" if effects_on else "off", str(fps_cap) if fps_cap > 0 else "none (%d Hz screen)" % _target_fps()])
+	lines.append("Settings: quality %s, FPS cap %s" % [quality, str(fps_cap) if fps_cap > 0 else "none (%d Hz screen)" % _target_fps()])
 	if n > 0 and total > 0.0:
 		lines.append("Ran %.0f s, average %.1f FPS, worst 1%% %.1f FPS" % [total / 1000.0, n * 1000.0 / total, 1000.0 / (worst_sum / worst_count)])
 		lines.append("Slow frames (over %.0f ms): %d of %d (%.1f%%)" % [slow_limit, slow, n, slow * 100.0 / n])
@@ -696,7 +793,7 @@ func _heat_text() -> String:
 	return "%s (headroom %.2f)" % [_heat_name(heat_status), heat_headroom]
 
 
-func _make_layer(tex: Texture2D, radius: float, additive: bool) -> MultiMesh:
+func _make_layer(tex: Texture2D, radius: float, additive: bool, glow_modulate: Color) -> MultiMesh:
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_2D
 	mm.use_colors = true
@@ -709,6 +806,7 @@ func _make_layer(tex: Texture2D, radius: float, additive: bool) -> MultiMesh:
 		mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 		inst.material = mat
 	world.add_child(inst)
+	glow_layers.append([mm, tex, additive, glow_modulate])
 	return mm
 
 
@@ -723,7 +821,9 @@ func _quad_mesh(r: float) -> ArrayMesh:
 	return mesh
 
 
-func _circle_texture(size: int, core: float) -> ImageTexture:
+## A soft disc. "core" is the solid part (0-1 of the radius). "rim" darkens
+## the middle so the edge reads as a bright outline (0 = no rim).
+func _circle_texture(size: int, core: float, rim: float) -> ImageTexture:
 	var img := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
 	var c := (size - 1) * 0.5
 	for y in size:
@@ -734,24 +834,41 @@ func _circle_texture(size: int, core: float) -> ImageTexture:
 				a = 1.0
 			elif d < 1.0:
 				a = (1.0 - d) / maxf(1.0 - core, 0.001)
-			img.set_pixel(x, y, Color(1, 1, 1, a))
+			var shade: float = 1.0 - rim * (1.0 - smoothstep(0.0, core, d))
+			img.set_pixel(x, y, Color(shade, shade, shade, a))
+	return ImageTexture.create_from_image(img)
+
+
+func _ring_texture(size: int) -> ImageTexture:
+	var img := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
+	var c := (size - 1) * 0.5
+	for y in size:
+		for x in size:
+			var d: float = Vector2(x - c, y - c).length() / (size * 0.5)
+			var a: float = clampf(1.0 - absf(d - 0.8) / 0.12, 0.0, 1.0)
+			img.set_pixel(x, y, Color(1, 1, 1, a * a))
 	return ImageTexture.create_from_image(img)
 
 
 func _run_smoke() -> void:
 	# Headless check for CI: runs each mode briefly with a fixed 1/60 s step.
 	print("SMOKE: start")
+	_set_quality("Ultra")
 	_start(Mode.FIXED, 2000, 4000)
 	await _frames(180)
 	print("SMOKE: fixed enemies=%d bullets=%d particles=%d kills=%d logic_ms=%.2f" % [e_count, b_count, p_count, kills, sim_ms])
 	if not _check(e_count == 2000 and b_count > 1000 and kills > 0, "fixed load is running"):
 		return
+	if not _check(r_count > 0, "Ultra shockwave rings are running"):
+		return
 	_finish()
+	_set_quality("Low")
 	_start(Mode.RAMP, RAMP_START, RAMP_START * 2)
 	await _frames(int(RAMP_STEP_TIME * 60.0) + 30)
 	if not _check(mode == Mode.MENU or enemy_target > RAMP_START, "ramp moved to the next level"):
 		return
 	_finish()
+	_set_quality("High")
 	_start(Mode.SOAK, SOAK_ENEMIES, SOAK_BULLETS)
 	await _frames(int(SOAK_SAMPLE * 60.0) + 30)
 	if not _check(soak_fps.size() >= 1, "soak recorded a sample"):
@@ -759,6 +876,23 @@ func _run_smoke() -> void:
 	_finish()
 	print(last_results)
 	print("SMOKE: passed")
+	get_tree().quit(0)
+
+
+func _run_shots(dir: String) -> void:
+	# Renders each tier with a real GPU driver (CI uses software OpenGL), so
+	# shaders compile and the screenshots can be checked.
+	DirAccess.make_dir_recursive_absolute(dir)
+	for tier_name in FX.ORDER:
+		_set_quality(tier_name)
+		_start(Mode.FIXED, 1000, 2000)
+		await _frames(150)
+		await RenderingServer.frame_post_draw
+		var path := dir.path_join("%s.png" % tier_name.to_lower())
+		get_viewport().get_texture().get_image().save_png(path)
+		print("SHOTS: saved %s (sparks=%d rings=%d)" % [path, p_count, r_count])
+		_finish()
+	print("SHOTS: done")
 	get_tree().quit(0)
 
 

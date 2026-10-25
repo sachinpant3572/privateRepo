@@ -80,6 +80,18 @@ jobs:
           if grep -E "SCRIPT ERROR|Parse Error|SMOKE FAILED" smoke.log; then exit 1; fi
           grep -q "SMOKE: passed" smoke.log
 
+      - name: Render screenshots of each quality tier
+        run: |
+          # Software OpenGL (Mesa llvmpipe) compiles the shaders and renders
+          # real frames, so shader errors fail the build.
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends xvfb libgl1-mesa-dri libglx-mesa0 > /dev/null
+          xvfb-run -a -s "-screen 0 1280x1600x24" godot --rendering-driver opengl3 --path "$PROJECT" \
+            -- --shots="$GITHUB_WORKSPACE/shots" 2>&1 | tee shots.log
+          if grep -E "SCRIPT ERROR|SHADER ERROR|Parse Error|SMOKE FAILED" shots.log; then exit 1; fi
+          grep -q "SHOTS: done" shots.log
+          ls -l shots
+
       - name: Export APK
         run: |
           mkdir -p build
@@ -93,6 +105,12 @@ jobs:
           path: build/stress-test.apk
           retention-days: 30
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stress-test-screenshots
+          path: shots/*.png
+          retention-days: 30
+
       - name: Publish APK to the stress-test-builds branch
         if: github.event_name == 'push'
         env:
@@ -100,6 +118,7 @@ jobs:
         run: |
           mkdir publish
           cp build/stress-test.apk publish/
+          cp -r shots publish/screenshots
           printf 'Stress test APK built from %s (%s).\n' "$GITHUB_SHA" "$GITHUB_REF_NAME" > publish/README.md
           cd publish
           git init -q -b stress-test-builds

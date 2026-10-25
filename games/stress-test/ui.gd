@@ -11,7 +11,7 @@ var hud: MarginContainer
 var hud_label: Label
 var results_label: Label
 var copy_button: Button
-var effects_button: Button
+var quality_button: Button
 var cap_button: Button
 var heat_button: Button
 var results := ""
@@ -59,7 +59,7 @@ func _build_menu() -> void:
 	_button(box, "Heavy: 1,000 enemies + 2,000 bullets", func(): start_requested.emit("fixed", 1000, 2000))
 	_button(box, "Extreme: 2,000 enemies + 4,000 bullets", func(): start_requested.emit("fixed", 2000, 4000))
 	_label(box, "Settings", 32)
-	effects_button = _button(box, "", func(): option_toggled.emit("effects"))
+	quality_button = _button(box, "", func(): option_toggled.emit("quality"))
 	cap_button = _button(box, "", func(): option_toggled.emit("cap"))
 	heat_button = _button(box, "", func(): option_toggled.emit("heat"))
 	results_label = _label(box, "", 22)
@@ -113,8 +113,8 @@ func set_hud_text(text: String) -> void:
 	hud_label.text = text
 
 
-func set_options(effects_on: bool, fps_cap: int, heat_on: bool) -> void:
-	effects_button.text = "Explosions, flashes and shake: %s" % ("ON" if effects_on else "OFF")
+func set_options(quality: String, fps_cap: int, heat_on: bool) -> void:
+	quality_button.text = "Graphics quality: %s" % quality
 	cap_button.text = "Frame rate cap: %s" % ("%d FPS" % fps_cap if fps_cap > 0 else "none (screen max)")
 	heat_button.text = "Read phone heat sensor: %s" % ("ON" if heat_on else "OFF")
 
