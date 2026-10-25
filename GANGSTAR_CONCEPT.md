@@ -100,6 +100,56 @@ Chosen for depth per unit of work on mobile; none are decided yet.
 - **Avoid**: casino games built on simulated gambling. They raise age ratings
   and are restricted in some regions.
 
+## Design pillar: high replayability and retention
+
+**Requirement**: replayability and retention must be high and strong. Every
+system is judged by whether it gives players a reason to come back or to play
+again.
+
+### Retention by time horizon
+
+| Horizon | Goal | Systems |
+|---|---|---|
+| First session | Hook within minutes | Playable in under 30 s; opening mission with a chase and a quick win; first vehicle and safehouse within ~15 min; end on a cliffhanger or a pending reward. |
+| Daily | A reason to open the game today | Daily jobs from phone contacts; business income to collect (capped, never punishing); random-event hotspots; a daily sports match; story in 5-10 minute chunks. |
+| Weekly | Goals that span days | Faction turf wars; weekly challenges and events; sports and race leaderboards; rotating shop stock; new side-quest drops. |
+| Monthly / seasonal | Something new to come back for | Themed seasons (carnival, Mardi Gras, holidays); free story episodes; new districts; a cosmetic season track. |
+| Long term | Mastery and ownership | Completion %, collections, sports ranks, fighting styles, skills; growing property and business empire; repeatable heists and turf defence; New Game+. |
+
+### Replayability
+
+- **Branching story**: faction alignment and key choices change missions,
+  allies and endings; several endings.
+- **Multiple approaches** per mission: stealth, loud, vehicle-based.
+- **Systemic world**: random events, NPC routines and wanted escalation create
+  unscripted stories every session.
+- **Variation in repeatable content**: side jobs and heists with different
+  targets, routes and modifiers each time.
+- **New Game+ and challenge modes**: harder police, hardcore mode, rampages,
+  time trials.
+- Optional, if budget allows: 2-3 starting backgrounds that change the opening
+  city and first story act.
+
+### What kills retention (never do)
+
+- Energy or stamina timers that stop play (Gangstar New Orleans).
+- Pay-to-win weapons or stats.
+- Forced ads mid-mission; use only optional rewarded ads.
+- Streaks that wipe progress when a day is missed.
+- Paid loot boxes (restricted or banned in some countries).
+
+Monetization should support retention: cosmetics, vehicles, story expansions,
+optional rewarded ads, cosmetic season track.
+
+### Measuring it
+
+- Analytics from the first build: funnels, mission drop-off points, session
+  length, where players quit.
+- Soft launch in a few test markets to tune before the global release.
+- Targets: D1 40%+, D7 20%+, D30 10%+ (top quartile for mobile).
+- Live-ops needs a steady content pipeline; AI-assisted content (side-quest
+  variants, radio, NPC lines) can help keep it affordable.
+
 ## Question asked
 
 How viable, engaging, immersive and retentive can it be on Android and iOS,
@@ -122,8 +172,8 @@ one city.
 |---|---|---|
 | Market demand | High | Gangstar Vegas (100M+ Google Play installs), GTA ports, and endless clones show sustained demand. |
 | Engagement / immersion | High potential | Open-world sandbox plus story is among the stickiest mobile formats when the world feels alive. |
-| Retention | Medium-high, only with live systems | Story-driven games drop off after the story; long-term retention needs repeatable loops (sports leagues, faction wars, businesses, events). |
-| Replayability | Medium, high with branching | Sandbox play repeats well but a linear story is done once; faction-based branching and New Game+ raise it. |
+| Retention | High, by design (target D1 40% / D7 20% / D30 10%) | Story alone drops off after the ending; the design pillar adds daily, weekly and seasonal loops (turf wars, businesses, sports leagues, events). Needs ongoing live-ops content. |
+| Replayability | High, by design | Branching story, multiple mission approaches, systemic world, New Game+ (see design pillar). Medium if the story ships linear. |
 | Differentiation | Medium-high | Premium-quality 2D isometric open world is rare; GTA Chinatown Wars proved the format plays well on touch. |
 | Feasibility as written | Low | Multiple cities, an island, 15+ vehicle classes and 7 sports with progression is many years of a large team. |
 | Feasibility, phased | Medium | One city, ground and water vehicles, 2 sports, a focused story arc. |
