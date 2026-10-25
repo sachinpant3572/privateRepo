@@ -72,7 +72,7 @@ playing.
     gold.
   - A ready evolution always comes first.
 - **Kill combo:**
-  - Kills within 2 s chain together, boosting XP by up to 2× at 1,000.
+  - Kills within 2 s chain together, boosting XP by up to +50% at 1,000.
   - Milestones (Killing Spree 50 → Apocalypse 2,000) pay gold.
   - Getting hit halves the combo.
 - **Screen-clear pickups:** rare drops, always one from a Juggernaut.

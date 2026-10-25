@@ -821,7 +821,7 @@ func _spawn_enemy(ty: int) -> void:
 	e_type[i] = ty
 	e_pos[i] = _spawn_point()
 	e_ang[i] = 0.0
-	e_hp[i] = t_hp[ty] * (1.0 + 0.25 * t / 60.0)
+	e_hp[i] = t_hp[ty] * (1.0 + 0.2 * t / 60.0)
 	e_flash[i] = 0.0
 	e_timer[i] = t_fire[ty] * randf()
 	e_halo[i] = 0.0
@@ -981,12 +981,12 @@ func _enemy_attack(ty: int, p: Vector2, dir: Vector2) -> void:
 			_telegraph(0, player + Vector2(randf_range(-30.0, 30.0), randf_range(-30.0, 30.0)), Vector2(58.0, 0.0), 1.0, 12.0)
 		Data.ELITE:
 			for k in 9:
-				_ebullet(p, dir.rotated(deg_to_rad(-40.0 + k * 10.0)) * 260.0, 8.0, 6.0)
+				_ebullet(p, dir.rotated(deg_to_rad(-40.0 + k * 10.0)) * 260.0, 6.0, 6.0)
 		Data.TANK:
-			_telegraph(1, p, p + dir * 760.0, 0.8, 20.0)
+			_telegraph(1, p, p + dir * 760.0, 0.8, 16.0)
 		Data.HELI:
 			for k in 3:
-				_ebullet(p, dir.rotated(deg_to_rad(-12.0 + k * 12.0)) * 300.0, 7.0, 6.0)
+				_ebullet(p, dir.rotated(deg_to_rad(-12.0 + k * 12.0)) * 300.0, 5.0, 6.0)
 
 
 func _ebullet(p: Vector2, vel: Vector2, dmg: float, rad: float) -> void:
@@ -1702,11 +1702,11 @@ func _update_pickups(dt: float) -> void:
 
 
 func _xp_need(l: int) -> float:
-	return 4.0 + 2.5 * pow(float(l), 1.3)
+	return 5.0 + 6.0 * pow(float(l), 1.6)
 
 
 func _gain_xp(value: int) -> void:
-	xp += value * (1.0 + minf(combo, 1000) / 1000.0)
+	xp += value * (1.0 + minf(combo, 1000) / 2000.0)
 	while xp >= xp_need:
 		xp -= xp_need
 		level += 1
@@ -2132,7 +2132,7 @@ func _upload() -> void:
 # --- Combo, coins and screen-clear pickups ---------------------------------
 
 ## Kills within COMBO_TIME of each other chain into a combo. It boosts XP
-## (up to double at 1,000) and pays gold at each milestone.
+## (up to +50% at 1,000) and pays gold at each milestone.
 func _add_combo() -> void:
 	combo += 1
 	combo_timer = COMBO_TIME
