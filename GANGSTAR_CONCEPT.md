@@ -1,7 +1,8 @@
 # Open-world crime game concept (Gangstar-style, 2D isometric)
 
-Status: **concept**. Captured Oct 25, 2026. The first write-up of this idea was
-lost when a cloud session restarted; this file is the re-sent version.
+Status: **concept**. Captured Oct 25, 2026. The first prompt for this idea was
+lost when a cloud session restarted; this file merges the re-sent version with
+the recovered first prompt.
 
 Working title needed: "Gangstar" is Gameloft's trademark and can't be used.
 
@@ -40,6 +41,12 @@ bigger map.
 - **Sports**, each with its own progression: basketball, boxing, baseball,
   cricket, football, table tennis, badminton (indoor and outdoor).
 - **Customization**: lots of clothing; vehicles to buy.
+- **Wanted system**: police response that escalates with the player's crimes.
+- **Random events**: unscripted things happening around the world.
+- **Street business**: run businesses on the street.
+- **Property**: houses to buy.
+- **Phone**: buy vehicles and other things through the in-game phone.
+- **Shops**: enter shops and buy things inside.
 - Many other side activities.
 
 ### Sound design
@@ -53,7 +60,45 @@ bigger map.
 ### Quality bar
 
 Top-notch storyline, exploration, build-up, model quality and sound design, in
-the same 2D isometric cartoon look as the older Gangstar games.
+the same 2D isometric cartoon look as the older Gangstar games but with much
+better graphics.
+
+Inspired by Gangstar, not a literal clone: mechanics and genre are free to
+use; names, characters, maps, story and assets must be original.
+
+## Suggested additions (from Claude)
+
+Chosen for depth per unit of work on mobile; none are decided yet.
+
+- **Phone as the hub**: contacts, mission offers, map, bank, vehicle and
+  property marketplace, a social feed reacting to what the player did.
+- **Territory control**: take blocks from rival factions; owned turf earns
+  income and must be defended (GTA San Andreas gang wars).
+- **Business empire**: street businesses grow into fronts with passive income
+  and occasional attacks or supply runs to manage.
+- **Safehouses**: owned houses act as save points, garage and wardrobe, and can
+  be furnished.
+- **Vehicle garage and tuning**: paint, parts, performance upgrades.
+- **Skills that grow with use**: driving, shooting, stamina, strength, as in
+  San Andreas.
+- **Living world**: day/night and weather, NPC routines, traffic, police and
+  gang patrols, per-neighbourhood reputation.
+- **Random events with choices**: robberies, chases, accidents, people asking
+  for help; choices move reputation.
+- **Classic side jobs**: taxi, ambulance, firefighter, vigilante, courier,
+  street racing, stunt jumps.
+- **Heists**: multi-stage planned jobs as late-game set pieces.
+- **Collectibles and secrets**: hidden packages, graffiti tags, landmarks to
+  photograph, secret areas with lore.
+- **Radio stations**: AI-generated music plus DJ chatter per city.
+- **Photo mode**: shareable shots, which doubles as free marketing.
+- **Branching story**: faction alignment changes missions and endings, which
+  is the biggest lever for replayability; New Game+ after the ending.
+- **Light online features**: leaderboards (sports, races), ghost races, weekly
+  events, instead of real-time multiplayer at first.
+- **Offline play, cloud save, controller support, low-end device mode.**
+- **Avoid**: casino games built on simulated gambling. They raise age ratings
+  and are restricted in some regions.
 
 ## Question asked
 
@@ -78,6 +123,7 @@ one city.
 | Market demand | High | Gangstar Vegas (100M+ Google Play installs), GTA ports, and endless clones show sustained demand. |
 | Engagement / immersion | High potential | Open-world sandbox plus story is among the stickiest mobile formats when the world feels alive. |
 | Retention | Medium-high, only with live systems | Story-driven games drop off after the story; long-term retention needs repeatable loops (sports leagues, faction wars, businesses, events). |
+| Replayability | Medium, high with branching | Sandbox play repeats well but a linear story is done once; faction-based branching and New Game+ raise it. |
 | Differentiation | Medium-high | Premium-quality 2D isometric open world is rare; GTA Chinatown Wars proved the format plays well on touch. |
 | Feasibility as written | Low | Multiple cities, an island, 15+ vehicle classes and 7 sports with progression is many years of a large team. |
 | Feasibility, phased | Medium | One city, ground and water vehicles, 2 sports, a focused story arc. |
@@ -108,6 +154,10 @@ one city.
    - **Quality and consistency**: curate hard and master everything to one
      standard, so regions sound distinct but the game sounds like one game.
    - **Size**: keep the download small with streaming or optional audio packs.
+8. **Android specifics.** Huge range of devices, many low-end (especially in
+   India); install size limits push big worlds into Play Asset Delivery;
+   Android revenue is overwhelmingly free-to-play (ads and in-app purchases);
+   offline play matters where connections are patchy.
 
 ### Suggested phasing
 
