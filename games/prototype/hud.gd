@@ -218,8 +218,8 @@ func _build_play() -> void:
 	banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	banner.anchor_left = 0.0
 	banner.anchor_right = 1.0
-	banner.anchor_top = 0.3
-	banner.anchor_bottom = 0.3
+	banner.anchor_top = 0.22
+	banner.anchor_bottom = 0.22
 	banner.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4))
 	banner.visible = false
 	play.add_child(banner)

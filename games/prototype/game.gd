@@ -3,8 +3,8 @@ extends Node2D
 ## of The Iron Dominion plus a boss, with placeholder art drawn in code.
 ##
 ## Same engine approach as games/stress-test: entities live in packed arrays,
-## hits use a spatial hash grid, and each layer is one MultiMesh. All units
-## share one MultiMesh and a texture atlas, so every enemy is one draw call.
+## hits use a spatial hash grid, and each layer is one MultiMesh. Units use one
+## MultiMesh per sprite (8 draw calls for every enemy on screen).
 ## Dead enemies are only marked during the frame and removed at the end, so
 ## grid lists stay valid while weapons are hitting things.
 
@@ -14,7 +14,6 @@ const FX := preload("res://fx.gd")
 const Overlay := preload("res://overlay.gd")
 
 const STRIDE := 12  # Floats per instance: 8 for the Transform2D, 4 for the color.
-const USTRIDE := 16  # Units also carry their atlas cell as custom data.
 const CELL := 64.0
 const GRID_PAD := 200.0
 const STAGE_TIME := 300.0
@@ -23,6 +22,8 @@ const BOSS_RADIUS := 62.0
 const BOSS_SCALE := 0.8
 const BOSS_TURRETS := [Vector2(40, -34), Vector2(40, 34), Vector2(-36, 0)]
 const PLAYER_RADIUS := 14.0
+const PLAYER_HP := 120.0
+const PICKUP := 120.0
 const INVULN := 0.5
 const MAX_SLOTS := 6
 const MAX_LEVEL := 8
@@ -109,7 +110,6 @@ var t_fire: PackedFloat32Array
 var t_range: PackedFloat32Array
 var t_xp: PackedInt32Array
 var t_capn: PackedInt32Array
-var cells := []
 
 # Enemies.
 var e_type := PackedInt32Array()
@@ -209,7 +209,10 @@ var ground_mat: ShaderMaterial
 var hero: Sprite2D
 var boss_node: Sprite2D
 var boss_turret_nodes := []
-var units_mm: MultiMesh
+var unit_mms := []  # One MultiMesh per unit sprite (Art cell order).
+var unit_cap := PackedInt32Array()
+var unit_off := PackedInt32Array()
+var unit_n := PackedInt32Array()
 var shot_mm: MultiMesh
 var rocket_mm: MultiMesh
 var eb_mm: MultiMesh
@@ -227,7 +230,6 @@ var c_buf := PackedFloat32Array()
 var p_buf := PackedFloat32Array()
 var r_buf := PackedFloat32Array()
 var bl_buf := PackedFloat32Array()
-var u_count := 0
 var glow_layers := []
 var noise := FastNoiseLite.new()
 var fx
@@ -259,8 +261,6 @@ func _ready() -> void:
 	t_range = PackedFloat32Array(Data.ENEMY_RANGE)
 	t_xp = PackedInt32Array(Data.ENEMY_XP)
 	t_capn = PackedInt32Array(Data.ENEMY_CAP)
-	for i in Art.COLS * Art.ROWS:
-		cells.append(Art.cell_rect(i))
 	_build_scene()
 	get_viewport().size_changed.connect(_on_resized)
 	_on_resized()
@@ -287,7 +287,8 @@ func _build_scene() -> void:
 
 	gem_mm = _layer(Art.gem(24), 7.0, true, Color(0.4, 0.4, 0.4))
 	chest_mm = _layer(Art.chest(48), 18.0, false, Color(0.6, 0.6, 0.6))
-	units_mm = _units_layer()
+	for tex in Art.cell_textures():
+		unit_mms.append(_layer(tex, 0.5, false, Color(0.25, 0.25, 0.25)))
 	shot_mm = _layer(Art.soft_disc(32, 0.35), 5.0, true, Color(0.6, 0.6, 0.6))
 	rocket_mm = _layer(Art.soft_disc(32, 0.3), 7.0, true, Color.WHITE)
 	blade_mm = _layer(Art.blade(64), 16.0, true, Color(0.8, 0.8, 0.8))
@@ -350,24 +351,6 @@ func _layer(tex: Texture2D, radius: float, additive: bool, glow_modulate: Color)
 		inst.material = mat
 	world.add_child(inst)
 	glow_layers.append([mm, tex, additive, glow_modulate, null])
-	return mm
-
-
-func _units_layer() -> MultiMesh:
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_2D
-	mm.use_colors = true
-	mm.use_custom_data = true
-	mm.mesh = _quad(0.5)
-	var tex := Art.atlas()
-	var mat := ShaderMaterial.new()
-	mat.shader = preload("res://units.gdshader")
-	var inst := MultiMeshInstance2D.new()
-	inst.multimesh = mm
-	inst.texture = tex
-	inst.material = mat
-	world.add_child(inst)
-	glow_layers.append([mm, tex, false, Color(0.25, 0.25, 0.25), mat])
 	return mm
 
 
@@ -506,7 +489,7 @@ func _start(auto: bool) -> void:
 	reroll_left = 1
 	joy_on = false
 	joy_vec = Vector2.ZERO
-	max_hp = 100.0
+	max_hp = PLAYER_HP
 	_recalc()
 	hp = max_hp
 	_alloc()
@@ -539,8 +522,16 @@ func _alloc() -> void:
 	e_timer.resize(e_cap)
 	e_halo.resize(e_cap)
 	e_next.resize(e_cap)
-	units_mm.instance_count = e_cap + 60
-	u_buf.resize((e_cap + 60) * USTRIDE)
+	# Every unit sprite gets a slice of one shared buffer.
+	unit_cap = PackedInt32Array([e_cap, e_cap, e_cap, 8, 12, 12, 10, 10])
+	unit_off.resize(unit_cap.size())
+	unit_n.resize(unit_cap.size())
+	var total := 0
+	for c in unit_cap.size():
+		unit_off[c] = total
+		total += unit_cap[c]
+		unit_mms[c].instance_count = unit_cap[c]
+	u_buf = _buffer(total, Color.WHITE)
 	s_pos.resize(SHOT_CAP)
 	s_vel.resize(SHOT_CAP)
 	s_life.resize(SHOT_CAP)
@@ -600,13 +591,13 @@ func _clear_entities() -> void:
 	p_count = 0
 	r_count = 0
 	bl_count = 0
-	u_count = 0
+	unit_n.fill(0)
 	type_alive.fill(0)
 	telegraphs.clear()
 	bolts.clear()
 	bombs.clear()
 	blasts.clear()
-	if units_mm != null and units_mm.instance_count > 0:
+	if unit_cap.size() > 0:
 		_upload()
 
 
@@ -888,9 +879,9 @@ func _enemy_attack(ty: int, p: Vector2, dir: Vector2) -> void:
 		Data.TROOPER:
 			if shot_budget >= 1.0:
 				shot_budget -= 1.0
-				_ebullet(p, dir * 230.0, 6.0, 5.0)
+				_ebullet(p, dir * 230.0, 5.0, 5.0)
 		Data.GRENADIER:
-			_telegraph(0, player + Vector2(randf_range(-30.0, 30.0), randf_range(-30.0, 30.0)), Vector2(58.0, 0.0), 1.0, 14.0)
+			_telegraph(0, player + Vector2(randf_range(-30.0, 30.0), randf_range(-30.0, 30.0)), Vector2(58.0, 0.0), 1.0, 12.0)
 		Data.ELITE:
 			for k in 9:
 				_ebullet(p, dir.rotated(deg_to_rad(-40.0 + k * 10.0)) * 260.0, 8.0, 6.0)
@@ -1576,7 +1567,7 @@ func _update_pickups(dt: float) -> void:
 
 
 func _xp_need(l: int) -> float:
-	return 5.0 + 4.0 * pow(float(l), 1.35)
+	return 4.0 + 2.5 * pow(float(l), 1.3)
 
 
 func _gain_xp(value: int) -> void:
@@ -1620,11 +1611,11 @@ func _recalc() -> void:
 	var mag: int = powers.get("magnet", 0)
 	var cr: int = powers.get("crit", 0)
 	fire_rate = 1.0 + 0.08 * int(powers.get("overclock", 0))
-	max_hp = 100.0 + 20.0 * titan
+	max_hp = PLAYER_HP + 20.0 * titan
 	armor = titan
 	if max_hp > old_max:
 		hp += max_hp - old_max
-	pickup = 70.0 * (1.0 + 0.3 * mag)
+	pickup = PICKUP * (1.0 + 0.3 * mag)
 	magnet_all = mag >= MAX_LEVEL
 	speed = 210.0 * (1.0 + 0.07 * int(powers.get("adrenaline", 0)))
 	explosive = powers.get("explosive", 0)
@@ -1872,53 +1863,47 @@ func _update_rings(dt: float) -> void:
 
 
 func _render_units() -> void:
-	var n := 0
-	var cap := units_mm.instance_count - 2
+	unit_n.fill(0)
 	for i in e_count:
-		if n >= cap:
-			break
 		var ty := e_type[i]
 		var p := e_pos[i]
 		var bright := 1.9 if e_flash[i] > 0.0 else 1.0
 		match ty:
 			Data.TANK:
-				n = _put_unit(n, Art.TANK, p, e_ang[i], t_size[ty], bright)
-				n = _put_unit(n, Art.TURRET, p, (player - p).angle(), t_size[ty], bright)
+				_put_unit(Art.TANK, p, e_ang[i], t_size[ty], bright)
+				_put_unit(Art.TURRET, p, (player - p).angle(), t_size[ty], bright)
 			Data.HELI:
-				n = _put_unit(n, Art.HELI, p, e_ang[i], t_size[ty], bright)
-				n = _put_unit(n, Art.ROTOR, p, t * 25.0 + i, t_size[ty] * 1.15, bright)
+				_put_unit(Art.HELI, p, e_ang[i], t_size[ty], bright)
+				_put_unit(Art.ROTOR, p, t * 25.0 + i, t_size[ty] * 1.15, bright)
 			_:
-				n = _put_unit(n, ty, p, e_ang[i], t_size[ty], bright)
-	u_count = n
+				_put_unit(ty, p, e_ang[i], t_size[ty], bright)
 
 
-func _put_unit(n: int, cell: int, p: Vector2, ang: float, size: float, bright: float) -> int:
-	var o := n * USTRIDE
+func _put_unit(cell: int, p: Vector2, ang: float, size: float, bright: float) -> void:
+	var n := unit_n[cell]
+	if n >= unit_cap[cell]:
+		return
+	unit_n[cell] = n + 1
+	var o := (unit_off[cell] + n) * STRIDE
 	var c := cos(ang) * size
 	var s := sin(ang) * size
-	var rect: Color = cells[cell]
 	u_buf[o] = c
 	u_buf[o + 1] = -s
-	u_buf[o + 2] = 0.0
 	u_buf[o + 3] = p.x
 	u_buf[o + 4] = s
 	u_buf[o + 5] = c
-	u_buf[o + 6] = 0.0
 	u_buf[o + 7] = p.y
 	u_buf[o + 8] = bright
 	u_buf[o + 9] = bright
 	u_buf[o + 10] = bright
-	u_buf[o + 11] = 1.0
-	u_buf[o + 12] = rect.r
-	u_buf[o + 13] = rect.g
-	u_buf[o + 14] = rect.b
-	u_buf[o + 15] = rect.a
-	return n + 1
 
 
 func _upload() -> void:
-	units_mm.visible_instance_count = u_count
-	RenderingServer.multimesh_set_buffer(units_mm.get_rid(), u_buf)
+	for c in unit_mms.size():
+		var mm: MultiMesh = unit_mms[c]
+		mm.visible_instance_count = unit_n[c]
+		var from := unit_off[c] * STRIDE
+		RenderingServer.multimesh_set_buffer(mm.get_rid(), u_buf.slice(from, from + unit_cap[c] * STRIDE))
 	shot_mm.visible_instance_count = s_count
 	RenderingServer.multimesh_set_buffer(shot_mm.get_rid(), s_buf)
 	rocket_mm.visible_instance_count = k_count
@@ -2014,14 +1999,14 @@ func _bot_move() -> Vector2:
 		if d.length() < 320.0:
 			push += d.normalized() * 2.0
 	# Drift toward the nearest XP gem, like a player would.
-	var gem_best := 160000.0
+	var gem_best := 250000.0
 	var gem_dir := Vector2.ZERO
 	for i in g_count:
 		var d2 := player.distance_squared_to(g_pos[i])
 		if d2 < gem_best:
 			gem_best = d2
 			gem_dir = (g_pos[i] - player).normalized()
-	push += gem_dir * 0.8
+	push += gem_dir * 1.5
 	var mv := push + Vector2.from_angle(t * 0.3) * 0.35
 	return mv.normalized() if mv.length() > 0.05 else Vector2.ZERO
 

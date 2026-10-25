@@ -1,7 +1,7 @@
 extends RefCounted
 ## Placeholder art drawn in code, top-down, with units facing +x (the game
-## rotates them). Real sprites can replace the atlas later as long as the cell
-## layout stays the same.
+## rotates them). Units are drawn into one atlas image, then split into one
+## texture per cell; real sprites can replace these later.
 
 const CELL := 128
 const COLS := 4
@@ -25,7 +25,17 @@ const OLIVE := Color(0.28, 0.31, 0.23)
 const OLIVE_LIGHT := Color(0.34, 0.37, 0.28)
 
 
-static func atlas() -> ImageTexture:
+## One texture per atlas cell, in cell order.
+static func cell_textures() -> Array:
+	var img := atlas_image()
+	var out := []
+	for cell in COLS * ROWS:
+		var region := Rect2i((cell % COLS) * CELL, int(cell / COLS) * CELL, CELL, CELL)
+		out.append(ImageTexture.create_from_image(img.get_region(region)))
+	return out
+
+
+static func atlas_image() -> Image:
 	var img := Image.create_empty(CELL * COLS, CELL * ROWS, false, Image.FORMAT_RGBA8)
 	for cell in COLS * ROWS:
 		var o := Vector2(float((cell % COLS) * CELL), float(int(cell / COLS) * CELL))
@@ -51,13 +61,7 @@ static func atlas() -> ImageTexture:
 				_box(img, o, Vector2(4, 61), Vector2(124, 67), Color(0.85, 0.88, 0.92, 0.55))
 				_box(img, o, Vector2(61, 4), Vector2(67, 124), Color(0.85, 0.88, 0.92, 0.55))
 				_disc(img, o + Vector2(64, 64), 7.0, Color(0.3, 0.32, 0.35))
-	return ImageTexture.create_from_image(img)
-
-
-## An atlas cell as (u, v, width, height), stored in a Color for MultiMesh
-## custom data.
-static func cell_rect(cell: int) -> Color:
-	return Color(float(cell % COLS) / COLS, float(int(cell / COLS)) / ROWS, 1.0 / COLS, 1.0 / ROWS)
+	return img
 
 
 static func boss() -> ImageTexture:

@@ -66,9 +66,11 @@ playing.
 - **Android Back:** ends the run.
 
 ## Tech notes
-- **Units:** all of them share one MultiMesh and a texture atlas
-  (`art.gd`, `units.gdshader`). Each instance's custom data selects its atlas
-  cell.
+- **Units:** one MultiMesh per sprite (8 draw calls for every enemy on
+  screen), sharing one buffer. The placeholder sprites are drawn into one atlas
+  image in `art.gd`, then split into textures. (An earlier version drew every
+  unit in one call using MultiMesh custom data, but the Compatibility renderer
+  drew nothing.)
 - **Dead enemies:** they are only marked during the frame and removed at the
   end, so grid lists stay valid while weapons hit.
 - **Enemy budgets per tier:** Low 150, Medium 250, High 400, Ultra 800.
