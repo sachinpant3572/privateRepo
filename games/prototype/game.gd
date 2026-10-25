@@ -1811,7 +1811,7 @@ func _update_pickups(dt: float) -> void:
 
 
 func _xp_need(l: int) -> float:
-	return 5.0 + 6.0 * pow(float(l), 1.6)
+	return 5.0 + 3.0 * pow(float(l), 1.5)
 
 
 func _gain_xp(value: int) -> void:
