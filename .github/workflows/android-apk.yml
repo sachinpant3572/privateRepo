@@ -54,10 +54,11 @@ jobs:
 
       - name: Configure Android export
         run: |
-          # A throwaway signing key: fine for a test build, not for the store.
+          # A fixed test-only signing key, so a new build installs over the old
+          # one (Android rejects updates signed with a different key). Its
+          # password is public: never use it for a store release.
           keystore="$RUNNER_TEMP/test.keystore"
-          keytool -genkeypair -keystore "$keystore" -alias test -keyalg RSA -keysize 2048 \
-            -validity 10000 -storepass testbuild -keypass testbuild -dname "CN=Test Build"
+          cp .github/signing/test.keystore "$keystore"
           mkdir -p "$HOME/.config/godot"
           settings=$(printf '%s\n' \
             '[gd_resource type="EditorSettings" format=3]' \
