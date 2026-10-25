@@ -59,7 +59,9 @@ at different points in its history, then watches what happens.
 
 ## Tuesday, Oct 27, 2026, 1:30 PM IST: Casual Android game research
 
-Status: **not started**. Research is on hold until Tuesday, like the item above.
+Status: **research done** (Oct 25, 2026). Report:
+[docs/casual-android-game-research.md](docs/casual-android-game-research.md).
+On Tuesday: review it and make the decisions in step 9 of the report.
 
 ### The idea (as described)
 
@@ -84,29 +86,29 @@ developer. The user calls these "casual platformers".
 
 ### Agenda for Tuesday
 
-1. [ ] **Check the reference games**: confirm each title, its developer and its
+1. [x] **Check the reference games**: confirm each title, its developer and its
    real genre. Several may not be platformers (for example idle tycoon, RPG,
    or survivor-like shooter), so agree on which genre we are actually building.
    Collect public data on installs, revenue and ratings.
-2. [ ] **Break down each game**: core loop, session length, progression and meta
+2. [x] **Break down each game**: core loop, session length, progression and meta
    progression, upgrade and merge/combination systems, surprise mechanics,
    monetization (IAP, rewarded ads, offers timed to decision points, passes),
    FTUE/onboarding, LiveOps, and how their ads compare with the real gameplay.
-3. [ ] **Test the success factors**: check the user's list above against
+3. [x] **Test the success factors**: check the user's list above against
    evidence, and add what is missing (for example retention D1/D7/D30, ad
    creatives and CPI, meta progression, difficulty curve).
-4. [ ] **Store policy and ethics**: Google Play rules on random rewards and odds
+4. [x] **Store policy and ethics**: Google Play rules on random rewards and odds
    disclosure, and on misleading ads. Regional pricing (India included).
    Monetize without dark patterns that get games banned or refunded.
-5. [ ] **Tech for a solo developer**: engine choice (for example Unity, Godot,
+5. [x] **Tech for a solo developer**: engine choice (for example Unity, Godot,
    Defold), and how to keep hundreds of bullets and explosions at a steady 60 FPS
    on low-end Android phones (object pooling, batching/instancing). APK size.
-6. [ ] **Claude can do it all?**: what Claude can do (research, design,
+6. [x] **Claude can do it all?**: what Claude can do (research, design,
    code, testing, balancing) and what needs outside tools, assets or people
    (art, animation, sound, ad creatives, store publishing, user acquisition).
-7. [ ] **Concepts**: 3 to 5 original game concepts that combine these factors,
+7. [x] **Concepts**: 3 to 5 original game concepts that combine these factors,
    rated for addictiveness, replayability, revenue potential and build effort.
-8. [ ] **Next steps**: pick one concept, MVP scope, a short prototype, and a cheap
+8. [x] **Next steps**: pick one concept, MVP scope, a short prototype, and a cheap
    test of the ad creatives (CPI) before committing to a full build.
 
 Note: this starts 30 minutes after the Civilization Tech review above. Decide
