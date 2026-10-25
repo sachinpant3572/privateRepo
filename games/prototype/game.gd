@@ -1811,7 +1811,7 @@ func _update_pickups(dt: float) -> void:
 
 
 func _xp_need(l: int) -> float:
-	return 5.0 + 3.0 * pow(float(l), 1.5)
+	return 4.0 + 1.6 * pow(float(l), 1.3)
 
 
 func _gain_xp(value: int) -> void:
@@ -1975,6 +1975,15 @@ func _make_offers(n: int, chest: bool, skip: Array) -> Array:
 	var used := {}
 	for id in skip:
 		used[id] = true
+	# Once a build has started, one card always deepens something you own, so
+	# runs don't end with nine items at level 2.
+	if weapons.size() + powers.size() >= 3:
+		for entry in pool:
+			var owned: Dictionary = weapons if entry[0] == "weapon" else powers
+			if owned.has(entry[1]) and not used.has(entry[1]):
+				used[entry[1]] = true
+				out.append(_offer(entry[0], entry[1], _roll_rarity(chest)))
+				break
 	for entry in pool:
 		if out.size() >= n:
 			break
@@ -1982,6 +1991,7 @@ func _make_offers(n: int, chest: bool, skip: Array) -> Array:
 			continue
 		used[entry[1]] = true
 		out.append(_offer(entry[0], entry[1], _roll_rarity(chest)))
+	out.shuffle()
 	if out.size() < n:
 		out.append({"kind": "heal", "id": "heal", "rarity": 0, "levels": 0, "evolve": false})
 	while out.size() < n:
@@ -1993,8 +2003,10 @@ func _add_candidate(pool: Array, kind: String, id: String, lvl: int, owned: int)
 	if lvl >= MAX_LEVEL or (lvl == 0 and owned >= MAX_SLOTS):
 		return
 	pool.append([kind, id])
-	if lvl >= 3:
+	if lvl >= 1:
 		pool.append([kind, id])  # Owned items come up more often, so builds come together.
+	if lvl >= 3:
+		pool.append([kind, id])
 
 
 func _roll_rarity(chest: bool) -> int:
