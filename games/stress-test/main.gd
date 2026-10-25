@@ -290,7 +290,7 @@ func _set_load(enemies: int, bullets: int) -> void:
 	bullet_mm.instance_count = b_cap
 	b_buf = _instance_buffer(b_cap, BULLET_COLOR)
 
-	p_cap = mini(PARTICLE_MAX, 200 + enemies * int(fx.tier["sparks"]) / 4)
+	p_cap = mini(PARTICLE_MAX, 200 + int(enemies * int(fx.tier["sparks"]) / 4.0))
 	p_pos.resize(p_cap)
 	p_vel.resize(p_cap)
 	p_life.resize(p_cap)
