@@ -48,6 +48,7 @@ bigger map.
   region of each place.
 - Multiple soundtracks for different things, so players feel more immersed,
   engrossed and engaged.
+- **Decision**: no licensed music. Soundtracks will be generated with AI.
 
 ### Quality bar
 
@@ -95,10 +96,18 @@ one city.
    but short mobile sessions need clearer hooks; mix hidden and signposted.
 6. **Content rating and stores.** Allowed on both stores (GTA is) with a 17+ /
    Mature rating; avoid real trademarks and brands.
-7. **Music licensing.** Licensing real songs (GTA-style radio) is expensive and
-   time-limited (licenses expire, forcing tracks out of the game later).
-   Commission original or buyout-licensed music per region and activity, and
-   keep download size in check with streaming or optional audio packs.
+7. **AI-generated music** (chosen over licensing). Watch for:
+   - **Commercial rights**: use only a paid plan whose terms grant commercial
+     use of the output; free tiers usually don't. Keep a record of the tool,
+     plan and date for every track.
+   - **Ownership**: purely AI-generated audio may not be protected by
+     copyright (the US Copyright Office's current position), so others could
+     reuse the tracks. Human editing, arranging and mixing strengthens the claim.
+   - **Infringement**: never prompt with real artist or song names, and check
+     tracks for close resemblance to existing songs.
+   - **Quality and consistency**: curate hard and master everything to one
+     standard, so regions sound distinct but the game sounds like one game.
+   - **Size**: keep the download small with streaming or optional audio packs.
 
 ### Suggested phasing
 
