@@ -42,10 +42,17 @@ bigger map.
 - **Customization**: lots of clothing; vehicles to buy.
 - Many other side activities.
 
+### Sound design
+
+- Engrossing, high-quality sound that matches the mood, themes, vibes and
+  region of each place.
+- Multiple soundtracks for different things, so players feel more immersed,
+  engrossed and engaged.
+
 ### Quality bar
 
-Top-notch storyline, exploration, build-up and model quality, in the same 2D
-isometric cartoon look as the older Gangstar games.
+Top-notch storyline, exploration, build-up, model quality and sound design, in
+the same 2D isometric cartoon look as the older Gangstar games.
 
 ## Question asked
 
@@ -88,6 +95,10 @@ one city.
    but short mobile sessions need clearer hooks; mix hidden and signposted.
 6. **Content rating and stores.** Allowed on both stores (GTA is) with a 17+ /
    Mature rating; avoid real trademarks and brands.
+7. **Music licensing.** Licensing real songs (GTA-style radio) is expensive and
+   time-limited (licenses expire, forcing tracks out of the game later).
+   Commission original or buyout-licensed music per region and activity, and
+   keep download size in check with streaming or optional audio packs.
 
 ### Suggested phasing
 
