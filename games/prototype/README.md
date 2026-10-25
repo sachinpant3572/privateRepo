@@ -84,6 +84,34 @@ playing.
 | Vacuum | Pulls in every gem and coin |
 | Medkit | +30% HP |
 
+- **Explosions:** layered. A white flash, rolling fireballs, rising smoke,
+  sparks, a shockwave ring, and scorch marks that stay on the ground. They
+  scale with the blast: rockets small, airstrikes bigger, tanks and
+  helicopters huge, the boss enormous.
+- **Readable actions:**
+
+| Who | What you see |
+|---|---|
+| Troopers | Muzzle flashes |
+| Tanks | A muzzle blast with smoke |
+| Helicopters | Rocket smoke |
+| Grenadiers | Grenades arcing through the air onto their warning circle |
+| Shield Troopers | Shields flash when they block |
+
+- **Weapon looks:**
+
+| Weapon | Look |
+|---|---|
+| Pulse Rifle | Cyan tracers |
+| Storm Rifle | Pale electric tracers |
+| Scatter Cannon | Golden pellets with a muzzle blast |
+| Rocket Swarm | Smoke trails |
+
+- **Power moments:**
+  - Every card you pick sends a burst from the hero: a colored flash, a ring
+    of energy, enemies knocked back, and a brief slow-down. It's sized by
+    rarity and level, with the item's name shown in its rarity color.
+  - Evolutions are a gold blast that damages everything within 420 px.
 - **Timed events:** Ambush (1:30), Shield Wall (2:30), Tank Column (3:15),
   Air Raid (4:30).
 - **Sound effects:** synthesized in code (`sfx.gd`), so there are no audio
@@ -126,7 +154,14 @@ version. No code changes needed.
   drew nothing.)
 - **Dead enemies:** they are only marked during the frame and removed at the
   end, so grid lists stay valid while weapons hit.
-- **Enemy budgets per tier:** Low 150, Medium 250, High 400, Ultra 800.
+- **Same difficulty on every tier:**
+  - The enemy count follows the clock, peaking at 320 at 4:00.
+  - A tier that draws fewer enemies (Low 150, Medium 250) spawns fewer,
+    tougher ones worth more XP.
+  - Tiers otherwise change only the look: glow, streaks, particle and scorch
+    budgets.
+  - This replaces the first build, where the tier's enemy budget also set the
+    difficulty and Ultra faced about 5× the enemies of Low.
 - **Enemy fire:** troopers share a fire budget, so a big crowd can't fill the
   screen with bullets.
 

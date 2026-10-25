@@ -188,6 +188,20 @@ static func soft_disc(size: int, core: float) -> ImageTexture:
 	return ImageTexture.create_from_image(img)
 
 
+## A ragged scorch mark for the ground.
+static func scorch(size: int) -> ImageTexture:
+	var img := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
+	var c := (size - 1) * 0.5
+	for y in size:
+		for x in size:
+			var v := Vector2(x - c, y - c)
+			var edge: float = 0.75 + 0.12 * sin(v.angle() * 5.0) + 0.08 * sin(v.angle() * 11.0 + 1.3)
+			var d: float = v.length() / (size * 0.5)
+			var a: float = clampf((edge - d) * 3.0, 0.0, 1.0) * (0.55 + 0.35 * (1.0 - d))
+			img.set_pixel(x, y, Color(0.03, 0.025, 0.02, a))
+	return ImageTexture.create_from_image(img)
+
+
 static func ring(size: int) -> ImageTexture:
 	var img := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
 	var c := (size - 1) * 0.5

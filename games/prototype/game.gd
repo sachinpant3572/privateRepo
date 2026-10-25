@@ -49,6 +49,15 @@ const PICKUP_CHANCE := 0.004
 const COMBO_TIME := 2.0
 const FREEZE_TIME := 5.0
 const SAVE_PATH := "user://save.cfg"
+# Most enemies at once (at 4:00), the same on every quality tier. Tiers that
+# can't draw that many spawn fewer, tougher enemies worth more XP instead.
+const GAME_PEAK := 320
+const VFX_RADIUS := 16.0
+const DECAL_CAP := 60
+const DECAL_LIFE := 8.0
+const RIFLE_COLOR := Color(0.55, 0.9, 1.0)
+const STORM_COLOR := Color(0.75, 0.85, 1.0)
+const SCATTER_COLOR := Color(1.0, 0.8, 0.35)
 const GEM_BLUE := Color(0.45, 0.75, 1.0)
 const GEM_GREEN := Color(0.4, 1.0, 0.55)
 const GEM_RED := Color(1.0, 0.4, 0.4)
@@ -100,6 +109,7 @@ var combo_best := 0
 var combo_step := 0
 var freeze_t := 0.0
 var events_done := 0
+var hp_mult := 1.0
 var chest_rewards: Array = []
 var save := ConfigFile.new()
 
@@ -163,6 +173,7 @@ var s_life := PackedFloat32Array()
 var s_dmg := PackedFloat32Array()
 var s_pierce := PackedInt32Array()
 var s_last := PackedInt32Array()
+var s_col := PackedColorArray()
 var s_count := 0
 
 # Rockets.
@@ -208,6 +219,24 @@ var r_life := PackedFloat32Array()
 var r_size := PackedFloat32Array()
 var r_count := 0
 var r_cap := 0
+# Explosion particles: additive fire and alpha-blended smoke share one pool.
+var v_pos := PackedVector2Array()
+var v_vel := PackedVector2Array()
+var v_life := PackedFloat32Array()
+var v_max := PackedFloat32Array()
+var v_s0 := PackedFloat32Array()
+var v_s1 := PackedFloat32Array()
+var v_c0 := PackedColorArray()
+var v_c1 := PackedColorArray()
+var v_fire := PackedInt32Array()
+var v_count := 0
+var v_cap := 0
+var fire_n := 0
+var smoke_n := 0
+var d_pos := PackedVector2Array()
+var d_life := PackedFloat32Array()
+var d_size := PackedFloat32Array()
+var d_count := 0
 var bl_count := 0
 var telegraphs: Array = []  # [kind, start, end or radius, time left, total, damage]
 var bolts: Array = []  # [points, time left]
@@ -249,6 +278,12 @@ var ring_mm: MultiMesh
 var blade_mm: MultiMesh
 var coin_mm: MultiMesh
 var co_buf := PackedFloat32Array()
+var fire_mm: MultiMesh
+var smoke_mm: MultiMesh
+var decal_mm: MultiMesh
+var fire_buf := PackedFloat32Array()
+var smoke_buf := PackedFloat32Array()
+var decal_buf := PackedFloat32Array()
 var numbers
 var sfx
 var u_buf := PackedFloat32Array()
@@ -316,6 +351,7 @@ func _build_scene() -> void:
 	low.game = self
 	world.add_child(low)
 
+	decal_mm = _layer(Art.scorch(64), 32.0, false, Color(0, 0, 0, 0))
 	gem_mm = _layer(Art.gem(24), 8.0, true, Color(0.4, 0.4, 0.4))
 	coin_mm = _layer(Art.coin(32), 9.0, false, Color(0.5, 0.4, 0.1))
 	chest_mm = _layer(Art.chest(48), 22.0, false, Color(0.6, 0.6, 0.6))
@@ -326,6 +362,8 @@ func _build_scene() -> void:
 	shot_mm = _layer(Art.soft_disc(32, 0.35), 5.0, true, Color(0.6, 0.6, 0.6))
 	rocket_mm = _layer(Art.soft_disc(32, 0.3), 7.0, true, Color.WHITE)
 	blade_mm = _layer(Art.blade(64), 16.0, true, Color(0.8, 0.8, 0.8))
+	smoke_mm = _layer(Art.soft_disc(32, 0.15), VFX_RADIUS, false, Color(0, 0, 0, 0))
+	fire_mm = _layer(Art.soft_disc(32, 0.3), VFX_RADIUS, true, Color.WHITE)
 	spark_mm = _layer(Art.soft_disc(16, 0.0), 3.0, true, Color.WHITE)
 	ring_mm = _layer(Art.ring(64), RING_SIZE, true, Color.WHITE)
 
@@ -549,6 +587,7 @@ func _start(auto: bool) -> void:
 	combo_step = 0
 	freeze_t = 0.0
 	events_done = 0
+	hp_mult = 1.0
 	numbers.clear()
 	frame_ms = PackedFloat32Array()
 	logic_sum = 0.0
@@ -588,6 +627,7 @@ func _alloc() -> void:
 	s_dmg.resize(SHOT_CAP)
 	s_pierce.resize(SHOT_CAP)
 	s_last.resize(SHOT_CAP)
+	s_col.resize(SHOT_CAP)
 	shot_mm.instance_count = SHOT_CAP
 	s_buf = _buffer(SHOT_CAP, SHOT_COLOR)
 	k_pos.resize(ROCKET_CAP)
@@ -633,6 +673,25 @@ func _alloc() -> void:
 	r_buf = _buffer(r_cap, RING_COLOR)
 	blade_mm.instance_count = BLADE_CAP
 	bl_buf = _buffer(BLADE_CAP, BLADE_COLOR)
+	v_cap = int(fx.tier["vfx"])
+	v_pos.resize(v_cap)
+	v_vel.resize(v_cap)
+	v_life.resize(v_cap)
+	v_max.resize(v_cap)
+	v_s0.resize(v_cap)
+	v_s1.resize(v_cap)
+	v_c0.resize(v_cap)
+	v_c1.resize(v_cap)
+	v_fire.resize(v_cap)
+	fire_mm.instance_count = v_cap
+	smoke_mm.instance_count = v_cap
+	fire_buf = _buffer(v_cap, Color.WHITE)
+	smoke_buf = _buffer(v_cap, Color.WHITE)
+	d_pos.resize(DECAL_CAP)
+	d_life.resize(DECAL_CAP)
+	d_size.resize(DECAL_CAP)
+	decal_mm.instance_count = DECAL_CAP
+	decal_buf = _buffer(DECAL_CAP, Color.WHITE)
 
 
 func _clear_entities() -> void:
@@ -643,6 +702,10 @@ func _clear_entities() -> void:
 	g_count = 0
 	c_count = 0
 	co_count = 0
+	v_count = 0
+	d_count = 0
+	fire_n = 0
+	smoke_n = 0
 	p_count = 0
 	r_count = 0
 	bl_count = 0
@@ -696,7 +759,8 @@ func _on_revive() -> void:
 	invuln = 2.0
 	b_count = 0
 	telegraphs.clear()
-	_blast(player, 260.0, 200.0, false)
+	_damage_around(player, 260.0, 200.0)
+	_power_moment(1.5, Color(0.5, 0.9, 1.0))
 	state = State.PLAYING
 	hud.show_play()
 
@@ -738,6 +802,7 @@ func _process(delta: float) -> void:
 	_compact_enemies()
 	_update_sparks(dt)
 	_update_rings(dt)
+	_update_vfx(dt)
 	_render_units()
 	_upload()
 	numbers.step(dt)
@@ -821,7 +886,7 @@ func _spawn_enemy(ty: int) -> void:
 	e_type[i] = ty
 	e_pos[i] = _spawn_point()
 	e_ang[i] = 0.0
-	e_hp[i] = t_hp[ty] * (1.0 + 0.2 * t / 60.0)
+	e_hp[i] = t_hp[ty] * (1.0 + 0.2 * t / 60.0) * hp_mult
 	e_flash[i] = 0.0
 	e_timer[i] = t_fire[ty] * randf()
 	e_halo[i] = 0.0
@@ -840,10 +905,14 @@ func _spawn_director(dt: float) -> void:
 		_spawn_enemy(Data.ELITE)
 		hud.show_banner("JUGGERNAUT INCOMING")
 		sfx.play("alarm")
-	var budget := int(fx.tier["enemies"])
-	var target := int(lerpf(18.0, budget * 0.7, clampf(t / 240.0, 0.0, 1.0)))
+	var target := int(lerpf(18.0, GAME_PEAK, clampf(t / 240.0, 0.0, 1.0)))
 	if boss_on:
 		target = int(target * 0.35)
+	# The same fight on every tier: if this tier draws fewer enemies, each one
+	# is tougher and worth more XP.
+	var cap := mini(target, int(int(fx.tier["enemies"]) * 0.9))
+	hp_mult = maxf(1.0, float(target) / maxf(cap, 1.0))
+	target = cap
 	spawn_acc = minf(spawn_acc + dt * (12.0 + t * 0.25), 30.0)
 	shot_budget = minf(shot_budget + dt * (1.5 + t / 60.0), 5.0)
 	var weights := Data.spawn_weights(t)
@@ -977,16 +1046,21 @@ func _enemy_attack(ty: int, p: Vector2, dir: Vector2) -> void:
 			if shot_budget >= 1.0:
 				shot_budget -= 1.0
 				_ebullet(p, dir * 230.0, 5.0, 5.0)
+				_muzzle(p + dir * 18.0, dir, Color(1.0, 0.5, 0.2), 8.0)
 		Data.GRENADIER:
 			_telegraph(0, player + Vector2(randf_range(-30.0, 30.0), randf_range(-30.0, 30.0)), Vector2(58.0, 0.0), 1.0, 12.0)
+			telegraphs[telegraphs.size() - 1].append(p)
 		Data.ELITE:
 			for k in 9:
 				_ebullet(p, dir.rotated(deg_to_rad(-40.0 + k * 10.0)) * 260.0, 6.0, 6.0)
+			_muzzle(p + dir * 30.0, dir, Color(1.0, 0.4, 0.15), 18.0)
 		Data.TANK:
 			_telegraph(1, p, p + dir * 760.0, 0.8, 16.0)
 		Data.HELI:
 			for k in 3:
 				_ebullet(p, dir.rotated(deg_to_rad(-12.0 + k * 12.0)) * 300.0, 5.0, 6.0)
+				_vfx(p, dir.rotated(randf_range(-0.6, 0.6)) * -40.0, 0.7, 5.0, 14.0, Color(0.6, 0.6, 0.6, 0.45), Color(0.3, 0.3, 0.3, 0.0), false)
+			_muzzle(p + dir * 20.0, dir, Color(1.0, 0.6, 0.25), 12.0)
 
 
 func _ebullet(p: Vector2, vel: Vector2, dmg: float, rad: float) -> void:
@@ -1012,6 +1086,8 @@ func _damage(j: int, amount: float, from: Vector2, force_crit: bool) -> void:
 		a *= crit_mult
 	if ty == Data.SHIELD and Vector2.from_angle(e_ang[j]).dot(from - e_pos[j]) > 0.0:
 		a *= 0.25  # The shield blocks most damage from the front.
+		if randf() < 0.3:
+			_vfx(e_pos[j] + Vector2.from_angle(e_ang[j]) * 16.0, Vector2.ZERO, 0.1, 4.0, 14.0, Color(0.9, 0.95, 1.0, 0.9), Color(0.6, 0.8, 1.0, 0.0), true)
 	var h := e_hp[j] - a
 	e_hp[j] = h
 	e_flash[j] = 0.06
@@ -1029,7 +1105,7 @@ func _kill(j: int) -> void:
 	var p := e_pos[j]
 	kills += 1
 	type_alive[ty] -= 1
-	_gem(p, t_xp[ty])
+	_gem(p, int(round(t_xp[ty] * hp_mult)))
 	_add_combo()
 	var big := ty >= Data.ELITE
 	var coins := 0
@@ -1048,6 +1124,10 @@ func _kill(j: int) -> void:
 	sfx.play("big_boom" if big else "boom", randf_range(0.85, 1.15), -2.0 if big else -10.0)
 	_sparks(p, int(fx.tier["sparks"]) * (3 if big else 1))
 	_ring(p, 3.5 if big else 1.8)
+	if big:
+		_explosion(p, 95.0 if ty == Data.ELITE else 70.0, 1.3)
+	elif randf() < 0.3:
+		_vfx(p, Vector2(0.0, -20.0), 0.6, 6.0, 16.0, Color(0.35, 0.33, 0.32, 0.4), Color(0.2, 0.2, 0.2, 0.0), false)
 	trauma = minf(trauma + (0.25 if big else 0.01), 0.6)
 	if ty == Data.ELITE:
 		_chest(p)
@@ -1114,7 +1194,8 @@ func _blast(p: Vector2, radius: float, dmg: float, force_crit: bool) -> void:
 		_damage_boss(dmg, force_crit)
 	_ring(p, radius / RING_SIZE * 1.1)
 	_sparks(p, int(fx.tier["sparks"]))
-	trauma = minf(trauma + 0.03, 0.6)
+	_explosion(p, radius, clampf(radius / 90.0, 0.4, 1.4))
+	trauma = minf(trauma + 0.03 + radius * 0.0004, 0.6)
 	sfx.play("boom", randf_range(0.7, 1.0), -6.0)
 
 
@@ -1123,6 +1204,8 @@ func _enemy_blast(p: Vector2, radius: float, dmg: float) -> void:
 		_hurt(dmg)
 	_ring(p, radius / RING_SIZE * 1.1)
 	_sparks(p, 6)
+	_explosion(p, radius * 0.9, 0.6)
+	sfx.play("boom", randf_range(0.9, 1.1), -8.0)
 
 
 # --- Boss -------------------------------------------------------------------
@@ -1236,6 +1319,7 @@ func _boss_killed() -> void:
 		var p := boss_pos + Vector2.from_angle(randf() * TAU) * randf_range(0.0, 90.0)
 		_ring(p, randf_range(3.0, 8.0))
 		_sparks(p, int(fx.tier["sparks"]) * 2)
+		_explosion(p, randf_range(90.0, 160.0), 1.6)
 	trauma = 1.0
 	hitstop = 0.2
 	hud.set_boss(false, 0.0)
@@ -1281,7 +1365,8 @@ func _fire(id: String, st: Dictionary) -> bool:
 			sfx.play("shot", randf_range(0.9, 1.1), -14.0)
 			for k in n:
 				var a: float = a0 + (k - (n - 1) * 0.5) * float(st["spread"])
-				_shot(Vector2.from_angle(a) * float(st["speed"]), st["dmg"], st["pierce"], st["life"])
+				_shot(Vector2.from_angle(a) * float(st["speed"]), st["dmg"], st["pierce"], st["life"], STORM_COLOR if evolved.has("rifle") else RIFLE_COLOR)
+			_muzzle(player + Vector2.from_angle(a0) * 18.0, Vector2.from_angle(a0), RIFLE_COLOR, 10.0)
 		"scatter":
 			if not _has_target():
 				return false
@@ -1289,7 +1374,9 @@ func _fire(id: String, st: Dictionary) -> bool:
 			var cone: float = st["spread"]
 			for k in int(st["count"]):
 				var a := a0 + randf_range(-cone * 0.5, cone * 0.5)
-				_shot(Vector2.from_angle(a) * float(st["speed"]) * randf_range(0.85, 1.1), st["dmg"], st["pierce"], st["life"])
+				_shot(Vector2.from_angle(a) * float(st["speed"]) * randf_range(0.85, 1.1), st["dmg"], st["pierce"], st["life"], SCATTER_COLOR)
+			_muzzle(player + Vector2.from_angle(a0) * 20.0, Vector2.from_angle(a0), SCATTER_COLOR, 16.0)
+			sfx.play("boom", 1.8, -12.0)
 		"rockets":
 			if not _has_target():
 				return false
@@ -1304,9 +1391,10 @@ func _fire(id: String, st: Dictionary) -> bool:
 	return true
 
 
-func _shot(vel: Vector2, dmg: float, pierce: int, life: float) -> void:
+func _shot(vel: Vector2, dmg: float, pierce: int, life: float, color: Color) -> void:
 	if s_count >= SHOT_CAP:
 		return
+	s_col[s_count] = color
 	s_pos[s_count] = player
 	s_vel[s_count] = vel
 	s_life[s_count] = life
@@ -1324,6 +1412,7 @@ func _remove_shot(i: int) -> void:
 	s_dmg[i] = s_dmg[s_count]
 	s_pierce[i] = s_pierce[s_count]
 	s_last[i] = s_last[s_count]
+	s_col[i] = s_col[s_count]
 
 
 func _update_shots(dt: float) -> void:
@@ -1372,6 +1461,10 @@ func _update_shots(dt: float) -> void:
 		var o := i * STRIDE
 		s_buf[o + 3] = p.x
 		s_buf[o + 7] = p.y
+		var sc := s_col[i]
+		s_buf[o + 8] = sc.r
+		s_buf[o + 9] = sc.g
+		s_buf[o + 10] = sc.b
 		if trails:
 			var d := s_vel[i].normalized()
 			s_buf[o] = d.x * 3.0
@@ -1445,6 +1538,8 @@ func _update_rockets(dt: float) -> void:
 		k_retarget[i] = rt
 		var v := k_vel[i].lerp((k_aim[i] - p).normalized() * 470.0, minf(1.0, dt * 4.0))
 		p += v * dt
+		if randf() < 0.5:
+			_vfx(p - v.normalized() * 8.0, -v * 0.05, 0.45, 3.0, 10.0, Color(0.7, 0.7, 0.7, 0.4), Color(0.4, 0.4, 0.4, 0.0), false)
 		k_vel[i] = v
 		k_pos[i] = p
 		var hit := boss_on and p.distance_to(boss_pos) < BOSS_RADIUS + 7.0
@@ -1632,7 +1727,12 @@ func _update_telegraphs(dt: float) -> void:
 					_enemy_blast(tg[1], (tg[2] as Vector2).x, tg[5])
 				1:
 					var start: Vector2 = tg[1]
-					_ebullet(start, ((tg[2] as Vector2) - start).normalized() * 650.0, tg[5], 9.0)
+					var aim := ((tg[2] as Vector2) - start).normalized()
+					_ebullet(start + aim * 40.0, aim * 650.0, tg[5], 9.0)
+					_muzzle(start + aim * 44.0, aim, Color(1.0, 0.7, 0.3), 26.0)
+					for k in 4:
+						_vfx(start + aim * 44.0, aim.rotated(randf_range(-0.8, 0.8)) * randf_range(20.0, 70.0), 0.9, 10.0, 26.0, Color(0.5, 0.48, 0.45, 0.5), Color(0.25, 0.25, 0.25, 0.0), false)
+					sfx.play("boom", 1.4, -8.0)
 			telegraphs.remove_at(k)
 		k -= 1
 
@@ -1799,9 +1899,13 @@ func _evolve(id: String) -> void:
 	evolved[id] = true
 	weapons[id] = MAX_LEVEL
 	_recalc()
-	hud.show_banner("EVOLUTION: " + String(Data.EVOLUTIONS[id]["name"]))
-	hud.flash(Color(1.0, 0.85, 0.3, 0.6))
+	hud.show_banner("EVOLUTION: " + String(Data.EVOLUTIONS[id]["name"]), Color(1.0, 0.8, 0.25))
 	sfx.play("powerup")
+	# The biggest moment in a run: a gold blast that clears the area.
+	_power_moment(2.2, Color(1.0, 0.8, 0.25))
+	_damage_around(player, 420.0, 600.0)
+	for k in 6:
+		_explosion(player + Vector2.from_angle(TAU * k / 6.0) * 180.0, 110.0, 1.5)
 	trauma = minf(trauma + 0.5, 1.0)
 	hitstop = 0.12
 	_ring(player, 10.0)
@@ -1952,6 +2056,12 @@ func _on_card(index: int) -> void:
 	if int(o["rarity"]) == 1 and (o["kind"] == "weapon" or o["kind"] == "power"):
 		bonus_dmg += Data.RARE_BONUS
 	_recalc()
+	var rarity: int = o["rarity"]
+	if o["kind"] == "weapon" or o["kind"] == "power":
+		var lvl: int = (weapons if o["kind"] == "weapon" else powers).get(id, 0)
+		if not o["evolve"]:
+			hud.show_banner("%s  Lv %d" % [Data.NAMES[id], lvl], Data.RARITY_COLORS[rarity])
+		_power_moment([0.35, 0.6, 0.9, 1.3][rarity] + lvl * 0.05, Data.RARITY_COLORS[rarity])
 	if chest_cards:
 		chest_cards = false
 	else:
@@ -2127,6 +2237,169 @@ func _upload() -> void:
 	RenderingServer.multimesh_set_buffer(blade_mm.get_rid(), bl_buf)
 	coin_mm.visible_instance_count = co_count
 	RenderingServer.multimesh_set_buffer(coin_mm.get_rid(), co_buf)
+	fire_mm.visible_instance_count = fire_n
+	RenderingServer.multimesh_set_buffer(fire_mm.get_rid(), fire_buf)
+	smoke_mm.visible_instance_count = smoke_n
+	RenderingServer.multimesh_set_buffer(smoke_mm.get_rid(), smoke_buf)
+	decal_mm.visible_instance_count = d_count
+	RenderingServer.multimesh_set_buffer(decal_mm.get_rid(), decal_buf)
+
+
+# --- Explosions and power moments ------------------------------------------
+
+func _vfx(p: Vector2, vel: Vector2, life: float, s0: float, s1: float, c0: Color, c1: Color, fire: bool) -> void:
+	if v_count >= v_cap:
+		return
+	var i := v_count
+	v_pos[i] = p
+	v_vel[i] = vel
+	v_life[i] = life
+	v_max[i] = life
+	v_s0[i] = s0
+	v_s1[i] = s1
+	v_c0[i] = c0
+	v_c1[i] = c1
+	v_fire[i] = 1 if fire else 0
+	v_count += 1
+
+
+func _muzzle(p: Vector2, dir: Vector2, col: Color, size: float) -> void:
+	if v_count > v_cap * 0.8:
+		return  # Keep room for explosions when the screen is busy.
+	_vfx(p, dir * 80.0, 0.07, size * 0.5, size, Color(col.r, col.g, col.b, 0.95), Color(col.r, col.g, col.b, 0.0), true)
+
+
+## A layered explosion: white flash, rolling fireballs, rising smoke and a
+## scorch mark. `power` scales the particle count and speed (about 0.4-1.6).
+func _explosion(p: Vector2, radius: float, power: float) -> void:
+	if v_count > v_cap * 0.9:
+		return
+	var q := clampf(float(v_cap) / 1600.0, 0.25, 1.0)  # Fewer particles on lower tiers.
+	_vfx(p, Vector2.ZERO, 0.14, radius * 0.3, radius * 1.15, Color(1.0, 0.97, 0.85, 0.95), Color(1.0, 0.75, 0.35, 0.0), true)
+	for k in int((3.0 + 6.0 * power) * q) + 1:
+		var dir := Vector2.from_angle(randf() * TAU)
+		_vfx(p + dir * radius * 0.2, dir * randf_range(20.0, 110.0) * power, randf_range(0.3, 0.55), radius * 0.25, radius * randf_range(0.5, 0.75), Color(1.0, 0.72, 0.28, 0.9), Color(0.75, 0.12, 0.04, 0.0), true)
+	for k in int((2.0 + 5.0 * power) * q) + 1:
+		var dir := Vector2.from_angle(randf() * TAU)
+		_vfx(p + dir * radius * 0.3, dir * randf_range(10.0, 40.0) + Vector2(0.0, -25.0), randf_range(0.8, 1.6), radius * 0.3, radius * randf_range(0.8, 1.1), Color(0.24, 0.22, 0.21, 0.55), Color(0.12, 0.12, 0.12, 0.0), false)
+	if power >= 0.5 and fx.tier["decals"]:
+		_decal(p, radius * 0.9)
+
+
+func _decal(p: Vector2, size: float) -> void:
+	var i := d_count
+	if d_count < DECAL_CAP:
+		d_count += 1
+	else:
+		i = randi() % DECAL_CAP
+	d_pos[i] = p
+	d_life[i] = DECAL_LIFE
+	d_size[i] = size
+
+
+func _update_vfx(dt: float) -> void:
+	var fn := 0
+	var sn := 0
+	var drag := maxf(0.0, 1.0 - 2.5 * dt)
+	var i := 0
+	while i < v_count:
+		var life := v_life[i] - dt
+		if life <= 0.0:
+			v_count -= 1
+			v_pos[i] = v_pos[v_count]
+			v_vel[i] = v_vel[v_count]
+			v_life[i] = v_life[v_count]
+			v_max[i] = v_max[v_count]
+			v_s0[i] = v_s0[v_count]
+			v_s1[i] = v_s1[v_count]
+			v_c0[i] = v_c0[v_count]
+			v_c1[i] = v_c1[v_count]
+			v_fire[i] = v_fire[v_count]
+			continue
+		v_life[i] = life
+		var k := 1.0 - life / v_max[i]
+		var vel := v_vel[i] * drag
+		var p := v_pos[i] + vel * dt
+		v_vel[i] = vel
+		v_pos[i] = p
+		var sc := lerpf(v_s0[i], v_s1[i], k) / VFX_RADIUS
+		var c := v_c0[i].lerp(v_c1[i], k)
+		if v_fire[i] == 1:
+			var o := fn * STRIDE
+			fn += 1
+			fire_buf[o] = sc
+			fire_buf[o + 5] = sc
+			fire_buf[o + 3] = p.x
+			fire_buf[o + 7] = p.y
+			fire_buf[o + 8] = c.r
+			fire_buf[o + 9] = c.g
+			fire_buf[o + 10] = c.b
+			fire_buf[o + 11] = c.a
+		else:
+			var o := sn * STRIDE
+			sn += 1
+			smoke_buf[o] = sc
+			smoke_buf[o + 5] = sc
+			smoke_buf[o + 3] = p.x
+			smoke_buf[o + 7] = p.y
+			smoke_buf[o + 8] = c.r
+			smoke_buf[o + 9] = c.g
+			smoke_buf[o + 10] = c.b
+			smoke_buf[o + 11] = c.a
+		i += 1
+	fire_n = fn
+	smoke_n = sn
+	var j := 0
+	while j < d_count:
+		var dl := d_life[j] - dt
+		if dl <= 0.0:
+			d_count -= 1
+			d_pos[j] = d_pos[d_count]
+			d_life[j] = d_life[d_count]
+			d_size[j] = d_size[d_count]
+			continue
+		d_life[j] = dl
+		var o := j * STRIDE
+		var ds := d_size[j] / 32.0
+		decal_buf[o] = ds
+		decal_buf[o + 5] = ds
+		decal_buf[o + 3] = d_pos[j].x
+		decal_buf[o + 7] = d_pos[j].y
+		decal_buf[o + 11] = minf(1.0, dl / 2.0)
+		j += 1
+
+
+## A burst from the hero when you gain power: a colored flash, a ring of
+## energy, enemies knocked back, and a short slow-down. Bigger for rarer cards
+## and higher levels.
+func _power_moment(strength: float, color: Color) -> void:
+	hud.flash(Color(color.r, color.g, color.b, clampf(0.12 + 0.18 * strength, 0.0, 0.7)))
+	_ring(player, 5.0 + 6.0 * strength)
+	var reach := 160.0 + 140.0 * strength
+	for j in e_count:
+		if e_hp[j] <= 0.0 or e_type[j] >= Data.TANK:
+			continue
+		var d := e_pos[j] - player
+		var l := d.length()
+		if l < reach and l > 0.1:
+			e_pos[j] += d / l * (reach - l) * 0.4
+	var n := int(10.0 + 14.0 * strength)
+	for k in n:
+		var dir := Vector2.from_angle(TAU * k / n)
+		_vfx(player + dir * 20.0, dir * (220.0 + 200.0 * strength), 0.4, 6.0, 18.0, Color(color.r, color.g, color.b, 0.9), Color(color.r, color.g, color.b, 0.0), true)
+	hitstop = maxf(hitstop, 0.04 + 0.08 * strength)
+	trauma = minf(trauma + 0.15 * strength, 0.8)
+	sfx.play("powerup", 0.8 + 0.3 * minf(strength, 1.5))
+
+
+## Damages enemies in a radius without the spatial grid, which is only valid
+## during a frame (this runs between frames, from menus and cards).
+func _damage_around(center: Vector2, radius: float, dmg: float) -> void:
+	for j in e_count:
+		if e_hp[j] > 0.0 and center.distance_to(e_pos[j]) < radius + t_radius[e_type[j]]:
+			_damage(j, dmg, center, false)
+	if boss_on and center.distance_to(boss_pos) < radius + BOSS_RADIUS:
+		_damage_boss(dmg, false)
 
 
 # --- Combo, coins and screen-clear pickups ---------------------------------

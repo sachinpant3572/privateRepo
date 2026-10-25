@@ -204,7 +204,8 @@ func set_boss(visible_now: bool, frac: float) -> void:
 	boss_bar.value = frac
 
 
-func show_banner(text: String) -> void:
+func show_banner(text: String, color: Color = Color(1.0, 0.85, 0.4)) -> void:
+	banner.add_theme_color_override("font_color", color)
 	banner.text = text
 	banner_time = 2.5
 	banner.visible = true

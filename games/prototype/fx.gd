@@ -1,6 +1,8 @@
 extends Node
-## Graphics quality tiers: glow (bloom) and Ultra screen effects, plus the
-## per-tier enemy budget. Adapted from games/stress-test/fx.gd.
+## Graphics quality tiers: glow (bloom), Ultra screen effects, and per-tier
+## caps (most enemies drawn, explosion particles). Tiers change only the
+## look: difficulty is the same on every tier. Adapted from
+## games/stress-test/fx.gd.
 ##
 ## Glow redraws the bright layers into a small offscreen viewport, blurs it
 ## horizontally into a second viewport, then blurs it vertically while adding
@@ -8,10 +10,10 @@ extends Node
 ## Compatibility renderer.
 
 const TIERS := {
-	"Low": {"glow": 0.0, "glow_strength": 0.0, "trails": false, "sparks": 4, "rings": 60, "detail": 0.0, "post": false, "fps_cap": 30, "enemies": 150},
-	"Medium": {"glow": 0.35, "glow_strength": 0.7, "trails": false, "sparks": 6, "rings": 120, "detail": 0.5, "post": false, "fps_cap": 60, "enemies": 250},
-	"High": {"glow": 0.5, "glow_strength": 0.8, "trails": true, "sparks": 10, "rings": 250, "detail": 1.0, "post": false, "fps_cap": 60, "enemies": 400},
-	"Ultra": {"glow": 1.0, "glow_strength": 0.9, "trails": true, "sparks": 16, "rings": 400, "detail": 1.0, "post": true, "fps_cap": 0, "enemies": 800},
+	"Low": {"glow": 0.0, "glow_strength": 0.0, "trails": false, "sparks": 4, "rings": 60, "detail": 0.0, "post": false, "fps_cap": 30, "enemies": 150, "vfx": 300, "decals": false},
+	"Medium": {"glow": 0.35, "glow_strength": 0.7, "trails": false, "sparks": 6, "rings": 120, "detail": 0.5, "post": false, "fps_cap": 60, "enemies": 250, "vfx": 600, "decals": true},
+	"High": {"glow": 0.5, "glow_strength": 0.8, "trails": true, "sparks": 10, "rings": 250, "detail": 1.0, "post": false, "fps_cap": 60, "enemies": 400, "vfx": 1000, "decals": true},
+	"Ultra": {"glow": 1.0, "glow_strength": 0.9, "trails": true, "sparks": 16, "rings": 400, "detail": 1.0, "post": true, "fps_cap": 0, "enemies": 800, "vfx": 1600, "decals": true},
 }
 const ORDER := ["Low", "Medium", "High", "Ultra"]
 const ABERRATION := 0.0025
