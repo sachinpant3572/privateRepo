@@ -141,6 +141,8 @@ version. No code changes needed.
 - **Hero and boss:** `hero`, `boss`, `boss_turret`.
 - **Pickups:** `nuke`, `freeze`, `vacuum`, `medkit`.
 
+**Now real:** all 15 above, hand-drawn vector art made by Claude (not AI image generation); `hero` and the pickups are 64×64 because the game draws them at texture size.
+
 ## Controls
 - **Move:** drag anywhere. The joystick appears where you touch.
 - **Weapons:** fire on their own.
