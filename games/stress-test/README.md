@@ -27,13 +27,19 @@ How it's built:
 | Button | What it does |
 |---|---|
 | Quick check | 500 enemies + 1,000 bullets until you tap Stop |
-| Auto ramp | Starts at 100 enemies + 200 bullets and adds 100 + 200 every 8 s. Stops at the first level that can't hold 92% of the frame-rate cap (55 FPS at a 60 cap) |
+| Auto ramp | Starts at 100 enemies + 200 bullets and grows 25% every 6 s (at least +100), up to 20,000 enemies. Stops at the first level that can't hold 92% of the target frame rate (55 FPS at a 60 cap). Logs FPS and game-logic time per level |
 | 5-minute heat soak | 500 + 1,000 for 5 minutes. Logs FPS and the phone's heat level every 10 s, to show whether the phone slows down as it warms up |
 | Heavy / Extreme | 1,000 + 2,000 and 2,000 + 4,000 |
 
 Settings:
 - **Effects:** turn explosions, flashes and shake on or off.
-- **Frame-rate cap:** 60 or 30 FPS.
+- **Frame-rate cap:** 60, 30, or none. With no cap, the test runs at the
+  screen's refresh rate (e.g. 120 Hz), which shows how much headroom a fast
+  phone has.
+
+Every result also shows **game-logic time per frame**. That's the CPU time for
+moving, firing and hit checks, and it runs out first on cheap phones. A 60 FPS
+frame has 16.7 ms in total, and drawing needs part of that.
 - **Heat sensor:** on or off. It uses Android's thermal status (Android 10+)
   and headroom (Android 11+).
 

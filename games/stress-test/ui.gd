@@ -115,7 +115,7 @@ func set_hud_text(text: String) -> void:
 
 func set_options(effects_on: bool, fps_cap: int, heat_on: bool) -> void:
 	effects_button.text = "Explosions, flashes and shake: %s" % ("ON" if effects_on else "OFF")
-	cap_button.text = "Frame rate cap: %d FPS" % fps_cap
+	cap_button.text = "Frame rate cap: %s" % ("%d FPS" % fps_cap if fps_cap > 0 else "none (screen max)")
 	heat_button.text = "Read phone heat sensor: %s" % ("ON" if heat_on else "OFF")
 
 

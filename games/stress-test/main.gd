@@ -21,10 +21,10 @@ const MARGIN := 40.0
 const STRIDE := 12  # Floats per instance: 8 for the Transform2D, 4 for the color.
 
 const RAMP_START := 100
-const RAMP_STEP := 100
-const RAMP_STEP_TIME := 8.0
-const RAMP_MEASURE_FROM := 3.0  # Skip the first seconds of each level.
-const RAMP_MAX := 4000
+const RAMP_GROWTH := 1.25  # Each level has 25% more enemies (at least 100 more).
+const RAMP_STEP_TIME := 6.0
+const RAMP_MEASURE_FROM := 2.0  # Skip the first seconds of each level.
+const RAMP_MAX := 20000
 const SOAK_ENEMIES := 500
 const SOAK_BULLETS := 1000
 const SOAK_TIME := 300.0
@@ -41,7 +41,7 @@ enum Mode { MENU, FIXED, RAMP, SOAK }
 var mode := Mode.MENU
 var smoke := false
 var effects_on := true
-var fps_cap := 60
+var fps_cap := 60  # 0 means no cap: the screen's refresh rate.
 var heat_on := true
 
 var arena := Vector2(720, 1280)
@@ -90,6 +90,10 @@ var ui
 # Frame stats for the current run.
 var frame_ms := PackedFloat32Array()
 var sim_ms := 0.0
+var logic_sum := 0.0
+var logic_worst := 0.0
+var level_logic_sum := 0.0
+var level_logic_worst := 0.0
 var hud_timer := 0.0
 var level_time := 0.0
 var level_frames := 0
@@ -173,7 +177,13 @@ func _on_option_toggled(option: String) -> void:
 		"effects":
 			effects_on = not effects_on
 		"cap":
-			fps_cap = 30 if fps_cap == 60 else 60
+			match fps_cap:
+				60:
+					fps_cap = 30
+				30:
+					fps_cap = 0
+				_:
+					fps_cap = 60
 			Engine.max_fps = fps_cap
 		"heat":
 			heat_on = not heat_on
@@ -195,6 +205,10 @@ func _start(new_mode: Mode, enemies: int, bullets: int) -> void:
 	level_time = 0.0
 	level_frames = 0
 	level_measured = 0.0
+	level_logic_sum = 0.0
+	level_logic_worst = 0.0
+	logic_sum = 0.0
+	logic_worst = 0.0
 	best_ramp = -1
 	ramp_log = PackedStringArray()
 	sample_time = 0.0
@@ -294,6 +308,8 @@ func _process(delta: float) -> void:
 	_upload()
 	_shake(dt)
 	sim_ms = (Time.get_ticks_usec() - t0) / 1000.0
+	logic_sum += sim_ms
+	logic_worst = maxf(logic_worst, sim_ms)
 	_track(dt if smoke else delta)
 
 
@@ -479,11 +495,13 @@ func _track_ramp(delta: float) -> void:
 	if level_time >= RAMP_MEASURE_FROM:
 		level_frames += 1
 		level_measured += delta
+		level_logic_sum += sim_ms
+		level_logic_worst = maxf(level_logic_worst, sim_ms)
 	if level_time < RAMP_STEP_TIME:
 		return
 	var fps := level_frames / maxf(level_measured, 0.001)
-	var held := fps >= fps_cap * 0.92
-	ramp_log.append("%d enemies + %d bullets: %.1f FPS%s" % [enemy_target, bullet_target, fps, "" if held else " (too slow)"])
+	var held := fps >= _target_fps() * 0.92
+	ramp_log.append("%d + %d: %.1f FPS, logic %.1f ms avg, %.1f worst%s" % [enemy_target, bullet_target, fps, level_logic_sum / maxi(level_frames, 1), level_logic_worst, "" if held else " (too slow)"])
 	if held:
 		best_ramp = enemy_target
 	if not held or enemy_target >= RAMP_MAX:
@@ -492,7 +510,10 @@ func _track_ramp(delta: float) -> void:
 	level_time = 0.0
 	level_frames = 0
 	level_measured = 0.0
-	_set_load(enemy_target + RAMP_STEP, (enemy_target + RAMP_STEP) * 2)
+	level_logic_sum = 0.0
+	level_logic_worst = 0.0
+	var next := mini(RAMP_MAX, maxi(enemy_target + 100, int(enemy_target * RAMP_GROWTH / 50.0) * 50))
+	_set_load(next, next * 2)
 
 
 func _track_soak(delta: float) -> void:
@@ -562,7 +583,7 @@ func _results_text(title: String) -> String:
 	var worst_sum := 0.0
 	for i in range(n - worst_count, n):
 		worst_sum += sorted[i]
-	var slow_limit := 1000.0 / fps_cap * 1.5
+	var slow_limit := 1000.0 / _target_fps() * 1.5
 	var slow := 0
 	for ms in sorted:
 		if ms > slow_limit:
@@ -570,17 +591,21 @@ func _results_text(title: String) -> String:
 
 	var lines := PackedStringArray()
 	lines.append(title)
-	lines.append("Phone: %s, %s" % [OS.get_model_name(), OS.get_processor_name()])
+	lines.append("Phone: %s, %s" % [OS.get_model_name(), _chip_name()])
 	lines.append("GPU: %s (%s)" % [RenderingServer.get_video_adapter_name(), RenderingServer.get_video_adapter_api_version()])
-	var ram: int = OS.get_memory_info().get("physical", -1)
-	lines.append("RAM: %s   Screen: %.0f Hz   Android: %s" % ["%.1f GB" % (ram / 1073741824.0) if ram > 0 else "unknown", DisplayServer.screen_get_refresh_rate(), OS.get_version()])
-	lines.append("Settings: effects %s, FPS cap %d" % ["on" if effects_on else "off", fps_cap])
+	var ram := _ram_gb()
+	lines.append("RAM: %s   Screen: %.0f Hz   Android: %s" % ["%.1f GB usable" % ram if ram > 0.0 else "unknown", DisplayServer.screen_get_refresh_rate(), OS.get_version()])
+	lines.append("Settings: effects %s, FPS cap %s" % ["on" if effects_on else "off", str(fps_cap) if fps_cap > 0 else "none (%d Hz screen)" % _target_fps()])
 	if n > 0 and total > 0.0:
 		lines.append("Ran %.0f s, average %.1f FPS, worst 1%% %.1f FPS" % [total / 1000.0, n * 1000.0 / total, 1000.0 / (worst_sum / worst_count)])
 		lines.append("Slow frames (over %.0f ms): %d of %d (%.1f%%)" % [slow_limit, slow, n, slow * 100.0 / n])
+		lines.append("Game logic per frame: %.1f ms avg, %.1f ms worst (a 60 FPS frame is 16.7 ms in total)" % [logic_sum / n, logic_worst])
 	lines.append("Kills: %d" % kills)
 	if mode == Mode.RAMP:
-		lines.append("Most enemies held at %d+ FPS: %s" % [int(fps_cap * 0.92), str(best_ramp) + " (with twice as many bullets)" if best_ramp > 0 else "below " + str(RAMP_START)])
+		var limit: String = str(best_ramp) + " (with twice as many bullets)" if best_ramp > 0 else "below " + str(RAMP_START)
+		if best_ramp >= RAMP_MAX:
+			limit += ", the test's maximum"
+		lines.append("Most enemies held at %d+ FPS: %s" % [int(_target_fps() * 0.92), limit])
 		lines.append_array(ramp_log)
 	if mode == Mode.SOAK:
 		var parts := PackedStringArray()
@@ -590,6 +615,42 @@ func _results_text(title: String) -> String:
 		lines.append("Heat every 10 s: " + ", ".join(soak_heat))
 	lines.append("Worst heat level: %s" % _heat_name(heat_worst))
 	return "\n".join(lines)
+
+
+func _target_fps() -> int:
+	if fps_cap > 0:
+		return fps_cap
+	var hz := roundi(DisplayServer.screen_get_refresh_rate())
+	return hz if hz > 0 else 60
+
+
+func _ram_gb() -> float:
+	var ram: int = OS.get_memory_info().get("physical", -1)
+	if ram > 0:
+		return ram / 1073741824.0
+	# Android often hides this from Godot, but /proc/meminfo is readable.
+	var f := FileAccess.open("/proc/meminfo", FileAccess.READ)
+	if f == null:
+		return -1.0
+	while not f.eof_reached():
+		var line := f.get_line()
+		if line.begins_with("MemTotal:"):
+			return line.split(" ", false)[1].to_float() / 1048576.0
+	return -1.0
+
+
+func _chip_name() -> String:
+	var chip := OS.get_processor_name()
+	if chip == "":
+		for path in ["/sys/devices/soc0/machine", "/sys/devices/soc0/soc_id"]:
+			if not FileAccess.file_exists(path):
+				continue
+			var f := FileAccess.open(path, FileAccess.READ)
+			if f != null:
+				chip = f.get_line().strip_edges()
+			if chip != "":
+				break
+	return "%s, %d cores" % [chip if chip != "" else "unknown chip", OS.get_processor_count()]
 
 
 func _init_heat() -> void:
