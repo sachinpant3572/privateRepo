@@ -27,7 +27,7 @@ const PLAYER_RADIUS := 14.0
 const PLAYER_HP := 120.0
 const PICKUP := 120.0
 const INVULN := 0.5
-const MAX_SLOTS := 6
+const MAX_SLOTS := 4  # Of 6 weapons and 6 powers, so every run is a different build.
 const MAX_LEVEL := 8
 const SHOT_CAP := 2500
 const ROCKET_CAP := 300
@@ -120,7 +120,14 @@ var weapons := {}  # id -> level
 var powers := {}  # id -> level
 var evolved := {}  # weapon id -> true
 var limit := {}  # id -> Limit Break stacks bought after level 8
+var synergies := {}  # Data.SYNERGIES id -> true once both halves reach SYNERGY_LEVEL
+var syn_queue: Array = []  # Synergies waiting for their big announcement.
+var syn_cd := 0.0
+var arc_budget := 0  # Arc Rounds forks left this frame.
+var static_charge := 0.0  # Static Dash: distance run since the last nova.
+var halo_pts := PackedVector2Array()  # Blade positions this frame, for Bulwark.
 var big_mult := 1.0  # Extra HP for Juggernauts, tanks and helicopters against strong builds.
+var horde_mult := 1.0  # The same, gentler, for everything else.
 var w_timer := {}
 var w_stats := {}
 var halo_angle := 0.0
@@ -176,6 +183,7 @@ var s_vel := PackedVector2Array()
 var s_life := PackedFloat32Array()
 var s_dmg := PackedFloat32Array()
 var s_pierce := PackedInt32Array()
+var s_kind := PackedInt32Array()  # 0 = Pulse Rifle, 1 = Scatter Cannon
 var s_last := PackedInt32Array()
 var s_col := PackedColorArray()
 var s_count := 0
@@ -577,6 +585,10 @@ func _start(auto: bool) -> void:
 	powers = {}
 	evolved = {}
 	limit = {}
+	synergies = {}
+	syn_queue = []
+	syn_cd = 0.0
+	static_charge = 0.0
 	big_mult = 1.0
 	w_timer = {}
 	bonus_dmg = 0.0
@@ -642,6 +654,7 @@ func _alloc() -> void:
 	s_life.resize(SHOT_CAP)
 	s_dmg.resize(SHOT_CAP)
 	s_pierce.resize(SHOT_CAP)
+	s_kind.resize(SHOT_CAP)
 	s_last.resize(SHOT_CAP)
 	s_col.resize(SHOT_CAP)
 	shot_mm.instance_count = SHOT_CAP
@@ -800,6 +813,8 @@ func _process(delta: float) -> void:
 			combo = 0
 			combo_step = 0
 	_run_events()
+	_announce_synergies(dt)
+	arc_budget = 6
 	_update_player(dt)
 	grid_origin = cam - view * 0.5 - Vector2(GRID_PAD, GRID_PAD)
 	_update_enemies(dt)
@@ -853,6 +868,8 @@ func _update_player(dt: float) -> void:
 		mv = mv.normalized()
 	move_vec = mv
 	player += mv * speed * dt
+	if synergies.has("static"):
+		static_charge += mv.length() * speed * dt
 	if mv.length_squared() > 0.01:
 		facing = mv.normalized()
 	invuln = maxf(invuln - dt, 0.0)
@@ -903,8 +920,7 @@ func _spawn_enemy(ty: int) -> void:
 	e_pos[i] = _spawn_point()
 	e_ang[i] = 0.0
 	e_hp[i] = t_hp[ty] * (1.0 + 0.2 * t / 60.0) * hp_mult
-	if ty >= Data.ELITE:
-		e_hp[i] *= big_mult
+	e_hp[i] *= big_mult if ty >= Data.ELITE else horde_mult
 	e_flash[i] = 0.0
 	e_timer[i] = t_fire[ty] * randf()
 	e_halo[i] = 0.0
@@ -1377,6 +1393,8 @@ func _has_target() -> bool:
 
 
 func _fire_weapons(dt: float) -> void:
+	if synergies.has("static"):
+		_static_nova()
 	for id in weapons:
 		var st: Dictionary = w_stats[id]
 		if not st.has("cd"):
@@ -1385,6 +1403,24 @@ func _fire_weapons(dt: float) -> void:
 		if tm <= 0.0:
 			tm = tm + float(st["cd"]) if _fire(id, st) else 0.1
 		w_timer[id] = tm
+
+
+## Static Dash: every 320 px run releases a lightning nova at up to 6 enemies.
+func _static_nova() -> void:
+	if static_charge < 320.0 or not weapons.has("tesla"):
+		return
+	static_charge = 0.0
+	var dmg: float = float(w_stats["tesla"]["dmg"]) * 1.5
+	var hit := {}
+	for k in 6:
+		var j := _nearest_in_radius(player, 300.0, hit)
+		if j < 0:
+			break
+		hit[j] = true
+		_bolt(PackedVector2Array([player, e_pos[j]]))
+		_damage(j, dmg, player, false)
+	if not hit.is_empty():
+		_ring(player, 4.0)
 
 
 func _fire(id: String, st: Dictionary) -> bool:
@@ -1397,7 +1433,7 @@ func _fire(id: String, st: Dictionary) -> bool:
 			sfx.play("shot", randf_range(0.9, 1.1), -14.0)
 			for k in n:
 				var a: float = a0 + (k - (n - 1) * 0.5) * float(st["spread"])
-				_shot(Vector2.from_angle(a) * float(st["speed"]), st["dmg"], st["pierce"], st["life"], STORM_COLOR if evolved.has("rifle") else RIFLE_COLOR)
+				_shot(Vector2.from_angle(a) * float(st["speed"]), st["dmg"], st["pierce"], st["life"], STORM_COLOR if evolved.has("rifle") else RIFLE_COLOR, 0)
 			_muzzle(player + Vector2.from_angle(a0) * 18.0, Vector2.from_angle(a0), RIFLE_COLOR, 10.0)
 		"scatter":
 			if not _has_target():
@@ -1406,7 +1442,7 @@ func _fire(id: String, st: Dictionary) -> bool:
 			var cone: float = st["spread"]
 			for k in int(st["count"]):
 				var a := a0 + randf_range(-cone * 0.5, cone * 0.5)
-				_shot(Vector2.from_angle(a) * float(st["speed"]) * randf_range(0.85, 1.1), st["dmg"], st["pierce"], st["life"], SCATTER_COLOR)
+				_shot(Vector2.from_angle(a) * float(st["speed"]) * randf_range(0.85, 1.1), st["dmg"], st["pierce"], st["life"], SCATTER_COLOR, 1)
 			_muzzle(player + Vector2.from_angle(a0) * 20.0, Vector2.from_angle(a0), SCATTER_COLOR, 16.0)
 			sfx.play("boom", 1.8, -12.0)
 		"rockets":
@@ -1423,7 +1459,7 @@ func _fire(id: String, st: Dictionary) -> bool:
 	return true
 
 
-func _shot(vel: Vector2, dmg: float, pierce: int, life: float, color: Color) -> void:
+func _shot(vel: Vector2, dmg: float, pierce: int, life: float, color: Color, kind: int) -> void:
 	if s_count >= SHOT_CAP:
 		return
 	s_col[s_count] = color
@@ -1432,6 +1468,7 @@ func _shot(vel: Vector2, dmg: float, pierce: int, life: float, color: Color) -> 
 	s_life[s_count] = life
 	s_dmg[s_count] = dmg
 	s_pierce[s_count] = pierce
+	s_kind[s_count] = kind
 	s_last[s_count] = -1
 	s_count += 1
 
@@ -1443,6 +1480,7 @@ func _remove_shot(i: int) -> void:
 	s_life[i] = s_life[s_count]
 	s_dmg[i] = s_dmg[s_count]
 	s_pierce[i] = s_pierce[s_count]
+	s_kind[i] = s_kind[s_count]
 	s_last[i] = s_last[s_count]
 	s_col[i] = s_col[s_count]
 
@@ -1478,6 +1516,7 @@ func _update_shots(dt: float) -> void:
 							if p.distance_squared_to(e_pos[j]) < rr * rr:
 								_damage(j, s_dmg[i], p, false)
 								s_last[i] = j
+								_shot_synergy(s_kind[i], j, p, s_dmg[i])
 								if s_pierce[i] <= 0:
 									removed = true
 									break
@@ -1559,7 +1598,7 @@ func _update_rockets(dt: float) -> void:
 		var life := k_life[i] - dt
 		var p := k_pos[i]
 		if life <= 0.0:
-			_blast(p, k_rad[i], k_dmg[i], k_crit[i] == 1)
+			_rocket_blast(p, k_rad[i], k_dmg[i], k_crit[i] == 1)
 			_remove_rocket(i)
 			continue
 		k_life[i] = life
@@ -1587,7 +1626,7 @@ func _update_rockets(dt: float) -> void:
 							hit = p.distance_squared_to(e_pos[j]) < rr * rr
 						j = e_next[j]
 		if hit:
-			_blast(p, k_rad[i], k_dmg[i], k_crit[i] == 1)
+			_rocket_blast(p, k_rad[i], k_dmg[i], k_crit[i] == 1)
 			_remove_rocket(i)
 			continue
 		var o := i * STRIDE
@@ -1603,6 +1642,7 @@ func _update_rockets(dt: float) -> void:
 
 func _update_halo(dt: float) -> void:
 	bl_count = 0
+	halo_pts.clear()
 	if not weapons.has("halo"):
 		return
 	var st: Dictionary = w_stats["halo"]
@@ -1615,6 +1655,7 @@ func _update_halo(dt: float) -> void:
 	var dmg: float = st["dmg"]
 	for k in n:
 		var p := player + Vector2.from_angle(halo_angle + TAU * k / n) * rad
+		halo_pts.append(p)
 		var cx := int((p.x - grid_origin.x) / CELL)
 		var cy := int((p.y - grid_origin.y) / CELL)
 		if cx >= 0 and cy >= 0 and cx < grid_cols and cy < grid_rows:
@@ -1699,7 +1740,8 @@ func _update_bombs(dt: float) -> void:
 		var bomb: Array = bombs[k]
 		bomb[1] = float(bomb[1]) - dt
 		if float(bomb[1]) <= 0.0:
-			_blast(bomb[0], bomb[2], bomb[3], false)
+			var precise := synergies.has("precision")
+			_blast(bomb[0], float(bomb[2]) * (1.25 if precise else 1.0), bomb[3], precise)
 			bombs.remove_at(k)
 		k -= 1
 	# Explosive Rounds blasts, capped per frame so chain reactions don't spike.
@@ -1727,6 +1769,12 @@ func _update_enemy_bullets(dt: float) -> void:
 		var p := b_pos[i] + b_vel[i] * dt
 		var rr := b_rad[i] + PLAYER_RADIUS
 		var hit := p.distance_squared_to(player) < rr * rr
+		if not hit and not halo_pts.is_empty() and synergies.has("bulwark"):
+			for bp in halo_pts:
+				if p.distance_squared_to(bp) < 900.0:
+					life = 0.0
+					_sparks(p, 3)
+					break
 		if life <= 0.0 or hit:
 			if hit:
 				_hurt(b_dmg[i])
@@ -1834,7 +1882,9 @@ func _update_pickups(dt: float) -> void:
 
 
 func _xp_need(l: int) -> float:
-	return 4.0 + 1.6 * pow(float(l), 1.3)
+	# Levels come quickly early on, then slow down past 25 so late picks
+	# stay an event instead of a card every two seconds.
+	return (4.0 + 1.6 * pow(float(l), 1.3)) * (1.0 + 0.08 * maxf(0.0, l - 25.0))
 
 
 func _gain_xp(value: int) -> void:
@@ -1968,7 +2018,93 @@ func _recalc() -> void:
 		w_stats[id] = Data.weapon_stats(id, weapons[id], evolved.has(id))
 		Data.limit_break(w_stats[id], _lb(id))
 	big_mult = 1.0 + maxf(0.0, _power_score() - 24.0) / 12.0
+	horde_mult = 1.0 + maxf(0.0, _power_score() - 30.0) / 30.0
+	_check_synergies()
 	hud.set_build(_build_text())
+
+
+## On-hit effects for Arc Rounds (rifle) and Frag Shells (scatter).
+func _shot_synergy(kind: int, j: int, p: Vector2, dmg: float) -> void:
+	if kind == 0 and synergies.has("arc") and arc_budget > 0 and randf() < 0.2 and weapons.has("tesla"):
+		arc_budget -= 1
+		var hit := {j: true}
+		var points := PackedVector2Array([p])
+		var cur := j
+		for k in 2:
+			cur = _nearest_in_radius(e_pos[cur], 170.0, hit)
+			if cur < 0:
+				break
+			hit[cur] = true
+			points.append(e_pos[cur])
+			_damage(cur, float(w_stats["tesla"]["dmg"]) * 0.6, p, false)
+		if points.size() > 1:
+			_bolt(points)
+	elif kind == 1 and synergies.has("frag") and randf() < 0.25 and blasts.size() < 120:
+		blasts.append([p, 34.0, dmg * 0.6])
+
+
+## Rocket explosions; with Gravity Warheads they also drag enemies inward.
+func _rocket_blast(p: Vector2, radius: float, dmg: float, crit: bool) -> void:
+	if synergies.has("gravity"):
+		var reach := radius * 2.5
+		var x0 := clampi(int((p.x - reach - grid_origin.x) / CELL), 0, grid_cols - 1)
+		var x1 := clampi(int((p.x + reach - grid_origin.x) / CELL), 0, grid_cols - 1)
+		var y0 := clampi(int((p.y - reach - grid_origin.y) / CELL), 0, grid_rows - 1)
+		var y1 := clampi(int((p.y + reach - grid_origin.y) / CELL), 0, grid_rows - 1)
+		for gy in range(y0, y1 + 1):
+			for gx in range(x0, x1 + 1):
+				var j := cell_head[gy * grid_cols + gx]
+				while j != -1:
+					if e_hp[j] > 0.0 and e_type[j] < Data.ELITE:
+						var to := p - e_pos[j]
+						var d := to.length()
+						if d < reach and d > 1.0:
+							e_pos[j] += to / d * minf(d * 0.6, 70.0)
+					j = e_next[j]
+	_blast(p, radius, dmg, crit)
+
+
+func _item_level(id: String) -> int:
+	return int(weapons.get(id, powers.get(id, 0)))
+
+
+func _check_synergies() -> void:
+	for id in Data.SYNERGIES:
+		var sy: Dictionary = Data.SYNERGIES[id]
+		if not synergies.has(id) and _item_level(sy["a"]) >= Data.SYNERGY_LEVEL and _item_level(sy["b"]) >= Data.SYNERGY_LEVEL:
+			synergies[id] = true
+			syn_queue.append(id)
+
+
+## A synergy gets its own moment once play resumes, so it isn't lost under
+## the level-up banner.
+func _announce_synergies(dt: float) -> void:
+	syn_cd = maxf(syn_cd - dt, 0.0)
+	if syn_queue.is_empty() or syn_cd > 0.0:
+		return
+	var id: String = syn_queue.pop_front()
+	syn_cd = 1.8
+	hud.show_banner("SYNERGY: " + String(Data.SYNERGIES[id]["name"]), Color(0.4, 1.0, 0.9))
+	sfx.play("powerup")
+	_power_moment(1.6, Color(0.4, 1.0, 0.9))
+	_ring(player, 8.0)
+	trauma = minf(trauma + 0.3, 1.0)
+	var found: Array = save.get_value("stats", "synergies", [])
+	if not found.has(id):
+		found.append(id)
+		save.set_value("stats", "synergies", found)
+
+
+## Card text: which synergies this item is part of.
+func _synergy_hint(id: String) -> String:
+	var out := ""
+	for sid in Data.SYNERGIES:
+		var sy: Dictionary = Data.SYNERGIES[sid]
+		if synergies.has(sid) or (sy["a"] != id and sy["b"] != id):
+			continue
+		var partner: String = sy["b"] if sy["a"] == id else sy["a"]
+		out += " Synergy with %s (both Lv %d) - %s: %s" % [Data.NAMES[partner], Data.SYNERGY_LEVEL, sy["name"], sy["desc"]]
+	return out
 
 
 func _lb(id: String) -> int:
@@ -2101,7 +2237,7 @@ func _offer_info(o: Dictionary) -> Dictionary:
 					desc += " Bonus: +4% damage to everything."
 				if o["kind"] == "weapon" and Data.EVOLUTIONS.has(id):
 					desc += " Evolves with %s." % Data.NAMES[Data.EVOLUTIONS[id]["power"]]
-				info["desc"] = desc
+				info["desc"] = desc + _synergy_hint(id)
 		"heal":
 			info["title"] = "Field Medkit"
 			info["desc"] = "Restore 40% of your HP."
@@ -2625,8 +2761,9 @@ func _save_summary() -> String:
 	if runs == 0:
 		return ""
 	var best := float(save.get_value("stats", "best_time", 0.0))
-	return "Gold %d   Runs %d   Wins %d\nBest: %d:%02d survived, %d kills, x%d combo" % [
-		int(save.get_value("stats", "gold", 0)), runs, int(save.get_value("stats", "wins", 0)),
+	var found: Array = save.get_value("stats", "synergies", [])
+	return "Gold %d   Runs %d   Wins %d   Synergies found %d/%d\nBest: %d:%02d survived, %d kills, x%d combo" % [
+		int(save.get_value("stats", "gold", 0)), runs, int(save.get_value("stats", "wins", 0)), found.size(), Data.SYNERGIES.size(),
 		int(best) / 60, int(best) % 60, int(save.get_value("stats", "best_kills", 0)), int(save.get_value("stats", "best_combo", 0))]
 
 
@@ -2672,6 +2809,11 @@ func _results_text(victory: bool) -> String:
 	lines.append("Time %d:%02d   Level %d   Kills %d%s" % [int(t) / 60, int(t) % 60, level, kills, "   (revived)" if revived else ""])
 	lines.append("Gold %d   Best combo x%d" % [gold, combo_best])
 	lines.append("Build: " + _build_text())
+	if not synergies.is_empty():
+		var names := PackedStringArray()
+		for id in synergies:
+			names.append(Data.SYNERGIES[id]["name"])
+		lines.append("Synergies: " + ", ".join(names))
 	var n := frame_ms.size()
 	if n > 0:
 		var sorted := frame_ms.duplicate()
@@ -2788,6 +2930,8 @@ func _run_smoke() -> void:
 	_recalc()
 	var lb_offers := _make_offers(2, false, [])
 	if not _check(lb_offers.all(func(o): return o.get("limit", false)), "a maxed build is offered Limit Breaks"):
+		return
+	if not _check(synergies.size() == Data.SYNERGIES.size(), "every synergy unlocks"):
 		return
 	god = true
 	t = 280.0

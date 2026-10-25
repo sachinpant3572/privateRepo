@@ -128,8 +128,12 @@ A stage lasts 5:00 of waves, then a boss fight.
 ## 5. Upgrade system
 
 ### Slots
-Each run has **6 weapon slots** and **6 power slots**. Once a type's slots are
-full, cards only offer level-ups for items you already have.
+Each run has **6 weapon slots** and **6 power slots**, out of 12 of each per
+world. Once a type's slots are full, cards only offer level-ups for items you
+already have. Slots must stay well below the number of items, so no run can
+take everything and each run is a different build. (The M1 prototype has 6 of
+each and uses **4 slots**; the third playtest, at 6 of 6, ended with the same
+maxed build as every other run.)
 
 ### Level-up cards: pick 1 of 2
 - Each level-up pauses the game and shows **2 cards**. Each card is either a
@@ -167,6 +171,35 @@ Card rarity rises as the run goes on. Higher rarity means a bigger jump:
   - Discovered recipes go into the **Fusion Codex**, a collection screen;
     undiscovered ones show as silhouettes.
   - Fusions are possible from World 2 onwards (see section 8).
+
+### Synergies
+- Two specific items that both reach **level 4** unlock a **synergy**: a new
+  behavior, not a stat. Examples from the prototype:
+  - Pulse Rifle + Tesla Coil = **Arc Rounds** (hits fork lightning).
+  - Scatter Cannon + Explosive Rounds = **Frag Shells** (pellets burst).
+  - Rocket Swarm + Magnet Field = **Gravity Warheads** (blasts pull enemies in).
+  - Razor Halo + Titan Skin = **Bulwark** (blades shred enemy bullets).
+  - Airstrike Beacon + Critical Targeting = **Precision Payload** (every bomb
+    crits).
+  - Tesla Coil + Adrenaline = **Static Dash** (running charges a lightning
+    nova).
+- Cards name the synergies an item is part of, so players plan builds around
+  them.
+- Discovered synergies are counted on the menu ("Synergies found 3/6"). This
+  collection is the main reason to try a different build next run.
+- Target for the full game: about 20 synergies per world, so a player
+  discovers new ones for weeks.
+
+### Limit Break
+- A maxed item keeps coming back as an uncapped **Limit Break** card (and as
+  a chest reward): weapons gain +12% damage and +4% fire rate per stack, plus
+  a projectile every 4th stack; powers gain a little more of their effect.
+- Levelling slows past level 25, so late Limit Breaks stay an event.
+- Enemies keep up with strong builds: the boss's HP grows with the build's
+  power score (shown as THREAT on its banner) and its damage taken tapers
+  past 2% of its HP per second; elites, tanks and helicopters, and more
+  gently the horde, also gain HP against strong builds. The scaling is
+  always slower than the build's growth, so upgrades still feel stronger.
 
 ### Offer rules (anti-frustration)
 - Never offer two cards for the same item.

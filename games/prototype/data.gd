@@ -49,6 +49,18 @@ const DESCS := {
 	"crit": "+5% crit chance and +10% crit damage per level.",
 }
 
+# Two items that both reach SYNERGY_LEVEL unlock a new behavior. With 4 of 6
+# slots per kind, which synergies a run can reach depends on the build.
+const SYNERGY_LEVEL := 4
+const SYNERGIES := {
+	"arc": {"a": "rifle", "b": "tesla", "name": "Arc Rounds", "desc": "Pulse Rifle hits can fork lightning."},
+	"frag": {"a": "scatter", "b": "explosive", "name": "Frag Shells", "desc": "Scatter pellets burst on impact."},
+	"gravity": {"a": "rockets", "b": "magnet", "name": "Gravity Warheads", "desc": "Rocket blasts drag enemies into the crater."},
+	"bulwark": {"a": "halo", "b": "titan", "name": "Bulwark", "desc": "Razor blades shred enemy bullets."},
+	"precision": {"a": "airstrike", "b": "crit", "name": "Precision Payload", "desc": "Every bomb crits, with a wider blast."},
+	"static": {"a": "tesla", "b": "adrenaline", "name": "Static Dash", "desc": "Running charges a lightning nova."},
+}
+
 # After level 8 an item keeps coming back as a Limit Break, with no cap.
 const LIMIT_WEAPON_DESC := "+12% damage and +4% fire rate per stack. Every 4th stack adds a projectile."
 const LIMIT_DESCS := {
