@@ -25,16 +25,43 @@ The Iron Dominion, then a boss.
 | Attack Helicopter | Circles and fires rocket salvos |
 | Juggernaut (elite, at 2:00 and 4:00) | Fires a 9-bullet fan; drops a **Power Chest** |
 
-**Weapons:** Pulse Rifle (you start with it), Scatter Cannon, Rocket Swarm,
-Razor Halo, Tesla Coil, Airstrike Beacon.
+**Weapons (12, up to 4 at once), each with an evolution:** Pulse Rifle (you
+start with it), Scatter Cannon, Rail Lance, Rocket Swarm, Grenade Rain, Razor
+Halo, Combat Drones, Tesla Coil, Flame Burst, Mine Layer, Sentry Turret,
+Airstrike Beacon. The pairings are in `data.gd` (`EVOLUTIONS`).
 
-**Powers:** Overclock, Titan Skin, Magnet Field, Adrenaline, Explosive
-Rounds, Critical Targeting.
+**Powers (32, up to 4 at once):**
+- **Attack:** Overclock, Explosive Rounds, Critical Targeting, Firepower,
+  Blast Radius, Multishot, Velocity Rounds, Armor Piercer, Ricochet Matrix,
+  Concussive Rounds, Vampiric Rounds.
+- **Defense:** Titan Skin, Nanite Regeneration, Evasion Matrix, Kinetic
+  Shield, Reactive Plating, Second Wind (revives).
+- **Elements:** Incendiary (burn), Cryo (slow, freeze), Shock (arcs), Toxin
+  (clouds).
+- **Actives:** Phase Dash (DASH button), Shockwave Stomp, Bullet Time, Last
+  Stand, Blood Oath (harder enemies, more XP and gold).
+- **Utility:** Magnet Field, Adrenaline, Long Fuse, Lucky Charm, Battle
+  Instinct (XP), Scavenger (gold).
+
+**Gear that grows with the build (`hero.gd`):**
+- **Helmet** (3 tiers) from survival powers, **pauldrons** (3 tiers) from
+  armor and damage powers.
+- **Back item** from the strongest build family: jetpack (speed and
+  actives), missile pod (explosives), drone dock (summons), energy wings
+  (elements and blades).
+- **Weapon in hand:** the highest-level weapon; a new main weapon swaps in
+  with an animation, and an evolved one glows gold.
+- **Element aura** and a **shield bubble** while Kinetic Shield is charged.
+
+**Costumes:** 12, bought with gold on the menu (Costumes). Gear stacks on top
+of any costume.
 
 **Level-up cards**
 - Pick 1 of 2.
 - **Show 3rd card (ad):** free in this build, 3 per run. Real ads come later.
 - **Reroll:** 1 per run.
+- **Banish:** 3 per run; the item never comes back that run.
+- **Skip:** no card; +5 gold and +10% HP instead.
 - Rarity rises over the stage:
 
 | Rarity | Effect |
@@ -143,6 +170,11 @@ version. No code changes needed.
 - **Ground:** `ground`, an opaque seamless tile (512×512) repeated every 512 world pixels.
 
 **Now real:** all 16 above, AI-generated with Higgsfield (GPT Image 2.5), then cropped and resized (the ground made seamless); `hero` and the pickups are 64×64 because the game draws them at texture size.
+
+**Also AI-generated with Higgsfield:** `costumes/<id>` (128×128, top-down,
+facing right, ids in `Data.COSTUMES`), `gear/` (helmets, pauldrons, back
+items, wings; 128×128), `hand/<weapon id>` (weapon in hand, pointing right),
+`icons/<weapon or power id>` (card icons, 96×96), `drone` and `sentry`.
 
 ## Controls
 - **Move:** drag anywhere. The joystick appears where you touch.

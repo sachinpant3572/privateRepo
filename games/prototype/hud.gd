@@ -11,6 +11,11 @@ signal menu_pressed
 signal option_toggled(option: String)
 signal chest_collected
 signal double_gold_pressed
+signal dash_pressed
+signal banish_pressed
+signal skip_pressed
+signal costumes_pressed
+signal costume_chosen(id: String)
 
 const Art := preload("res://art.gd")
 const JOY_RING := 180.0
@@ -57,6 +62,12 @@ var copy_button: Button
 var quality_button: Button
 var cap_button: Button
 var results := ""
+var dash_button: Button
+var banish_button: Button
+var skip_button: Button
+var costumes: ColorRect
+var costume_grid: GridContainer
+var costume_gold: Label
 
 
 func _ready() -> void:
@@ -73,6 +84,7 @@ func _ready() -> void:
 	_build_death()
 	_build_over()
 	_build_chest()
+	_build_costumes()
 
 
 func _process(delta: float) -> void:
@@ -98,10 +110,10 @@ func show_play() -> void:
 	_only(play)
 
 
-func show_cards(infos: Array, third_left: int, reroll_left: int, chest: bool) -> void:
+func show_cards(infos: Array, third_left: int, reroll_left: int, chest: bool, banish_left: int, banish_mode: bool) -> void:
 	for child in card_list.get_children():
 		child.queue_free()
-	card_title.text = "POWER CHEST!" if chest else "LEVEL UP!"
+	card_title.text = "TAP A CARD TO BANISH IT" if banish_mode else ("POWER CHEST!" if chest else "LEVEL UP!")
 	for i in infos.size():
 		var info_d: Dictionary = infos[i]
 		var card := Button.new()
@@ -110,7 +122,11 @@ func show_cards(infos: Array, third_left: int, reroll_left: int, chest: bool) ->
 		card.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		card.custom_minimum_size = Vector2(0, 170)
 		card.add_theme_font_size_override("font_size", 24)
-		var col: Color = info_d["color"]
+		if info_d["icon"] != null:
+			card.icon = info_d["icon"]
+			card.add_theme_constant_override("icon_max_width", 96)
+			card.add_theme_constant_override("h_separation", 16)
+		var col: Color = Color(1.0, 0.35, 0.3) if banish_mode else info_d["color"]
 		for style_name in ["normal", "hover", "pressed", "focus"]:
 			var sb := StyleBoxFlat.new()
 			sb.bg_color = Color(0.07, 0.08, 0.11, 0.96) if style_name != "pressed" else Color(0.15, 0.16, 0.2, 0.96)
@@ -134,6 +150,8 @@ func show_cards(infos: Array, third_left: int, reroll_left: int, chest: bool) ->
 	third_button.text = "Show 3rd card (ad) · %d left" % third_left
 	reroll_button.disabled = reroll_left <= 0
 	reroll_button.text = "Reroll (free)" if reroll_left > 0 else "Reroll used"
+	banish_button.disabled = banish_left <= 0
+	banish_button.text = ("Cancel banish" if banish_mode else "Banish · %d left" % banish_left)
 	play.visible = true
 	cards.visible = true
 
@@ -316,6 +334,95 @@ func _build_play() -> void:
 	play.add_child(joy_knob)
 	set_joystick(false, Vector2.ZERO, Vector2.ZERO)
 
+	dash_button = Button.new()
+	dash_button.text = "DASH"
+	dash_button.add_theme_font_size_override("font_size", 28)
+	dash_button.anchor_left = 1.0
+	dash_button.anchor_right = 1.0
+	dash_button.anchor_top = 1.0
+	dash_button.anchor_bottom = 1.0
+	dash_button.offset_left = -190
+	dash_button.offset_right = -30
+	dash_button.offset_top = -220
+	dash_button.offset_bottom = -90
+	var dash_style := StyleBoxFlat.new()
+	dash_style.bg_color = Color(0.3, 0.2, 0.55, 0.75)
+	dash_style.set_corner_radius_all(64)
+	dash_style.border_color = Color(0.75, 0.55, 1.0)
+	dash_style.set_border_width_all(4)
+	dash_button.add_theme_stylebox_override("normal", dash_style)
+	dash_button.add_theme_stylebox_override("pressed", dash_style)
+	dash_button.add_theme_stylebox_override("hover", dash_style)
+	dash_button.pressed.connect(dash_pressed.emit)
+	dash_button.visible = false
+	play.add_child(dash_button)
+
+
+## The dash button: hidden until Phase Dash is owned; dims while cooling down.
+func set_dash(on: bool, cooldown_frac: float) -> void:
+	dash_button.visible = on
+	dash_button.modulate.a = 1.0 if cooldown_frac <= 0.0 else 0.35 + 0.3 * (1.0 - cooldown_frac)
+
+
+func show_costumes(items: Array, wallet: int) -> void:
+	for child in costume_grid.get_children():
+		child.queue_free()
+	costume_gold.text = "Gold: %d" % wallet
+	for it in items:
+		var b := Button.new()
+		b.icon = it["tex"]
+		b.expand_icon = true
+		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
+		b.custom_minimum_size = Vector2(0, 230)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.add_theme_font_size_override("font_size", 20)
+		var status := "EQUIPPED" if it["on"] else ("Owned" if it["owned"] else "%d gold" % it["price"])
+		b.text = "%s\n%s" % [it["name"], status]
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.07, 0.08, 0.11, 0.96)
+		sb.border_color = Color(0.4, 0.95, 1.0) if it["on"] else (Color(0.5, 0.55, 0.6) if it["owned"] else Color(1.0, 0.8, 0.3))
+		sb.set_border_width_all(4 if it["on"] else 2)
+		sb.set_corner_radius_all(12)
+		sb.set_content_margin_all(10)
+		for style_name in ["normal", "hover", "pressed", "focus"]:
+			b.add_theme_stylebox_override(style_name, sb)
+		b.pressed.connect(costume_chosen.emit.bind(it["id"]))
+		costume_grid.add_child(b)
+	_only(costumes)
+
+
+func _build_costumes() -> void:
+	costumes = ColorRect.new()
+	costumes.color = Color(0.0, 0.0, 0.0, 0.8)
+	_full(costumes)
+	costumes.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(costumes)
+	var box := _centered_box(costumes)
+	var title := _label("COSTUMES", 48)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_color_override("font_color", Color(0.6, 0.9, 1.0))
+	box.add_child(title)
+	costume_gold = _label("", 26)
+	costume_gold.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	costume_gold.add_theme_color_override("font_color", Color(1.0, 0.82, 0.25))
+	box.add_child(costume_gold)
+	var hint := _label("Your gear (helmet, armor, back item, weapon) grows on top of any costume during a run.", 20)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(hint)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	box.add_child(scroll)
+	costume_grid = GridContainer.new()
+	costume_grid.columns = 3
+	costume_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	costume_grid.add_theme_constant_override("h_separation", 12)
+	costume_grid.add_theme_constant_override("v_separation", 12)
+	scroll.add_child(costume_grid)
+	_button(box, "Back", menu_pressed.emit)
+
 
 func _build_menu() -> void:
 	menu = ColorRect.new()
@@ -340,6 +447,7 @@ func _build_menu() -> void:
 	menu_stats.add_theme_color_override("font_color", Color(1.0, 0.82, 0.25))
 	box.add_child(menu_stats)
 	_button(box, "Play Stage 1", start_pressed.emit.bind(false))
+	_button(box, "Costumes", costumes_pressed.emit)
 	_button(box, "Watch auto-play", start_pressed.emit.bind(true))
 	quality_button = _button(box, "", option_toggled.emit.bind("quality"))
 	cap_button = _button(box, "", option_toggled.emit.bind("cap"))
@@ -364,6 +472,11 @@ func _build_cards() -> void:
 	box.add_child(row)
 	third_button = _button(row, "", third_pressed.emit)
 	reroll_button = _button(row, "", reroll_pressed.emit)
+	var row2 := HBoxContainer.new()
+	row2.add_theme_constant_override("separation", 12)
+	box.add_child(row2)
+	banish_button = _button(row2, "", banish_pressed.emit)
+	skip_button = _button(row2, "Skip (+5 gold, +10% HP)", skip_pressed.emit)
 
 
 func _build_death() -> void:
@@ -449,7 +562,7 @@ func _copy_results() -> void:
 
 
 func _only(screen: Control) -> void:
-	for s in [menu, play, cards, death, over, chest]:
+	for s in [menu, play, cards, death, over, chest, costumes]:
 		s.visible = s == screen
 
 

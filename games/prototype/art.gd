@@ -250,6 +250,23 @@ static func blade(size: int) -> ImageTexture:
 	return ImageTexture.create_from_image(img)
 
 
+## A disc mine with a red light (used when sprites/mine.png is missing).
+static func mine(size: int) -> Texture2D:
+	var real := sprite("mine")
+	if real != null:
+		return real
+	var img := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
+	var c := Vector2(size, size) * 0.5
+	_disc(img, c, size * 0.46, OUTLINE)
+	_disc(img, c, size * 0.4, Color(0.3, 0.33, 0.37))
+	_disc(img, c - Vector2(size * 0.08, size * 0.08), size * 0.26, Color(0.45, 0.5, 0.55))
+	for k in 6:
+		_disc(img, c + Vector2.from_angle(TAU * k / 6.0) * size * 0.32, size * 0.05, Color(0.2, 0.22, 0.25))
+	_disc(img, c, size * 0.11, Color(1.0, 0.2, 0.15))
+	_disc(img, c, size * 0.05, Color(1.0, 0.85, 0.8))
+	return ImageTexture.create_from_image(img)
+
+
 static func enemy_bullet(size: int) -> ImageTexture:
 	var img := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
 	var c := Vector2(size, size) * 0.5

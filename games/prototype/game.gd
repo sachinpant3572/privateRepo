@@ -12,6 +12,7 @@ const Data := preload("res://data.gd")
 const Art := preload("res://art.gd")
 const FX := preload("res://fx.gd")
 const Overlay := preload("res://overlay.gd")
+const HeroRig := preload("res://hero.gd")
 
 const STRIDE := 12  # Floats per instance: 8 for the Transform2D, 4 for the color.
 const CELL := 64.0
@@ -27,7 +28,11 @@ const PLAYER_RADIUS := 14.0
 const PLAYER_HP := 120.0
 const PICKUP := 120.0
 const INVULN := 0.5
-const MAX_SLOTS := 4  # Of 6 weapons and 6 powers, so every run is a different build.
+const MAX_SLOTS := 4  # Weapons, of 12: every run is a different build.
+const POWER_SLOTS := 4  # Of 32.
+const BANISHES := 3
+const MINE_CAP := 24
+const CLOUD_CAP := 12
 const MAX_LEVEL := 8
 const SHOT_CAP := 2500
 const ROCKET_CAP := 300
@@ -51,6 +56,11 @@ const PICKUP_CHANCE := 0.004
 const COMBO_TIME := 2.0
 const FREEZE_TIME := 5.0
 const SAVE_PATH := "user://save.cfg"
+const SHOT_FREEZE := 1
+const SHOT_LEECH := 2
+const RAIL_COLOR := Color(0.85, 0.75, 1.0)
+const FLAME_HOT := Color(1.0, 0.75, 0.3, 0.9)
+const FLAME_COOL := Color(0.9, 0.2, 0.05, 0.0)
 # Most enemies at once (at 4:00), the same on every quality tier. Tiers that
 # can't draw that many spawn fewer, tougher enemies worth more XP instead.
 const GAME_PEAK := 320
@@ -135,6 +145,59 @@ var offers: Array = []
 var chest_cards := false
 var third_left := 3
 var reroll_left := 1
+var banish_left := BANISHES
+var banished := {}
+var banish_mode := false
+
+# Stats from the extra powers (set in _recalc).
+var area_mult := 1.0
+var dur_mult := 1.0
+var vel_mult := 1.0
+var extra_proj := 0
+var pierce_bonus := 0
+var bounces := 0
+var knock := 1.0
+var regen := 0.0
+var kill_heal := 0.0
+var lifesteal := 0.0
+var steal_pool := 0.0
+var dodge := 0.0
+var shield_max := 0
+var shield_charges := 0
+var shield_cd := 0.0
+var thorns := 0
+var revives := 0
+var revive_given := 0
+var laststand := 0
+var burn_dps := 0.0
+var cryo_lvl := 0
+var shock_lvl := 0
+var toxin_lvl := 0
+var luck := 0
+var xp_mult := 1.0
+var gold_mult := 1.0
+var gold_acc := 0.0
+var curse := 0
+var ls_on := false
+# Actives.
+var dash_lvl := 0
+var dash_cd := 0.0
+var dash_t := 0.0
+var dash_dir := Vector2.RIGHT
+var stomp_lvl := 0
+var stomp_t := 0.0
+var bt_lvl := 0
+var bt_t := 0.0
+var slow_t := 0.0  # Bullet Time: enemies move at a third of their speed.
+# Summons and ground effects.
+var drone_nodes: Array = []
+var drone_timer := 0.0
+var mines: Array = []  # [position, arm time, Sprite2D, life]
+var sentries: Array = []  # [position, life, fire timer, Sprite2D]
+var clouds: Array = []  # [position, life, radius, dps, tick]
+var flame_tick := 0.0
+var burn_phase := 0
+var costume := "vanguard"
 
 # Joystick.
 var joy_on := false
@@ -161,6 +224,9 @@ var e_hp := PackedFloat32Array()
 var e_flash := PackedFloat32Array()
 var e_timer := PackedFloat32Array()
 var e_halo := PackedFloat32Array()
+var e_burn := PackedFloat32Array()  # Burn time left.
+var e_chill := PackedFloat32Array()  # Slow time left.
+var e_frozen := PackedFloat32Array()  # Frozen solid time left.
 var e_next := PackedInt32Array()
 var e_count := 0
 var e_cap := 0
@@ -186,6 +252,8 @@ var s_pierce := PackedInt32Array()
 var s_kind := PackedInt32Array()  # 0 = Pulse Rifle, 1 = Scatter Cannon
 var s_last := PackedInt32Array()
 var s_col := PackedColorArray()
+var s_bounce := PackedInt32Array()
+var s_flag := PackedInt32Array()  # SHOT_FREEZE, SHOT_LEECH.
 var s_count := 0
 
 # Rockets.
@@ -275,7 +343,8 @@ var boss_halo_cd := 0.0
 var world: Node2D
 var ground: ColorRect
 var ground_mat: ShaderMaterial
-var hero: Sprite2D
+var hero  # hero.gd
+var mine_tex: Texture2D
 var boss_node: Sprite2D
 var boss_turret_nodes := []
 var unit_mms := []  # One MultiMesh per unit sprite (Art cell order).
@@ -399,10 +468,11 @@ func _build_scene() -> void:
 		boss_node.add_child(turret)
 		boss_turret_nodes.append(turret)
 
-	hero = Sprite2D.new()
-	hero.texture = Art.hero(64)
-	hero.scale = Vector2(0.75, 0.75)
+	mine_tex = Art.mine(48)
+	costume = String(save.get_value("shop", "costume", "vanguard"))
+	hero = HeroRig.new()
 	world.add_child(hero)
+	hero.setup(_costume_tex(costume), Art.soft_disc(64, 0.25), Art.ring(64))
 	# Enemy bullets go on top so they are always readable.
 	eb_mm = _layer(Art.enemy_bullet(32), 6.0, true, Color.WHITE)
 	var top := Overlay.new()
@@ -417,7 +487,10 @@ func _build_scene() -> void:
 
 	fx = FX.new()
 	add_child(fx)
-	fx.setup(glow_layers, hero.texture)
+	fx.setup(glow_layers, hero.body.texture)
+	fx.player_glow.scale = hero.scale
+	# The costumes are bright; a dimmer glow keeps the gear readable.
+	fx.player_glow.modulate = Color(0.4, 0.4, 0.4)
 
 	hud = preload("res://hud.gd").new()
 	hud.layer = 10
@@ -432,6 +505,11 @@ func _build_scene() -> void:
 	hud.option_toggled.connect(_on_option)
 	hud.chest_collected.connect(_on_chest_collected)
 	hud.double_gold_pressed.connect(_on_double_gold)
+	hud.dash_pressed.connect(_dash)
+	hud.banish_pressed.connect(_on_banish)
+	hud.skip_pressed.connect(_on_skip)
+	hud.costumes_pressed.connect(_show_costumes)
+	hud.costume_chosen.connect(_on_costume)
 
 
 func _layer(tex: Texture2D, radius: float, additive: bool, glow_modulate: Color) -> MultiMesh:
@@ -594,9 +672,26 @@ func _start(auto: bool) -> void:
 	bonus_dmg = 0.0
 	third_left = 3
 	reroll_left = 1
+	banish_left = BANISHES
+	banished = {}
+	banish_mode = false
+	gold_acc = 0.0
+	steal_pool = 0.0
+	shield_charges = 0
+	shield_cd = 0.0
+	dash_cd = 0.0
+	dash_t = 0.0
+	stomp_t = 0.0
+	bt_t = 0.0
+	slow_t = 0.0
+	drone_timer = 0.0
+	flame_tick = 0.0
+	hero.reset()
 	joy_on = false
 	joy_vec = Vector2.ZERO
 	max_hp = PLAYER_HP
+	revives = 0
+	revive_given = 0
 	_recalc()
 	hp = max_hp
 	_alloc()
@@ -638,6 +733,9 @@ func _alloc() -> void:
 	e_flash.resize(e_cap)
 	e_timer.resize(e_cap)
 	e_halo.resize(e_cap)
+	e_burn.resize(e_cap)
+	e_chill.resize(e_cap)
+	e_frozen.resize(e_cap)
 	e_next.resize(e_cap)
 	# Every unit sprite gets a slice of one shared buffer.
 	unit_cap = PackedInt32Array([e_cap, e_cap, e_cap, 8, 12, 12, 10, 10])
@@ -657,6 +755,8 @@ func _alloc() -> void:
 	s_kind.resize(SHOT_CAP)
 	s_last.resize(SHOT_CAP)
 	s_col.resize(SHOT_CAP)
+	s_bounce.resize(SHOT_CAP)
+	s_flag.resize(SHOT_CAP)
 	shot_mm.instance_count = SHOT_CAP
 	s_buf = _buffer(SHOT_CAP, SHOT_COLOR)
 	k_pos.resize(ROCKET_CAP)
@@ -747,6 +847,14 @@ func _clear_entities() -> void:
 	for pk in pickups:
 		pk[3].queue_free()
 	pickups.clear()
+	for m in mines:
+		m[2].queue_free()
+	mines.clear()
+	for se in sentries:
+		se[3].queue_free()
+	sentries.clear()
+	clouds.clear()
+	_set_drones(0)
 	if unit_cap.size() > 0:
 		_upload()
 
@@ -768,6 +876,17 @@ func _game_over(victory: bool) -> void:
 
 
 func _on_death() -> void:
+	if revives > 0:
+		# Second Wind: back up on the spot, no menu.
+		revives -= 1
+		hp = max_hp * 0.5
+		invuln = 2.0
+		b_count = 0
+		telegraphs.clear()
+		_damage_around(player, 300.0, 300.0)
+		_power_moment(1.6, Color(0.6, 1.0, 0.8))
+		hud.show_banner("SECOND WIND!", Color(0.6, 1.0, 0.8))
+		return
 	state = State.DEAD
 	joy_on = false
 	hud.set_joystick(false, Vector2.ZERO, Vector2.ZERO)
@@ -827,6 +946,11 @@ func _process(delta: float) -> void:
 	_update_bombs(dt)
 	_update_enemy_bullets(dt)
 	_update_telegraphs(dt)
+	_update_status(dt)
+	_update_actives(dt)
+	_update_drones(dt)
+	_update_mines(dt)
+	_update_sentries(dt)
 	_update_pickups(dt)
 	_update_coins(dt)
 	_update_powerups(dt)
@@ -867,12 +991,25 @@ func _update_player(dt: float) -> void:
 	if mv.length() > 1.0:
 		mv = mv.normalized()
 	move_vec = mv
-	player += mv * speed * dt
+	if dash_t > 0.0:
+		dash_t -= dt
+		player += dash_dir * 1100.0 * dt
+		if dash_lvl >= 5:
+			_damage_around(player, 50.0, 6.0 * dash_lvl)
+		if int(t * 60.0) % 2 == 0:
+			_vfx(player, Vector2.ZERO, 0.25, 14.0, 4.0, Color(0.5, 0.95, 1.0, 0.6), Color(0.3, 0.6, 1.0, 0.0), true)
+	else:
+		player += mv * speed * dt
 	if synergies.has("static"):
 		static_charge += mv.length() * speed * dt
 	if mv.length_squared() > 0.01:
 		facing = mv.normalized()
 	invuln = maxf(invuln - dt, 0.0)
+	if regen > 0.0 or steal_pool > 0.0:
+		var heal := regen * dt + minf(steal_pool, 6.0 * dt)
+		steal_pool = maxf(0.0, steal_pool - 6.0 * dt)
+		hp = minf(max_hp, hp + heal)
+	ls_on = laststand > 0 and hp < max_hp * 0.35
 	hero.position = player
 	hero.rotation = facing.angle()
 	hero.modulate.a = 0.35 if invuln > 0.0 and int(t * 20.0) % 2 == 0 else 1.0
@@ -890,8 +1027,23 @@ func _update_camera(dt: float) -> void:
 
 
 func _hurt(amount: float) -> void:
-	if invuln > 0.0 or god or state != State.PLAYING:
+	if invuln > 0.0 or god or state != State.PLAYING or dash_t > 0.0:
 		return
+	if dodge > 0.0 and randf() < dodge:
+		invuln = INVULN * 0.5
+		_vfx(player, Vector2(randf_range(-60.0, 60.0), -40.0), 0.3, 22.0, 6.0, Color(0.6, 0.95, 1.0, 0.7), Color(0.3, 0.6, 1.0, 0.0), true)
+		_ring(player, 1.5)
+		return
+	if shield_charges > 0:
+		shield_charges -= 1
+		invuln = INVULN
+		shield_cd = maxf(shield_cd, _shield_time())
+		hero.set_shield(shield_charges > 0)
+		_ring(player, 3.0)
+		sfx.play("zap", 1.6, -6.0)
+		return
+	if thorns > 0:
+		_blast(player, 90.0 + 10.0 * thorns, 15.0 * thorns + armor * 4.0, false)
 	hp -= maxf(1.0, amount - armor)
 	invuln = INVULN
 	trauma = minf(trauma + 0.35, 1.0)
@@ -924,6 +1076,9 @@ func _spawn_enemy(ty: int) -> void:
 	e_flash[i] = 0.0
 	e_timer[i] = t_fire[ty] * randf()
 	e_halo[i] = 0.0
+	e_burn[i] = 0.0
+	e_chill[i] = 0.0
+	e_frozen[i] = 0.0
 	e_count += 1
 	type_alive[ty] += 1
 	peak_enemies = maxi(peak_enemies, e_count)
@@ -939,7 +1094,7 @@ func _spawn_director(dt: float) -> void:
 		_spawn_enemy(Data.ELITE)
 		hud.show_banner("JUGGERNAUT INCOMING")
 		sfx.play("alarm")
-	var target := int(lerpf(18.0, GAME_PEAK, clampf(t / 240.0, 0.0, 1.0)))
+	var target := int(lerpf(18.0, GAME_PEAK, clampf(t / 240.0, 0.0, 1.0)) * (1.0 + 0.1 * curse))
 	if boss_on:
 		target = int(target * 0.35)
 	# The same fight on every tier: if this tier draws fewer enemies, each one
@@ -947,7 +1102,7 @@ func _spawn_director(dt: float) -> void:
 	var cap := mini(target, int(int(fx.tier["enemies"]) * 0.9))
 	hp_mult = maxf(1.0, float(target) / maxf(cap, 1.0))
 	target = cap
-	spawn_acc = minf(spawn_acc + dt * (12.0 + t * 0.25), 30.0)
+	spawn_acc = minf(spawn_acc + dt * (12.0 + t * 0.25) * (1.0 + 0.1 * curse), 30.0)
 	shot_budget = minf(shot_budget + dt * (1.5 + t / 60.0), 5.0)
 	var weights := Data.spawn_weights(t)
 	while spawn_acc >= 1.0 and e_count < target and e_count < e_cap:
@@ -1013,7 +1168,11 @@ func _update_enemies(dt: float) -> void:
 			d2 = to.length_squared()
 		var d := sqrt(d2)
 		var dir := to / maxf(d, 0.001)
-		var sp := 0.0 if freeze_t > 0.0 else t_speed[ty]
+		var sp := 0.0 if freeze_t > 0.0 or e_frozen[i] > 0.0 else t_speed[ty] * (1.0 + 0.04 * curse)
+		if e_chill[i] > 0.0:
+			sp *= 0.5
+		if slow_t > 0.0:
+			sp *= 0.33
 		var v := dir * sp
 		match ty:
 			Data.GRENADIER:
@@ -1112,9 +1271,11 @@ func _telegraph(kind: int, start: Vector2, end: Vector2, time: float, dmg: float
 	telegraphs.append([kind, start, end, time, time, dmg])
 
 
-func _damage(j: int, amount: float, from: Vector2, force_crit: bool) -> void:
+func _damage(j: int, amount: float, from: Vector2, force_crit: bool, procs: bool = true) -> void:
 	var ty := e_type[j]
-	var a := amount * dmg_mult
+	var a := amount * dmg_mult * (1.0 + 0.1 * laststand if ls_on else 1.0)
+	if e_frozen[j] > 0.0:
+		a *= 1.25  # Frozen enemies shatter more easily.
 	var crit := force_crit or randf() < crit_chance
 	if crit:
 		a *= crit_mult
@@ -1125,11 +1286,23 @@ func _damage(j: int, amount: float, from: Vector2, force_crit: bool) -> void:
 	var h := e_hp[j] - a
 	e_hp[j] = h
 	e_flash[j] = 0.06
-	if ty <= Data.GRENADIER:
-		# Light knockback for infantry, away from the hit.
-		e_pos[j] += (e_pos[j] - from).normalized() * 5.0
+	if ty <= Data.GRENADIER or (knock >= 3.5 and ty != Data.ELITE):
+		# Knockback away from the hit: light for infantry, Concussive Rounds for more.
+		e_pos[j] += (e_pos[j] - from).normalized() * 5.0 * knock
+	if procs:
+		if burn_dps > 0.0:
+			e_burn[j] = 2.5 * dur_mult
+		if cryo_lvl > 0:
+			e_chill[j] = 1.5 * dur_mult
+			if cryo_lvl >= 5 and e_frozen[j] <= 0.0 and randf() < 0.04 * cryo_lvl:
+				e_frozen[j] = 1.2 * dur_mult
+		if shock_lvl > 0 and randf() < 0.06 + 0.03 * shock_lvl:
+			_shock_arc(j, 6.0 + 4.0 * shock_lvl)
+		if lifesteal > 0.0:
+			steal_pool = minf(steal_pool + a * lifesteal, 30.0)
 	numbers.add(e_pos[j], a, crit)
-	sfx.play("hit", randf_range(0.8, 1.3), -8.0)
+	if procs:
+		sfx.play("hit", randf_range(0.8, 1.3), -8.0)
 	if h <= 0.0:
 		_kill(j)
 
@@ -1150,12 +1323,12 @@ func _kill(j: int) -> void:
 		Data.TANK, Data.HELI:
 			coins = 2 + randi() % 3
 		_:
-			coins = 1 if randf() < 0.08 else 0
+			coins = 1 if randf() < 0.08 * (1.0 + 0.15 * luck) else 0
 	if big:
 		coins = int(coins * sqrt(big_mult))  # Tougher kills pay more.
 	for k in coins:
 		_coin(p + Vector2(randf_range(-20.0, 20.0), randf_range(-20.0, 20.0)))
-	if not big and randf() < PICKUP_CHANCE:
+	if not big and randf() < PICKUP_CHANCE * (1.0 + 0.2 * luck):
 		_drop_pickup(p, randi() % 4)
 	sfx.play("big_boom" if big else "boom", randf_range(0.85, 1.15), -2.0 if big else -10.0)
 	_sparks(p, int(fx.tier["sparks"]) * (3 if big else 1))
@@ -1169,7 +1342,11 @@ func _kill(j: int) -> void:
 		_chest(p)
 		hitstop = 0.08
 	if explosive > 0:
-		blasts.append([p, 40.0 + 6.0 * explosive, 6.0 * explosive])
+		blasts.append([p, (40.0 + 6.0 * explosive) * area_mult, 6.0 * explosive])
+	if toxin_lvl > 0 and clouds.size() < CLOUD_CAP and randf() < 0.15 + 0.05 * toxin_lvl:
+		clouds.append([p, 3.0 * dur_mult, (50.0 + 8.0 * toxin_lvl) * area_mult, 5.0 * toxin_lvl, 0.0])
+	if kill_heal > 0.0:
+		hp = minf(max_hp, hp + kill_heal)
 
 
 ## Removes enemies marked dead this frame (after all hit checks are done).
@@ -1189,6 +1366,9 @@ func _compact_enemies() -> void:
 			e_flash[i] = e_flash[last]
 			e_timer[i] = e_timer[last]
 			e_halo[i] = e_halo[last]
+			e_burn[i] = e_burn[last]
+			e_chill[i] = e_chill[last]
+			e_frozen[i] = e_frozen[last]
 
 
 func _nearest_in_radius(p: Vector2, r: float, exclude: Dictionary) -> int:
@@ -1399,7 +1579,7 @@ func _fire_weapons(dt: float) -> void:
 		var st: Dictionary = w_stats[id]
 		if not st.has("cd"):
 			continue
-		var tm: float = float(w_timer.get(id, 0.0)) - dt * fire_rate
+		var tm: float = float(w_timer.get(id, 0.0)) - dt * fire_rate * (1.0 + 0.06 * laststand if ls_on else 1.0)
 		if tm <= 0.0:
 			tm = tm + float(st["cd"]) if _fire(id, st) else 0.1
 		w_timer[id] = tm
@@ -1442,7 +1622,7 @@ func _fire(id: String, st: Dictionary) -> bool:
 			var cone: float = st["spread"]
 			for k in int(st["count"]):
 				var a := a0 + randf_range(-cone * 0.5, cone * 0.5)
-				_shot(Vector2.from_angle(a) * float(st["speed"]) * randf_range(0.85, 1.1), st["dmg"], st["pierce"], st["life"], SCATTER_COLOR, 1)
+				_shot(Vector2.from_angle(a) * float(st["speed"]) * randf_range(0.85, 1.1), st["dmg"], st["pierce"], st["life"], SCATTER_COLOR, 1, Vector2.INF, SHOT_LEECH if st["leech"] else 0)
 			_muzzle(player + Vector2.from_angle(a0) * 20.0, Vector2.from_angle(a0), SCATTER_COLOR, 16.0)
 			sfx.play("boom", 1.8, -12.0)
 		"rockets":
@@ -1450,6 +1630,47 @@ func _fire(id: String, st: Dictionary) -> bool:
 				return false
 			for k in int(st["count"]):
 				_rocket(facing.rotated(randf_range(-1.4, 1.4)) * 260.0, st["dmg"], st["radius"], st["crit"])
+		"rail":
+			if not _has_target():
+				return false
+			var a0 := (_target() - player).angle()
+			var n: int = st["count"]
+			for k in n:
+				var a: float = a0 + (k - (n - 1) * 0.5) * 0.12
+				_shot(Vector2.from_angle(a) * float(st["speed"]), st["dmg"], 999, st["life"], RAIL_COLOR, 0, Vector2.INF, SHOT_FREEZE if st["freeze"] else 0)
+			_muzzle(player + Vector2.from_angle(a0) * 22.0, Vector2.from_angle(a0), RAIL_COLOR, 18.0)
+			sfx.play("zap", 0.6, -6.0)
+		"grenade":
+			if not _has_target():
+				return false
+			for k in int(st["count"]):
+				var at := _random_target_near(player)
+				_ring(at, 2.0)
+				bombs.append([at, 0.55 + 0.08 * k, st["radius"], st["dmg"], st["cluster"]])
+			sfx.play("shot", 0.6, -10.0)
+		"flame":
+			return _flame(st)
+		"mines":
+			if mines.size() >= MINE_CAP:
+				return false
+			var spr := Sprite2D.new()
+			spr.texture = mine_tex
+			spr.position = player - facing * 20.0
+			spr.scale = Vector2.ONE * 0.6
+			_add_below_hero(spr)
+			mines.append([spr.position, 0.4, spr, float(st["life"])])
+		"sentry":
+			var alive := sentries.size()
+			if alive >= int(st["max"]):
+				return false
+			var spr := Sprite2D.new()
+			spr.texture = Art.pick("sentry", Art.turret_texture())
+			spr.scale = Vector2.ONE * 46.0 / spr.texture.get_width()
+			spr.position = player + facing.orthogonal() * 40.0
+			_add_below_hero(spr)
+			_ring(spr.position, 3.0)
+			sentries.append([spr.position, float(st["life"]), 0.0, spr])
+			sfx.play("powerup", 1.6, -10.0)
 		"tesla":
 			return _tesla(st)
 		"airstrike":
@@ -1459,11 +1680,13 @@ func _fire(id: String, st: Dictionary) -> bool:
 	return true
 
 
-func _shot(vel: Vector2, dmg: float, pierce: int, life: float, color: Color, kind: int) -> void:
+func _shot(vel: Vector2, dmg: float, pierce: int, life: float, color: Color, kind: int = 0, from: Vector2 = Vector2.INF, flags: int = 0) -> void:
 	if s_count >= SHOT_CAP:
 		return
 	s_col[s_count] = color
-	s_pos[s_count] = player
+	s_bounce[s_count] = bounces
+	s_flag[s_count] = flags
+	s_pos[s_count] = player if from == Vector2.INF else from
 	s_vel[s_count] = vel
 	s_life[s_count] = life
 	s_dmg[s_count] = dmg
@@ -1483,6 +1706,8 @@ func _remove_shot(i: int) -> void:
 	s_kind[i] = s_kind[s_count]
 	s_last[i] = s_last[s_count]
 	s_col[i] = s_col[s_count]
+	s_bounce[i] = s_bounce[s_count]
+	s_flag[i] = s_flag[s_count]
 
 
 func _update_shots(dt: float) -> void:
@@ -1517,7 +1742,19 @@ func _update_shots(dt: float) -> void:
 								_damage(j, s_dmg[i], p, false)
 								s_last[i] = j
 								_shot_synergy(s_kind[i], j, p, s_dmg[i])
+								if s_flag[i] & SHOT_FREEZE:
+									e_frozen[j] = 1.5 * dur_mult
+								if s_flag[i] & SHOT_LEECH:
+									steal_pool = minf(steal_pool + 0.6, 30.0)
 								if s_pierce[i] <= 0:
+									# Ricochet Matrix: bounce on to the next enemy instead of stopping.
+									if s_bounce[i] > 0:
+										var nxt := _nearest_in_radius(e_pos[j], 260.0, {j: true})
+										if nxt >= 0:
+											s_bounce[i] -= 1
+											s_vel[i] = (e_pos[nxt] - e_pos[j]).normalized() * s_vel[i].length()
+											s_life[i] = maxf(s_life[i], 0.4)
+											break
 									removed = true
 									break
 								s_pierce[i] -= 1
@@ -1705,6 +1942,14 @@ func _tesla(st: Dictionary) -> bool:
 		if cur < 0:
 			break
 	_bolt(points)
+	if st["fork"]:
+		# Storm Network: every enemy hit forks one more bolt to a fresh target.
+		for j in hit.keys():
+			var f := _nearest_in_radius(e_pos[j], float(st["jump"]) * 1.2, hit)
+			if f >= 0:
+				hit[f] = true
+				_damage(f, float(st["dmg"]) * 0.7, e_pos[j], false)
+				bolts.append([PackedVector2Array([e_pos[j], e_pos[f]]), 0.12])
 	return true
 
 
@@ -1736,12 +1981,20 @@ func _airstrike(st: Dictionary) -> void:
 
 func _update_bombs(dt: float) -> void:
 	var k := bombs.size() - 1
+	var booms := 0
 	while k >= 0:
 		var bomb: Array = bombs[k]
 		bomb[1] = float(bomb[1]) - dt
-		if float(bomb[1]) <= 0.0:
+		# At most 20 bombs go off per frame; the rest wait a frame, so big
+		# chain reactions (cluster grenades, mine quakes) don't stall a frame.
+		if float(bomb[1]) <= 0.0 and booms < 20:
+			booms += 1
 			var precise := synergies.has("precision")
 			_blast(bomb[0], float(bomb[2]) * (1.25 if precise else 1.0), bomb[3], precise)
+			if bomb.size() > 4 and bomb[4]:
+				# Cluster Jackpot: a ring of smaller blasts.
+				for c in 5:
+					bombs.append([Vector2(bomb[0]) + Vector2.from_angle(TAU * c / 5.0) * float(bomb[2]) * 1.2, 0.15 + 0.04 * c, float(bomb[2]) * 0.6, float(bomb[3]) * 0.5, false])
 			bombs.remove_at(k)
 		k -= 1
 	# Explosive Rounds blasts, capped per frame so chain reactions don't spike.
@@ -1817,6 +2070,294 @@ func _update_telegraphs(dt: float) -> void:
 		k -= 1
 
 
+# --- New weapons, summons, status effects and actives ----------------------
+
+## Flame Burst: a cone (or ring, at level 8) of fire in front of you.
+func _flame(st: Dictionary) -> bool:
+	var reach: float = st["range"]
+	var cone: float = st["cone"]
+	var aim := (_target() - player).normalized() if _has_target() else facing
+	var any := false
+	for j in e_count:
+		if e_hp[j] <= 0.0:
+			continue
+		var to := e_pos[j] - player
+		if to.length() > reach + t_radius[e_type[j]]:
+			continue
+		if cone < TAU and absf(aim.angle_to(to)) > cone * 0.5:
+			continue
+		_damage(j, st["dmg"], player, false)
+		e_burn[j] = maxf(e_burn[j], 1.5 * dur_mult)
+		any = true
+	if boss_on and boss_pos.distance_to(player) < reach + BOSS_RADIUS:
+		_damage_boss(st["dmg"], false)
+		any = true
+	if fx.tier["vfx"] > 0:
+		for k in 3:
+			var a := aim.angle() + randf_range(-cone * 0.5, cone * 0.5) if cone < TAU else randf() * TAU
+			_vfx(player + Vector2.from_angle(a) * 16.0, Vector2.from_angle(a) * reach * randf_range(2.2, 3.2), 0.32, 8.0, 26.0, FLAME_HOT, FLAME_COOL, true)
+	return any or cone >= TAU
+
+
+## Burns tick, slows wear off, toxic clouds hurt, Inferno Walker burns.
+func _update_status(dt: float) -> void:
+	flame_tick -= dt
+	var tick := flame_tick <= 0.0
+	if tick:
+		flame_tick = 0.5
+	# Burns tick on one enemy in eight each frame, so a big burning crowd
+	# doesn't land every hit on the same frame.
+	burn_phase = (burn_phase + 1) & 7
+	for j in e_count:
+		if e_hp[j] <= 0.0:
+			continue
+		if e_chill[j] > 0.0:
+			e_chill[j] -= dt
+		if e_frozen[j] > 0.0:
+			e_frozen[j] -= dt
+		if e_burn[j] > 0.0:
+			e_burn[j] -= dt
+			if (j & 7) == burn_phase:
+				_damage(j, maxf(burn_dps, 4.0) * dt * 8.0, e_pos[j], false, false)
+				if fx.tier["vfx"] > 0 and randf() < 0.05:
+					_vfx(e_pos[j], Vector2(0.0, -40.0), 0.4, 6.0, 14.0, FLAME_HOT, FLAME_COOL, true)
+	var k := clouds.size() - 1
+	while k >= 0:
+		var c: Array = clouds[k]
+		c[1] = float(c[1]) - dt
+		c[4] = float(c[4]) - dt
+		if float(c[4]) <= 0.0:
+			c[4] = 0.4
+			_damage_around(c[0], c[2], float(c[3]) * 0.4)
+			if fx.tier["vfx"] > 0:
+				for n in 2:
+					var off := Vector2.from_angle(randf() * TAU) * randf() * float(c[2])
+					_vfx(Vector2(c[0]) + off, Vector2(0.0, -10.0), 0.9, 10.0, 30.0, Color(0.45, 1.0, 0.3, 0.45), Color(0.2, 0.5, 0.1, 0.0), false)
+		if float(c[1]) <= 0.0:
+			clouds.remove_at(k)
+		k -= 1
+	if weapons.has("flame") and w_stats["flame"]["ring"] and tick:
+		var r: float = float(w_stats["flame"]["range"]) * 0.7
+		_damage_around(player, r, float(w_stats["flame"]["dmg"]) * 2.0)
+		if fx.tier["vfx"] > 0:
+			for n in 8:
+				var a := randf() * TAU
+				_vfx(player + Vector2.from_angle(a) * r, Vector2(0.0, -30.0), 0.5, 10.0, 22.0, FLAME_HOT, FLAME_COOL, true)
+
+
+## Stomp, Bullet Time, shield recharge and the dash cooldown.
+func _update_actives(dt: float) -> void:
+	if stomp_lvl > 0:
+		stomp_t -= dt
+		if stomp_t <= 0.0:
+			stomp_t = 8.0 - 0.5 * stomp_lvl
+			var r := (130.0 + 15.0 * stomp_lvl) * area_mult
+			for j in e_count:
+				if e_hp[j] > 0.0 and e_pos[j].distance_to(player) < r:
+					e_pos[j] += (e_pos[j] - player).normalized() * 70.0
+			_damage_around(player, r, 20.0 + 10.0 * stomp_lvl)
+			_ring(player, r / RING_SIZE * 1.1)
+			trauma = minf(trauma + 0.2, 0.6)
+			sfx.play("boom", 0.7, -4.0)
+			if weapons.has("mines") and w_stats["mines"]["quake"]:
+				for m in mines:
+					m[1] = minf(float(m[1]), 0.0)
+					m[3] = randf_range(0.0, 0.6)  # Seismic Field: the stomp sets off every mine, in a ripple.
+	if bt_lvl > 0:
+		bt_t -= dt
+		if bt_t <= 0.0:
+			bt_t = 20.0
+			slow_t = (2.0 + 0.25 * bt_lvl) * dur_mult
+			hud.flash(Color(0.6, 0.5, 1.0, 0.25))
+			sfx.play("powerup", 0.5, -6.0)
+	slow_t = maxf(slow_t - dt, 0.0)
+	if shield_max > 0 and shield_charges < shield_max:
+		shield_cd -= dt
+		if shield_cd <= 0.0:
+			shield_charges += 1
+			shield_cd = _shield_time()
+			hero.set_shield(true)
+	if dash_lvl > 0:
+		dash_cd = maxf(dash_cd - dt, 0.0)
+		hud.set_dash(true, dash_cd / _dash_time())
+		if autoplay and dash_cd <= 0.0 and hp < max_hp * 0.5:
+			_dash()
+
+
+func _shield_time() -> float:
+	return maxf(4.0, 13.0 - float(_lv("shield")))
+
+
+func _dash_time() -> float:
+	return maxf(1.5, 6.0 - 0.45 * dash_lvl)
+
+
+func _dash() -> void:
+	if state != State.PLAYING or dash_lvl <= 0 or dash_cd > 0.0:
+		return
+	dash_cd = _dash_time()
+	dash_t = 0.16
+	dash_dir = move_vec.normalized() if move_vec.length_squared() > 0.01 else facing
+	invuln = maxf(invuln, 0.3)
+	_ring(player, 2.5)
+	sfx.play("shot", 0.5, -6.0)
+
+
+## Shock Rounds: a small arc to two nearby enemies.
+func _shock_arc(from_j: int, dmg: float) -> void:
+	var hit := {from_j: true}
+	var pts := PackedVector2Array([e_pos[from_j]])
+	for k in 2:
+		var n := _nearest_in_radius(pts[pts.size() - 1], 140.0, hit)
+		if n < 0:
+			break
+		hit[n] = true
+		pts.append(e_pos[n])
+		_damage(n, dmg, e_pos[from_j], false, false)
+	if pts.size() > 1:
+		bolts.append([pts, 0.1])
+
+
+## Ground objects (mines, sentries) go under the hero so they never cover it.
+func _add_below_hero(node: Node2D) -> void:
+	world.add_child(node)
+	world.move_child(node, hero.get_index())
+
+
+func _set_drones(n: int) -> void:
+	while drone_nodes.size() < n:
+		var d := Sprite2D.new()
+		d.texture = Art.pick("drone", Art.hero(32))
+		d.scale = Vector2.ONE * 30.0 / d.texture.get_width()
+		d.position = player
+		world.add_child(d)
+		drone_nodes.append(d)
+	while drone_nodes.size() > n:
+		drone_nodes.pop_back().queue_free()
+
+
+## Drones circle you and each fires at the nearest enemy.
+func _update_drones(dt: float) -> void:
+	if drone_nodes.is_empty():
+		return
+	var st: Dictionary = w_stats["drones"]
+	var n := drone_nodes.size()
+	drone_timer -= dt * fire_rate
+	var shoot := drone_timer <= 0.0 and _has_target()
+	if drone_timer <= 0.0:
+		drone_timer = float(st["cd"])
+	for k in n:
+		var d: Sprite2D = drone_nodes[k]
+		var goal := player + Vector2.from_angle(t * 1.6 + TAU * k / n) * 70.0
+		d.position = d.position.lerp(goal, minf(1.0, dt * 8.0))
+		var aim := (_target() - d.position).angle() if _has_target() else facing.angle()
+		d.rotation = aim
+		if shoot:
+			_shot(Vector2.from_angle(aim) * 700.0 * vel_mult, st["dmg"], pierce_bonus, 0.9 * dur_mult, RIFLE_COLOR, 0, d.position)
+
+
+## Mines arm, wait for an enemy to step close, then blow up.
+func _update_mines(dt: float) -> void:
+	if mines.is_empty():
+		return
+	var st: Dictionary = w_stats.get("mines", {})
+	var k := mines.size() - 1
+	while k >= 0:
+		var m: Array = mines[k]
+		m[1] = float(m[1]) - dt
+		m[3] = float(m[3]) - dt
+		var boom := float(m[3]) <= 0.0
+		if not boom and float(m[1]) <= 0.0:
+			var near := _nearest_in_radius(m[0], 34.0, {})
+			boom = near >= 0 or (boss_on and Vector2(m[0]).distance_to(boss_pos) < BOSS_RADIUS + 20.0)
+		m[2].modulate = Color(1.6, 0.5, 0.4) if int(t * 4.0) % 2 == 0 and float(m[1]) <= 0.0 else Color.WHITE
+		if boom:
+			if not st.is_empty():
+				_blast(m[0], st["radius"], st["dmg"], false)
+				if st["quake"]:
+					# Seismic Field: a fault line of blasts.
+					var dir := Vector2.from_angle(randf() * TAU)
+					for q in 3:
+						bombs.append([Vector2(m[0]) + dir * 60.0 * (q + 1), 0.1 + 0.08 * q, float(st["radius"]) * 0.7, float(st["dmg"]) * 0.6])
+			m[2].queue_free()
+			mines.remove_at(k)
+		k -= 1
+
+
+## Sentries shoot at the nearest enemy in range until they expire.
+func _update_sentries(dt: float) -> void:
+	if sentries.is_empty():
+		return
+	var st: Dictionary = w_stats.get("sentry", {})
+	var k := sentries.size() - 1
+	while k >= 0:
+		var se: Array = sentries[k]
+		se[1] = float(se[1]) - dt
+		se[2] = float(se[2]) - dt * fire_rate
+		if float(se[1]) <= 0.0 or st.is_empty():
+			_ring(se[0], 2.0)
+			se[3].queue_free()
+			sentries.remove_at(k)
+			k -= 1
+			continue
+		var tgt := _nearest_in_radius(se[0], 420.0, {})
+		if tgt >= 0:
+			var aim := (e_pos[tgt] - Vector2(se[0])).angle()
+			se[3].rotation = lerp_angle(se[3].rotation, aim, minf(1.0, dt * 10.0))
+			if float(se[2]) <= 0.0:
+				se[2] = st["fire"]
+				_shot(Vector2.from_angle(aim) * 760.0 * vel_mult, st["dmg"], pierce_bonus, 0.7 * dur_mult, SHOT_COLOR, 0, se[0])
+				_muzzle(Vector2(se[0]) + Vector2.from_angle(aim) * 18.0, Vector2.from_angle(aim), SHOT_COLOR, 8.0)
+				if st["rockets"] and randf() < 0.25:
+					var saved := player
+					player = se[0]
+					_rocket(Vector2.from_angle(aim) * 260.0, float(st["dmg"]) * 1.5, 50.0 * area_mult, false)
+					player = saved
+		k -= 1
+
+
+# --- Costumes ---------------------------------------------------------------
+
+func _costume_tex(id: String) -> Texture2D:
+	return Art.pick("costumes/" + id, Art.hero(64))
+
+
+func _wallet() -> int:
+	return int(save.get_value("stats", "gold", 0)) - int(save.get_value("shop", "spent", 0))
+
+
+func _owns(id: String) -> bool:
+	return id == "vanguard" or bool(save.get_value("owned", id, false))
+
+
+func _show_costumes() -> void:
+	var items := []
+	for c in Data.COSTUMES:
+		items.append({"id": c[0], "name": c[1], "price": c[2], "tex": _costume_tex(c[0]), "owned": _owns(c[0]), "on": c[0] == costume})
+	hud.show_costumes(items, _wallet())
+
+
+func _on_costume(id: String) -> void:
+	var price := 0
+	for c in Data.COSTUMES:
+		if c[0] == id:
+			price = c[2]
+	if not _owns(id):
+		if _wallet() < price:
+			hud.show_banner("Not enough gold", Color(1.0, 0.5, 0.4))
+			return
+		save.set_value("shop", "spent", int(save.get_value("shop", "spent", 0)) + price)
+		save.set_value("owned", id, true)
+		sfx.play("fanfare")
+	costume = id
+	save.set_value("shop", "costume", id)
+	if not smoke:
+		save.save(SAVE_PATH)
+	hero.set_costume(_costume_tex(id))
+	fx.player_glow.texture = hero.body.texture
+	_show_costumes()
+
+
 # --- Pickups and progression -----------------------------------------------
 
 func _gem(p: Vector2, value: int) -> void:
@@ -1888,7 +2429,7 @@ func _xp_need(l: int) -> float:
 
 
 func _gain_xp(value: int) -> void:
-	xp += value * (1.0 + minf(combo, 1000) / 2000.0)
+	xp += value * xp_mult * (1.0 + minf(combo, 1000) / 2000.0)
 	while xp >= xp_need:
 		xp -= xp_need
 		level += 1
@@ -2013,14 +2554,82 @@ func _recalc() -> void:
 	explosive = mini(int(powers.get("explosive", 0)) + int(_lb("explosive") / 2.0), 20)
 	crit_chance = minf(0.05 + 0.05 * cr + 0.02 * _lb("crit"), 0.9)
 	crit_mult = 2.0 + 0.1 * cr + 0.1 * _lb("crit")
-	dmg_mult = 1.0 + bonus_dmg
+	dmg_mult = 1.0 + bonus_dmg + 0.08 * _lv("might")
+	# Limit Breaks of the powers without a stat of their own add damage.
+	for id in limit:
+		if Data.POWER_IDS.has(id) and not Data.LIMIT_DESCS.has(id):
+			dmg_mult += 0.03 * int(limit[id])
+	area_mult = 1.0 + 0.08 * _lv("area")
+	dur_mult = 1.0 + 0.1 * _lv("duration")
+	vel_mult = 1.0 + 0.1 * _lv("velocity")
+	extra_proj = int((_lv("multishot") + 2) / 3.0)
+	pierce_bonus = int((_lv("pierce") + 1) / 2.0)
+	bounces = int((_lv("ricochet") + 1) / 2.0)
+	knock = 1.0 + 0.5 * _lv("knockback")
+	regen = 0.4 * _lv("regen")
+	kill_heal = 1.0 if _lv("regen") >= 6 else 0.0
+	lifesteal = 0.005 * _lv("lifesteal")
+	dodge = 0.04 * _lv("dodge")
+	var sh := _lv("shield")
+	shield_max = 0 if sh == 0 else 1 + int(sh / 3.0)
+	shield_charges = mini(shield_charges, shield_max)
+	thorns = _lv("thorns")
+	laststand = _lv("laststand")
+	burn_dps = 4.0 * _lv("burn")
+	cryo_lvl = _lv("cryo")
+	shock_lvl = _lv("shock")
+	toxin_lvl = _lv("toxin")
+	luck = _lv("luck")
+	curse = _lv("curse")
+	xp_mult = (1.0 + 0.08 * _lv("growth")) * (1.0 + 0.15 * curse)
+	gold_mult = (1.0 + 0.15 * _lv("greed")) * (1.0 + 0.15 * curse)
+	dash_lvl = _lv("dash")
+	stomp_lvl = _lv("stomp")
+	bt_lvl = _lv("bullettime")
+	# Second Wind hands out a revive at level 1 and another at level 5, once each.
+	var owed := (1 if _lv("revival") >= 1 else 0) + (1 if _lv("revival") >= 5 else 0)
+	while revive_given < owed:
+		revive_given += 1
+		revives += 1
 	for id in weapons:
-		w_stats[id] = Data.weapon_stats(id, weapons[id], evolved.has(id))
-		Data.limit_break(w_stats[id], _lb(id))
+		var st := Data.weapon_stats(id, weapons[id], evolved.has(id))
+		Data.limit_break(st, _lb(id))
+		_apply_mods(st)
+		w_stats[id] = st
 	big_mult = 1.0 + maxf(0.0, _power_score() - 24.0) / 12.0
 	horde_mult = 1.0 + maxf(0.0, _power_score() - 30.0) / 30.0
 	_check_synergies()
+	_set_drones(int(w_stats["drones"]["count"]) if weapons.has("drones") else 0)
 	hud.set_build(_build_text())
+	hud.set_dash(dash_lvl > 0, 0.0)
+	if state != State.MENU:
+		for n in hero.refresh(weapons, powers, evolved):
+			if smoke:
+				continue
+			hud.show_banner("%s: %s" % n, Color(0.6, 0.95, 1.0))
+			_ring(player, 4.0)
+			_sparks(player, 12)
+
+
+func _lv(id: String) -> int:
+	return int(powers.get(id, 0))
+
+
+## Applies the stat powers (area, duration, multishot, speed, pierce) to one
+## weapon's stats.
+func _apply_mods(st: Dictionary) -> void:
+	for k in ["radius", "range"]:
+		if st.has(k):
+			st[k] = float(st[k]) * area_mult
+	for k in ["count", "chains", "bombs"]:
+		if st.has(k):
+			st[k] = int(st[k]) + extra_proj
+	if st.has("speed") and float(st["speed"]) > 100.0:
+		st["speed"] = float(st["speed"]) * vel_mult
+	if st.has("life"):
+		st["life"] = float(st["life"]) * dur_mult
+	if st.has("pierce"):
+		st["pierce"] = int(st["pierce"]) + pierce_bonus
 
 
 ## On-hit effects for Arc Rounds (rifle) and Frag Shells (scatter).
@@ -2142,15 +2751,15 @@ func _show_cards() -> void:
 	var infos := []
 	for o in offers:
 		infos.append(_offer_info(o))
-	hud.show_cards(infos, third_left, reroll_left, chest_cards)
+	hud.show_cards(infos, third_left, reroll_left, chest_cards, banish_left, banish_mode)
 
 
 func _make_offers(n: int, chest: bool, skip: Array) -> Array:
 	var pool := []
 	for id in Data.WEAPON_IDS:
-		_add_candidate(pool, "weapon", id, int(weapons.get(id, 0)), weapons.size())
+		_add_candidate(pool, "weapon", id, int(weapons.get(id, 0)), weapons.size(), MAX_SLOTS)
 	for id in Data.POWER_IDS:
-		_add_candidate(pool, "power", id, int(powers.get(id, 0)), powers.size())
+		_add_candidate(pool, "power", id, int(powers.get(id, 0)), powers.size(), POWER_SLOTS)
 	pool.shuffle()
 	var out := []
 	var used := {}
@@ -2180,8 +2789,8 @@ func _make_offers(n: int, chest: bool, skip: Array) -> Array:
 	return out
 
 
-func _add_candidate(pool: Array, kind: String, id: String, lvl: int, owned: int) -> void:
-	if lvl == 0 and owned >= MAX_SLOTS:
+func _add_candidate(pool: Array, kind: String, id: String, lvl: int, owned: int, slots: int) -> void:
+	if (lvl == 0 and owned >= slots) or banished.has(id):
 		return
 	pool.append([kind, id])  # A maxed item stays in the pool as a Limit Break.
 	if lvl >= 1 and lvl < MAX_LEVEL:
@@ -2192,6 +2801,8 @@ func _add_candidate(pool: Array, kind: String, id: String, lvl: int, owned: int)
 
 func _roll_rarity(chest: bool) -> int:
 	var w := Data.rarity_weights(t)
+	for k in range(1, 4):
+		w[k] *= 1.0 + 0.15 * luck
 	if chest:
 		w[0] = 0.0
 		w[1] = 0.0
@@ -2212,8 +2823,9 @@ func _offer(kind: String, id: String, rarity: int) -> Dictionary:
 
 func _offer_info(o: Dictionary) -> Dictionary:
 	var rarity: int = o["rarity"]
-	var info := {"color": Data.RARITY_COLORS[rarity], "title": "", "tag": "", "desc": ""}
+	var info := {"color": Data.RARITY_COLORS[rarity], "title": "", "tag": "", "desc": "", "icon": null}
 	var id: String = o["id"]
+	info["icon"] = Art.sprite("icons/" + (id if id != "heal" and id != "gold" else ("regen" if id == "heal" else "might")))
 	match String(o["kind"]):
 		"weapon", "power":
 			var cur: int = (weapons if o["kind"] == "weapon" else powers).get(id, 0)
@@ -2225,7 +2837,7 @@ func _offer_info(o: Dictionary) -> Dictionary:
 				var nm: String = Data.EVOLUTIONS[id]["name"] if evolved.has(id) else Data.NAMES[id]
 				info["title"] = "LIMIT BREAK: " + nm
 				info["tag"] = "%s · %d → %d" % [Data.RARITY_NAMES[rarity], _lb(id), _lb(id) + int(o["levels"])]
-				info["desc"] = Data.LIMIT_DESCS.get(id, Data.LIMIT_WEAPON_DESC)
+				info["desc"] = Data.LIMIT_DESCS.get(id, Data.LIMIT_WEAPON_DESC if o["kind"] == "weapon" else Data.LIMIT_POWER_DESC)
 				if rarity == 1:
 					info["desc"] += " Bonus: +4% damage to everything."
 			else:
@@ -2252,6 +2864,19 @@ func _on_card(index: int) -> void:
 		return
 	var o: Dictionary = offers[index]
 	var id: String = o["id"]
+	if banish_mode:
+		# Banish: this item never shows up again this run; a new card takes its place.
+		banish_mode = false
+		if o["kind"] == "weapon" or o["kind"] == "power":
+			banished[id] = true
+			banish_left -= 1
+			var skip := []
+			for other in offers:
+				skip.append(other["id"])
+			offers[index] = _make_offers(1, chest_cards, skip)[0]
+			hud.show_banner("BANISHED: " + String(Data.NAMES[id]), Color(1.0, 0.5, 0.4))
+		_show_cards()
+		return
 	match String(o["kind"]):
 		"weapon":
 			if o["evolve"]:
@@ -2304,6 +2929,32 @@ func _on_third() -> void:
 	var extra := _make_offers(1, chest_cards, skip)
 	offers.append(extra[0])
 	_show_cards()
+
+
+func _on_banish() -> void:
+	if state != State.CARDS or banish_left <= 0:
+		return
+	banish_mode = not banish_mode
+	_show_cards()
+
+
+## Skip: take no card, get a little gold and HP instead.
+func _on_skip() -> void:
+	if state != State.CARDS:
+		return
+	banish_mode = false
+	gold += 5
+	hp = minf(max_hp, hp + max_hp * 0.1)
+	if chest_cards:
+		chest_cards = false
+	else:
+		pending_levels -= 1
+	if pending_levels > 0:
+		offers = _make_offers(2, false, [])
+		_show_cards()
+	else:
+		state = State.PLAYING
+		hud.show_play()
 
 
 func _on_reroll() -> void:
@@ -2398,7 +3049,15 @@ func _render_units() -> void:
 	for i in e_count:
 		var ty := e_type[i]
 		var p := e_pos[i]
-		var tint := Color(1.9, 1.9, 1.9) if e_flash[i] > 0.0 else (Color(0.55, 0.85, 1.4) if freeze_t > 0.0 else Color.WHITE)
+		var tint := Color.WHITE
+		if e_flash[i] > 0.0:
+			tint = Color(1.9, 1.9, 1.9)
+		elif freeze_t > 0.0 or e_frozen[i] > 0.0:
+			tint = Color(0.55, 0.85, 1.4)
+		elif e_burn[i] > 0.0:
+			tint = Color(1.5, 0.85, 0.6)
+		elif e_chill[i] > 0.0:
+			tint = Color(0.8, 0.95, 1.3)
 		var spin := 0.0 if freeze_t > 0.0 else t * 25.0
 		match ty:
 			Data.TANK:
@@ -2657,7 +3316,9 @@ func _update_coins(dt: float) -> void:
 		if co_mag[i] == 1:
 			var d := sqrt(d2)
 			if d < PLAYER_RADIUS + 10.0:
-				gold += 1
+				gold_acc += gold_mult
+				gold += int(gold_acc)
+				gold_acc -= int(gold_acc)
 				sfx.play("coin", randf_range(0.95, 1.1), -8.0)
 				co_count -= 1
 				co_pos[i] = co_pos[co_count]
@@ -2922,16 +3583,34 @@ func _run_smoke() -> void:
 	print(_results_text(boss_dead_t >= 0.0))
 	if not _check(t > 30.0 and kills > 0, "the bot played the stage"):
 		return
-	# Second run: every weapon and power maxed and evolved, near the boss.
+	# Every weapon and power at once (more than the slots allow) for a few
+	# seconds, so every code path runs at least once.
 	_start(true)
-	_grant({"rifle": 8, "scatter": 8, "rockets": 8, "halo": 8, "tesla": 8, "airstrike": 8, "overclock": 8, "titan": 8, "magnet": 8, "adrenaline": 8, "explosive": 8, "crit": 8})
+	var all := {}
+	for id in Data.WEAPON_IDS:
+		all[id] = 8
+	for id in Data.POWER_IDS:
+		all[id] = 8
+	_grant(all)
 	for id in Data.EVOLUTIONS:
+		evolved[id] = true
+	_recalc()
+	god = true
+	t = 200.0
+	await _frames(60 * 8)
+	print("SMOKE: everything-at-once kills=%d logic_worst=%.1f" % [kills, logic_worst])
+	if not _check(synergies.size() == Data.SYNERGIES.size(), "every synergy unlocks"):
+		return
+	# Second run: a heavy legal build (4 weapons, 4 powers) maxed and evolved,
+	# near the boss.
+	_start(true)
+	weapons = {}  # Drop the starting rifle so the slots hold exactly this build.
+	_grant({"flame": 8, "drones": 8, "mines": 8, "grenade": 8, "titan": 8, "magnet": 8, "stomp": 8, "luck": 8})
+	for id in ["flame", "drones", "mines", "grenade"]:
 		evolved[id] = true
 	_recalc()
 	var lb_offers := _make_offers(2, false, [])
 	if not _check(lb_offers.all(func(o): return o.get("limit", false)), "a maxed build is offered Limit Breaks"):
-		return
-	if not _check(synergies.size() == Data.SYNERGIES.size(), "every synergy unlocks"):
 		return
 	god = true
 	t = 280.0
@@ -2983,6 +3662,20 @@ func _run_shots(dir: String) -> void:
 			await _frames(90)
 			await _save_shot(dir, "boss")
 			bot_still = false
+			# A fully geared hero: helmet, pauldrons, wings, aura and an evolved weapon.
+			_start(true)
+			_grant({"rail": 8, "drones": 6, "sentry": 5, "mines": 4, "flame": 8, "grenade": 4, "titan": 6, "shield": 4, "dodge": 3, "thorns": 3, "regen": 3, "burn": 5, "cryo": 3, "might": 3, "bullettime": 3})
+			evolved["rail"] = true
+			_recalc()
+			t = 150.0
+			bot_still = true
+			await _frames(60 * 4)
+			await _save_shot(dir, "gear")
+			bot_still = false
+			_to_menu()
+			_show_costumes()
+			await _frames(10)
+			await _save_shot(dir, "costumes")
 	print("SHOTS: done")
 	get_tree().quit(0)
 
