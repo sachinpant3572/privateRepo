@@ -116,6 +116,7 @@ jobs:
           path: |
             shots/*.png
             smoke.log
+            shots.log
           retention-days: 30
 
       - name: Publish APK and screenshots to the builds branch
@@ -126,7 +127,7 @@ jobs:
           mkdir publish
           cp "build/$GAME.apk" publish/
           cp -r shots publish/screenshots
-          cp smoke.log publish/
+          cp smoke.log shots.log publish/
           printf '%s APK built from %s (%s).\n' "$GAME" "$GITHUB_SHA" "$GITHUB_REF_NAME" > publish/README.md
           cd publish
           git init -q -b "$GAME-builds"

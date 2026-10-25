@@ -50,6 +50,7 @@ var autoplay := false
 var smoke := false
 var god := false
 var bot_cards := true
+var bot_still := false
 var quality := "Ultra"
 var fps_cap := 0
 var view := Vector2(720, 1280)
@@ -1968,6 +1969,8 @@ func _results_text(victory: bool) -> String:
 # --- Bot (auto-play, smoke test and screenshots) ---------------------------
 
 func _bot_move() -> Vector2:
+	if bot_still:
+		return Vector2.ZERO
 	var push := Vector2.ZERO
 	for i in e_count:
 		if e_hp[i] <= 0.0:
@@ -2076,13 +2079,19 @@ func _run_shots(dir: String) -> void:
 	god = true
 	await _frames(5)
 	await _save_shot(dir, "menu")
-	for tier_name in ["Ultra", "Low"]:
+	for tier_name in ["Ultra", "High", "Medium", "Low"]:
 		_set_quality(tier_name)
 		_start(true)
 		_grant({"rifle": 5, "rockets": 4, "halo": 4, "tesla": 3, "airstrike": 3, "scatter": 2, "overclock": 3, "explosive": 2})
 		t = 200.0
-		await _frames(60 * 8)
+		await _frames(60 * 3)
+		# A fixed ring of every enemy type around a still player, made tough so
+		# it survives until the screenshot.
+		bot_still = true
+		_showcase()
+		await _frames(30)
 		await _save_shot(dir, "play_" + tier_name.to_lower())
+		bot_still = false
 		if tier_name == "Ultra":
 			bot_cards = false
 			pending_levels += 1
@@ -2091,17 +2100,34 @@ func _run_shots(dir: String) -> void:
 			bot_cards = true
 			_bot_pick()
 			t = STAGE_TIME - 1.0
-			await _frames(60 * 6)
+			await _frames(5)
+			bot_still = true
+			boss_pos = player + Vector2(0.0, -330.0)
+			await _frames(90)
 			await _save_shot(dir, "boss")
+			bot_still = false
 	print("SHOTS: done")
 	get_tree().quit(0)
+
+
+func _showcase() -> void:
+	var kinds := [Data.TROOPER, Data.TROOPER, Data.SHIELD, Data.GRENADIER, Data.TROOPER, Data.TANK, Data.TROOPER, Data.HELI, Data.SHIELD, Data.TROOPER, Data.GRENADIER, Data.ELITE]
+	for k in 36:
+		var ty: int = kinds[k % kinds.size()]
+		_spawn_enemy(ty)
+		var i := e_count - 1
+		e_pos[i] = player + Vector2.from_angle(TAU * k / 36.0) * (190.0 + (k % 3) * 80.0)
+		e_hp[i] = 1.0e6
 
 
 func _save_shot(dir: String, name: String) -> void:
 	await RenderingServer.frame_post_draw
 	var path := dir.path_join(name + ".png")
 	get_viewport().get_texture().get_image().save_png(path)
-	print("SHOTS: saved %s (state=%d enemies=%d)" % [path, state, e_count])
+	var units := 0
+	for n in unit_n:
+		units += n
+	print("SHOTS: saved %s quality=%s state=%d enemies=%d unit_sprites=%d shots=%d rockets=%d enemy_bullets=%d gems=%d sparks=%d rings=%d boss=%s" % [path, quality, state, e_count, units, s_count, k_count, b_count, g_count, p_count, r_count, boss_on])
 
 
 func _frames(n: int) -> void:
