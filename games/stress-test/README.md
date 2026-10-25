@@ -36,12 +36,12 @@ Settings:
 - **Frame-rate cap:** 60, 30, or none. With no cap, the test runs at the
   screen's refresh rate (e.g. 120 Hz), which shows how much headroom a fast
   phone has.
+- **Heat sensor:** on or off. It uses Android's thermal status (Android 10+)
+  and headroom (Android 11+).
 
 Every result also shows **game-logic time per frame**. That's the CPU time for
 moving, firing and hit checks, and it runs out first on cheap phones. A 60 FPS
 frame has 16.7 ms in total, and drawing needs part of that.
-- **Heat sensor:** on or off. It uses Android's thermal status (Android 10+)
-  and headroom (Android 11+).
 
 ## How to install
 
