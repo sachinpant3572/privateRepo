@@ -81,7 +81,7 @@ say how it felt: smooth, or stuttery.
 
 ## How it's built
 
-`.github/workflows/stress-test-apk.yml` runs on every push that touches this
+`.github/workflows/android-apk.yml` runs on every push that touches this
 folder:
 1. Downloads Godot 4.7.2 and its export templates from the official
    `godotengine/godot-builds` releases and checks them against the official

@@ -1,10 +1,10 @@
-name: Stress test APK
+name: Android APKs
 
 on:
   push:
     paths:
-      - "games/stress-test/**"
-      - ".github/workflows/stress-test-apk.yml"
+      - "games/**"
+      - ".github/workflows/android-apk.yml"
   workflow_dispatch:
 
 permissions:
@@ -15,12 +15,18 @@ env:
   # Official checksums from godotengine/godot-builds, releases/godot-4.7.2-stable.json.
   GODOT_ZIP_SHA512: "9aa00f7a605200940bce3027a567b782f49bd8e940dd06ae9e987bd65aee1b1467edd56ed84fcdcbdd44354bf613bdbb4e5d2913e925850368e150c59ed54c65"
   GODOT_TPZ_SHA512: "ca4d71c4d7b81dfc15d1a98baa07534aa95b03fdda78a0075b06672e1648d2e5f40980c9adc28d23e1b92e732ee7bf3461997aa804af74ec2fcd7a93ccb84079"
-  PROJECT: games/stress-test
 
 jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        game: [stress-test, prototype]
+    env:
+      PROJECT: games/${{ matrix.game }}
+      GAME: ${{ matrix.game }}
     steps:
       - uses: actions/checkout@v4
 
@@ -49,9 +55,9 @@ jobs:
       - name: Configure Android export
         run: |
           # A throwaway signing key: fine for a test build, not for the store.
-          keystore="$RUNNER_TEMP/stresstest.keystore"
-          keytool -genkeypair -keystore "$keystore" -alias stresstest -keyalg RSA -keysize 2048 \
-            -validity 10000 -storepass stresstest -keypass stresstest -dname "CN=Stress Test"
+          keystore="$RUNNER_TEMP/test.keystore"
+          keytool -genkeypair -keystore "$keystore" -alias test -keyalg RSA -keysize 2048 \
+            -validity 10000 -storepass testbuild -keypass testbuild -dname "CN=Test Build"
           mkdir -p "$HOME/.config/godot"
           settings=$(printf '%s\n' \
             '[gd_resource type="EditorSettings" format=3]' \
@@ -60,16 +66,15 @@ jobs:
             "export/android/android_sdk_path = \"$ANDROID_SDK_ROOT\"" \
             "export/android/java_sdk_path = \"$JAVA_HOME\"" \
             "export/android/debug_keystore = \"$keystore\"" \
-            'export/android/debug_keystore_user = "stresstest"' \
-            'export/android/debug_keystore_pass = "stresstest"')
+            'export/android/debug_keystore_user = "test"' \
+            'export/android/debug_keystore_pass = "testbuild"')
           echo "$settings" > "$HOME/.config/godot/editor_settings-4.7.tres"
           echo "$settings" > "$HOME/.config/godot/editor_settings-4.tres"
           {
             echo "GODOT_ANDROID_KEYSTORE_RELEASE_PATH=$keystore"
-            echo "GODOT_ANDROID_KEYSTORE_RELEASE_USER=stresstest"
-            echo "GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=stresstest"
+            echo "GODOT_ANDROID_KEYSTORE_RELEASE_USER=test"
+            echo "GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=testbuild"
           } >> "$GITHUB_ENV"
-          ls "$ANDROID_SDK_ROOT/build-tools"
 
       - name: Import project
         run: godot --headless --path "$PROJECT" --import 2>&1 | tee import.log
@@ -80,7 +85,7 @@ jobs:
           if grep -E "SCRIPT ERROR|Parse Error|SMOKE FAILED" smoke.log; then exit 1; fi
           grep -q "SMOKE: passed" smoke.log
 
-      - name: Render screenshots of each quality tier
+      - name: Render screenshots
         run: |
           # Software OpenGL (Mesa llvmpipe) compiles the shaders and renders
           # real frames, so shader errors fail the build.
@@ -95,35 +100,38 @@ jobs:
       - name: Export APK
         run: |
           mkdir -p build
-          godot --headless --path "$PROJECT" --export-release "Android" "$GITHUB_WORKSPACE/build/stress-test.apk" 2>&1 | tee export.log
-          test -s build/stress-test.apk
+          godot --headless --path "$PROJECT" --export-release "Android" "$GITHUB_WORKSPACE/build/$GAME.apk" 2>&1 | tee export.log
+          test -s "build/$GAME.apk"
           ls -lh build
 
       - uses: actions/upload-artifact@v4
         with:
-          name: stress-test-apk
-          path: build/stress-test.apk
+          name: ${{ matrix.game }}-apk
+          path: build/${{ matrix.game }}.apk
           retention-days: 30
 
       - uses: actions/upload-artifact@v4
         with:
-          name: stress-test-screenshots
-          path: shots/*.png
+          name: ${{ matrix.game }}-screenshots
+          path: |
+            shots/*.png
+            smoke.log
           retention-days: 30
 
-      - name: Publish APK to the stress-test-builds branch
+      - name: Publish APK and screenshots to the builds branch
         if: github.event_name == 'push'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir publish
-          cp build/stress-test.apk publish/
+          cp "build/$GAME.apk" publish/
           cp -r shots publish/screenshots
-          printf 'Stress test APK built from %s (%s).\n' "$GITHUB_SHA" "$GITHUB_REF_NAME" > publish/README.md
+          cp smoke.log publish/
+          printf '%s APK built from %s (%s).\n' "$GAME" "$GITHUB_SHA" "$GITHUB_REF_NAME" > publish/README.md
           cd publish
-          git init -q -b stress-test-builds
+          git init -q -b "$GAME-builds"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .
-          git commit -q -m "Stress test APK from ${GITHUB_SHA::7}"
-          git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:stress-test-builds
+          git commit -q -m "$GAME APK from ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:$GAME-builds"
