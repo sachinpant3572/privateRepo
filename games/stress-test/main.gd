@@ -14,6 +14,7 @@ const ENEMY_SPEED := 90.0
 # explosions happen in view rather than at the edges.
 const ENEMY_HP := 24
 const HIT_COOLDOWN := 0.1
+const FLASH_TIME := 0.035  # The hit flash is a blink at the start of the cooldown.
 const BULLET_SPEED := 560.0
 const BULLET_LIFE := 1.5
 const BULLET_STREAMS := 6
@@ -400,9 +401,9 @@ func _update_enemies(dt: float) -> void:
 		var o := i * STRIDE
 		e_buf[o + 3] = p.x
 		e_buf[o + 7] = p.y
-		if cool > 0.0:
-			e_buf[o + 9] = 1.0
-			e_buf[o + 10] = 1.0
+		if cool > HIT_COOLDOWN - FLASH_TIME:
+			e_buf[o + 9] = 0.8
+			e_buf[o + 10] = 0.9
 		else:
 			e_buf[o + 9] = ENEMY_COLOR.g
 			e_buf[o + 10] = ENEMY_COLOR.b
