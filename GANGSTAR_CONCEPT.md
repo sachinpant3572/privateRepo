@@ -1,4 +1,4 @@
-# Open-world crime game concept (Gangstar-style, 2D isometric)
+# Open-world crime game concept (Gangstar-style, classic top-down)
 
 Status: **concept**. Captured Oct 25, 2026. The first prompt for this idea was
 lost when a cloud session restarted; this file merges the re-sent version with
@@ -10,7 +10,7 @@ Proposed: **Solvera** (see `WORLD_BIBLE.md` for the world, names and lore).
 ## The idea (as described)
 
 An Android and iOS open-world crime game in the spirit of the Gangstar series
-(Rio, New Orleans, Vegas) and GTA San Andreas, in a **2D isometric, cartoon-like
+(Rio, New Orleans, Vegas) and GTA San Andreas, in a **classic top-down, cartoon-like
 style** like the older Gangstar games, with a very lively world and a much
 bigger map.
 
@@ -61,7 +61,7 @@ bigger map.
 ### Quality bar
 
 Top-notch storyline, exploration, build-up, model quality and sound design, in
-the same 2D isometric cartoon look as the older Gangstar games but with much
+the classic top-down cartoon look of the Java-era Gangstar games but with much
 better graphics.
 
 Inspired by Gangstar, not a literal clone: mechanics and genre are free to
@@ -164,7 +164,7 @@ Figures are industry benchmarks recalled from public reports (GameAnalytics,
 AppsFlyer, store pages) up to mid-2026, not freshly verified. Verify before
 using them for business decisions.
 
-**Verdict**: the genre is proven on mobile and the 2D isometric niche is
+**Verdict**: the genre is proven on mobile and the top-down niche is
 under-served at high quality, so the idea is viable. The scope as written is
 not: it's a AAA-sized feature list. Viable as a phased project starting from
 one city.
@@ -175,7 +175,7 @@ one city.
 | Engagement / immersion | High potential | Open-world sandbox plus story is among the stickiest mobile formats when the world feels alive. |
 | Retention | High, by design (target D1 40% / D7 20% / D30 10%) | Story alone drops off after the ending; the design pillar adds daily, weekly and seasonal loops (turf wars, businesses, sports leagues, events). Needs ongoing live-ops content. |
 | Replayability | High, by design | Branching story, multiple mission approaches, systemic world, New Game+ (see design pillar). Medium if the story ships linear. |
-| Differentiation | Medium-high | Premium-quality 2D isometric open world is rare; GTA Chinatown Wars proved the format plays well on touch. |
+| Differentiation | Medium-high | Premium-quality top-down open world is rare; GTA Chinatown Wars proved the format plays well on touch. |
 | Feasibility as written | Low | Multiple cities, an island, 15+ vehicle classes and 7 sports with progression is many years of a large team. |
 | Feasibility, phased | Medium | One city, ground and water vehicles, 2 sports, a focused story arc. |
 
@@ -184,8 +184,9 @@ one city.
 1. **Scope.** Every vehicle class and every sport is its own subsystem.
 2. **Art pipeline.** True 2D sprites need 8 to 16 directions per vehicle and
    per animation, and clothing layers multiply that. Recommended: low-poly 3D
-   with a fixed orthographic isometric camera (looks 2D, far cheaper to vary).
-3. **Flight in isometric.** Altitude reads poorly in 2D; planes and helis need
+   with a fixed top-down camera (looks 2D, far cheaper to vary). **Decision**:
+   classic top-down view only (see `MVP_DESIGN.md`, "Camera decision").
+3. **Flight in top-down.** Altitude reads poorly in 2D; planes and helis need
    camera zoom-out and shadows, so treat them as a later phase.
 4. **Monetization backlash.** Gangstar New Orleans' energy timers and heavy
    IAP were badly received; Vegas' lighter model did much better.

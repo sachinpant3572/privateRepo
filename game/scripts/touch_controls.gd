@@ -1,7 +1,6 @@
 extends Control
 ## Multi-touch controls drawn in code: a floating joystick on the left half of
-## the screen and round buttons that press Input actions. Button offsets are
-## from the bottom-right corner, or from the top-right with "top": true.
+## the screen and round buttons bottom-right that press Input actions.
 ## Raw touch events are used so the stick and a button work at the same time.
 
 const STICK_RADIUS := 90.0
@@ -9,7 +8,6 @@ const BUTTONS := [
 	{"action": "attack", "label": "PUNCH", "offset": Vector2(-120, -130), "radius": 62.0},
 	{"action": "sprint", "label": "RUN", "offset": Vector2(-265, -95), "radius": 52.0},
 	{"action": "interact", "label": "ENTER", "offset": Vector2(-140, -285), "radius": 50.0},
-	{"action": "camera", "label": "CAM", "offset": Vector2(-60, 110), "radius": 34.0, "top": true},
 ]
 
 var labels := {}
@@ -67,7 +65,7 @@ func _button_at(pos: Vector2) -> String:
 
 
 func _center(b: Dictionary) -> Vector2:
-	return Vector2(size.x + b.offset.x, b.offset.y) if b.get("top", false) else size + b.offset
+	return size + b.offset
 
 
 func _draw() -> void:

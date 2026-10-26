@@ -2,7 +2,7 @@ extends CharacterBody3D
 ## Arcade car shared by the player, traffic and police.
 ## Steering is direction-based: the car turns toward a requested world
 ## direction (reversing when it points well behind), which suits a touch
-## joystick under an isometric camera.
+## joystick under a top-down camera.
 
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const L = preload("res://scripts/layers.gd")

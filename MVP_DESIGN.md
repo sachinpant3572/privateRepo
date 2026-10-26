@@ -20,22 +20,40 @@ Everything not needed to prove that waits for later phases.
 |---|---|---|
 | Platforms | Android first, iOS right after | Larger audience in target markets; one codebase covers both. |
 | Engine | **Decision: Godot 4** | See "Engine decision" below. |
-| Look | Low-poly 3D, toon shading, fixed orthographic isometric camera | Reads as 2D isometric cartoon, but one model works from every angle, so vehicles and clothing stay cheap. |
+| Look | Low-poly 3D, toon shading, classic top-down camera (see "Camera decision") | Reads as a 2D top-down cartoon, but one model works from every angle, so vehicles and clothing stay cheap. |
 | Min device | ~4 GB RAM, mid-range 2021 Android chip | Covers most active devices in India and similar markets. |
 | Frame rate | 30 fps locked on min device, 60 fps option on high-end | Battery and heat matter on phones. |
 | Install size | Base under 150 MB, rest downloaded as content packs | Store limits and data costs. |
 | Offline | Fully playable offline; online only for leaderboards, events, cloud save | Patchy connections. |
 
+## Camera decision
+
+**Decision (Oct 26, 2026): classic top-down view only.** North is up, and the
+camera looks steeply down (72° below the horizon) so building fronts show a
+little, like the Java-era Gangstar games, Stardew Valley, Crashlands and
+Chronomon. The isometric view is dropped.
+
+What this means for the art:
+- **Roofs are what players see most**: give them detail and variety (tiles,
+  vents, water tanks, rooftop gardens, signs).
+- **Characters read from above**: big heads, hats and hair, strong shoulder
+  colours, clear outlines, so people are recognisable at a glance.
+- **Vehicles read by silhouette and roof colour**: taxis, police and
+  faction cars get distinct roof markings.
+- **Height still matters**: planes and helicopters later show altitude with
+  zoom and shadows, as Chronomon-style games do with jumps and flight.
+
 ## Visual direction: classic + modern
 
 **Decision (Oct 26, 2026)**: "high-quality graphics" means a readable cartoon
-look that combines old and new game mechanics and effects, not realism.
+look that combines old and new game mechanics and effects, not realism,
+and clearly better than the classic games in every area.
 Every effect must look good at a glance on a phone screen and have a low-end
 setting that keeps 30 fps on the min-spec device.
 
 | From the classic games (Java Gangstar, GTA 2 era) | From modern games |
 |---|---|
-| **Classic camera**: optional steep top-down view, north up (in the prototype) | Isometric 3D default view with smooth follow, lead and speed zoom |
+| **Classic top-down camera**, north up (in the prototype) | Smooth follow, lead ahead of cars, zoom out with speed (in the prototype) |
 | Wanted stars, instant carjacking, arcade driving | Day/night lighting, neon at night, weather (rain, storms, flooding) |
 | Big, readable characters and cars; clear colours | Particles: skid marks, tyre smoke, sparks, dust, splashes |
 | Arrows and markers to the next objective | Screen shake and hit-stop on punches and crashes, phone vibration |
@@ -43,16 +61,12 @@ setting that keeps 30 fps on the min-spec device.
 | Radio stations in cars | Music that changes by district and action (AI-generated) |
 | Quick mission restarts | Buildings dissolve around the player, and silhouettes show who is hidden (in the prototype) |
 
-**Keeping the action visible in the isometric view.** Buildings must never
-hide what the player needs to see:
+**Keeping the action visible.** Even from steeply above, tall buildings must
+never hide what the player needs to see:
 - **Cutaway** (in the prototype): anything between the camera and the player
   dissolves in a circle around them.
 - **X-ray silhouettes** (in the prototype): the player in yellow, police in
   blue, anyone attacking in red.
-- **Camera angle** (in the prototype): the default view looks down at 50°,
-  steeper than true isometric (35°), so buildings hide less.
-- **Classic camera** (in the prototype): steep top-down view with almost no
-  occlusion.
 - **Objective markers and arrows** always draw on top (vertical slice).
 - **Level design**: mission-critical interactions (fights, pickups, doors)
   sit on streets, plazas and courtyards, with the camera side kept open.
@@ -69,7 +83,7 @@ Why:
   Claude can build, test and export Android builds there, which fits working
   from a phone. Unity needs a desktop with the editor open.
 - **Quality is enough for the art style**: low-poly 3D, toon shading and a
-  fixed isometric camera don't need Unity's rendering lead.
+  fixed top-down camera don't need Unity's rendering lead.
 - **Free, no royalties**, and smaller base downloads.
 
 Accepted risks and how to handle them:

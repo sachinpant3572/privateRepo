@@ -27,7 +27,7 @@ func _run() -> void:
 		"test_busted_when_cop_holds_player",
 		"test_wasted_respawns_at_hospital",
 		"test_city_runs_with_population",
-		"test_classic_camera_toggle",
+		"test_camera_is_classic_top_down",
 	]
 	for name in tests:
 		var before := failed
@@ -110,8 +110,8 @@ func test_enter_drive_and_exit_car() -> void:
 	_check(game.player.vehicle == car, "player gets in the car")
 	_check(not game.player.visible, "player hidden while driving")
 	var start: Vector3 = car.global_position
-	# Screen up-right is world -Z under the isometric camera: straight down the road.
-	Controls.override_vector = Vector2(0.707, -0.707)
+	# Screen up is north (world -Z): straight down the road.
+	Controls.override_vector = Vector2(0, -1)
 	await _frames(90)
 	Controls.override_vector = null
 	var moved: float = car.global_position.distance_to(start)
@@ -188,23 +188,17 @@ func test_city_runs_with_population() -> void:
 	_check(is_instance_valid(car), "player car still exists")
 
 
-func test_classic_camera_toggle() -> void:
+func test_camera_is_classic_top_down() -> void:
 	await _new_game(false)
 	var cam = game.camera
 	_place_player(Vector2i(2, 2), Vector3.ZERO)
-	await _press("camera")
-	_check(cam.mode == cam.Mode.CLASSIC, "camera switches to classic")
-	# In classic view, screen-up is north (world -Z).
+	_check(cam.global_basis.z.y > 0.9 and absf(cam.global_basis.z.x) < 0.01, "camera looks steeply down with north up")
 	var start: Vector3 = game.player.global_position
 	Controls.override_vector = Vector2(0, -1)
 	await _frames(40)
 	Controls.override_vector = null
 	var moved: Vector3 = game.player.global_position - start
-	_check(moved.z < -2.0 and absf(moved.x) < 0.5, "screen-up walks north in classic view, moved %s" % moved)
-	await _frames(30)
-	_check(cam.global_basis.z.y > 0.9, "camera looks steeply down")
-	await _press("camera")
-	_check(cam.mode == cam.Mode.ISOMETRIC, "camera switches back")
+	_check(moved.z < -2.0 and absf(moved.x) < 0.5, "screen-up walks north, moved %s" % moved)
 
 
 # --- Helpers -----------------------------------------------------------------
@@ -214,14 +208,12 @@ func _new_game(with_population: bool) -> void:
 	game = MainScene.instantiate()
 	game.population_enabled = with_population
 	add_child(game)
-	# Tests assume the default view, whatever the saved setting is.
-	game.camera.set_mode(game.camera.Mode.ISOMETRIC, true)
 	await _frames(2)
 
 
 func _free_game() -> void:
 	Controls.override_vector = null
-	for action in ["attack", "interact", "sprint", "camera"]:
+	for action in ["attack", "interact", "sprint"]:
 		Input.action_release(action)
 	if game != null:
 		game.queue_free()

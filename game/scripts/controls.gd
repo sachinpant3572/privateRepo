@@ -11,13 +11,11 @@ const KEYS := {
 	"sprint": [KEY_SHIFT], # handbrake while driving
 	"attack": [KEY_SPACE, KEY_J],
 	"interact": [KEY_E, KEY_F],
-	"camera": [KEY_C],
 }
 const PAD_BUTTONS := {
 	"sprint": JOY_BUTTON_A,
 	"attack": JOY_BUTTON_X,
 	"interact": JOY_BUTTON_Y,
-	"camera": JOY_BUTTON_BACK,
 }
 const PAD_AXES := {
 	"move_left": [JOY_AXIS_LEFT_X, -1.0],

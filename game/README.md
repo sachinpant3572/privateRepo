@@ -15,7 +15,7 @@ min-spec device.
   city is baked into one mesh, so it draws in a single call. The district
   name shows on screen as you enter it.
 - **On foot**: jog, sprint, punch.
-- **Nothing hidden behind buildings**: buildings between the camera and the
+- **Nothing hidden behind buildings**: tall buildings between the camera and the
   player dissolve in a circle around them (city shader, `mesh_builder.gd`),
   and silhouettes show through walls: the player and their car in yellow,
   police in blue, anyone attacking in red.
@@ -29,9 +29,9 @@ min-spec device.
   stop and send an officer out when you're on foot). Stay out of sight to lose
   them. Getting held by a cop means **BUSTED** (respawn at the police
   station); dying means **WASTED** (respawn at the hospital).
-- **Two cameras**: the isometric view (default) and a **Classic** steep
-  top-down view, north up, like the Java-era Gangstar games. Same world and
-  models; controls follow the chosen view. The choice is remembered.
+- **Classic top-down camera**: north up, looking steeply down so building
+  fronts show a little, like the Java-era Gangstar games. Leads ahead of
+  cars and zooms out with speed.
 - **HUD**: health, wanted stars (flashing while police can't see you),
   speed, prompts, FPS and draw-call readout.
 
@@ -43,7 +43,6 @@ min-spec device.
 | Punch | PUNCH | Space / J | X |
 | Run / handbrake | RUN / BRAKE | Shift | A |
 | Get in / out | ENTER / EXIT | E / F | Y |
-| Switch camera | CAM | C | Back / Select |
 
 Tab toggles the on-screen controls on desktop.
 
@@ -89,7 +88,7 @@ FPS in screenshots is meaningless: the container renders without a GPU.
 | `scripts/wanted.gd` | Wanted level (autoload) |
 | `scripts/population.gd` | Pedestrian and traffic bubble around the player |
 | `scripts/controls.gd`, `touch_controls.gd` | Input (autoload) and multi-touch UI |
-| `scripts/hud.gd`, `iso_camera.gd` | HUD and camera |
+| `scripts/hud.gd`, `top_down_camera.gd` | HUD and camera |
 | `tests/` | Headless tests and screenshot scene |
 | `tools/` | Cloud setup and APK build |
 

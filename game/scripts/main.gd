@@ -5,7 +5,7 @@ extends Node3D
 const City = preload("res://scripts/city.gd")
 const Player = preload("res://scripts/player.gd")
 const Vehicle = preload("res://scripts/vehicle.gd")
-const IsoCamera = preload("res://scripts/iso_camera.gd")
+const TopDownCamera = preload("res://scripts/top_down_camera.gd")
 const PoliceManager = preload("res://scripts/police_manager.gd")
 const Population = preload("res://scripts/population.gd")
 const Hud = preload("res://scripts/hud.gd")
@@ -46,7 +46,7 @@ func _ready() -> void:
 	add_child(player)
 	player.died.connect(func(_who): _respawn("WASTED", city.hospital))
 
-	camera = IsoCamera.new()
+	camera = TopDownCamera.new()
 	camera.target = player
 	add_child(camera)
 	camera.snap()
