@@ -16,6 +16,11 @@ const TANK := 4
 const TURRET := 5
 const HELI := 6
 const ROTOR := 7
+# Extra cells after the atlas: sprites only (with a simple fallback).
+const JET := 8
+const GUNSHIP := 9
+const SIEGE := 10
+const EXTRA_NAMES := ["jet", "gunship", "siege"]
 
 const DARK := Color(0.12, 0.12, 0.13)
 const ARMOR := Color(0.24, 0.26, 0.29)
@@ -56,6 +61,9 @@ static func cell_textures() -> Array:
 		if cell != ROTOR:
 			_outline(cell_img)
 		out.append(ImageTexture.create_from_image(cell_img))
+	# Late-game units: their sprite, or a stand-in built from the atlas.
+	for k in EXTRA_NAMES.size():
+		out.append(pick(EXTRA_NAMES[k], out[[HELI, HELI, TANK][k]]))
 	return out
 
 
@@ -247,6 +255,25 @@ static func blade(size: int) -> ImageTexture:
 			var edge: float = 0.3 + 0.65 * pow(maxf(0.0, cos(3.0 * v.angle())), 6.0)
 			var a: float = clampf((edge - d) * 8.0, 0.0, 1.0)
 			img.set_pixel(x, y, Color(1, 1, 1, a))
+	return ImageTexture.create_from_image(img)
+
+
+## A glowing energy bolt along +x: a hot white core inside a soft halo. It is
+## white so each weapon can tint it.
+static func bolt(size: int) -> ImageTexture:
+	var img := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
+	var a := Vector2(size * 0.18, size * 0.5)
+	var b := Vector2(size * 0.82, size * 0.5)
+	for y in size:
+		for x in size:
+			var q := Vector2(x + 0.5, y + 0.5)
+			var k := clampf((q - a).dot(b - a) / (b - a).length_squared(), 0.0, 1.0)
+			var d: float = q.distance_to(a.lerp(b, k)) / (size * 0.5)
+			var core: float = clampf(1.0 - d / 0.12, 0.0, 1.0)
+			var halo: float = clampf(1.0 - d / 0.32, 0.0, 1.0)
+			# The head (front, +x) is brighter than the tail.
+			var head: float = 0.55 + 0.45 * k
+			img.set_pixel(x, y, Color(1, 1, 1, clampf(core + halo * halo * 0.6, 0.0, 1.0) * head))
 	return ImageTexture.create_from_image(img)
 
 

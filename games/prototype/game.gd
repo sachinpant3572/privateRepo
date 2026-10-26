@@ -230,7 +230,7 @@ var e_frozen := PackedFloat32Array()  # Frozen solid time left.
 var e_next := PackedInt32Array()
 var e_count := 0
 var e_cap := 0
-var type_alive := PackedInt32Array([0, 0, 0, 0, 0, 0])
+var type_alive := PackedInt32Array([0, 0, 0, 0, 0, 0, 0, 0, 0])
 var nearest := -1
 var spawn_acc := 0.0
 var elites_spawned := 0
@@ -327,6 +327,9 @@ var blasts: Array = []  # Queued Explosive Rounds blasts: [position, radius, dam
 var boss_on := false
 var boss_spawned := false
 var boss_dead_t := -1.0
+var final_clear_t := -1.0  # When the last Siege Colossus of the final push fell.
+var final_jet_t := 0.0
+var flyby_t := 0.0  # Late-stage bomber flybys.
 var boss_pos := Vector2.ZERO
 var boss_hp := 0.0
 var boss_max := BOSS_HP
@@ -446,13 +449,13 @@ func _build_scene() -> void:
 		pickup_textures.append(Art.pickup_icon(kind, 64))
 	for tex in Art.cell_textures():
 		unit_mms.append(_layer(tex, 0.5, false, Color(0.25, 0.25, 0.25)))
-	shot_mm = _layer(Art.soft_disc(32, 0.35), 5.0, true, Color(0.6, 0.6, 0.6))
+	shot_mm = _layer(Art.bolt(64), 8.0, true, Color(0.6, 0.6, 0.6))
 	rocket_mm = _layer(Art.soft_disc(32, 0.3), 7.0, true, Color.WHITE)
 	blade_mm = _layer(Art.blade(64), 16.0, true, Color(0.8, 0.8, 0.8))
 	smoke_mm = _layer(Art.soft_disc(32, 0.15), VFX_RADIUS, false, Color(0, 0, 0, 0))
 	fire_mm = _layer(Art.soft_disc(32, 0.3), VFX_RADIUS, true, Color.WHITE)
 	spark_mm = _layer(Art.soft_disc(16, 0.0), 3.0, true, Color.WHITE)
-	ring_mm = _layer(Art.ring(64), RING_SIZE, true, Color.WHITE)
+	ring_mm = _layer(Art.pick("fx/ring", Art.ring(64)), RING_SIZE, true, Color.WHITE)
 
 	boss_node = Sprite2D.new()
 	boss_node.texture = Art.boss()
@@ -699,6 +702,9 @@ func _start(auto: bool) -> void:
 	boss_on = false
 	boss_spawned = false
 	boss_dead_t = -1.0
+	final_clear_t = -1.0
+	final_jet_t = 0.0
+	flyby_t = 0.0
 	boss_node.visible = false
 	elites_spawned = 0
 	spawn_acc = 0.0
@@ -739,7 +745,7 @@ func _alloc() -> void:
 	e_frozen.resize(e_cap)
 	e_next.resize(e_cap)
 	# Every unit sprite gets a slice of one shared buffer.
-	unit_cap = PackedInt32Array([e_cap, e_cap, e_cap, 8, 12, 12, 10, 10])
+	unit_cap = PackedInt32Array([e_cap, e_cap, e_cap, 8, 12, 12, 12, 12, 10, 4, 3])
 	unit_off.resize(unit_cap.size())
 	unit_n.resize(unit_cap.size())
 	var total := 0
@@ -980,7 +986,7 @@ func _process(delta: float) -> void:
 		_update_hud()
 	if hp <= 0.0:
 		_on_death()
-	elif boss_dead_t >= 0.0 and t - boss_dead_t > 2.0:
+	elif final_clear_t >= 0.0 and t - final_clear_t > 2.5:
 		_game_over(true)
 	elif pending_levels > 0 and state == State.PLAYING:
 		_open_cards(false)
@@ -1097,8 +1103,15 @@ func _spawn_enemy(ty: int) -> void:
 
 
 func _spawn_director(dt: float) -> void:
-	if boss_dead_t >= 0.0:
+	if final_clear_t >= 0.0:
 		return
+	_update_final(dt)
+	# From 3:20 to the boss, a bomber squadron every 16 seconds.
+	if t >= 200.0 and not boss_on and boss_dead_t < 0.0:
+		flyby_t -= dt
+		if flyby_t <= 0.0:
+			flyby_t = 16.0
+			_flyby(2 + int(t >= 260.0))
 	if not boss_spawned and t >= STAGE_TIME:
 		_spawn_boss()
 	if (elites_spawned == 0 and t >= 120.0) or (elites_spawned == 1 and t >= 240.0):
@@ -1135,16 +1148,71 @@ func _run_events() -> void:
 	hud.show_banner(ev[1])
 	sfx.play("alarm")
 	var n: int = ev[3]
+	if ev[4] == "flyby":
+		_flyby(n)
+		return
 	var side := Vector2.from_angle(randf() * TAU)
 	for k in n:
+		var before := e_count
 		_spawn_enemy(ev[2])
+		if e_count == before:
+			break  # The pool is full.
 		var i := e_count - 1
-		if i < 0:
-			break
 		if ev[4] == "ring":
 			e_pos[i] = player + Vector2.from_angle(TAU * k / n) * 420.0
 		else:
 			e_pos[i] = player + side * 560.0 + side.orthogonal() * (k - n * 0.5) * 60.0
+
+
+## A squadron of bomber jets crossing the screen over the player, side by side.
+func _flyby(n: int) -> void:
+	var dir := Vector2.from_angle(randf() * TAU)
+	var side := dir.orthogonal()
+	for k in n:
+		var before := e_count
+		_spawn_enemy(Data.JET)
+		if e_count == before:
+			return
+		var i := e_count - 1
+		e_pos[i] = player - dir * (850.0 + 60.0 * absf(k - (n - 1) * 0.5)) + side * (k - (n - 1) * 0.5) * 110.0
+		e_ang[i] = dir.angle()
+		e_timer[i] = 0.3 + 0.05 * k
+	sfx.play("alarm", 1.3, -6.0)
+
+
+## After the Colossus falls, the Dominion throws everything left at you.
+func _start_final() -> void:
+	hud.show_banner("THE DOMINION STRIKES BACK!", Color(1.0, 0.4, 0.3))
+	sfx.play("alarm")
+	var side := Vector2.from_angle(randf() * TAU)
+	for wave in Data.FINAL_WAVE:
+		for k in int(wave[1]):
+			var before := e_count
+			_spawn_enemy(wave[0])
+			if e_count == before:
+				break
+			var i := e_count - 1
+			var spread := (k - (int(wave[1]) - 1) * 0.5) * (260.0 if wave[0] == Data.SIEGE else 90.0)
+			e_pos[i] = player + side * (620.0 if wave[0] == Data.SIEGE else 520.0) + side.orthogonal() * spread
+	_flyby(4)
+	final_jet_t = 12.0
+
+
+## Final phase: more flybys and gunships until the last Siege Colossus falls.
+func _update_final(dt: float) -> void:
+	if boss_dead_t < 0.0 or final_clear_t >= 0.0:
+		return
+	final_jet_t -= dt
+	if final_jet_t <= 0.0:
+		final_jet_t = 14.0
+		_flyby(3)
+		if type_alive[Data.GUNSHIP] < 3:
+			_spawn_enemy(Data.GUNSHIP)
+	if t - boss_dead_t >= Data.FINAL_TIME and type_alive[Data.SIEGE] <= 0:
+		final_clear_t = t
+		hud.show_banner("THE IRON DOMINION FALLS!", Color(1.0, 0.85, 0.4))
+		_power_moment(2.0, Color(1.0, 0.85, 0.4))
+		_damage_around(player, 2000.0, 99999.0)
 
 
 func _pick(weights: PackedFloat32Array) -> int:
@@ -1173,7 +1241,14 @@ func _update_enemies(dt: float) -> void:
 		var p := e_pos[i]
 		var to := player - p
 		var d2 := to.length_squared()
-		if d2 > despawn2:
+		if ty == Data.JET:
+			# Bomber jets fly straight across and leave once they are past.
+			var fly := Vector2.from_angle(e_ang[i])
+			if d2 > despawn2 and fly.dot(p - player) > 0.0:
+				e_hp[i] = 0.0
+				type_alive[ty] -= 1
+				continue
+		elif d2 > despawn2:
 			# Stragglers far behind come back in ahead of the player.
 			p = _spawn_point()
 			to = player - p
@@ -1195,8 +1270,15 @@ func _update_enemies(dt: float) -> void:
 			Data.TANK:
 				if d < 240.0:
 					v = Vector2.ZERO
+			Data.SIEGE:
+				if d < 330.0:
+					v = Vector2.ZERO
 			Data.HELI:
 				v = Vector2(-dir.y, dir.x) * sp * 0.8 + dir * sp * clampf((d - 320.0) / 120.0, -1.0, 1.0)
+			Data.GUNSHIP:
+				v = Vector2(-dir.y, dir.x) * sp * 0.6 + dir * sp * clampf((d - 400.0) / 120.0, -1.0, 1.0)
+			Data.JET:
+				v = Vector2.from_angle(e_ang[i]) * t_speed[ty]  # Jets ignore slows and freezes.
 		p += v * dt
 
 		var rad := t_radius[ty]
@@ -1219,16 +1301,16 @@ func _update_enemies(dt: float) -> void:
 		e_next[i] = cell_head[c]
 		cell_head[c] = i
 
-		if ty == Data.TANK:
+		if ty == Data.TANK or ty == Data.SIEGE:
 			if v.length_squared() > 1.0:
-				e_ang[i] = lerp_angle(e_ang[i], v.angle(), minf(1.0, dt * 3.0))
-		elif freeze_t <= 0.0:
+				e_ang[i] = lerp_angle(e_ang[i], v.angle(), minf(1.0, dt * (3.0 if ty == Data.TANK else 1.2)))
+		elif ty != Data.JET and freeze_t <= 0.0:
 			e_ang[i] = dir.angle()
 		if e_flash[i] > 0.0:
 			e_flash[i] -= dt
 		if e_halo[i] > 0.0:
 			e_halo[i] -= dt
-		if d < rad + PLAYER_RADIUS and freeze_t <= 0.0:
+		if d < rad + PLAYER_RADIUS and freeze_t <= 0.0 and t_touch[ty] > 0.0:
 			_hurt(t_touch[ty])
 		if d2 < best:
 			best = d2
@@ -1266,6 +1348,26 @@ func _enemy_attack(ty: int, p: Vector2, dir: Vector2) -> void:
 				_ebullet(p, dir.rotated(deg_to_rad(-12.0 + k * 12.0)) * 300.0, 5.0, 6.0)
 				_vfx(p, dir.rotated(randf_range(-0.6, 0.6)) * -40.0, 0.7, 5.0, 14.0, Color(0.6, 0.6, 0.6, 0.45), Color(0.3, 0.3, 0.3, 0.0), false)
 			_muzzle(p + dir * 20.0, dir, Color(1.0, 0.6, 0.25), 12.0)
+		Data.JET:
+			# A bomb under the jet: a warning circle, then a blast.
+			if player.distance_to(p) < 900.0:
+				_telegraph(0, p, Vector2(70.0, 0.0), 0.9, 16.0)
+		Data.GUNSHIP:
+			if randf() < 0.5:
+				for k in 7:
+					_ebullet(p, dir.rotated(deg_to_rad(-30.0 + k * 10.0)) * 280.0, 6.0, 7.0)
+				_muzzle(p + dir * 40.0, dir, Color(1.0, 0.5, 0.2), 20.0)
+			else:
+				# A cannon shell down a red aiming line, slightly off to each side.
+				for k in 2:
+					_telegraph(1, p, p + dir.rotated(-0.12 + 0.24 * k) * 800.0, 0.9, 18.0)
+		Data.SIEGE:
+			for k in 3:
+				_telegraph(1, p, p + dir.rotated(-0.25 + 0.25 * k) * 900.0, 1.0, 22.0)
+			if randf() < 0.4:
+				for k in 12:
+					_ebullet(p, Vector2.from_angle(TAU * k / 12.0) * 220.0, 6.0, 8.0)
+			_muzzle(p + dir * 70.0, dir, Color(1.0, 0.45, 0.2), 30.0)
 
 
 func _ebullet(p: Vector2, vel: Vector2, dmg: float, rad: float) -> void:
@@ -1291,6 +1393,7 @@ func _damage(j: int, amount: float, from: Vector2, force_crit: bool, procs: bool
 	var crit := force_crit or randf() < crit_chance
 	if crit:
 		a *= crit_mult
+		hero.effect("spark_star", e_pos[j], 0.16, 12.0, 30.0, Color(1.0, 0.9, 0.5))
 	if ty == Data.SHIELD and Vector2.from_angle(e_ang[j]).dot(from - e_pos[j]) > 0.0:
 		a *= 0.25  # The shield blocks most damage from the front.
 		if randf() < 0.3:
@@ -1332,8 +1435,15 @@ func _kill(j: int) -> void:
 		Data.ELITE:
 			coins = 15
 			_drop_pickup(p, randi() % 4)
-		Data.TANK, Data.HELI:
+		Data.TANK, Data.HELI, Data.JET:
 			coins = 2 + randi() % 3
+		Data.GUNSHIP:
+			coins = 8 + randi() % 5
+			if randf() < 0.3:
+				_drop_pickup(p, randi() % 4)
+		Data.SIEGE:
+			coins = 40
+			_drop_pickup(p, randi() % 4)
 		_:
 			coins = 1 if randf() < 0.08 * (1.0 + 0.15 * luck) else 0
 	if big:
@@ -1346,13 +1456,13 @@ func _kill(j: int) -> void:
 	_sparks(p, int(fx.tier["sparks"]) * (3 if big else 1))
 	_ring(p, 3.5 if big else 1.8)
 	if big:
-		_explosion(p, 95.0 if ty == Data.ELITE else 70.0, 1.3)
+		_explosion(p, {Data.ELITE: 95.0, Data.GUNSHIP: 120.0, Data.SIEGE: 170.0}.get(ty, 70.0), 1.3 if ty != Data.SIEGE else 1.8)
 	elif randf() < 0.3:
 		_vfx(p, Vector2(0.0, -20.0), 0.6, 6.0, 16.0, Color(0.35, 0.33, 0.32, 0.4), Color(0.2, 0.2, 0.2, 0.0), false)
 	trauma = minf(trauma + (0.25 if big else 0.01), 0.6)
-	if ty == Data.ELITE:
+	if ty == Data.ELITE or ty == Data.SIEGE:
 		_chest(p)
-		hitstop = 0.08
+		hitstop = 0.08 if ty == Data.ELITE else 0.14
 	if explosive > 0:
 		blasts.append([p, (40.0 + 6.0 * explosive) * area_mult, 6.0 * explosive])
 	if toxin_lvl > 0 and clouds.size() < CLOUD_CAP and randf() < 0.15 + 0.05 * toxin_lvl:
@@ -1568,6 +1678,7 @@ func _boss_killed() -> void:
 	sfx.play("big_boom")
 	for k in 60:
 		_coin(boss_pos + Vector2.from_angle(randf() * TAU) * randf_range(0.0, 140.0))
+	_start_final()
 
 
 # --- Weapons ----------------------------------------------------------------
@@ -1795,12 +1906,13 @@ func _update_shots(dt: float) -> void:
 		s_buf[o + 8] = sc.r
 		s_buf[o + 9] = sc.g
 		s_buf[o + 10] = sc.b
-		if trails:
-			var d := s_vel[i].normalized()
-			s_buf[o] = d.x * 3.0
-			s_buf[o + 1] = -d.y
-			s_buf[o + 4] = d.y * 3.0
-			s_buf[o + 5] = d.x
+		# Bolts point along their flight; with trails on they stretch longer.
+		var d := s_vel[i].normalized()
+		var stretch := 1.6 if trails else 1.0
+		s_buf[o] = d.x * stretch
+		s_buf[o + 1] = -d.y * 0.7
+		s_buf[o + 4] = d.y * stretch
+		s_buf[o + 5] = d.x * 0.7
 		i += 1
 
 
@@ -1960,6 +2072,7 @@ func _tesla(st: Dictionary) -> bool:
 		points.append(p)
 		_damage(cur, st["dmg"], player, false)
 		hit[cur] = true
+		hero.effect("spark_electric", p, 0.2, 16.0, 36.0, Color(0.7, 0.9, 1.0), 14)
 		cur = _nearest_in_radius(p, st["jump"], hit)
 		if cur < 0:
 			break
@@ -3091,6 +3204,13 @@ func _render_units() -> void:
 			Data.HELI:
 				_put_unit(Art.HELI, p, e_ang[i], t_size[ty], tint)
 				_put_unit(Art.ROTOR, p, spin + i, t_size[ty] * 1.15, tint)
+			Data.GUNSHIP:
+				_put_unit(Art.GUNSHIP, p, e_ang[i], t_size[ty], tint)
+				_put_unit(Art.ROTOR, p, spin * 0.8 + i, t_size[ty] * 1.1, tint)
+			Data.JET:
+				_put_unit(Art.JET, p, e_ang[i], t_size[ty], tint)
+			Data.SIEGE:
+				_put_unit(Art.SIEGE, p, e_ang[i], t_size[ty], tint)
 			_:
 				_put_unit(ty, p, e_ang[i], t_size[ty], tint)
 
@@ -3648,6 +3768,26 @@ func _run_smoke() -> void:
 		return
 	if not _check(boss_dead_t < 0.0 or boss_dead_t - STAGE_TIME > 8.0, "a maxed build does not kill the boss in seconds"):
 		return
+	# The final push: killing the Colossus starts it, and clearing it wins.
+	_start(true)
+	god = true
+	t = STAGE_TIME
+	await _frames(10)
+	if not _check(boss_on, "the Colossus spawns at the stage time"):
+		return
+	boss_hp = 1.0
+	_damage_boss(1000.0, true)
+	await _frames(5)
+	if not _check(type_alive[Data.SIEGE] >= 1 and state == State.PLAYING, "the final push spawns Siege Colossi"):
+		return
+	for j in e_count:
+		if e_type[j] == Data.SIEGE and e_hp[j] > 0.0:
+			_damage(j, 1.0e9, e_pos[j], true)
+	await _frames(int(60 * (Data.FINAL_TIME + 5.0)))
+	print("SMOKE: final push state=%d final_clear=%.1f jets_seen=%s" % [state, final_clear_t, str(peak_enemies > 0)])
+	if not _check(state == State.OVER, "clearing the final push wins the stage"):
+		return
+	god = false
 	print("SMOKE: passed")
 	get_tree().quit(0)
 
@@ -3714,6 +3854,13 @@ func _showcase() -> void:
 		_spawn_enemy(ty)
 		var i := e_count - 1
 		e_pos[i] = player + Vector2.from_angle(TAU * k / 36.0) * (190.0 + (k % 3) * 80.0)
+		e_hp[i] = 1.0e6
+	# The late-game units, outside the ring.
+	for spot in [[Data.SIEGE, Vector2(0.0, 470.0)], [Data.GUNSHIP, Vector2(-250.0, -440.0)], [Data.JET, Vector2(260.0, -470.0)]]:
+		_spawn_enemy(spot[0])
+		var i := e_count - 1
+		e_pos[i] = player + spot[1]
+		e_ang[i] = PI
 		e_hp[i] = 1.0e6
 
 

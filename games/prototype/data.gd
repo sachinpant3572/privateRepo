@@ -5,18 +5,20 @@ extends RefCounted
 const MAX_LEVEL := 8
 
 # Enemy types. The first four match their cells in the unit atlas (art.gd).
-enum { TROOPER, SHIELD, GRENADIER, ELITE, TANK, HELI }
+# Late game: bomber jets fly across and bomb, gunships hover and shell, and
+# Siege Colossi are slow mini-bosses that come in pairs.
+enum { TROOPER, SHIELD, GRENADIER, ELITE, TANK, HELI, JET, GUNSHIP, SIEGE }
 
-const ENEMY_NAMES := ["Trooper", "Shield Trooper", "Grenadier", "Juggernaut", "Battle Tank", "Attack Helicopter"]
-const ENEMY_HP := [10.0, 24.0, 14.0, 700.0, 170.0, 70.0]
-const ENEMY_SPEED := [72.0, 56.0, 62.0, 52.0, 34.0, 125.0]
-const ENEMY_RADIUS := [14.0, 16.0, 14.0, 28.0, 30.0, 26.0]
-const ENEMY_SIZE := [42.0, 46.0, 42.0, 76.0, 84.0, 76.0]  # On-screen size of the sprite.
-const ENEMY_XP := [1, 2, 2, 30, 10, 6]
-const ENEMY_TOUCH := [6.0, 8.0, 6.0, 22.0, 18.0, 10.0]  # Contact damage.
-const ENEMY_FIRE := [2.6, 0.0, 3.6, 3.0, 4.2, 3.2]  # Seconds between attacks; 0 = none.
-const ENEMY_RANGE := [460.0, 0.0, 420.0, 420.0, 640.0, 520.0]
-const ENEMY_CAP := [0, 0, 0, 4, 8, 6]  # Most alive at once; 0 = no limit.
+const ENEMY_NAMES := ["Trooper", "Shield Trooper", "Grenadier", "Juggernaut", "Battle Tank", "Attack Helicopter", "Bomber Jet", "Gunship", "Siege Colossus"]
+const ENEMY_HP := [10.0, 24.0, 14.0, 700.0, 170.0, 70.0, 60.0, 900.0, 4200.0]
+const ENEMY_SPEED := [72.0, 56.0, 62.0, 52.0, 34.0, 125.0, 430.0, 70.0, 26.0]
+const ENEMY_RADIUS := [14.0, 16.0, 14.0, 28.0, 30.0, 26.0, 26.0, 40.0, 64.0]
+const ENEMY_SIZE := [42.0, 46.0, 42.0, 76.0, 84.0, 76.0, 92.0, 124.0, 176.0]  # On-screen size of the sprite.
+const ENEMY_XP := [1, 2, 2, 30, 10, 6, 8, 60, 200]
+const ENEMY_TOUCH := [6.0, 8.0, 6.0, 22.0, 18.0, 10.0, 0.0, 20.0, 30.0]  # Contact damage.
+const ENEMY_FIRE := [2.6, 0.0, 3.6, 3.0, 4.2, 3.2, 0.22, 2.4, 3.0]  # Seconds between attacks; 0 = none.
+const ENEMY_RANGE := [460.0, 0.0, 420.0, 420.0, 640.0, 520.0, 99999.0, 560.0, 720.0]
+const ENEMY_CAP := [0, 0, 0, 4, 8, 6, 8, 3, 2]  # Most alive at once; 0 = no limit.
 
 const WEAPON_IDS := ["rifle", "scatter", "rail", "rockets", "grenade", "halo", "drones", "tesla", "flame", "mines", "sentry", "airstrike"]
 const POWER_IDS := [
@@ -239,12 +241,21 @@ const COMBO_MILESTONES := [
 ]
 
 # Timed events: time, banner, enemy type, count, formation.
+# The last 90 seconds before the Colossus build up with air and armor.
 const EVENTS := [
 	[90.0, "AMBUSH!", TROOPER, 30, "ring"],
 	[150.0, "SHIELD WALL!", SHIELD, 24, "line"],
 	[195.0, "TANK COLUMN!", TANK, 5, "line"],
+	[210.0, "BOMBING RUN!", JET, 3, "flyby"],
+	[235.0, "GUNSHIPS INBOUND!", GUNSHIP, 2, "ring"],
+	[255.0, "ARMORED ASSAULT!", TANK, 7, "line"],
 	[270.0, "AIR RAID!", HELI, 6, "ring"],
+	[285.0, "SIEGE COLOSSUS!", SIEGE, 1, "line"],
 ]
+# After the Colossus falls: the Dominion's last push. Survive FINAL_TIME and
+# destroy every Siege Colossus to win.
+const FINAL_TIME := 25.0
+const FINAL_WAVE := [[SIEGE, 2], [GUNSHIP, 3], [TANK, 6], [HELI, 4]]
 
 # Treasure chests give 1, 3 or 5 rewards.
 const CHEST_SIZES := [1, 3, 5]
@@ -260,12 +271,15 @@ static func rarity_weights(t: float) -> PackedFloat32Array:
 ## Spawn weights per enemy type over the stage. Elites come from timed events.
 static func spawn_weights(t: float) -> PackedFloat32Array:
 	if t < 60.0:
-		return PackedFloat32Array([1.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+		return PackedFloat32Array([1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 	if t < 120.0:
-		return PackedFloat32Array([0.6, 0.2, 0.2, 0.0, 0.0, 0.0])
+		return PackedFloat32Array([0.6, 0.2, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 	if t < 210.0:
-		return PackedFloat32Array([0.5, 0.15, 0.15, 0.0, 0.1, 0.1])
-	return PackedFloat32Array([0.4, 0.15, 0.15, 0.0, 0.15, 0.15])
+		return PackedFloat32Array([0.5, 0.15, 0.15, 0.0, 0.1, 0.1, 0.0, 0.0, 0.0])
+	if t < 240.0:
+		return PackedFloat32Array([0.4, 0.15, 0.15, 0.0, 0.15, 0.15, 0.0, 0.0, 0.0])
+	# From 4:00 the horde mixes in gunships (Siege Colossi come from events).
+	return PackedFloat32Array([0.36, 0.15, 0.15, 0.0, 0.16, 0.16, 0.0, 0.02, 0.0])
 
 
 ## Limit Break stacks on top of a weapon's level-8 (or evolved) stats.

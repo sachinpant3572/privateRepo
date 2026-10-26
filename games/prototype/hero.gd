@@ -417,6 +417,13 @@ func _flash(fx_name: String, time: float) -> void:
 	flash_t = time
 
 
+## A world effect for the game (impacts, chain sparks). It keeps `reserve`
+## of the effect slots free so the hero's own effects always have room.
+func effect(fx_name: String, at: Vector2, life: float, size0: float, size1: float, color: Color, reserve: int = 10) -> void:
+	if fx_alive < FX_CAP - reserve:
+		_fx_world(fx_name, at, life, size0, size1, randf() * TAU, color)
+
+
 ## A fading copy of the body left behind (dash afterimages, dodges).
 func _ghost(color: Color, offset: Vector2) -> void:
 	if fx_alive >= FX_CAP or get_parent() == null:
