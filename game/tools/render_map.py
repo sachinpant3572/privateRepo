@@ -10,6 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "game" / "data" / "world_map.json"
+MISSIONS = ROOT / "game" / "data" / "missions_act1.json"
 
 REGION_FILL = {
     "desert": "#e8d3a2", "military": "#b9b39a", "mountains": "#b7a99a", "forest": "#8fb27a",
@@ -144,14 +145,33 @@ def _legend(x, y):
     return "".join(parts)
 
 
-def city_svg(world, city_id):
+def stop_pos(world, stop):
+    """A mission stop is a landmark id or a {pos, label} point."""
+    if isinstance(stop, str):
+        return next(lm["pos"] for lm in world["landmarks"] if lm["id"] == stop)
+    return stop["pos"]
+
+
+def mission_points(world, mission):
+    points = [stop_pos(world, st) for st in mission["stops"]]
+    points += [stop_pos(world, b["stop"]) for b in mission.get("branches", [])]
+    return points
+
+
+def city_svg(world, city_id, missions=()):
     city = next(c for c in world["cities"] if c["id"] == city_id)
     colors = faction_colors(world)
     pad = 150
     x0, y0, cw, ch = city["rect"]
-    ox, oy = x0 - pad, y0 - pad
+    xs, ys = [x0, x0 + cw], [y0, y0 + ch]
+    for m in missions:
+        for px, py in mission_points(world, m):
+            xs.append(px)
+            ys.append(py)
+    ox, oy = min(xs) - pad, min(ys) - pad
+    vw, vh = max(xs) - min(xs) + pad * 2, max(ys) - min(ys) + pad * 2
     s = 0.6
-    w, h = (cw + pad * 2) * s, (ch + pad * 2) * s
+    w, h = vw * s, vh * s
     out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w:.0f} {h + 60:.0f}" width="{w:.0f}" height="{h + 60:.0f}">',
            f'<rect width="{w}" height="{h + 60}" fill="#cfe3c0"/>']
     for wtr in world["water"]:
@@ -178,16 +198,45 @@ def city_svg(world, city_id):
         out.append(f'<rect x="{(wx - ox) * s:.1f}" y="{(wy - oy) * s:.1f}" width="{size * s:.1f}" height="{size * s:.1f}" fill="none" stroke="#111" stroke-width="3" stroke-dasharray="8 5"/>')
         out.append(text((wx - ox) * s, (wy - oy) * s - 8, "prototype area", 14, "700", anchor="start"))
     for lm in world["landmarks"]:
-        if lm.get("city") != city_id and not _inside(lm["pos"], (ox, oy, cw + pad * 2, ch + pad * 2)):
+        if lm.get("city") != city_id and not _inside(lm["pos"], (ox, oy, vw, vh)):
             continue
         x, y = (lm["pos"][0] - ox) * s, (lm["pos"][1] - oy) * s
         color = LANDMARK_ICON.get(lm["type"], "#555")
         out.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="7" fill="{color}" stroke="#fff" stroke-width="2"{tag("landmark", lm["id"], city["phase"])}/>')
         label = lm["name"] + (" (secret)" if lm.get("secret") else "")
         out.append(text(x, y - 12, label, 13, "600"))
-    out.append(text(14, h + 36, f'{city["name"]}: district fill = style, border = controlling faction. 1 px = {1 / s:.1f} m.', 16, "500", anchor="start"))
+    out.extend(_missions(world, missions, s, ox, oy))
+    note = " Numbered circles = act 1 missions." if missions else ""
+    out.append(text(14, h + 36, f'{city["name"]}: district fill = style, border = controlling faction. 1 px = {1 / s:.1f} m.{note}', 16, "500", anchor="start"))
     out.append("</svg>")
     return "\n".join(out)
+
+
+def _missions(world, missions, s, ox, oy):
+    """Mission routes as faint dashed lines, then a numbered marker at each
+    mission's main location (its last stop; the finale also marks its branches)."""
+    lines, markers, used = [], [], {}
+
+    def marker(pos, label, mission):
+        key = (round(pos[0] / 40), round(pos[1] / 40))
+        nudge = used.get(key, 0)
+        used[key] = nudge + 1
+        x, y = (pos[0] - ox) * s + 20 + nudge * 28, (pos[1] - oy) * s + 4
+        markers.append(f'<g{tag("mission", mission["id"], 1)}><circle cx="{x:.1f}" cy="{y:.1f}" r="13" fill="#1f2a2e" stroke="#fff" stroke-width="2"/>'
+                       f'<text x="{x:.1f}" y="{y + 5:.1f}" font-size="13" font-weight="700" fill="#fff" text-anchor="middle" '
+                       f'font-family="Helvetica, Arial, sans-serif">{label}</text></g>')
+
+    for m in missions:
+        route = [stop_pos(world, st) for st in m["stops"]]
+        if len(route) > 1:
+            lines.append(f'<polyline points="{pts(route, s, ox, oy)}" fill="none" stroke="#1f2a2e" stroke-opacity="0.3" stroke-width="2.5" stroke-dasharray="2 5" stroke-linecap="round"/>')
+        branches = m.get("branches", [])
+        marker(route[-1] if not branches else route[0], str(m["order"]), m)
+        for i, b in enumerate(branches):
+            end = stop_pos(world, b["stop"])
+            lines.append(f'<polyline points="{pts([route[0], end], s, ox, oy)}" fill="none" stroke="#b5462f" stroke-opacity="0.6" stroke-width="2.5" stroke-dasharray="6 5"/>')
+            marker(end, f'{m["order"]}{"abc"[i]}', m)
+    return lines + markers
 
 
 def _faction_name(world, fid):
@@ -203,7 +252,8 @@ def main():
     out_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT
     world = json.loads(DATA.read_text())
     (out_dir / "world_map.svg").write_text(world_svg(world))
-    (out_dir / "bellerive_map.svg").write_text(city_svg(world, "bellerive"))
+    missions = json.loads(MISSIONS.read_text())["missions"]
+    (out_dir / "bellerive_map.svg").write_text(city_svg(world, "bellerive", missions))
     print("wrote", out_dir / "world_map.svg", "and", out_dir / "bellerive_map.svg")
 
 

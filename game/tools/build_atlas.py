@@ -46,11 +46,11 @@ BLURBS = {
     "smugglers_cave": "The Sentinel's light signals smugglers in code.",
     "solvera_line": "Aurum's high-speed railway, built during the story. Every gang wants a piece of it.",
 }
-KIND_LABEL = {"city": "City", "district": "District", "region": "Region", "route": "Route", "town": "Town", "landmark": "Landmark"}
+KIND_LABEL = {"mission": "Act 1 mission", "city": "City", "district": "District", "region": "Region", "route": "Route", "town": "Town", "landmark": "Landmark"}
 PHASES = {1: "Phase 1 · MVP", 2: "Phase 2 · Expansion 1", 3: "Phase 3 · Expansion 2", 4: "Phase 4 · Expansion 3"}
 
 
-def build_index(world):
+def build_index(world, missions):
     """Flat lookup of everything the page can describe."""
     factions = {f["id"]: f for f in world["factions"]}
     items = {}
@@ -73,6 +73,16 @@ def build_index(world):
         add("town", t, phase=t["phase"])
     for lm in world["landmarks"]:
         add("landmark", lm, phase=render_map._phase_of(world, lm), style=lm["type"], secret=lm.get("secret", False))
+    names = {lm["id"]: lm["name"] for lm in world["landmarks"]}
+    for m in missions:
+        where = [names[st] if isinstance(st, str) else st["label"] for st in m["stops"]]
+        items[f'mission:{m["id"]}'] = {
+            "kind": KIND_LABEL["mission"], "name": f'{m["order"]}. {m["name"]}', "blurb": m["summary"], "phase": 1,
+            "giver": m["giver"], "route": " → ".join(dict.fromkeys(where)),
+            "approaches": ", ".join(m.get("approaches", [])),
+            "choice": " / ".join(m.get("choice", [b["name"] for b in m.get("branches", [])])),
+            "teaches": ", ".join(m["teaches"]), "unlocks": ", ".join(m["unlocks"]),
+        }
     return items
 
 
@@ -134,7 +144,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   </header>
   <div class="bar" role="toolbar" aria-label="Map controls">
     <button class="seg" id="view-world" aria-pressed="true">Whole state</button>
-    <button class="seg" id="view-city" aria-pressed="false">Bellerive close-up</button>
+    <button class="seg" id="view-city" aria-pressed="false">Bellerive · act 1 missions</button>
     <span class="spacer"></span>
     <div class="zoom"><button id="zoom-out" aria-label="Zoom out">−</button><button id="zoom-in" aria-label="Zoom in">+</button></div>
   </div>
@@ -156,7 +166,7 @@ function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&l
 function showDefault() {
   entry.innerHTML = '<p class="eyebrow">How to read it</p><h2>Solvera</h2>' +
     '<p>A fictional Gulf-coast state. Bellerive (phase 1) is built first; Porto Brisa, the countryside, Las Brasas and Isla Serena follow as expansions.</p>' +
-    '<p class="hint">Tap a coloured shape, line or dot on the map. A ? marks a secret.</p>';
+    '<p class="hint">Tap a coloured shape, line or dot on the map. A ? marks a secret. The Bellerive view numbers the 13 act 1 missions.</p>';
 }
 
 function show(key) {
@@ -167,6 +177,12 @@ function show(key) {
   if (it.faction) rows.push(['Faction', '<span class="swatch" style="background:' + esc(it.color) + '"></span>' + esc(it.faction)]);
   if (it.style) rows.push(['Type', esc(it.style)]);
   if (it.note) rows.push(['Note', esc(it.note)]);
+  if (it.giver) rows.push(['Giver', esc(it.giver)]);
+  if (it.route) rows.push(['Route', esc(it.route)]);
+  if (it.approaches) rows.push(['Ways in', esc(it.approaches)]);
+  if (it.choice) rows.push(['Choice', esc(it.choice)]);
+  if (it.teaches) rows.push(['Teaches', esc(it.teaches)]);
+  if (it.unlocks) rows.push(['Unlocks', esc(it.unlocks)]);
   if (it.phase) rows.push(['Build', esc(PHASES[it.phase])]);
   entry.innerHTML = '<p class="eyebrow">' + esc(it.kind) + (it.secret ? ' · <span class="secret">secret</span>' : '') + '</p>' +
     '<h2>' + esc(it.name) + '</h2>' + (it.blurb ? '<p>' + esc(it.blurb) + '</p>' : '') +
@@ -213,9 +229,10 @@ showDefault();
 def main():
     out = Path(sys.argv[1])
     world = json.loads(render_map.DATA.read_text())
+    missions = json.loads(render_map.MISSIONS.read_text())["missions"]
     page = (PAGE.replace("__WORLD__", render_map.world_svg(world))
-            .replace("__CITY__", render_map.city_svg(world, "bellerive"))
-            .replace("__ITEMS__", json.dumps(build_index(world), ensure_ascii=False))
+            .replace("__CITY__", render_map.city_svg(world, "bellerive", missions))
+            .replace("__ITEMS__", json.dumps(build_index(world, missions), ensure_ascii=False))
             .replace("__PHASES__", json.dumps(PHASES)))
     out.write_text(page)
     print("wrote", out, f"({len(page) // 1024} KB)")

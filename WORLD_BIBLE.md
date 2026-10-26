@@ -1,7 +1,6 @@
 # World bible: Solvera
 
-Status: **draft**, Oct 26, 2026. Proposed names; nothing is final until
-approved. Replaces the placeholders in `MVP_DESIGN.md` (Port Lafitte, Bayou
+Status: **names approved**, Oct 26, 2026. Replaces the placeholders in `MVP_DESIGN.md` (Port Lafitte, Bayou
 Wolves, Crescent Syndicate).
 
 The map data lives in `game/data/world_map.json` (the game reads it); the
@@ -144,6 +143,14 @@ Smugglers' Cove, and the Sunken Casino offshore (secret dive).
 - **Captain Dana Reyes**: Bellerive PD; honest, outnumbered, useful.
 - **Lua Ferreira**: leader of Comando Maré; Jules's old boss in Porto Brisa.
 - **Duke Calloway**: Velvet Aces boss; a showman who sells everyone out.
+- **Nia Batiste**: leader of High Water, Teo's partner, sharp and stubborn.
+- **Celeste Durand**: owns the Blue Lantern jazz club; knows everyone's
+  secrets.
+- **Pops**: old fixer who runs the Wharfside Courts; information for a price.
+- **Simone Kessler**: Victor Hale's fixer; polite, never makes threats twice.
+- **Dex**: High Water lieutenant who sells Teo out to Aurum.
+
+Act 1 missions: `ACT1_MISSIONS.md`.
 
 ## Story spine (no mission detail yet)
 
