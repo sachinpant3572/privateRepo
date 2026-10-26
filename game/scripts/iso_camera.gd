@@ -1,6 +1,7 @@
 extends Camera3D
 ## Follow camera with two looks over the same 3D world:
-## ISOMETRIC (default) shows building fronts at the classic 45° angle;
+## ISOMETRIC (default) looks down at 50° from a 45° corner, steeper than true
+## isometric (35°) so buildings hide less while fronts still show;
 ## CLASSIC looks steeply down with north up, like the old Java-era games.
 ## Switching eases between the two. Leads ahead of a moving car and zooms
 ## out with speed. The choice is remembered between sessions.
@@ -16,7 +17,7 @@ const SETTINGS_PATH := "user://settings.cfg"
 ## Pitch and yaw in degrees. CLASSIC stops short of straight down so building
 ## fronts still show a little, as in the old games.
 const ANGLES := {
-	Mode.ISOMETRIC: Vector3(-35.264, 45.0, 0.0),
+	Mode.ISOMETRIC: Vector3(-50.0, 45.0, 0.0),
 	Mode.CLASSIC: Vector3(-72.0, 0.0, 0.0),
 }
 

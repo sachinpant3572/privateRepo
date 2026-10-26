@@ -49,6 +49,8 @@ hide what the player needs to see:
   dissolves in a circle around them.
 - **X-ray silhouettes** (in the prototype): the player in yellow, police in
   blue, anyone attacking in red.
+- **Camera angle** (in the prototype): the default view looks down at 50°,
+  steeper than true isometric (35°), so buildings hide less.
 - **Classic camera** (in the prototype): steep top-down view with almost no
   occlusion.
 - **Objective markers and arrows** always draw on top (vertical slice).
