@@ -15,8 +15,8 @@ min-spec device.
   city is baked into one mesh, so it draws in a single call. The district
   name shows on screen as you enter it.
 - **On foot**: jog, sprint, punch.
-- **Nothing hidden behind buildings**: tall buildings between the camera and the
-  player dissolve in a circle around them (city shader, `mesh_builder.gd`),
+- **Nothing hidden behind buildings**: when a building blocks the view of
+  the player, it dissolves in a circle around them (city shader, `mesh_builder.gd`),
   and silhouettes show through walls: the player and their car in yellow,
   police in blue, anyone attacking in red.
 - **Driving**: arcade cars steered toward the stick direction (reverse by
@@ -29,8 +29,9 @@ min-spec device.
   stop and send an officer out when you're on foot). Stay out of sight to lose
   them. Getting held by a cop means **BUSTED** (respawn at the police
   station); dying means **WASTED** (respawn at the hospital).
-- **Classic top-down camera**: north up, looking steeply down so building
-  fronts show a little, like the Java-era Gangstar games. Leads ahead of
+- **Classic top-down camera**: north up, tilted to a 3/4 view (60°) so the
+  fronts of buildings and people show, like Stardew Valley and the Java-era
+  Gangstar games. Leads ahead of
   cars and zooms out with speed.
 - **HUD**: health, wanted stars (flashing while police can't see you),
   speed, prompts, FPS and draw-call readout.

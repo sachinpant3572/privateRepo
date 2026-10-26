@@ -192,7 +192,7 @@ func test_camera_is_classic_top_down() -> void:
 	await _new_game(false)
 	var cam = game.camera
 	_place_player(Vector2i(2, 2), Vector3.ZERO)
-	_check(cam.global_basis.z.y > 0.9 and absf(cam.global_basis.z.x) < 0.01, "camera looks steeply down with north up")
+	_check(cam.global_basis.z.y > 0.8 and absf(cam.global_basis.z.x) < 0.01, "camera looks down at a 3/4 angle with north up")
 	var start: Vector3 = game.player.global_position
 	Controls.override_vector = Vector2(0, -1)
 	await _frames(40)

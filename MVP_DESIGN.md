@@ -29,8 +29,8 @@ Everything not needed to prove that waits for later phases.
 ## Camera decision
 
 **Decision (Oct 26, 2026): classic top-down view only.** North is up, and the
-camera looks steeply down (72° below the horizon) so building fronts show a
-little, like the Java-era Gangstar games, Stardew Valley, Crashlands and
+camera looks down at 60° below the horizon, a 3/4 view that shows the fronts
+of buildings and people, like the Java-era Gangstar games, Stardew Valley, Crashlands and
 Chronomon. The isometric view is dropped.
 
 What this means for the art:
@@ -63,8 +63,8 @@ setting that keeps 30 fps on the min-spec device.
 
 **Keeping the action visible.** Even from steeply above, tall buildings must
 never hide what the player needs to see:
-- **Cutaway** (in the prototype): anything between the camera and the player
-  dissolves in a circle around them.
+- **Cutaway** (in the prototype): when a building blocks the view of the
+  player, it dissolves in a circle around them, then closes again.
 - **X-ray silhouettes** (in the prototype): the player in yellow, police in
   blue, anyone attacking in red.
 - **Objective markers and arrows** always draw on top (vertical slice).
