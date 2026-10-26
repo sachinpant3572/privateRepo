@@ -46,11 +46,14 @@ const SOUNDS := {
 	"ui_tap": [0.05, -6.0, 0.04, "ui"],
 	"heal": [0.3, -4.0, 0.0, "ui"],
 	"shield": [0.2, -6.0, 0.05, "ui"],
+	"jet": [0.6, -3.0, 0.05, "fx"],
+	"gunship": [0.15, -7.0, 0.06, "fx"],
+	"siege": [0.4, -4.0, 0.05, "fx"],
 }
 
 # Most copies of a sound that may play at once. A screen of explosions is
 # still 3 booms, not 20 stacked into a distorted wall.
-const MAX_AT_ONCE := {"boom": 3, "big_boom": 2, "grenade": 3, "scatter": 2, "flame": 2, "rocket": 3, "rail": 2, "hit": 4, "shot": 4, "zap": 3}
+const MAX_AT_ONCE := {"jet": 2, "gunship": 2, "siege": 2, "boom": 3, "big_boom": 2, "grenade": 3, "scatter": 2, "flame": 2, "rocket": 3, "rail": 2, "hit": 4, "shot": 4, "zap": 3}
 
 # Sounds big enough to push the music down for a moment (dB).
 const DUCK := {"big_boom": 4.0, "synergy": 7.0, "evolve": 9.0, "level": 3.0, "fanfare": 5.0, "alarm": 4.0}
@@ -60,7 +63,9 @@ const BANNER_VOICES := [
 	["SYNERGY", "synergy"], ["EVOLUTION", "evolution"], ["BOSS:", "boss"], ["COLOSSUS DESTROYED", "boss_down"],
 	["JUGGERNAUT", "juggernaut"], ["AMBUSH", "ambush"], ["SHIELD WALL", "shield_wall"], ["TANK COLUMN", "tank_column"],
 	["AIR RAID", "air_raid"], ["NUKE", "nuke"], ["FREEZE", "freeze"], ["VACUUM", "vacuum"], ["MEDKIT", "medkit"],
-	["SECOND WIND", "second_wind"], ["KILLING SPREE", "killing_spree"], ["RAMPAGE", "rampage"], ["MASSACRE", "massacre"],
+	["SECOND WIND", "second_wind"], ["BOMBING RUN", "bombing_run"], ["GUNSHIPS", "gunships"],
+	["ARMORED ASSAULT", "armored_assault"], ["SIEGE COLOSSUS", "siege"], ["THE DOMINION STRIKES BACK", "strikes_back"],
+	["THE IRON DOMINION FALLS", "dominion_falls"], ["KILLING SPREE", "killing_spree"], ["RAMPAGE", "rampage"], ["MASSACRE", "massacre"],
 	["UNSTOPPABLE", "unstoppable"], ["GODLIKE", "godlike"], ["APOCALYPSE", "apocalypse"], ["FINAL WAVE", "final_wave"],
 ]
 

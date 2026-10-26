@@ -36,7 +36,12 @@ PLAN = {
     "hit": [("armor", 6, 0.16, 0.1)],
     "boom": [("explosions", 5, 1.0, 0.6), ("cannon", 2, 1.2, 1.2)],
     "big_boom": [("depot", 1, 2.6, 2.0), ("cannon", 2, 1.8, 1.2)],
+    "jet": [("jet", 2, 2.6, 1.5)],
+    "gunship": [("gunship", 4, 0.6, 0.4)],
+    "siege": [("siege", 3, 1.5, 1.0)],
 }
+# Loudness (RMS, dB) for sounds with no synthesized original to match.
+TARGETS = {"jet": -16.0, "gunship": -17.0, "siege": -15.0}
 # Sounds taken as one stretch of the clip rather than by onsets: start, length.
 STRETCH = {"alarm": ("siren", 0.8, 1.6), "freeze": ("frost", None, 1.2)}
 
@@ -46,6 +51,8 @@ def rms(x):
 
 
 def reference_rms(sound):
+    if sound in TARGETS:
+        return 10.0 ** (TARGETS[sound] / 20.0)
     path = os.path.join(OUT, "%s_0.ogg" % sound)
     if not os.path.exists(path):
         return 0.1

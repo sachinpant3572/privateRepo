@@ -127,6 +127,9 @@ it replaces. Each clip gives 3 to 7 variations.
 | explosions | medium explosions one at a time | `boom` |
 | siren | air-raid siren and klaxon | `alarm` |
 | frost | frost blast freezing water into ice | `freeze` |
+| jet | two fighter jets screaming past overhead | `jet` |
+| gunship | attack helicopter firing its autocannon in bursts | `gunship` |
+| siege | huge siege artillery cannon, three deep thumps | `siege` |
 
 Every prompt ends with "No music, no voices, only ... sound effects", and
 asks for pauses between events so they can be cut apart. To redo one: make

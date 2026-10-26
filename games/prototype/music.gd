@@ -64,7 +64,10 @@ func _process(delta: float) -> void:
 	if st == int(states.get("OVER", -1)):
 		target = "over"
 	elif st != int(states.get("MENU", -1)):
-		target = "boss" if game.get("boss_on") else "stage"
+		# The boss track also drives the final push after the boss dies,
+		# until the last Siege Colossus falls.
+		var pushing := float(game.get("boss_dead_t")) >= 0.0 and float(_prop("final_clear_t", -1.0)) < 0.0
+		target = "boss" if game.get("boss_on") or pushing else "stage"
 	if target != mode:
 		_switch(target)
 	if last_state == int(states.get("DEAD", -1)) and st == int(states.get("PLAYING", -1)):
@@ -111,13 +114,15 @@ func _switch(target: String) -> void:
 			_start("boss", 0.0)
 		"over":
 			_fade_all_except([], 0.6)
-			var won: bool = float(game.get("boss_dead_t")) >= 0.0
+			var won := _won()
 			var p: AudioStreamPlayer = players["sting"]
 			p.stream = _track("victory" if won else "defeat")
 			p.volume_db = 0.0
 			if p.stream:
 				p.play()
-			_announce("victory" if won else "defeat", 1.4)
+			# A win already got its "THE IRON DOMINION FALLS" callout.
+			if not won:
+				_announce("defeat", 1.4)
 
 
 func _start(slot: String, db: float) -> void:
@@ -172,3 +177,16 @@ func _announce(id: String, delay: float = 0.0) -> void:
 		get_tree().create_timer(delay).timeout.connect(sfx.announce.bind(id))
 	else:
 		sfx.announce(id)
+
+
+## A run is won when the final push is cleared (older builds: the boss died).
+func _won() -> bool:
+	var clear = _prop("final_clear_t", null)
+	if clear == null:
+		return float(game.get("boss_dead_t")) >= 0.0
+	return float(clear) >= 0.0
+
+
+func _prop(prop: String, fallback: Variant) -> Variant:
+	var v = game.get(prop)
+	return fallback if v == null else v
