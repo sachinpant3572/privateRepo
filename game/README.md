@@ -14,8 +14,11 @@ min-spec device.
   landmarks become the precinct, clinic, square and street court. The whole
   city is baked into one mesh, so it draws in a single call. The district
   name shows on screen as you enter it.
-- **On foot**: jog, sprint, punch. The player (and their car) shows as a
-  silhouette when buildings hide them (stencil x-ray, no self-tinting).
+- **On foot**: jog, sprint, punch.
+- **Nothing hidden behind buildings**: buildings between the camera and the
+  player dissolve in a circle around them (city shader, `mesh_builder.gd`),
+  and silhouettes show through walls: the player and their car in yellow,
+  police in blue, anyone attacking in red.
 - **Driving**: arcade cars steered toward the stick direction (reverse by
   pointing behind), handbrake drift, damage and wrecks, parked cars,
   carjacking.

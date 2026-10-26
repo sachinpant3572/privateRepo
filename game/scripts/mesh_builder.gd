@@ -13,7 +13,43 @@ const FACES := [
 ]
 
 static var _material: StandardMaterial3D
-static var _xray_material: StandardMaterial3D
+static var _xray_materials := {}
+static var _cutaway_material: ShaderMaterial
+
+## City shader: the same toon look as material(), plus a dissolving hole in
+## anything standing between the camera and the player, so buildings never
+## hide what happens around them. The camera updates the uniforms each frame.
+const CUTAWAY_SHADER := """
+shader_type spatial;
+render_mode diffuse_toon, specular_disabled;
+
+uniform vec3 focus = vec3(0.0);
+uniform vec3 cam_right = vec3(1.0, 0.0, 0.0);
+uniform vec3 cam_up = vec3(0.0, 1.0, 0.0);
+uniform vec3 cam_back = vec3(0.0, 0.0, 1.0);
+uniform float cut_radius = 7.0;
+
+varying vec3 world_pos;
+
+void vertex() {
+	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+}
+
+void fragment() {
+	ALBEDO = COLOR.rgb;
+	ROUGHNESS = 1.0;
+	vec3 rel = world_pos - focus;
+	if (world_pos.y > 0.4 && dot(rel, cam_back) > 1.0) {
+		float d = length(vec2(dot(rel, cam_right), dot(rel, cam_up))) / cut_radius;
+		if (d < 1.0) {
+			float noise = fract(sin(dot(floor(FRAGCOORD.xy), vec2(12.9898, 78.233))) * 43758.5453);
+			if (noise > smoothstep(0.7, 1.0, d)) {
+				discard;
+			}
+		}
+	}
+}
+"""
 
 var verts := PackedVector3Array()
 var normals := PackedVector3Array()
@@ -33,16 +69,26 @@ static func material() -> StandardMaterial3D:
 	return _material
 
 
-## The same material plus a pass that draws a flat silhouette wherever the
-## mesh is hidden behind buildings, so the player never gets lost.
-static func xray_material() -> StandardMaterial3D:
-	if _xray_material == null:
-		# Stencil x-ray marks the mesh's own pixels first, so parts of the mesh
-		# hidden by other parts of itself are not tinted; only world occlusion is.
-		_xray_material = material().duplicate()
-		_xray_material.stencil_mode = BaseMaterial3D.STENCIL_MODE_XRAY
-		_xray_material.stencil_color = Color(1.0, 0.85, 0.25, 0.6)
-	return _xray_material
+## The same material, drawn as a flat silhouette in `color` wherever the mesh
+## is hidden behind buildings: yellow for the player, blue for police, red for
+## anyone attacking. Stencil x-ray marks the mesh's own pixels first, so parts
+## hidden by other parts of the same mesh are not tinted.
+static func xray_material(color := Color(1.0, 0.85, 0.25, 0.6)) -> StandardMaterial3D:
+	if not _xray_materials.has(color):
+		var mat: StandardMaterial3D = material().duplicate()
+		mat.stencil_mode = BaseMaterial3D.STENCIL_MODE_XRAY
+		mat.stencil_color = color
+		_xray_materials[color] = mat
+	return _xray_materials[color]
+
+
+static func cutaway_material() -> ShaderMaterial:
+	if _cutaway_material == null:
+		var shader := Shader.new()
+		shader.code = CUTAWAY_SHADER
+		_cutaway_material = ShaderMaterial.new()
+		_cutaway_material.shader = shader
+	return _cutaway_material
 
 
 func box(center: Vector3, size: Vector3, color: Color) -> void:

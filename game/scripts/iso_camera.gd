@@ -7,6 +7,8 @@ extends Camera3D
 
 enum Mode { ISOMETRIC, CLASSIC }
 
+const MeshBuilder = preload("res://scripts/mesh_builder.gd")
+
 const DISTANCE := 60.0
 const FOOT_SIZE := 26.0
 const DRIVE_SIZE := 38.0
@@ -53,6 +55,16 @@ func _process(delta: float) -> void:
 	_focus = _focus.lerp(pos + lead, 1.0 - exp(-6.0 * delta))
 	size = lerpf(size, want_size, 1.0 - exp(-2.0 * delta))
 	global_position = _focus + global_basis.z * DISTANCE
+	_update_cutaway(pos)
+
+
+## Points the city's see-through hole at the player for this frame's view.
+func _update_cutaway(player_pos: Vector3) -> void:
+	var mat := MeshBuilder.cutaway_material()
+	mat.set_shader_parameter("focus", player_pos + Vector3(0, 1.0, 0))
+	mat.set_shader_parameter("cam_right", global_basis.x)
+	mat.set_shader_parameter("cam_up", global_basis.y)
+	mat.set_shader_parameter("cam_back", global_basis.z)
 
 
 func toggle() -> void:

@@ -32,16 +32,25 @@ func setup(c, rand: RandomNumberGenerator, loop: int, point: int) -> void:
 	punch_damage = 7.0
 
 
+const HOSTILE := Color(1.0, 0.3, 0.25, 0.6)
+
+
 func flee_from(who) -> void:
 	threat = who
-	state = State.FLEE
+	_set_state(State.FLEE)
 	state_time = 8.0
+
+
+## Peds who fight the player show through buildings in red while they do.
+func _set_state(value: State) -> void:
+	state = value
+	set_xray(HOSTILE if state == State.FIGHT else Color(0, 0, 0, 0))
 
 
 func _think(delta: float) -> void:
 	state_time -= delta
 	if state != State.WANDER and (state_time <= 0.0 or not is_instance_valid(threat) or threat.dead):
-		state = State.WANDER
+		_set_state(State.WANDER)
 		var near: Array = city.nearest_sidewalk(global_position)
 		loop_index = near[0]
 		point_index = near[1]
@@ -73,5 +82,5 @@ func _on_hit(attacker) -> void:
 	if attacker.is_in_group("player"):
 		Wanted.report_crime(1)
 	threat = attacker
-	state = State.FIGHT if brave and health > 15.0 else State.FLEE
+	_set_state(State.FIGHT if brave and health > 15.0 else State.FLEE)
 	state_time = 8.0

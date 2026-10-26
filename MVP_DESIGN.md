@@ -41,7 +41,19 @@ setting that keeps 30 fps on the min-spec device.
 | Arrows and markers to the next objective | Screen shake and hit-stop on punches and crashes, phone vibration |
 | Rampages, hidden packages, stunt jumps | Knockdowns with physics, breakable props (hydrants, lamp posts, fences) |
 | Radio stations in cars | Music that changes by district and action (AI-generated) |
-| Quick mission restarts | X-ray silhouettes when buildings hide the player (in the prototype) |
+| Quick mission restarts | Buildings dissolve around the player, and silhouettes show who is hidden (in the prototype) |
+
+**Keeping the action visible in the isometric view.** Buildings must never
+hide what the player needs to see:
+- **Cutaway** (in the prototype): anything between the camera and the player
+  dissolves in a circle around them.
+- **X-ray silhouettes** (in the prototype): the player in yellow, police in
+  blue, anyone attacking in red.
+- **Classic camera** (in the prototype): steep top-down view with almost no
+  occlusion.
+- **Objective markers and arrows** always draw on top (vertical slice).
+- **Level design**: mission-critical interactions (fights, pickups, doors)
+  sit on streets, plazas and courtyards, with the camera side kept open.
 
 ## Engine decision
 

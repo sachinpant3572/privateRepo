@@ -20,6 +20,7 @@ const TURN_RATE := 2.4
 const GRIP := 8.0
 const DRIFT_GRIP := 1.5
 const TRAFFIC_THROTTLE := 0.5
+const POLICE_XRAY := Color(0.3, 0.55, 1.0, 0.6)
 const COLORS := [Color(0.8, 0.15, 0.15), Color(0.15, 0.35, 0.75), Color(0.95, 0.8, 0.2), Color(0.2, 0.55, 0.3), Color(0.9, 0.9, 0.9), Color(0.15, 0.15, 0.17), Color(0.6, 0.3, 0.6)]
 
 var driver := Driver.NONE
@@ -274,6 +275,8 @@ func _build_model() -> void:
 	if is_police:
 		mb.box(Vector3(0, 0.45, 0), Vector3(1.94, 0.22, 4.24), Color(0.05, 0.06, 0.1))
 	_model = mb.make_instance()
+	if is_police:
+		_model.material_override = MeshBuilder.xray_material(POLICE_XRAY)
 	add_child(_model)
 	if is_police:
 		for i in 2:

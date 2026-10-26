@@ -67,7 +67,9 @@ func build(seed_value: int) -> void:
 	_build_bounds()
 	_pick_parking()
 
-	add_child(_mesh.make_instance())
+	var inst := _mesh.make_instance()
+	inst.material_override = MeshBuilder.cutaway_material()
+	add_child(inst)
 	spawn_point = node_pos(Vector2i(2, 3)) + Vector3(7.5, 0.0, 7.5)
 	if police_station == Vector3.ZERO:
 		police_station = spawn_point

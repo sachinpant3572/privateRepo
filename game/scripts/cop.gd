@@ -14,6 +14,7 @@ func _init() -> void:
 	shirt = Color(0.2, 0.3, 0.6)
 	pants = Color(0.1, 0.12, 0.2)
 	hat = Color(0.1, 0.14, 0.3)
+	xray_color = Color(0.3, 0.55, 1.0, 0.6)
 	run_speed = 6.0
 	walk_speed = 1.8
 	punch_damage = 10.0

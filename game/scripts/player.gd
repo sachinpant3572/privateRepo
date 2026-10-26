@@ -14,7 +14,7 @@ func _init() -> void:
 	pants = Color(0.18, 0.3, 0.55)
 	skin = SKIN_TONES[1]
 	punch_damage = 15.0
-	xray = true
+	xray_color = Color(1.0, 0.85, 0.25, 0.6)
 
 
 func _ready() -> void:

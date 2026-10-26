@@ -21,7 +21,8 @@ var shirt := Color(0.5, 0.5, 0.5)
 var pants := Color(0.2, 0.22, 0.3)
 var skin: Color = SKIN_TONES[0]
 var hat := Color(0, 0, 0, 0)
-var xray := false
+## Silhouette colour shown through buildings; transparent means none.
+var xray_color := Color(0, 0, 0, 0)
 
 var dead := false
 var dead_time := 0.0
@@ -179,9 +180,13 @@ func _build_model() -> void:
 	if hat.a > 0.0:
 		mb.box(Vector3(0, 1.9, -0.05), Vector3(0.46, 0.12, 0.5), hat)
 	model = mb.make_instance()
-	if xray:
-		model.material_override = MeshBuilder.xray_material()
 	add_child(model)
+	set_xray(xray_color)
+
+
+func set_xray(color: Color) -> void:
+	xray_color = color
+	model.material_override = MeshBuilder.xray_material(color) if color.a > 0.0 else MeshBuilder.material()
 
 
 func _animate(delta: float) -> void:
