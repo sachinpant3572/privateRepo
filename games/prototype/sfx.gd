@@ -55,14 +55,22 @@ const SOUNDS := {
 	"repair": [2.5, -16.0, 0.05, "fx"],
 	"gunship": [0.15, -7.0, 0.06, "fx"],
 	"siege": [0.4, -4.0, 0.05, "fx"],
+	"crunch": [0.05, -8.0, 0.08, "fx"],
+	"shatter": [0.1, -6.0, 0.06, "fx"],
+	"debris": [0.15, -6.0, 0.06, "fx"],
+	"crash_start": [0.3, -6.0, 0.04, "fx"],
+	"crash": [0.3, -3.0, 0.04, "fx"],
+	"dash_launch": [0.4, -1.0, 0.03, "ui"],
+	"dash_hit": [0.12, -3.0, 0.05, "ui"],
 }
 
 # Most copies of a sound that may play at once. A screen of explosions is
 # still 3 booms, not 20 stacked into a distorted wall.
-const MAX_AT_ONCE := {"jet": 2, "gunship": 2, "siege": 2, "boom": 3, "big_boom": 2, "grenade": 3, "scatter": 2, "flame": 2, "rocket": 3, "rail": 2, "hit": 4, "shot": 4, "zap": 3}
+const MAX_AT_ONCE := {"jet": 2, "gunship": 2, "siege": 2, "boom": 3, "big_boom": 2, "grenade": 3, "scatter": 2, "flame": 2, "rocket": 3, "rail": 2, "hit": 4, "shot": 4, "zap": 3,
+	"crunch": 3, "shatter": 2, "debris": 2, "crash": 2, "crash_start": 2, "dash_hit": 2}
 
 # Sounds big enough to push the music down for a moment (dB).
-const DUCK := {"slam_impact": 12.0, "slam_launch": 4.0, "big_boom": 4.0, "synergy": 7.0, "evolve": 9.0, "level": 3.0, "fanfare": 5.0, "alarm": 4.0}
+const DUCK := {"dash_launch": 6.0, "crash": 3.0, "slam_impact": 12.0, "slam_launch": 4.0, "big_boom": 4.0, "synergy": 7.0, "evolve": 9.0, "level": 3.0, "fanfare": 5.0, "alarm": 4.0}
 
 # Kills within one second -> callout. Each step up is louder.
 const KILL_BURSTS := [[25, "multi_kill"], [50, "mega_kill"], [100, "ultra_kill"], [200, "monster_kill"]]
@@ -74,7 +82,7 @@ const BANNER_VOICES := [
 	["AIR RAID", "air_raid"], ["NUKE", "nuke"], ["FREEZE", "freeze"], ["VACUUM", "vacuum"], ["MEDKIT", "medkit"],
 	["SECOND WIND", "second_wind"], ["BOMBING RUN", "bombing_run"], ["GUNSHIPS", "gunships"],
 	["ARMORED ASSAULT", "armored_assault"], ["SIEGE COLOSSUS", "siege"], ["THE DOMINION STRIKES BACK", "strikes_back"],
-	["THE IRON DOMINION FALLS", "dominion_falls"], ["METEOR SLAM", "meteor_slam"],
+	["THE IRON DOMINION FALLS", "dominion_falls"], ["METEOR SLAM", "meteor_slam"], ["BLITZ DASH", "blitz_dash"],
 	["DOMINATION", "domination"], ["THE DOMINION ESCALATES", "escalates"], ["VETERANS", "veterans"],
 	["ELITE GUARD", "elite_guard"], ["SHIELD CELL", "shield_cell"], ["KILLING SPREE", "killing_spree"], ["RAMPAGE", "rampage"], ["MASSACRE", "massacre"],
 	["UNSTOPPABLE", "unstoppable"], ["GODLIKE", "godlike"], ["APOCALYPSE", "apocalypse"], ["FINAL WAVE", "final_wave"],
@@ -94,6 +102,9 @@ var kill_hist: Array = []  # [time, kills] over the last second
 var kill_tier := -1
 var kill_cd := 0.0
 var slug_re := RegEx.create_from_string("[^a-z0-9]+")
+var dash_watch := []  # [time, kills] when the last Blitz Dash set off
+var vehicle_kills := {"tank": [], "air": []}  # Times of recent kills
+var vehicle_cd := 0.0
 var music  # music.gd
 var muted := false
 
@@ -183,6 +194,8 @@ func play(sound: String, pitch: float = 1.0, volume_db: float = 0.0) -> void:
 	p.pitch_scale = pitch * randf_range(1.0 - jitter, 1.0 + jitter)
 	p.volume_db = float(spec[1]) + volume_db
 	p.play()
+	if sound == "dash_launch" and game_ref:
+		dash_watch = [now, int(game_ref.get("kills"))]
 	if DUCK.has(sound) and music:
 		music.duck(DUCK[sound])
 
@@ -233,6 +246,43 @@ func _process(delta: float) -> void:
 	if voice_player and not voice_player.playing and not voice_queue.is_empty():
 		_next_voice()
 	_watch_kills(delta)
+	_watch_dash()
+	vehicle_cd = maxf(vehicle_cd - delta, 0.0)
+
+
+## After a Blitz Dash: a line cut through a crowd gets a callout.
+func _watch_dash() -> void:
+	if dash_watch.is_empty() or game_ref == null:
+		return
+	if Time.get_ticks_msec() / 1000.0 - float(dash_watch[0]) < 1.3:
+		return
+	var cut := int(game_ref.get("kills")) - int(dash_watch[1])
+	dash_watch = []
+	if cut >= 60:
+		announce("carnage", 4, 2.0)
+	elif cut >= 15:
+		announce("cut_through", 3)
+
+
+## A vehicle destroyed (deaths.gd). Wiping out a whole tank column or every
+## aircraft gets a big callout; single kills only now and then, when the
+## announcer is free, so he never turns into a running commentary.
+func vehicle_down(kind: String, wiped: bool, big: bool) -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	var hist: Array = vehicle_kills[kind]
+	hist.append(now)
+	while not hist.is_empty() and now - float(hist[0]) > 12.0:
+		hist.pop_front()
+	if wiped and hist.size() >= 4:
+		hist.clear()
+		announce("armor_wiped" if kind == "tank" else "air_cleared", 3, 1.0)
+		vehicle_cd = 12.0
+		return
+	if vehicle_cd > 0.0 or voice_player == null or voice_player.playing:
+		return
+	if big or randf() < 0.2:
+		announce("tank_destroyed" if kind == "tank" else "chopper_down", 1, -2.0)
+		vehicle_cd = 25.0
 
 
 ## Every upgrade picked gets a callout. How hard he shouts follows the pick:

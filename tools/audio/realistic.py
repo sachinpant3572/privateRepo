@@ -39,12 +39,20 @@ PLAN = {
     "jet": [("jet", 2, 2.6, 1.5)],
     "gunship": [("gunship", 4, 0.6, 0.4)],
     "siege": [("siege", 3, 1.5, 1.0)],
+    "crunch": [("robots", 6, 0.5, 0.4)],
+    "shatter": [("shatter", 3, 0.9, 0.8)],
+    "debris": [("debris", 5, 0.6, 0.35)],
+    "dash_launch": [("dash", 3, 0.8, 0.9)],
+    "dash_hit": [("slice", 4, 0.5, 0.5)],
 }
 # Loudness (RMS, dB) for sounds with no synthesized original to match.
-TARGETS = {"jet": -16.0, "gunship": -17.0, "siege": -15.0, "slam_impact": -12.0, "slam_launch": -16.0}
+TARGETS = {"jet": -16.0, "gunship": -17.0, "siege": -15.0, "slam_impact": -12.0, "slam_launch": -16.0,
+           "crunch": -20.0, "shatter": -18.0, "debris": -18.0, "dash_launch": -13.0, "dash_hit": -15.0,
+           "crash": -14.0, "crash_start": -18.0}
 # Sounds taken as one stretch of the clip rather than by onsets: start, length.
 STRETCH = {"alarm": ("siren", 0.8, 1.6), "freeze": ("frost", None, 1.2),
-           "slam_impact": ("slam2", None, 3.0), "slam_launch": ("slam1", None, 1.1)}
+           "slam_impact": ("slam2", None, 3.0), "slam_launch": ("slam1", None, 1.1),
+           "crash": ("crash", 3.72, 1.3), "crash_start": ("crash", 0.18, 0.9)}
 
 
 def rms(x):

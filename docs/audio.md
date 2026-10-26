@@ -10,7 +10,7 @@ studio-quality tracks.
 | Music | `games/prototype/audio/music/*.ogg` | `tools/audio/compose.py` (original, composed in code) |
 | Combat sound effects | `games/prototype/audio/sfx/<id>_<n>.ogg`: weapons, impacts, explosions, alarm, freeze | Recorded-style audio from Higgsfield video clips, cut by `tools/audio/realistic.py` |
 | Interface and reward sounds | same folder: pickups, level-up, cards, synergy, evolution | `tools/audio/sfx.py` (synthesized: clean and crisp suits these) |
-| Announcer | `games/prototype/audio/voice/*.ogg` (28 lines) | Higgsfield, ElevenLabs v4, voice "Gideon", stability 0 with delivery tags such as `[shouting excitedly]` and `[urgent, shouting]` |
+| Announcer | `games/prototype/audio/voice/*.ogg` (about 170 lines) | Higgsfield, ElevenLabs v4, voice "Gideon", stability 0 with delivery tags such as `[shouting excitedly]` and `[urgent, shouting]` |
 
 **Adaptive music (`music.gd`):**
 - The stage music is two stems that play in sync: **calm** (pads, bass,
@@ -132,6 +132,12 @@ it replaces. Each clip gives 3 to 7 variations.
 | siege | huge siege artillery cannon, three deep thumps | `siege` |
 | slam1 | armored robot launching on jet boots, then crashing down | `slam_launch` |
 | slam2 | an armored figure smashing into concrete from above | `slam_impact` |
+| robots | armored robot soldiers bursting apart, metal crunch | `crunch` |
+| shatter | a blue energy shield shattering like thick glass | `shatter` |
+| crash | a helicopter spinning out and crashing | `crash_start` (the sputter), `crash` (the impact) |
+| debris | steel armor chunks clanging onto concrete | `debris` |
+| dash | a robot dashing in a streak of blue lightning | `dash_launch` |
+| slice | an energy blade slicing through steel | `dash_hit` |
 
 Every prompt ends with "No music, no voices, only ... sound effects", and
 asks for pauses between events so they can be cut apart. To redo one: make
@@ -155,6 +161,10 @@ deterministic: the same code always renders the same files.
 - Pickups and rewards: `gem`, `coin`, `level`, `fanfare`, `tick`, `powerup`,
   `freeze`, `heal`, `shield`.
 - Big moments: `synergy`, `evolve`, `limit_break`, `alarm`.
+- Deaths (played by `deaths.gd`): `crunch`, `shatter`, `debris`,
+  `crash_start`, `crash`.
+- Abilities: `slam_launch`, `slam_impact`, `slam_ready`, `dash_launch`,
+  `dash_hit`.
 - Interface: `card_show`, `card_pick`, `ui_tap`.
 
 **Upgrade callouts:** every upgrade picked (tapped or auto-picked by the
@@ -169,6 +179,19 @@ BREAK!" after one. A callout only interrupts one of lower or equal priority.
 **Destruction callouts:** kills within one second trigger MULTI KILL (25),
 MEGA KILL (50), ULTRA KILL (100) and MONSTER KILL (200), each step louder,
 once per burst.
+
+**Death sounds:** every unit type sounds different as it dies: troopers
+crunch apart, shields shatter, grenadiers' grenades cook off, tanks blow
+and their turrets clang down, helicopters sputter then crash, the Colossus
+goes up in a chain of blasts.
+
+**Blitz Dash and vehicle callouts:** "DASH READY!" when the charge is full,
+"BLITZ DASH!" from its banner, then "CUT RIGHT THROUGH THEM!" for 15 or more
+kills in the dash and "TOTAL CARNAGE!" for 60 or more. Wiping out four or
+more tanks (or aircraft) until none are left calls "ARMORED DIVISION WIPED
+OUT!" (or "SKIES CLEARED!"). Single vehicle kills get "TANK DESTROYED!" or
+"CHOPPER DOWN!" only now and then (every gunship, one in five others, at
+most every 25 s, and only when the announcer is free).
 
 Announcer lines play by themselves from HUD banners (see `BANNER_VOICES` in
 `sfx.gd`), or directly with `sfx.announce(id)`.

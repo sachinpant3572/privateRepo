@@ -434,6 +434,7 @@ var smoke_buf := PackedFloat32Array()
 var decal_buf := PackedFloat32Array()
 var numbers
 var sfx
+var deaths  # deaths.gd
 var u_buf := PackedFloat32Array()
 var s_buf := PackedFloat32Array()
 var k_buf := PackedFloat32Array()
@@ -570,6 +571,8 @@ func _build_scene() -> void:
 	sfx = preload("res://sfx.gd").new()
 	add_child(sfx)
 	sfx.attach(self)  # Music and announcer read the game state from here on.
+	deaths = preload("res://deaths.gd").new()
+	deaths.attach(self)
 	sfx.muted = smoke
 
 	fx = FX.new()
@@ -1693,13 +1696,7 @@ func _kill(j: int) -> void:
 		_coin(p + Vector2(randf_range(-20.0, 20.0), randf_range(-20.0, 20.0)))
 	if not big and randf() < PICKUP_CHANCE * (1.0 + 0.2 * luck):
 		_drop_pickup(p, _random_pickup())
-	sfx.play("big_boom" if big else "boom", randf_range(0.85, 1.15), -2.0 if big else -10.0)
-	_sparks(p, int(fx.tier["sparks"]) * (3 if big else 1))
-	_ring(p, 3.5 if big else 1.8)
-	if big:
-		_explosion(p, {Data.ELITE: 95.0, Data.GUNSHIP: 120.0, Data.SIEGE: 170.0}.get(ty, 70.0), 1.3 if ty != Data.SIEGE else 1.8)
-	elif randf() < 0.3:
-		_vfx(p, Vector2(0.0, -20.0), 0.6, 6.0, 16.0, Color(0.35, 0.33, 0.32, 0.4), Color(0.2, 0.2, 0.2, 0.0), false)
+	deaths.play(ty, p, e_ang[j], e_tier[j])  # Each unit type dies its own way (deaths.gd).
 	trauma = minf(trauma + (0.25 if big else 0.01), 0.6)
 	if ty == Data.ELITE or ty == Data.SIEGE:
 		_chest(p)
@@ -4387,6 +4384,16 @@ func _run_shots(dir: String) -> void:
 		_showcase()
 		await _frames(30)
 		await _save_shot(dir, "play_" + tier_name.to_lower())
+		if tier_name == "Ultra":
+			# Every unit type dying at once (deaths.gd): mid-blast, then the
+			# wrecks and falling aircraft a moment later.
+			for i in e_count:
+				e_hp[i] = 0.0
+				_kill(i)
+			await _frames(8)
+			await _save_shot(dir, "deaths")
+			await _frames(30)
+			await _save_shot(dir, "deaths_late")
 		bot_still = false
 		if tier_name == "Ultra":
 			bot_cards = false

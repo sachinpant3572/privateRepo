@@ -16,6 +16,7 @@ signal chest_collected
 signal double_gold_pressed
 signal dash_pressed
 signal jump_pressed
+signal blitz_pressed
 signal banish_pressed
 signal skip_pressed
 signal costumes_pressed
@@ -83,6 +84,10 @@ var slam_root: Control
 var slam_ring: Ring
 var slam_hit: Button
 var slam_ready := false
+var blitz_root: Control
+var blitz_ring: Ring
+var blitz_hit: Button
+var blitz_ready := false
 var banish_button: Button
 var skip_button: Button
 var costumes: ColorRect
@@ -348,6 +353,33 @@ func set_jump(frac: float) -> void:
 	slam_ready = now_ready
 
 
+## The Blitz Dash charge, 0..1 (below 0 hides the button), like the slam.
+func set_blitz(frac: float) -> void:
+	blitz_root.visible = frac >= 0.0
+	if frac < 0.0:
+		return
+	blitz_ring.charge = clampf(frac, 0.0, 1.0)
+	var now_ready := frac >= 1.0
+	blitz_hit.disabled = not now_ready
+	if now_ready and not blitz_ready:
+		if sfx:
+			sfx.play("slam_ready", 1.25, -2.0)
+			sfx.announce("dash_ready", 2)
+		blitz_root.scale = Vector2(1.35, 1.35)
+		blitz_root.create_tween().tween_property(blitz_root, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	blitz_ready = now_ready
+
+
+func _on_blitz() -> void:
+	if not blitz_ready:
+		return
+	blitz_ready = false
+	blitz_hit.disabled = true
+	blitz_root.scale = Vector2(0.8, 0.8)
+	blitz_root.create_tween().tween_property(blitz_root, "scale", Vector2.ONE, 0.25)
+	blitz_pressed.emit()
+
+
 func _on_slam() -> void:
 	if not slam_ready:
 		return
@@ -547,6 +579,33 @@ func _build_play() -> void:
 	slam_hit.disabled = true
 	slam_hit.pressed.connect(_on_slam)
 	slam_root.add_child(slam_hit)
+
+	# Blitz Dash: just above the slam, in electric cyan.
+	blitz_root = Control.new()
+	blitz_root.anchor_top = 1.0
+	blitz_root.anchor_bottom = 1.0
+	blitz_root.offset_left = 41
+	blitz_root.offset_right = 171
+	blitz_root.offset_top = -400
+	blitz_root.offset_bottom = -270
+	blitz_root.pivot_offset = Vector2(65, 65)
+	blitz_root.visible = false
+	play.add_child(blitz_root)
+	blitz_ring = Ring.new()
+	blitz_ring.label = "DASH"
+	blitz_ring.cold = Color(0.3, 0.75, 1.0)
+	blitz_ring.hot = Color(0.55, 0.95, 1.0)
+	blitz_ring.arcs = true
+	blitz_ring.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	blitz_root.add_child(blitz_ring)
+	blitz_hit = Button.new()
+	blitz_hit.flat = true
+	for k in ["normal", "hover", "focus", "pressed", "disabled"]:
+		blitz_hit.add_theme_stylebox_override(k, StyleBoxEmpty.new())
+	blitz_hit.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	blitz_hit.disabled = true
+	blitz_hit.pressed.connect(_on_blitz)
+	blitz_root.add_child(blitz_hit)
 
 
 func _build_menu() -> void:
