@@ -26,6 +26,9 @@ const Bar := preload("res://ui_bar.gd")
 const JOY_RING := 180.0
 const JOY_KNOB := 76.0
 const KEY_ART := "res://sprites/ui/key_art.jpg"
+# Seconds to choose an upgrade before one is picked at random.
+const CARD_TIME := 6.0
+const CHEST_CARD_TIME := 8.0
 
 var root: Control
 var menu: Control
@@ -81,6 +84,14 @@ var costume_grid: GridContainer
 var costume_gold: Label
 var sfx  # sfx.gd, set by it: UI sounds and the announcer.
 var level_re := RegEx.create_from_string("Lv (\\d+)\\s+Kills (\\d+)")
+var card_timer_bar: Bar
+var card_timer_label: Label
+var card_timer := 0.0
+var card_timer_max := 1.0
+var card_timer_on := false
+var card_fresh := true  # Next show_cards is a new choice (not a reroll).
+var card_count := 0
+var card_last_tick := -1
 
 
 func _ready() -> void:
@@ -107,6 +118,8 @@ func _process(delta: float) -> void:
 		damage_flash.color.a = maxf(0.0, damage_flash.color.a - delta * 1.5)
 	if chest.visible:
 		_spin_chest(delta)
+	if cards.visible and card_timer_on:
+		_tick_card_timer(delta)
 
 
 # --- Screens ----------------------------------------------------------------
@@ -132,6 +145,18 @@ func show_cards(infos: Array, third_left: int, reroll_left: int, is_chest: bool,
 		card_tag.text = "//  POWER CHEST" if is_chest else "//  FIELD UPGRADE"
 		card_title.text = "CHOOSE YOUR REWARD" if is_chest else "LEVEL UP"
 		card_title.add_theme_color_override("font_color", UI.AMBER)
+	# A new choice restarts the clock; a reroll, extra card or banish keeps it
+	# running. Banish mode pauses it.
+	if card_fresh or not cards.visible:
+		card_timer_max = CHEST_CARD_TIME if is_chest else CARD_TIME
+		card_timer = card_timer_max
+		card_last_tick = -1
+	card_fresh = false
+	card_timer_on = not banish_mode
+	card_count = infos.size()
+	card_timer_bar.visible = not banish_mode
+	card_timer_label.visible = not banish_mode
+	_tick_card_timer(0.0)
 	# The banner would show through behind the cards' title.
 	banner_time = 0.0
 	banner_band.visible = false
@@ -140,6 +165,7 @@ func show_cards(infos: Array, third_left: int, reroll_left: int, is_chest: bool,
 		var card: PanelContainer = parts[0]
 		var hit: Button = parts[1]
 		hit.pressed.connect(_ui_sound.bind("card_pick"))
+		hit.pressed.connect(_card_taken)
 		hit.pressed.connect(card_chosen.emit.bind(i))
 		card_list.add_child(card)
 		# Cards slide in from the right one after another; rare ones pulse.
@@ -564,6 +590,18 @@ func _build_cards() -> void:
 	card_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	card_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(card_title)
+	var timer_row := HBoxContainer.new()
+	timer_row.add_theme_constant_override("separation", 12)
+	timer_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(timer_row)
+	card_timer_bar = _bar(UI.AMBER, 18, 6)
+	card_timer_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card_timer_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	timer_row.add_child(card_timer_bar)
+	card_timer_label = UI.title("6", 44, UI.AMBER)
+	card_timer_label.custom_minimum_size = Vector2(44, 0)
+	card_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	timer_row.add_child(card_timer_label)
 	card_list = VBoxContainer.new()
 	card_list.add_theme_constant_override("separation", 18)
 	box.add_child(card_list)
@@ -577,6 +615,7 @@ func _build_cards() -> void:
 	box.add_child(row2)
 	banish_button = _button(row2, "", banish_pressed.emit, "ghost")
 	skip_button = _button(row2, "SKIP (+5 GOLD, +10% HP)", skip_pressed.emit, "ghost")
+	skip_button.pressed.connect(_card_taken)
 	for b in [third_button, reroll_button, banish_button, skip_button]:
 		b.add_theme_font_size_override("font_size", 26)
 		b.custom_minimum_size = Vector2(0, 72)
@@ -732,6 +771,37 @@ func _build_costumes() -> void:
 	costume_grid.add_theme_constant_override("v_separation", 12)
 	scroll.add_child(costume_grid)
 	_button(box, "BACK", menu_pressed.emit)
+
+
+## The upgrade clock: amber, then red with a rising tick each second for the
+## last three; at zero a random card is taken.
+func _tick_card_timer(delta: float) -> void:
+	card_timer = maxf(card_timer - delta, 0.0)
+	var frac := card_timer / card_timer_max
+	var secs := int(ceil(card_timer))
+	var urgent := card_timer <= 3.0
+	card_timer_bar.color = UI.RED if urgent else UI.AMBER
+	card_timer_bar.value = frac
+	card_timer_bar.shown = frac
+	card_timer_bar.queue_redraw()
+	card_timer_label.text = str(secs)
+	card_timer_label.add_theme_color_override("font_color", UI.RED if urgent else UI.AMBER)
+	if urgent and secs != card_last_tick and secs > 0 and delta > 0.0:
+		card_last_tick = secs
+		if sfx:
+			sfx.play("tick", 1.0 + 0.25 * (3 - secs), 6.0)
+		card_timer_label.pivot_offset = card_timer_label.size * 0.5
+		card_timer_label.scale = Vector2(1.5, 1.5)
+		card_timer_label.create_tween().tween_property(card_timer_label, "scale", Vector2.ONE, 0.25)
+	if card_timer <= 0.0 and card_count > 0:
+		card_timer_on = false
+		_ui_sound("card_pick")
+		_card_taken()
+		card_chosen.emit(randi() % card_count)
+
+
+func _card_taken() -> void:
+	card_fresh = true
 
 
 func _collect_chest() -> void:

@@ -27,8 +27,8 @@ const SOUNDS := {
 	"drone": [0.06, -12.0, 0.08, "fx"],
 	"zap": [0.06, -8.0, 0.08, "fx"],
 	"hit": [0.025, -14.0, 0.12, "fx"],
-	"boom": [0.05, -4.0, 0.1, "fx"],
-	"big_boom": [0.18, 0.0, 0.06, "fx"],
+	"boom": [0.09, -7.0, 0.1, "fx"],
+	"big_boom": [0.25, -4.0, 0.06, "fx"],
 	"hurt": [0.15, -2.0, 0.05, "ui"],
 	"gem": [0.02, -13.0, 0.0, "fx"],
 	"coin": [0.04, -11.0, 0.03, "fx"],
@@ -48,6 +48,10 @@ const SOUNDS := {
 	"shield": [0.2, -6.0, 0.05, "ui"],
 }
 
+# Most copies of a sound that may play at once. A screen of explosions is
+# still 3 booms, not 20 stacked into a distorted wall.
+const MAX_AT_ONCE := {"boom": 3, "big_boom": 2, "grenade": 3, "scatter": 2, "flame": 2, "rocket": 3, "rail": 2, "hit": 4, "shot": 4, "zap": 3}
+
 # Sounds big enough to push the music down for a moment (dB).
 const DUCK := {"big_boom": 4.0, "synergy": 7.0, "evolve": 9.0, "level": 3.0, "fanfare": 5.0, "alarm": 4.0}
 
@@ -64,6 +68,7 @@ var variants := {}
 var last_played := {}
 var pools := {"fx": [], "ui": []}
 var next_voice := {"fx": 0, "ui": 0}
+var playing_id := {}  # AudioStreamPlayer -> sound id it last played
 var voices := {}
 var voice_player: AudioStreamPlayer
 var music  # music.gd
@@ -117,8 +122,8 @@ func _setup_buses() -> void:
 	var lp := AudioEffectLowPassFilter.new()
 	lp.cutoff_hz = 20000.0
 	AudioServer.add_bus_effect(music_bus, lp)
-	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("SFX"), -2.0)
-	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Voice"), 1.0)
+	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("SFX"), -4.0)
+	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Voice"), -2.0)
 	# A limiter on the master bus so a screen of explosions never clips.
 	var limiter := AudioEffectHardLimiter.new()
 	limiter.ceiling_db = -0.5
@@ -136,12 +141,20 @@ func play(sound: String, pitch: float = 1.0, volume_db: float = 0.0) -> void:
 	var now := Time.get_ticks_msec() / 1000.0
 	if now - float(last_played.get(sound, -10.0)) < float(spec[0]):
 		return
-	last_played[sound] = now
 	var pool: String = spec[3]
 	var players: Array = pools[pool]
+	if MAX_AT_ONCE.has(sound):
+		var busy := 0
+		for q in players:
+			if q.playing and playing_id.get(q, "") == sound:
+				busy += 1
+		if busy >= int(MAX_AT_ONCE[sound]):
+			return
+	last_played[sound] = now
 	var p: AudioStreamPlayer = players[next_voice[pool]]
 	next_voice[pool] = (next_voice[pool] + 1) % players.size()
 	p.stream = list[randi() % list.size()]
+	playing_id[p] = sound
 	var jitter: float = spec[2]
 	p.pitch_scale = pitch * randf_range(1.0 - jitter, 1.0 + jitter)
 	p.volume_db = float(spec[1]) + volume_db

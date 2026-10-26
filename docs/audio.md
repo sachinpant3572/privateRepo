@@ -10,7 +10,7 @@ studio-quality tracks.
 | Music | `games/prototype/audio/music/*.ogg` | `tools/audio/compose.py` (original, composed in code) |
 | Combat sound effects | `games/prototype/audio/sfx/<id>_<n>.ogg`: weapons, impacts, explosions, alarm, freeze | Recorded-style audio from Higgsfield video clips, cut by `tools/audio/realistic.py` |
 | Interface and reward sounds | same folder: pickups, level-up, cards, synergy, evolution | `tools/audio/sfx.py` (synthesized: clean and crisp suits these) |
-| Announcer | `games/prototype/audio/voice/*.ogg` (28 lines) | Higgsfield, ElevenLabs v4, voice "Gideon" |
+| Announcer | `games/prototype/audio/voice/*.ogg` (28 lines) | Higgsfield, ElevenLabs v4, voice "Gideon", stability 0 with delivery tags such as `[shouting excitedly]` and `[urgent, shouting]` |
 
 **Adaptive music (`music.gd`):**
 - The stage music is two stems that play in sync: **calm** (pads, bass,
@@ -24,6 +24,11 @@ studio-quality tracks.
   low-pass filter.
 - Big moments (synergy, evolution, big explosions, announcer lines) duck
   the music for a moment.
+
+**Built for phone speakers:** phones can't play below about 100 Hz, and
+trying to makes them distort. The combat recordings have their sub-bass cut
+and their 150–500 Hz punch lifted, and are never saturated. At most 3
+explosions play at once (`MAX_AT_ONCE` in `sfx.gd`).
 
 **Why it doesn't get tiring:**
 - Long loops: 2 minutes for the stage, in four 16-bar sections with

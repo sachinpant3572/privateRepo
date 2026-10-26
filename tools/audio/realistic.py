@@ -54,17 +54,27 @@ def reference_rms(sound):
     return rms(np.frombuffer(raw, np.float32))
 
 
+def phone_eq(seg):
+    """Shapes a recording for phone speakers: they can't play below about
+    100 Hz, and trying to only makes them distort. So the deep sub-bass is
+    cut, and the 150-500 Hz "punch" a phone can play is lifted instead."""
+    n = len(seg)
+    size = 1 << int(np.ceil(np.log2(max(n, 2))))
+    spec = np.fft.rfft(seg, size)
+    f = np.fft.rfftfreq(size, 1.0 / RATE)
+    gain = 1.0 / (1.0 + (110.0 / np.maximum(f, 1.0)) ** 4)
+    gain *= 1.0 + 0.6 * np.exp(-((np.log2((f + 1.0) / 280.0)) ** 2) / 0.5)
+    return np.fft.irfft(spec * gain, size)[:n].astype(np.float32)
+
+
 def match(seg, target):
-    """Scales a recording to the loudness of the sound it replaces. Real
-    recordings have sharper peaks, so when the peak would clip, a soft
-    saturator (like a mastering limiter) adds loudness instead."""
-    seg = seg / (np.max(np.abs(seg)) + 1e-9) * 0.95
-    drive = 1.0
-    while rms(np.tanh(seg * drive) / np.tanh(drive)) < target and drive < 6.0:
-        drive *= 1.25
-    seg = np.tanh(seg * drive) / np.tanh(drive) * 0.95
-    if rms(seg) > target:
-        seg = seg * (target / rms(seg))
+    """Scales a recording to the loudness of the sound it replaces, without
+    ever clipping or saturating it (a clean sound may end up quieter)."""
+    seg = phone_eq(seg)
+    seg = seg * (target / (rms(seg) + 1e-9))
+    peak = np.max(np.abs(seg))
+    if peak > 0.9:
+        seg = seg / peak * 0.9
     return seg.astype(np.float32)
 
 
