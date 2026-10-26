@@ -109,7 +109,11 @@ func run_smoke() -> void:
 	for j in g.e_count:
 		if g.e_type[j] == Data.SIEGE and g.e_hp[j] > 0.0:
 			g._damage(j, 1.0e9, g.e_pos[j], true)
-	await frames(int(60 * (Data.FINAL_TIME + 5.0)))
+	# Wait for the win itself: hitstops (slams, Meteor Blitzes) pause the clock.
+	var waited := 0
+	while g.state != g.State.OVER and waited < int(60 * (Data.FINAL_TIME + 25.0)):
+		await g.get_tree().process_frame
+		waited += 1
 	print("SMOKE: final push state=%d final_clear=%.1f jets_seen=%s" % [g.state, g.final_clear_t, str(g.peak_enemies > 0)])
 	if not check(g.state == g.State.OVER, "clearing the final push wins the stage"):
 		return
