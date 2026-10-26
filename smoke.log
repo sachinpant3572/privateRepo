@@ -1,0 +1,17 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+SMOKE: start
+SMOKE: fixed enemies=2000 bullets=3072 particles=576 kills=1836 logic_ms=10.24
+5-minute heat soak: 500 enemies + 1000 bullets
+Phone: GenericDevice, AMD EPYC 7763 64-Core Processor, 4 cores
+GPU:  ()
+RAM: 15.6 GB usable   Screen: -1 Hz   Android: 24.04
+Settings: quality High, FPS cap 60
+Ran 10 s, average 60.0 FPS, worst 1% 60.0 FPS
+Slow frames (over 25 ms): 0 of 630 (0.0%)
+Game logic per frame: 2.3 ms avg, 3.0 ms worst (a 60 FPS frame is 16.7 ms in total)
+Kills: 659
+FPS every 10 s: 60
+Heat every 10 s: n/a
+Worst heat level: n/a
+SMOKE: passed
