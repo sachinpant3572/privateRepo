@@ -483,6 +483,7 @@ func _build_scene() -> void:
 	world.add_child(numbers)
 	sfx = preload("res://sfx.gd").new()
 	add_child(sfx)
+	sfx.attach(self)  # Music and announcer read the game state from here on.
 	sfx.muted = smoke
 
 	fx = FX.new()

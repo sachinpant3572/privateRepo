@@ -68,6 +68,7 @@ var skip_button: Button
 var costumes: ColorRect
 var costume_grid: GridContainer
 var costume_gold: Label
+var sfx  # sfx.gd, set by it: UI sounds and the announcer.
 
 
 func _ready() -> void:
@@ -135,6 +136,7 @@ func show_cards(infos: Array, third_left: int, reroll_left: int, is_chest: bool,
 			sb.set_corner_radius_all(12)
 			sb.set_content_margin_all(18)
 			card.add_theme_stylebox_override(style_name, sb)
+		card.pressed.connect(_ui_sound.bind("card_pick"))
 		card.pressed.connect(card_chosen.emit.bind(i))
 		card_list.add_child(card)
 		# Cards fade and slide in one after another; rare ones pulse.
@@ -146,6 +148,10 @@ func show_cards(infos: Array, third_left: int, reroll_left: int, is_chest: bool,
 			var pulse := card.create_tween().set_loops(4)
 			pulse.tween_property(card, "self_modulate", Color(1.3, 1.2, 1.0), 0.25)
 			pulse.tween_property(card, "self_modulate", Color.WHITE, 0.25)
+	if sfx:
+		sfx.play("card_show")
+		if infos.any(func(d): return String(d.get("tag", "")).begins_with("Legendary")):
+			sfx.announce("legendary")
 	third_button.visible = infos.size() < 3 and third_left > 0
 	third_button.text = "Show 3rd card (ad) · %d left" % third_left
 	reroll_button.disabled = reroll_left <= 0
@@ -194,6 +200,8 @@ func show_chest(names: Array, pool: Array, gold: int) -> void:
 		var reel := _label("", 30)
 		reel.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		chest_reels.add_child(reel)
+	if sfx and names.size() >= 5:
+		sfx.announce("jackpot")
 	chest_gold.text = "+%d gold" % gold
 	chest_gold.visible = false
 	chest_button.visible = false
@@ -226,6 +234,8 @@ func show_banner(text: String, color: Color = Color(1.0, 0.85, 0.4)) -> void:
 	banner.add_theme_color_override("font_color", color)
 	banner.text = text
 	banner_time = 2.5
+	if sfx:
+		sfx.announce_banner(text)
 	banner.visible = true
 
 
@@ -600,6 +610,7 @@ func _button(parent: Control, text: String, action: Callable) -> Button:
 	button.custom_minimum_size = Vector2(0, 84)
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	button.pressed.connect(_ui_sound.bind("ui_tap"))
 	button.pressed.connect(action)
 	parent.add_child(button)
 	return button
@@ -632,3 +643,8 @@ func _image(texture: Texture2D, size: float) -> TextureRect:
 	rect.size = Vector2(size, size)
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return rect
+
+
+func _ui_sound(id: String) -> void:
+	if sfx:
+		sfx.play(id)
