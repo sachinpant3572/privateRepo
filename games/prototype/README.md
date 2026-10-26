@@ -17,10 +17,10 @@ The Iron Dominion, then a boss.
 **Domination and escalation:** the stage swings between two phases, so it
 feels like losing, then winning, again and again:
 - **Domination** (the start, and after every escalation): the difficulty
-  stops rising, and new enemies get weaker (down to half HP) and more
-  numerous while you keep leveling; late in it most are faded Conscripts.
-  It ends once you clearly overpower the horde (4+ levels gained and it
-  melting faster than it arrives, after at least 20 s) or after 50 s.
+  stops rising (enemies stay exactly as strong as when it began) and XP
+  comes 50% faster, so you outgrow them with more powers, offensive or
+  defensive. It ends once you clearly overpower the horde (4+ levels gained
+  and it melting faster than it arrives, after at least 20 s) or after 50 s.
 - **Escalation** (30 s): a ring of fresh troops closes in, the next two
   stage events hit (Ambush and Shield Wall first, the Siege Colossus last),
   a Juggernaut joins the 2nd and 4th, and the difficulty climbs fast.
@@ -30,7 +30,6 @@ feels like losing, then winning, again and again:
 
 | Tier | When | Look | XP |
 |---|---|---|---|
-| Conscripts | Late in a domination | Faded | 60% |
 | Regulars | Start, 1st escalation | Standard | 100% |
 | Veterans | 2nd and 3rd escalation | Gold trim, extra plating | 125% |
 | Elite Guard | 4th escalation, boss, final push | Black and crimson, a size bigger | 150% |

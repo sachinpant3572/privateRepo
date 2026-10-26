@@ -21,16 +21,16 @@ const GRID_PAD := 200.0
 const WORLD_BOUNDS := 1.0e7  # Culling bounds for the MultiMesh layers; the world itself is endless.
 const STAGE_TIME := 300.0
 # The stage swings between two phases, so it feels like losing, then winning:
-# - Domination: the difficulty clock stops and new enemies get weaker and
-#   more numerous while the hero keeps leveling, until the hero clearly
-#   overpowers them (or DOM_MAX runs out).
+# - Domination: the difficulty clock stops (enemies stay exactly as strong)
+#   and XP comes faster, so the hero outgrows them with more powers, until
+#   the hero clearly overpowers them (or DOM_MAX runs out).
 # - Escalation: a hard horde (the stage's big events) hits at once, and the
 #   difficulty climbs fast for ESC_TIME.
 const DOM_MIN := 20.0
 const DOM_MAX := 50.0
 const DOM_LEVELS := 4  # Levels gained in a domination before it can end early...
 const DOM_CLEAR := 0.6  # ...once fewer than this share of the wanted enemies are alive.
-const DOM_EASE := 0.5  # New enemies' HP at the end of a domination, of normal.
+const DOM_XP := 1.5  # XP multiplier during a domination.
 const ESC_TIME := 30.0
 const ESC_RATE := 2.5  # Difficulty-clock seconds per second during an escalation.
 const ESC_TIERS := [1, 2, 2, 3]  # Enemy tier from the 1st, 2nd, 3rd and 4th+ escalation.
@@ -1247,8 +1247,6 @@ func _spawn_enemy(ty: int) -> void:
 	var tier := _tier_now()
 	e_hp[i] = t_hp[ty] * (1.0 + 0.2 * _diff_t() / 60.0) * hp_mult
 	e_hp[i] *= big_mult if ty >= Data.ELITE else horde_mult
-	if not surge and not boss_spawned:
-		e_hp[i] *= lerpf(1.0, DOM_EASE, _dom_progress())
 	e_tier[i] = tier
 	e_kick[i] = 0.0
 	e_born[i] = t
@@ -1277,8 +1275,7 @@ func _spawn_director(dt: float) -> void:
 	if not boss_spawned and t >= STAGE_TIME:
 		_spawn_boss()
 	var d := _diff_t()
-	var dom := 0.0 if surge or boss_spawned else _dom_progress()
-	var target := int(lerpf(18.0, GAME_PEAK, clampf(d / 240.0, 0.0, 1.0)) * (1.0 + 0.1 * curse) * (1.0 + 0.2 * dom))
+	var target := int(lerpf(18.0, GAME_PEAK, clampf(d / 240.0, 0.0, 1.0)) * (1.0 + 0.1 * curse))
 	if boss_on:
 		target = int(target * 0.35)
 	# The same fight on every tier: if this tier draws fewer enemies, each one
@@ -1287,8 +1284,8 @@ func _spawn_director(dt: float) -> void:
 	hp_mult = maxf(1.0, float(target) / maxf(cap, 1.0))
 	target = cap
 	last_target = target
-	spawn_acc = minf(spawn_acc + dt * (12.0 + d * 0.25) * (1.0 + 0.1 * curse) * (1.0 + 0.6 * dom), 30.0)
-	shot_budget = minf(shot_budget + dt * (1.5 + d / 60.0) * (1.0 - 0.5 * dom), 5.0)
+	spawn_acc = minf(spawn_acc + dt * (12.0 + d * 0.25) * (1.0 + 0.1 * curse), 30.0)
+	shot_budget = minf(shot_budget + dt * (1.5 + d / 60.0), 5.0)
 	var weights := Data.spawn_weights(d)
 	while spawn_acc >= 1.0 and e_count < target and e_count < e_cap:
 		spawn_acc -= 1.0
@@ -1304,21 +1301,11 @@ func _diff_t() -> float:
 	return maxf(d_clock, t) if boss_spawned else d_clock
 
 
-## How far into the current domination (0..1 of DOM_MAX): new enemies get
-## weaker and more numerous as it goes.
-func _dom_progress() -> float:
-	return clampf((t - phase_t0) / DOM_MAX, 0.0, 1.0)
-
-
-## Tier of newly spawned enemies: set by the escalations so far. Late in a
-## domination more and more of them are Conscripts.
+## Tier of newly spawned enemies: set by the escalations so far.
 func _tier_now() -> int:
 	if boss_spawned:
 		return 3
-	var tier: int = 1 if wave_n == 0 else ESC_TIERS[mini(wave_n, ESC_TIERS.size()) - 1]
-	if not surge and randf() < _dom_progress() * 0.8:
-		return 0
-	return tier
+	return 1 if wave_n == 0 else ESC_TIERS[mini(wave_n, ESC_TIERS.size()) - 1]
 
 
 func _update_wave(dt: float) -> void:
@@ -1349,7 +1336,7 @@ func _start_domination() -> void:
 	dom_level0 = level
 	dom_op_t = 0.0
 	rep.phases.append("%s domination" % _clock(t))
-	hud.show_banner("THEY'RE BREAKING! CRUSH THEM!", Color(0.5, 1.0, 0.6))
+	hud.show_banner("DOMINATION! +50% XP", Color(0.5, 1.0, 0.6))
 
 
 ## A hard horde hits at once: the next two stage events, a Juggernaut on the
@@ -3029,7 +3016,7 @@ func _xp_need(l: int) -> float:
 
 
 func _gain_xp(value: int) -> void:
-	xp += value * xp_mult * (1.0 + minf(combo, 1000) / 2000.0)
+	xp += value * xp_mult * (1.0 + minf(combo, 1000) / 2000.0) * (DOM_XP if not surge and not boss_spawned else 1.0)
 	while xp >= xp_need:
 		xp -= xp_need
 		level += 1
