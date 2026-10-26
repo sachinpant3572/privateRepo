@@ -1024,7 +1024,7 @@ func _update_player(dt: float) -> void:
 		hp = minf(max_hp, hp + heal)
 	ls_on = laststand > 0 and hp < max_hp * 0.35
 	hero.position = player
-	hero.rotation = facing.angle()
+	hero.face(facing.angle(), dt)
 	hero.move(move_vec, dash_t > 0.0)
 	hero.aim((_target() - player).angle() if _has_target() else facing.angle())
 	hero.modulate.a = 0.35 if invuln > 0.0 and int(t * 20.0) % 2 == 0 else 1.0

@@ -29,6 +29,13 @@ const WINGS_PX := 120.0
 const HAND_PX := 54.0
 const AIM_LIMIT := 1.1  # How far the weapon turns from the body (radians).
 const FX_CAP := 28  # Most world effect sprites alive at once.
+const TURN_SPEED := 14.0  # Radians per second; the hero turns, it doesn't snap.
+const SHADOW_OFFSET := Vector2(7, 10)  # Screen pixels, light from the top-left.
+# Running, in body-texture pixels (the body is drawn at SIZE / TEX, about half).
+const STRIDE_SWAY := 9.0
+const STRIDE_SWING := 7.0  # Shoulders swing forward and back like arms.
+const STRIDE_WADDLE := 0.11
+const STRIDE_BOUNCE := 0.08
 # Recoil kick (0..1) and muzzle flash per weapon; "" = no flash.
 const RECOIL := {
 	"rifle": [0.35, "muzzle_plasma"], "scatter": [1.0, "muzzle"], "rail": [1.0, "muzzle_plasma"],
@@ -37,6 +44,7 @@ const RECOIL := {
 	"sentry": [0.3, ""], "airstrike": [0.25, ""],
 }
 
+var shadow: Sprite2D
 var rig: Node2D  # Everything below; animated as one figure.
 var body: Sprite2D
 var back: Sprite2D
@@ -73,6 +81,8 @@ var dash_t := 0.0
 var ghost_t := 0.0
 var dust_t := 0.0
 var back_kick := 0.0
+var trail_t := 0.0
+var lift := 0.0  # 0 on the ground .. 1 at the top of a stride.
 var dead := false
 var fx_alive := 0
 var fx_tex := {}  # Effect textures by name, loaded once.
@@ -80,6 +90,8 @@ var fx_tex := {}  # Effect textures by name, loaded once.
 
 func setup(costume: Texture2D, glow_tex: Texture2D, ring: Texture2D) -> void:
 	scale = Vector2.ONE * SIZE / TEX
+	shadow = _layer(self, glow_tex, Vector2.ZERO, 120.0)
+	shadow.modulate = Color(0.0, 0.0, 0.0, 0.42)
 	aura = _layer(self, glow_tex, Vector2.ZERO, 150.0)
 	var add := CanvasItemMaterial.new()
 	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
@@ -205,6 +217,11 @@ func refresh(weapons: Dictionary, powers: Dictionary, evolved: Dictionary) -> Ar
 
 # --- Animation hooks (called by the game) -----------------------------------
 
+## Every frame: turn toward the movement direction (world angle).
+func face(world_angle: float, dt: float) -> void:
+	rotation = rotate_toward(rotation, world_angle, TURN_SPEED * dt)
+
+
 ## Every frame: how fast the hero moves (move vector, length 0..1).
 func move(move_vec: Vector2, dashing: bool) -> void:
 	speed_frac = move_vec.length()
@@ -216,7 +233,7 @@ func move(move_vec: Vector2, dashing: bool) -> void:
 		dust_t -= get_process_delta_time()
 		if dust_t <= 0.0:
 			dust_t = 0.16
-			var feet := global_position - Vector2.from_angle(rotation) * 18.0
+			var feet := position - Vector2.from_angle(rotation) * 18.0
 			_fx_world("dust_puff", feet + Vector2(randf_range(-6, 6), randf_range(-6, 6)), 0.45, 14.0, 30.0, randf() * TAU, Color(1, 1, 1, 0.7))
 
 
@@ -254,7 +271,7 @@ func fire(id: String) -> void:
 			_pulse(hand, 1.25, 0.22)  # Deploy gesture.
 		"airstrike":
 			_pulse(hand, 1.2, 0.3)
-			_fx_world("spark_star", hand.global_position, 0.25, 6.0, 18.0, 0.0, Color(1.0, 0.4, 0.3))
+			_fx_world("spark_star", get_parent().to_local(hand.global_position), 0.25, 6.0, 18.0, 0.0, Color(1.0, 0.4, 0.3))
 
 
 ## Phase Dash: stretch along the dash, speed streak and afterimages.
@@ -262,7 +279,7 @@ func dash(world_angle: float) -> void:
 	dash_t = 0.2
 	ghost_t = 0.0
 	squash = Vector2(1.45, 0.7)
-	_fx_world("dash_streak", global_position, 0.3, 70.0, 110.0, world_angle, Color(0.7, 0.95, 1.0, 0.9))
+	_fx_world("dash_streak", position, 0.3, 70.0, 110.0, world_angle, Color(0.7, 0.95, 1.0, 0.9))
 
 
 ## Shockwave Stomp: crouch, slam, and a ground ring.
@@ -271,9 +288,9 @@ func stomp(radius: float) -> void:
 	var tw := rig.create_tween()
 	tw.tween_property(self, "squash", Vector2(1.25, 1.25), 0.08)
 	tw.tween_property(self, "squash", Vector2.ONE, 0.2)
-	_fx_world("shock_ring", global_position, 0.4, 20.0, radius * 2.0, 0.0, Color(0.7, 0.95, 1.0, 0.9))
+	_fx_world("shock_ring", position, 0.4, 20.0, radius * 2.0, 0.0, Color(0.7, 0.95, 1.0, 0.9))
 	for k in 5:
-		var at := global_position + Vector2.from_angle(TAU * k / 5.0) * 26.0
+		var at := position + Vector2.from_angle(TAU * k / 5.0) * 26.0
 		_fx_world("dust_puff", at, 0.5, 18.0, 40.0, randf() * TAU, Color(1, 1, 1, 0.8))
 
 
@@ -282,13 +299,13 @@ func power_up(strength: float, color: Color) -> void:
 	glow = minf(1.0, 0.4 + strength * 0.3)
 	glow_color = color
 	squash = Vector2.ONE * (1.0 + 0.12 * minf(strength, 2.0))
-	_fx_world("power_burst", global_position, 0.35 + 0.15 * strength, 30.0, 90.0 + 60.0 * minf(strength, 2.0), randf() * TAU, color.lightened(0.3), true)
+	_fx_world("power_burst", position, 0.35 + 0.15 * strength, 30.0, 90.0 + 60.0 * minf(strength, 2.0), randf() * TAU, color.lightened(0.3), true)
 
 
 func hurt() -> void:
 	flinch = 1.0
 	squash = Vector2(0.88, 1.1)
-	_fx_world("spark_star", global_position + Vector2(randf_range(-10, 10), randf_range(-10, 10)), 0.2, 10.0, 26.0, randf() * TAU, Color(1.0, 0.5, 0.4))
+	_fx_world("spark_star", position + Vector2(randf_range(-10, 10), randf_range(-10, 10)), 0.2, 10.0, 26.0, randf() * TAU, Color(1.0, 0.5, 0.4))
 
 
 func dodge() -> void:
@@ -297,11 +314,11 @@ func dodge() -> void:
 
 func shield_hit() -> void:
 	_pulse(bubble, 1.35, 0.25)
-	_fx_world("spark_electric", global_position, 0.25, 30.0, 60.0, randf() * TAU, Color(0.6, 0.9, 1.0))
+	_fx_world("spark_electric", position, 0.25, 30.0, 60.0, randf() * TAU, Color(0.6, 0.9, 1.0))
 
 
 func heal() -> void:
-	_fx_world("heal_glow", global_position, 0.6, 30.0, 70.0, 0.0, Color(1, 1, 1, 0.9), true)
+	_fx_world("heal_glow", position, 0.6, 30.0, 70.0, 0.0, Color(1, 1, 1, 0.9), true)
 
 
 func die() -> void:
@@ -310,6 +327,7 @@ func die() -> void:
 	tw.tween_property(rig, "rotation", rig.rotation + TAU * 1.5, 0.7).set_ease(Tween.EASE_OUT)
 	tw.tween_property(rig, "scale", Vector2.ONE * 0.55, 0.7)
 	tw.tween_property(rig, "modulate", Color(0.45, 0.45, 0.5, 0.8), 0.7)
+	body.skew = 0.0
 
 
 func revive(effects: bool = true) -> void:
@@ -334,16 +352,44 @@ func victory() -> void:
 func _process(delta: float) -> void:
 	t += delta
 	if not dead:
-		# Walk cycle: a side sway and a step bounce, faster when moving fast.
-		step += delta * (6.0 + 8.0 * speed_frac)
-		var sway := sin(step) * 3.0 * speed_frac
-		var bounce := 1.0 + 0.045 * absf(sin(step)) * speed_frac
-		var breathe := 1.0 + 0.02 * sin(t * 2.4) * (1.0 - speed_frac)
+		# Stride: one full cycle is two steps. Faster when moving fast.
+		step += delta * (8.0 + 7.0 * speed_frac)
+		var run := speed_frac
+		var idle := 1.0 - speed_frac
+		var stride := sin(step)
+		lift = absf(stride) * run
+		var bounce := 1.0 + STRIDE_BOUNCE * lift
+		var breathe := 1.0 + 0.035 * sin(t * 2.6) * idle
 		squash = squash.lerp(Vector2.ONE, minf(1.0, delta * 9.0))
-		rig.scale = Vector2(bounce * breathe, breathe / bounce) * squash
-		rig.position = Vector2(-recoil * 6.0, sway)
-		rig.rotation = lean
-		hand_pivot.rotation = lerp_angle(hand_pivot.rotation, aim_angle, minf(1.0, delta * 14.0))
+		# Running stretches slightly along the run and pops up on each step.
+		rig.scale = Vector2(bounce * breathe * (1.0 + 0.05 * run), breathe * bounce * (1.0 - 0.03 * run)) * squash
+		rig.position = Vector2(-recoil * 8.0, stride * STRIDE_SWAY * run)
+		# A waddle with each step, the lean into turns, and a slow look-around when still.
+		rig.rotation = lean + stride * STRIDE_WADDLE * run + sin(t * 0.9) * 0.07 * idle
+		# Shoulders swing in opposite directions, like arms pumping.
+		for k in shoulders.size():
+			var s: Sprite2D = shoulders[k]
+			s.position.x = SHOULDER.x + stride * STRIDE_SWING * run * (1.0 if k == 0 else -1.0)
+		helmet.position = HEAD + Vector2(stride * 2.0 * run, 0.0)
+		# The body shears a little, like a cape catching the air.
+		body.skew = stride * 0.12 * run + sin(t * 3.0) * 0.03 * idle
+		# The weapon bobs with the stride on top of its aim.
+		var gun_bob := cos(step) * 0.14 * run
+		hand_pivot.rotation = lerp_angle(hand_pivot.rotation, aim_angle + gun_bob, minf(1.0, delta * 14.0))
+		hand_pivot.position = HAND_PIVOT + Vector2(-absf(cos(step)) * 3.0 * run, 0.0)
+		# A faint motion trail at full speed.
+		if run > 0.85:
+			trail_t -= delta
+			if trail_t <= 0.0:
+				trail_t = 0.07
+				_ghost(Color(0.6, 0.9, 1.0, 0.22), Vector2.ZERO)
+	# The shadow stays toward the bottom-right in screen space and drifts out
+	# and shrinks a little as the hero pops up on each step.
+	var off := (SHADOW_OFFSET * (1.0 + 0.6 * lift)) / scale.x
+	shadow.position = off.rotated(-rotation)
+	var sh := 120.0 / shadow.texture.get_width() * (1.0 - 0.12 * lift)
+	shadow.scale = Vector2(sh, sh * 0.8)
+	shadow.rotation = -rotation
 	recoil = maxf(0.0, recoil - delta * 6.0)
 	jitter = maxf(0.0, jitter - delta * 3.0)
 	hand.position = Vector2(HAND_REACH - recoil * 14.0, 0.0) + Vector2(randf_range(-1, 1), randf_range(-1, 1)) * 3.0 * jitter
@@ -430,10 +476,11 @@ func _ghost(color: Color, offset: Vector2) -> void:
 		return
 	var g := Sprite2D.new()
 	g.texture = body.texture
-	g.global_position = global_position + offset
-	g.rotation = rotation
-	g.scale = scale * rig.scale
 	g.modulate = color
+	# Same parent as the hero, so the hero's own transform places it.
+	g.position = position + offset
+	g.rotation = rotation + rig.rotation
+	g.scale = scale * rig.scale
 	get_parent().add_child(g)
 	get_parent().move_child(g, get_index())
 	_track(g, 0.25)
@@ -442,7 +489,8 @@ func _ghost(color: Color, offset: Vector2) -> void:
 
 
 ## A one-shot effect sprite in the world: it grows from size0 to size1 pixels
-## and fades out. behind = drawn under the hero.
+## and fades out. `at` is in world coordinates (the hero's parent), like the
+## game's positions. behind = drawn under the hero.
 func _fx_world(fx_name: String, at: Vector2, life: float, size0: float, size1: float, rot: float, color: Color, behind: bool = false) -> void:
 	if fx_alive >= FX_CAP or get_parent() == null:
 		return
@@ -451,11 +499,11 @@ func _fx_world(fx_name: String, at: Vector2, life: float, size0: float, size1: f
 		return
 	var s := Sprite2D.new()
 	s.texture = tex
-	s.global_position = at
-	s.rotation = rot
 	s.modulate = color
 	var w := float(tex.get_width())
 	s.scale = Vector2.ONE * size0 / w
+	s.position = at
+	s.rotation = rot
 	get_parent().add_child(s)
 	if behind:
 		get_parent().move_child(s, get_index())
