@@ -19,12 +19,42 @@ Everything not needed to prove that waits for later phases.
 | Area | Proposal | Why |
 |---|---|---|
 | Platforms | Android first, iOS right after | Larger audience in target markets; one codebase covers both. |
-| Engine | Unity 6 (URP) | Most mature mobile engine: Play Asset Delivery, ads/IAP/analytics SDKs, large asset store. Godot is free and lighter but weaker on mobile tooling and SDKs. |
+| Engine | **Decision: Godot 4** | See "Engine decision" below. |
 | Look | Low-poly 3D, toon shading, fixed orthographic isometric camera | Reads as 2D isometric cartoon, but one model works from every angle, so vehicles and clothing stay cheap. |
 | Min device | ~4 GB RAM, mid-range 2021 Android chip | Covers most active devices in India and similar markets. |
 | Frame rate | 30 fps locked on min device, 60 fps option on high-end | Battery and heat matter on phones. |
-| Install size | Base under 150 MB, rest via Play Asset Delivery / on-demand resources | Store limits and data costs. |
+| Install size | Base under 150 MB, rest downloaded as content packs | Store limits and data costs. |
 | Offline | Fully playable offline; online only for leaderboards, events, cloud save | Patchy connections. |
+
+## Engine decision
+
+**Decision (Oct 26, 2026): Godot 4**, chosen over Unity 6.
+
+Why:
+- **Built mostly by Claude**: Godot scenes and scripts are compact, readable
+  text, so Claude can edit them directly. That means far fewer tokens per
+  feature than Unity's large generated scene files and editor round-trips.
+- **Works in cloud sessions**: the engine runs headless in the container, so
+  Claude can build, test and export Android builds there, which fits working
+  from a phone. Unity needs a desktop with the editor open.
+- **Quality is enough for the art style**: low-poly 3D, toon shading and a
+  fixed isometric camera don't need Unity's rendering lead.
+- **Free, no royalties**, and smaller base downloads.
+
+Accepted risks and how to handle them:
+- **Low-end Android performance**: use Godot's lighter renderer, keep draw
+  calls and shaders simple, stream the city in chunks, profile on a real
+  min-spec phone from the first prototype.
+- **Ads, payments, analytics**: official Google Play Billing plugin; ad
+  networks and analytics through community or vendor plugins, checked and
+  chosen before the beta.
+- **Open-world streaming**: custom chunk loading code instead of ready-made
+  tools.
+- **Smaller asset store**: rely on generated and custom assets.
+- **Consoles later**: possible only through third-party porting companies.
+
+Fallback: if the prototype can't hold 30 fps on a min-spec phone, revisit the
+engine then, while switching is still cheap.
 
 ## The city: "Port Lafitte" (New Orleans-inspired, fictional)
 
@@ -138,7 +168,7 @@ device.
 
 | Milestone | Contents | Exit check |
 |---|---|---|
-| 1. Prototype | Grey-box district, driving, on-foot, fighting, wanted levels 1-2 | Driving and fighting are fun on a phone |
+| 1. Prototype | Grey-box district, driving, on-foot, fighting, wanted levels 1-2 | Driving and fighting are fun on a phone, at 30 fps on a min-spec phone (confirms the engine choice) |
 | 2. Vertical slice | Old Quarter at final quality, first 3 missions, phone, one random event set | Playtesters want to keep playing |
 | 3. Alpha | All 6 districts, act 1 complete, all MVP systems | Feature complete |
 | 4. Beta | Content polish, performance on min device, monetization, analytics | Stable on min device |
@@ -150,9 +180,8 @@ between Claude, AI tools and people are decided.
 
 ## Open decisions
 
-1. Engine: Unity 6 (proposed) or Godot.
-2. Business model: free-to-play (proposed) or paid upfront.
-3. City name, premise and faction names.
-4. Protagonist: fixed character or customizable.
-5. Launch markets for soft launch.
-6. Team: who does art, animation and QA alongside Claude.
+1. Business model: free-to-play (proposed) or paid upfront.
+2. City name, premise and faction names.
+3. Protagonist: fixed character or customizable.
+4. Launch markets for soft launch.
+5. Team: who does art, animation and QA alongside Claude.
