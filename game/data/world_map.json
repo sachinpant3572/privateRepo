@@ -1,0 +1,146 @@
+{
+  "version": 1,
+  "name": "Solvera",
+  "units": "meters; x east, y south (game z)",
+  "size": [8000, 6000],
+
+  "factions": [
+    {"id": "aurum", "name": "Aurum Consortium", "color": "#d4a72c"},
+    {"id": "marrow", "name": "Marrow Krewe", "color": "#4f8a3c"},
+    {"id": "highwater", "name": "High Water", "color": "#3a7bd5"},
+    {"id": "mare", "name": "Comando Maré", "color": "#e05a47"},
+    {"id": "corvos", "name": "Os Corvos", "color": "#7b4fa0"},
+    {"id": "aces", "name": "Velvet Aces", "color": "#c2185b"},
+    {"id": "dust", "name": "Dust Riders", "color": "#a0522d"},
+    {"id": "neutral", "name": "Neutral", "color": "#9e9e9e"}
+  ],
+
+  "water": [
+    {"id": "gulf", "name": "Gulf of Solvera", "type": "ocean",
+     "polygon": [[0, 5600], [1200, 5250], [2600, 5350], [3600, 5700], [5600, 5650], [6400, 5000], [6900, 4200], [7300, 3000], [7600, 1500], [8000, 800], [8000, 6000], [0, 6000]]},
+    {"id": "miravel", "name": "Lake Miravel", "type": "lake",
+     "polygon": [[3100, 1700], [3500, 1450], [4100, 1550], [4300, 1950], [3950, 2350], [3400, 2300]]},
+    {"id": "morrow", "name": "Morrow River", "type": "river", "width": 160,
+     "line": [[3700, 2300], [3500, 3000], [3350, 3700], [3400, 4300], [3700, 4700], [4300, 4800], [4900, 4720], [5400, 5100], [5700, 5650]]}
+  ],
+
+  "regions": [
+    {"id": "hollow_mesa", "name": "Hollow Mesa", "type": "desert", "phase": 3,
+     "polygon": [[0, 0], [2600, 0], [2400, 1200], [2000, 2600], [0, 3000]]},
+    {"id": "fort_granite", "name": "Fort Granite", "type": "military", "phase": 3, "faction": "neutral",
+     "polygon": [[300, 2100], [1200, 2100], [1200, 2800], [300, 2800]]},
+    {"id": "cinder_ridge", "name": "Cinder Ridge", "type": "mountains", "phase": 3,
+     "polygon": [[2600, 0], [5200, 0], [5000, 900], [4200, 1300], [3000, 1200], [2400, 1200]]},
+    {"id": "red_pine", "name": "Red Pine County", "type": "forest", "phase": 3,
+     "polygon": [[2400, 1200], [3000, 1200], [3100, 1700], [3400, 2300], [3000, 2700], [2600, 3300], [2000, 2600]]},
+    {"id": "miravel_shores", "name": "Lake Miravel", "type": "lakeside", "phase": 3,
+     "polygon": [[3000, 1200], [4200, 1300], [4700, 1700], [4600, 2600], [3900, 2900], [3000, 2700], [3400, 2300], [3100, 1700]]},
+    {"id": "verdant_hills", "name": "Verdant Hills", "type": "hills", "phase": 2,
+     "polygon": [[4700, 1700], [5200, 0], [8000, 0], [8000, 800], [7600, 1500], [6300, 1800], [6300, 3500], [5600, 3600], [4800, 3500], [4600, 2600]]},
+    {"id": "golden_flats", "name": "Golden Flats", "type": "farmland", "phase": 3,
+     "polygon": [[0, 3000], [2000, 2600], [2600, 3300], [3000, 2700], [3900, 2900], [3350, 3550], [1500, 4200], [0, 4600]]},
+    {"id": "saltgrass", "name": "Saltgrass Parish", "type": "bayou", "phase": 3,
+     "polygon": [[0, 4600], [1500, 4200], [3350, 3550], [3550, 4800], [3600, 5700], [2600, 5350], [1200, 5250], [0, 5600]]},
+    {"id": "isla_serena", "name": "Isla Serena", "type": "island", "phase": 4, "faction": "neutral",
+     "polygon": [[6600, 5100], [7100, 4950], [7550, 5150], [7600, 5550], [7100, 5800], [6650, 5600]]}
+  ],
+
+  "cities": [
+    {"id": "bellerive", "name": "Bellerive", "inspired_by": "New Orleans", "phase": 1,
+     "rect": [3550, 3550, 2000, 1250],
+     "districts": [
+       {"id": "lantern_quarter", "name": "Lantern Quarter", "style": "quarter", "faction": "neutral", "rect": [4150, 4150, 650, 520]},
+       {"id": "ironwharf", "name": "Ironwharf", "style": "docks", "faction": "marrow", "rect": [4800, 4500, 600, 200]},
+       {"id": "gilt_district", "name": "Gilt District", "style": "downtown", "faction": "aurum", "rect": [4150, 3650, 650, 500]},
+       {"id": "magnolia_heights", "name": "Magnolia Heights", "style": "heights", "faction": "aurum", "rect": [3600, 3550, 550, 650]},
+       {"id": "floodline_wards", "name": "Floodline Wards", "style": "wards", "faction": "highwater", "rect": [4800, 3600, 700, 900]},
+       {"id": "blackwater_bayou", "name": "Blackwater Bayou", "style": "bayou", "faction": "marrow", "rect": [3550, 4200, 600, 550]}
+     ],
+     "prototype_window": {"origin": [4590, 4350], "blocks": 6, "pitch": 52}},
+    {"id": "porto_brisa", "name": "Porto Brisa", "inspired_by": "Rio de Janeiro", "phase": 2,
+     "rect": [6300, 1800, 1200, 1500],
+     "districts": [
+       {"id": "praia_dourada", "name": "Praia Dourada", "style": "beach", "faction": "corvos", "rect": [7050, 2100, 300, 1000]},
+       {"id": "morro_alto", "name": "Morro Alto", "style": "hillside", "faction": "mare", "rect": [6300, 2300, 450, 900]},
+       {"id": "centro_velho", "name": "Centro Velho", "style": "quarter", "faction": "neutral", "rect": [6750, 1900, 300, 700]},
+       {"id": "marina_azul", "name": "Marina Azul", "style": "docks", "faction": "aurum", "rect": [6750, 2650, 350, 550]}
+     ]},
+    {"id": "las_brasas", "name": "Las Brasas", "inspired_by": "Las Vegas", "phase": 3,
+     "rect": [600, 700, 1450, 1300],
+     "districts": [
+       {"id": "the_blaze", "name": "The Blaze", "style": "strip", "faction": "aces", "rect": [1100, 750, 300, 1100]},
+       {"id": "old_town_brasas", "name": "Old Town Brasas", "style": "quarter", "faction": "neutral", "rect": [650, 850, 400, 500]},
+       {"id": "ember_heights", "name": "Ember Heights", "style": "heights", "faction": "aurum", "rect": [1450, 750, 550, 600]},
+       {"id": "dust_yards", "name": "Dust Yards", "style": "industrial", "faction": "dust", "rect": [650, 1400, 450, 550]}
+     ]}
+  ],
+
+  "towns": [
+    {"id": "cypress_bend", "name": "Cypress Bend", "pos": [2300, 4650], "phase": 3},
+    {"id": "dellwood", "name": "Dellwood", "pos": [2650, 2050], "phase": 3},
+    {"id": "harlow", "name": "Harlow", "pos": [4350, 2250], "phase": 3},
+    {"id": "sable_junction", "name": "Sable Junction", "pos": [1950, 2350], "phase": 3},
+    {"id": "serena_town", "name": "Serena Town", "pos": [7050, 5300], "phase": 4}
+  ],
+
+  "routes": [
+    {"id": "route_1", "name": "Route 1 Gulf Highway", "type": "highway", "phase": 1,
+     "line": [[100, 4450], [1500, 4250], [2600, 4050], [3550, 4050], [4150, 4150], [5500, 4050], [6000, 3700], [6500, 3300], [6750, 2900]]},
+    {"id": "route_40", "name": "Route 40 Desert Highway", "type": "highway", "phase": 3,
+     "line": [[1300, 1950], [1950, 2350], [2650, 2050], [3200, 2650], [4000, 3150], [4400, 3650]]},
+    {"id": "route_7", "name": "Route 7 Ridge Road", "type": "highway", "phase": 3,
+     "line": [[2050, 900], [2700, 800], [3500, 950], [4500, 1450], [5500, 1650], [6300, 1950]]},
+    {"id": "solvera_line", "name": "Solvera Line", "type": "rail", "phase": 2,
+     "line": [[1250, 1700], [1950, 2350], [3000, 2750], [4350, 2250], [4600, 3200], [4500, 3800], [5600, 3300], [6400, 2600], [6850, 2300]]},
+    {"id": "freight_line", "name": "Freight Line", "type": "rail", "phase": 3,
+     "line": [[5000, 4600], [4100, 4450], [3300, 4400], [2000, 3650], [800, 2700]]},
+    {"id": "bellerive_streetcar", "name": "Bellerive Streetcar", "type": "streetcar", "phase": 1,
+     "line": [[4650, 4600], [4450, 4300], [4450, 3950], [4150, 3800], [3800, 3700]]},
+    {"id": "brisa_metro", "name": "Porto Brisa Metro", "type": "metro", "phase": 2,
+     "line": [[6450, 2950], [6850, 2350], [7150, 2050]]},
+    {"id": "brasas_monorail", "name": "Las Brasas Monorail", "type": "metro", "phase": 3,
+     "line": [[1250, 800], [1250, 1800]]},
+    {"id": "serena_ferry", "name": "Isla Serena Ferry", "type": "ferry", "phase": 4,
+     "line": [[6950, 3150], [7150, 4000], [7050, 5000]]},
+    {"id": "cruise_route", "name": "Cruise Route", "type": "ferry", "phase": 4,
+     "line": [[5200, 4800], [5650, 5450], [6400, 5450], [6750, 5250]]},
+    {"id": "air_bellerive_brasas", "name": "Flights", "type": "air", "phase": 3,
+     "line": [[5900, 3950], [1750, 1700]]},
+    {"id": "air_bellerive_serena", "name": "Flights", "type": "air", "phase": 4,
+     "line": [[5900, 3950], [7300, 5400]]},
+    {"id": "airship_tour", "name": "Airship Tour", "type": "air", "phase": 4,
+     "line": [[1600, 1100], [2800, 500], [4200, 450], [3500, 1000], [1600, 1100]]}
+  ],
+
+  "landmarks": [
+    {"id": "bpd_lantern", "name": "Lantern Quarter Precinct", "type": "police", "pos": [4600, 4420], "city": "bellerive"},
+    {"id": "lantern_square", "name": "Lantern Square", "type": "park", "pos": [4660, 4530], "city": "bellerive"},
+    {"id": "floodline_clinic", "name": "Floodline Clinic", "type": "hospital", "pos": [4840, 4395], "city": "bellerive"},
+    {"id": "wharfside_courts", "name": "Wharfside Courts", "type": "court", "pos": [4830, 4620], "city": "bellerive"},
+    {"id": "aurum_tower", "name": "Aurum Tower", "type": "tower", "pos": [4500, 3900], "city": "bellerive"},
+    {"id": "union_station", "name": "Union Station", "type": "station", "pos": [4500, 3800], "city": "bellerive"},
+    {"id": "crescent_bridge", "name": "Crescent Bridge", "type": "bridge", "pos": [3360, 4050], "city": "bellerive"},
+    {"id": "krewe_hall", "name": "Krewe Stilt Hall", "type": "hideout", "pos": [3800, 4600], "city": "bellerive"},
+    {"id": "bellerive_airport", "name": "Bellerive International", "type": "airport", "pos": [5900, 3950]},
+    {"id": "drowned_streetcar", "name": "The Drowned Streetcar", "type": "legend", "pos": [5250, 4250], "city": "bellerive", "secret": true},
+    {"id": "sentinel", "name": "Sentinel Lighthouse", "type": "lighthouse", "pos": [7300, 1950], "city": "porto_brisa"},
+    {"id": "estadio_mar", "name": "Estádio do Mar", "type": "stadium", "pos": [6600, 2650], "city": "porto_brisa"},
+    {"id": "avenida_festa", "name": "Avenida da Festa", "type": "parade", "pos": [6900, 2300], "city": "porto_brisa"},
+    {"id": "brisa_heliport", "name": "Porto Brisa Heliport", "type": "airport", "pos": [6700, 2100], "city": "porto_brisa"},
+    {"id": "smugglers_cave", "name": "Smugglers' Cave", "type": "legend", "pos": [7330, 2950], "city": "porto_brisa", "secret": true},
+    {"id": "sign_yard", "name": "The Sign Yard", "type": "museum", "pos": [800, 1250], "city": "las_brasas"},
+    {"id": "skyhook_pier", "name": "Skyhook Airship Pier", "type": "airship", "pos": [1600, 1100], "city": "las_brasas"},
+    {"id": "brasas_field", "name": "Las Brasas Field", "type": "airport", "pos": [1750, 1700], "city": "las_brasas"},
+    {"id": "fort_granite_airfield", "name": "Fort Granite Airfield", "type": "military", "pos": [750, 2450]},
+    {"id": "granite_vault", "name": "The Vault under Fort Granite", "type": "legend", "pos": [500, 2700], "secret": true},
+    {"id": "cinder_observatory", "name": "Cinder Peak Observatory", "type": "viewpoint", "pos": [4300, 400]},
+    {"id": "silver_train", "name": "The Silver Train", "type": "legend", "pos": [3700, 650], "secret": true},
+    {"id": "drowned_village", "name": "The Drowned Village", "type": "legend", "pos": [3700, 1850], "secret": true},
+    {"id": "mesa_arch", "name": "Mesa Arch", "type": "viewpoint", "pos": [1500, 3000]},
+    {"id": "salt_mine", "name": "Old Salt Mine", "type": "mine", "pos": [2500, 3800]},
+    {"id": "serena_grand", "name": "Serena Grand Resort", "type": "resort", "pos": [7300, 5250]},
+    {"id": "serena_airstrip", "name": "Isla Serena Airstrip", "type": "airport", "pos": [7300, 5450]},
+    {"id": "smugglers_cove", "name": "Smugglers' Cove", "type": "hideout", "pos": [6700, 5500]},
+    {"id": "sunken_casino", "name": "The Sunken Casino", "type": "legend", "pos": [7750, 5850], "secret": true}
+  ]
+}

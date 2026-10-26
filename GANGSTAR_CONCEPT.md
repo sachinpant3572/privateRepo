@@ -5,6 +5,7 @@ lost when a cloud session restarted; this file merges the re-sent version with
 the recovered first prompt.
 
 Working title needed: "Gangstar" is Gameloft's trademark and can't be used.
+Proposed: **Solvera** (see `WORLD_BIBLE.md` for the world, names and lore).
 
 ## The idea (as described)
 

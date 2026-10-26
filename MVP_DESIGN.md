@@ -56,47 +56,51 @@ Accepted risks and how to handle them:
 Fallback: if the prototype can't hold 30 fps on a min-spec phone, revisit the
 engine then, while switching is still cheap.
 
-## The city: "Port Lafitte" (New Orleans-inspired, fictional)
+## The city: Bellerive (New Orleans-inspired, fictional)
 
-About 2 km x 2 km of game space, 6 districts, each with its own look, music
-and faction presence.
+Names, history and factions come from `WORLD_BIBLE.md`; positions and sizes
+from the map data `game/data/world_map.json` (picture: `bellerive_map.svg`).
+
+About 2 km x 1.25 km of game space on the Morrow River, 6 districts, each with
+its own look, music and faction presence.
 
 | District | Feel | Role |
 |---|---|---|
-| Old Quarter | Balconies, jazz bars, tourist streets | Story hub, shops, nightlife events |
-| Riverside Docks | Cranes, warehouses, ships | Smuggling missions, boats, heist targets |
-| Garden Heights | Mansions, oak-lined streets | Wealthy targets, property to buy |
-| Lower Wards | Shotgun houses, corner stores | Turf wars, street business, basketball courts |
-| Downtown | Towers, nightlife, offices | Syndicate HQ, high-wanted zone |
-| Bayou Edge | Swamp, stilt houses, airboats | Hidden places, lore, boat chases |
+| Lantern Quarter | Balconies, jazz bars, tourist streets | Story hub, shops, nightlife events |
+| Ironwharf | Cranes, warehouses, ships | Smuggling missions, boats, heist targets |
+| Magnolia Heights | Mansions, oak-lined streets | Wealthy targets, property to buy |
+| Floodline Wards | Shotgun houses, storm scars, street courts | Turf wars, street business, basketball courts |
+| Gilt District | Towers, Aurum Tower, Union Station | Aurum HQ, high-wanted zone |
+| Blackwater Bayou | Swamp, stilt houses, airboats | Hidden places, lore, boat chases |
 
 Connected by a **streetcar line** (fixed-route fast travel; the city's
 signature transport) and **taxis** (ride anywhere, or drive one as a side job).
 
 ## Story act 1 (~12-15 missions, ~4-6 hours)
 
-Placeholder premise, to be replaced or refined:
+Premise (full story spine in `WORLD_BIBLE.md`):
 
-> The player returns to Port Lafitte after years away and finds their
-> family's corner business swallowed by a turf war between two factions. A
-> storm night, a missing cousin and a stolen ledger pull them in. Act 1 ends
-> with a choice: side with one faction, or play both against each other.
+> Jules Moreau returns to Bellerive twelve years after the Great Storm to
+> find their cousin Teo missing with a ledger of Aurum's bribes. Caught
+> between the Marrow Krewe and the Aurum Consortium, Jules ends act 1 with a
+> choice: side with one, or play both against each other.
 
-- **Opening (first 10 minutes)**: arrival, a chase through the Old Quarter on
+- **Opening (first 10 minutes)**: arrival, a chase through the Lantern Quarter on
   a stolen scooter, first fight, first car. Tutorial is the action.
 - **Missions 2-6**: learn the city, meet both factions, unlock phone, wanted
   system, first safehouse and street business.
 - **Missions 7-12**: rising stakes: docks shoot-out, bayou boat chase,
-  Garden Heights break-in, a betrayal.
+  Magnolia Heights break-in, a betrayal.
 - **Finale**: faction choice, which sets act 2's opening (teased, not built).
 
 Every mission offers at least two approaches (stealth / loud / vehicle).
 
 ## Factions (MVP)
 
-- **Bayou Wolves**: smugglers from the swamp edge; loyal, old-school.
-- **Crescent Syndicate**: downtown money; polished, ruthless.
-- **Police (PLPD)**: not joinable; drives the wanted system.
+- **Marrow Krewe**: bayou smuggling families; loyal, old-school.
+- **Aurum Consortium**: corporate money; polished, ruthless.
+- **High Water**: the Floodline crew; minor faction in act 1.
+- **Police (Bellerive PD)**: not joinable; drives the wanted system.
 
 Reputation is tracked per faction and per district. It unlocks missions, shop
 discounts and allies, and decides who attacks the player on sight.
@@ -169,7 +173,7 @@ device.
 | Milestone | Contents | Exit check |
 |---|---|---|
 | 1. Prototype | Grey-box district, driving, on-foot, fighting, wanted levels 1-2 | Driving and fighting are fun on a phone, at 30 fps on a min-spec phone (confirms the engine choice) |
-| 2. Vertical slice | Old Quarter at final quality, first 3 missions, phone, one random event set | Playtesters want to keep playing |
+| 2. Vertical slice | Lantern Quarter at final quality, first 3 missions, phone, one random event set | Playtesters want to keep playing |
 | 3. Alpha | All 6 districts, act 1 complete, all MVP systems | Feature complete |
 | 4. Beta | Content polish, performance on min device, monetization, analytics | Stable on min device |
 | 5. Soft launch | 2-3 test countries | Retention near targets |
@@ -184,7 +188,7 @@ between Claude, AI tools and people are decided.
 ## Open decisions
 
 1. Business model: free-to-play (proposed) or paid upfront.
-2. City name, premise and faction names.
+2. Names: proposed in `WORLD_BIBLE.md`, awaiting approval.
 3. Protagonist: fixed character or customizable.
 4. Launch markets for soft launch.
 5. Team: who does art, animation and QA alongside Claude.

@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1380 990" width="1380" height="990">
+<rect width="1380.0" height="990.0" fill="#cfe3c0"/>
+<polygon points="-2040.0,1320.0 -1320.0,1110.0 -480.0,1170.0 120.0,1380.0 1320.0,1350.0 1800.0,960.0 2100.0,480.0 2340.0,-240.0 2520.0,-1140.0 2760.0,-1560.0 2760.0,1560.0 -2040.0,1560.0" fill="#6fa8d6"/>
+<polygon points="-180.0,-1020.0 60.0,-1170.0 420.0,-1110.0 540.0,-870.0 330.0,-630.0 0.0,-660.0" fill="#6fa8d6"/>
+<polyline points="180.0,-660.0 60.0,-240.0 -30.0,180.0 0.0,540.0 180.0,780.0 540.0,840.0 900.0,792.0 1200.0,1020.0 1380.0,1350.0" fill="none" stroke="#6fa8d6" stroke-width="96.0" stroke-linejoin="round"/>
+<rect x="450.0" y="450.0" width="390.0" height="312.0" fill="#f2a65a" stroke="#9e9e9e" stroke-width="6" data-kind="district" data-id="lantern_quarter" data-phase="1"/>
+<text x="462.0" y="480.0" font-size="22" font-weight="800" fill="#222" text-anchor="start" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="5.5" stroke-opacity="0.8">Lantern Quarter</text>
+<text x="462.0" y="502.0" font-size="15" font-weight="500" fill="#333" text-anchor="start" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="3.8" stroke-opacity="0.8">quarter · Neutral</text>
+<rect x="840.0" y="660.0" width="360.0" height="120.0" fill="#9aa3ad" stroke="#4f8a3c" stroke-width="6" data-kind="district" data-id="ironwharf" data-phase="1"/>
+<text x="852.0" y="690.0" font-size="22" font-weight="800" fill="#222" text-anchor="start" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="5.5" stroke-opacity="0.8">Ironwharf</text>
+<text x="852.0" y="712.0" font-size="15" font-weight="500" fill="#333" text-anchor="start" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="3.8" stroke-opacity="0.8">docks · Marrow Krewe</text>
+<rect x="450.0" y="150.0" width="390.0" height="300.0" fill="#7d8fa8" stroke="#d4a72c" stroke-width="6" data-kind="district" data-id="gilt_district" data-phase="1"/>
+<text x="462.0" y="180.0" font-size="22" font-weight="800" fill="#222" text-anchor="start" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="5.5" stroke-opacity="0.8">Gilt District</text>
+<text x="462.0" y="202.0" font-size="15" font-weight="500" fill="#333" text-anchor="start" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="3.8" stroke-opacity="0.8">downtown · Aurum Consortium</text>
+<rect x="120.0" y="90.0" width="330.0" height="390.0" fill="#e9e4c9" stroke="#d4a72c" stroke-width="6" data-kind="district" data-id="magnolia_heights" data-phase="1"/>
+<text x="132.0" y="120.0" font-size="22" font-weight="800" fill="#222" text-anchor="start" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="5.5" stroke-opacity="0.8">Magnolia Heights</text>
+<text x="132.0" y="142.0" font-size="15" font-weight="500" fill="#333" text-anchor="start" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="3.8" stroke-opacity="0.8">heights · Aurum Consortium</text>
+<rect x="840.0" y="120.0" width="420.0" height="540.0" fill="#e88b8b" stroke="#3a7bd5" stroke-width="6" data-kind="district" data-id="floodline_wards" data-phase="1"/>
+<text x="852.0" y="150.0" font-size="22" font-weight="800" fill="#222" text-anchor="start" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="5.5" stroke-opacity="0.8">Floodline Wards</text>
+<text x="852.0" y="172.0" font-size="15" font-weight="500" fill="#333" text-anchor="start" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="3.8" stroke-opacity="0.8">wards · High Water</text>
+<rect x="90.0" y="480.0" width="360.0" height="330.0" fill="#5f8a5a" stroke="#4f8a3c" stroke-width="6" data-kind="district" data-id="blackwater_bayou" data-phase="1"/>
+<text x="102.0" y="510.0" font-size="22" font-weight="800" fill="#222" text-anchor="start" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="5.5" stroke-opacity="0.8">Blackwater Bayou</text>
+<text x="102.0" y="532.0" font-size="15" font-weight="500" fill="#333" text-anchor="start" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="3.8" stroke-opacity="0.8">bayou · Marrow Krewe</text>
+<polyline points="-1980.0,630.0 -1140.0,510.0 -480.0,390.0 90.0,390.0 450.0,450.0 1260.0,390.0 1560.0,180.0 1860.0,-60.0 2010.0,-300.0" fill="none" stroke="#fff7e0" stroke-width="13.5" stroke-linejoin="round"/>
+<polyline points="-1260.0,-870.0 -870.0,-630.0 -450.0,-810.0 -120.0,-450.0 360.0,-150.0 600.0,150.0" fill="none" stroke="#fff7e0" stroke-width="13.5" stroke-linejoin="round"/>
+<polyline points="-810.0,-1500.0 -420.0,-1560.0 60.0,-1470.0 660.0,-1170.0 1260.0,-1050.0 1740.0,-870.0" fill="none" stroke="#fff7e0" stroke-width="13.5" stroke-linejoin="round"/>
+<polyline points="-1290.0,-1020.0 -870.0,-630.0 -240.0,-390.0 570.0,-690.0 720.0,-120.0 660.0,240.0 1320.0,-60.0 1800.0,-480.0 2070.0,-660.0" fill="none" stroke="#5b4636" stroke-width="6.0" stroke-linejoin="round" stroke-dasharray="14 6"/>
+<polyline points="960.0,720.0 420.0,630.0 -60.0,600.0 -840.0,150.0 -1560.0,-420.0" fill="none" stroke="#5b4636" stroke-width="6.0" stroke-linejoin="round" stroke-dasharray="14 6"/>
+<polyline points="750.0,720.0 630.0,540.0 630.0,330.0 450.0,240.0 240.0,180.0" fill="none" stroke="#b5462f" stroke-width="6.0" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polyline points="1830.0,-270.0 2070.0,-630.0 2250.0,-810.0" fill="none" stroke="#7b4fa0" stroke-width="6.0" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polyline points="-1290.0,-1560.0 -1290.0,-960.0" fill="none" stroke="#7b4fa0" stroke-width="6.0" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polyline points="2130.0,-150.0 2250.0,360.0 2190.0,960.0" fill="none" stroke="#ffffff" stroke-width="4.5" stroke-linejoin="round" stroke-dasharray="10 8"/>
+<polyline points="1080.0,840.0 1350.0,1230.0 1800.0,1230.0 2010.0,1110.0" fill="none" stroke="#ffffff" stroke-width="4.5" stroke-linejoin="round" stroke-dasharray="10 8"/>
+<rect x="714.0" y="570.0" width="187.2" height="187.2" fill="none" stroke="#111" stroke-width="3" stroke-dasharray="8 5"/>
+<text x="714.0" y="562.0" font-size="14" font-weight="700" fill="#222" text-anchor="start" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="3.5" stroke-opacity="0.8">prototype area</text>
+<circle cx="720.0" cy="612.0" r="7" fill="#2c3e70" stroke="#fff" stroke-width="2" data-kind="landmark" data-id="bpd_lantern" data-phase="1"/>
+<text x="720.0" y="600.0" font-size="13" font-weight="600" fill="#222" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="3.2" stroke-opacity="0.8">Lantern Quarter Precinct</text>
+<circle cx="756.0" cy="678.0" r="7" fill="#555" stroke="#fff" stroke-width="2" data-kind="landmark" data-id="lantern_square" data-phase="1"/>
+<text x="756.0" y="666.0" font-size="13" font-weight="600" fill="#222" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="3.2" stroke-opacity="0.8">Lantern Square</text>
+<circle cx="864.0" cy="597.0" r="7" fill="#d33" stroke="#fff" stroke-width="2" data-kind="landmark" data-id="floodline_clinic" data-phase="1"/>
+<text x="864.0" y="585.0" font-size="13" font-weight="600" fill="#222" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="3.2" stroke-opacity="0.8">Floodline Clinic</text>
+<circle cx="858.0" cy="732.0" r="7" fill="#555" stroke="#fff" stroke-width="2" data-kind="landmark" data-id="wharfside_courts" data-phase="1"/>
+<text x="858.0" y="720.0" font-size="13" font-weight="600" fill="#222" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="3.2" stroke-opacity="0.8">Wharfside Courts</text>
+<circle cx="660.0" cy="300.0" r="7" fill="#555" stroke="#fff" stroke-width="2" data-kind="landmark" data-id="aurum_tower" data-phase="1"/>
+<text x="660.0" y="288.0" font-size="13" font-weight="600" fill="#222" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="3.2" stroke-opacity="0.8">Aurum Tower</text>
+<circle cx="660.0" cy="240.0" r="7" fill="#555" stroke="#fff" stroke-width="2" data-kind="landmark" data-id="union_station" data-phase="1"/>
+<text x="660.0" y="228.0" font-size="13" font-weight="600" fill="#222" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="3.2" stroke-opacity="0.8">Union Station</text>
+<circle cx="-24.0" cy="390.0" r="7" fill="#555" stroke="#fff" stroke-width="2" data-kind="landmark" data-id="crescent_bridge" data-phase="1"/>
+<text x="-24.0" y="378.0" font-size="13" font-weight="600" fill="#222" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="3.2" stroke-opacity="0.8">Crescent Bridge</text>
+<circle cx="240.0" cy="720.0" r="7" fill="#555" stroke="#fff" stroke-width="2" data-kind="landmark" data-id="krewe_hall" data-phase="1"/>
+<text x="240.0" y="708.0" font-size="13" font-weight="600" fill="#222" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="3.2" stroke-opacity="0.8">Krewe Stilt Hall</text>
+<circle cx="1110.0" cy="510.0" r="7" fill="#6a1b9a" stroke="#fff" stroke-width="2" data-kind="landmark" data-id="drowned_streetcar" data-phase="1"/>
+<text x="1110.0" y="498.0" font-size="13" font-weight="600" fill="#222" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="3.2" stroke-opacity="0.8">The Drowned Streetcar (secret)</text>
+<text x="14.0" y="966.0" font-size="16" font-weight="500" fill="#222" text-anchor="start" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="4.0" stroke-opacity="0.8">Bellerive: district fill = style, border = controlling faction. 1 px = 1.7 m.</text>
+</svg>

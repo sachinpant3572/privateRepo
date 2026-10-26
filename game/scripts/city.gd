@@ -1,13 +1,17 @@
 extends Node3D
-## Procedural grey-box district: a grid of blocks, roads and pastel buildings
-## loosely styled on New Orleans. Stand-in for the hand-built Old Quarter.
+## Grey-box city built from the world map (res://data/world_map.json): a grid
+## of blocks whose building style, faction and landmarks come from the map's
+## districts. Builds the city's "prototype_window" for now.
 ##
 ## Intersections ("nodes") sit at (i * PITCH, j * PITCH) for i, j in 0..BLOCKS.
+## Local (0, 0) is the window origin in world-map metres (map y = game z).
 ## Traffic drives on the right, LANE_OFFSET from the road centre line.
 
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const L = preload("res://scripts/layers.gd")
 
+const MAP_PATH := "res://data/world_map.json"
+const CITY_ID := "bellerive"
 const BLOCKS := 6
 const BLOCK := 40.0
 const ROAD := 12.0
@@ -37,6 +41,10 @@ var parked_spots: Array = []
 var spawn_point := Vector3.ZERO
 var hospital := Vector3.ZERO
 var police_station := Vector3.ZERO
+## World-map position of local (0, 0).
+var map_origin := Vector2.ZERO
+var districts: Array = []
+var _landmark_blocks := {}
 
 var _mesh := MeshBuilder.new()
 var _body: StaticBody3D
@@ -44,6 +52,7 @@ var _body: StaticBody3D
 
 func build(seed_value: int) -> void:
 	rng.seed = seed_value
+	_load_map()
 	_body = StaticBody3D.new()
 	_body.collision_layer = L.WORLD
 	_body.collision_mask = 0
@@ -60,6 +69,47 @@ func build(seed_value: int) -> void:
 
 	add_child(_mesh.make_instance())
 	spawn_point = node_pos(Vector2i(2, 3)) + Vector3(7.5, 0.0, 7.5)
+	if police_station == Vector3.ZERO:
+		police_station = spawn_point
+	if hospital == Vector3.ZERO:
+		hospital = spawn_point
+
+
+## The map district containing a local position, or the nearest one.
+func district_at(pos: Vector3) -> Dictionary:
+	var p := map_origin + Vector2(pos.x, pos.z)
+	var best := {}
+	var best_d := INF
+	for d in districts:
+		var r: Rect2 = d.rect
+		if r.has_point(p):
+			return d
+		var dist := r.get_center().distance_to(p)
+		if dist < best_d:
+			best_d = dist
+			best = d
+	return best
+
+
+func _load_map() -> void:
+	var world: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(MAP_PATH))
+	var city: Dictionary = {}
+	for c in world.cities:
+		if c.id == CITY_ID:
+			city = c
+	var window: Dictionary = city.prototype_window
+	assert(int(window.blocks) == BLOCKS and is_equal_approx(window.pitch, PITCH), "prototype_window must match BLOCKS and PITCH")
+	map_origin = Vector2(window.origin[0], window.origin[1])
+	for d in city.districts:
+		districts.append({
+			"id": d.id, "name": d.name, "style": d.style, "faction": d.faction,
+			"rect": Rect2(d.rect[0], d.rect[1], d.rect[2], d.rect[3]),
+		})
+	for lm in world.landmarks:
+		var local := Vector2(lm.pos[0], lm.pos[1]) - map_origin
+		var b := Vector2i(floori(local.x / PITCH), floori(local.y / PITCH))
+		if b.x >= 0 and b.y >= 0 and b.x < BLOCKS and b.y < BLOCKS:
+			_landmark_blocks[b] = lm.type
 
 
 # --- Road graph helpers used by traffic, police and spawning ---------------
@@ -138,20 +188,12 @@ func _block_rect(b: Vector2i) -> Rect2:
 	return Rect2(origin, Vector2(BLOCK, BLOCK))
 
 
-func _district(b: Vector2i) -> String:
-	if b == Vector2i(1, 1) or b == Vector2i(4, 3):
-		return "park"
-	if b == Vector2i(2, 4):
-		return "court"
-	if b == Vector2i(0, 4):
-		return "police"
-	if b == Vector2i(5, 1):
-		return "hospital"
-	if b.y == BLOCKS - 1:
-		return "docks"
-	if b.x >= 4 and b.y <= 2:
-		return "downtown"
-	return "quarter"
+## Landmark type if the map puts one in this block, else the district style.
+func _block_style(b: Vector2i) -> String:
+	if _landmark_blocks.has(b):
+		return _landmark_blocks[b]
+	var center := node_pos(b) + Vector3(PITCH * 0.5, 0, PITCH * 0.5)
+	return district_at(center).get("style", "quarter")
 
 
 func _build_block(b: Vector2i) -> void:
@@ -160,7 +202,7 @@ func _build_block(b: Vector2i) -> void:
 	_mesh.box(center + Vector3(0, 0.075, 0), Vector3(BLOCK, 0.15, BLOCK), PAVEMENT)
 	_add_sidewalk_loop(r)
 	var inner := r.grow(-SIDEWALK)
-	match _district(b):
+	match _block_style(b):
 		"park":
 			_build_park(inner)
 		"court":
@@ -177,6 +219,12 @@ func _build_block(b: Vector2i) -> void:
 			_build_docks(inner)
 		"downtown":
 			_build_lots(inner, 2, 18.0, 42.0, [Color(0.55, 0.6, 0.68), Color(0.7, 0.72, 0.75), Color(0.45, 0.5, 0.58)], false)
+		"wards":
+			_build_lots(inner, 4, 3.5, 5.5, PASTELS, false)
+		"heights":
+			_build_heights(inner)
+		"bayou":
+			_build_bayou(inner)
 		_:
 			_build_lots(inner, 3, 6.5, 11.0, PASTELS, true)
 
@@ -199,11 +247,39 @@ func _build_lots(area: Rect2, split: int, min_h: float, max_h: float, palette: A
 				_mesh.box(c + Vector3(0, 4.15, 0), Vector3(w + 1.45, 0.08, d + 1.45), IRON)
 
 
+## Mansions set back in gardens.
+func _build_heights(area: Rect2) -> void:
+	var c := Vector3(area.get_center().x, 0, area.get_center().y)
+	_mesh.box(c + Vector3(0, 0.17, 0), Vector3(area.size.x, 0.05, area.size.y), GRASS)
+	var half := area.size.x * 0.25
+	for x in [-1.0, 1.0]:
+		for z in [-1.0, 1.0]:
+			var p := c + Vector3(x * half, 0, z * half)
+			_solid(p, Vector3(12.0, 7.5, 9.0), Color(0.95, 0.93, 0.86))
+			_mesh.box(p + Vector3(0, 7.65, 0), Vector3(12.6, 0.3, 9.6), Color(0.35, 0.3, 0.32))
+	_add_trees(area, 6, c)
+
+
+## Swamp edge: wet ground, a couple of stilt shacks and trees.
+func _build_bayou(area: Rect2) -> void:
+	var c := Vector3(area.get_center().x, 0, area.get_center().y)
+	_mesh.box(c + Vector3(0, 0.17, 0), Vector3(area.size.x, 0.05, area.size.y), Color(0.28, 0.4, 0.27))
+	_mesh.box(c + Vector3(4, 0.2, 4), Vector3(area.size.x * 0.5, 0.02, area.size.y * 0.4), Color(0.25, 0.38, 0.42))
+	for p in [c + Vector3(-8, 0, -6), c + Vector3(7, 0, -9)]:
+		_solid(p + Vector3(0, 1.2, 0), Vector3(6.0, 3.0, 5.0), Color(0.5, 0.4, 0.3))
+	_add_trees(area, 8, c)
+
+
 func _build_park(area: Rect2) -> void:
 	var c := Vector3(area.get_center().x, 0, area.get_center().y)
 	_mesh.box(c + Vector3(0, 0.17, 0), Vector3(area.size.x, 0.05, area.size.y), GRASS)
 	_mesh.box(c + Vector3(0, 0.2, 0), Vector3(area.size.x, 0.02, 3.0), PAVEMENT)
 	_mesh.box(c + Vector3(0, 0.2, 0), Vector3(3.0, 0.02, area.size.y), PAVEMENT)
+	_add_trees(area, 10, c)
+
+
+## Scatters trees in an area, keeping the cross paths through `c` clear.
+func _add_trees(area: Rect2, count: int, c: Vector3) -> void:
 	var trunk := CylinderMesh.new()
 	trunk.top_radius = 0.25
 	trunk.bottom_radius = 0.3
@@ -214,7 +290,7 @@ func _build_park(area: Rect2) -> void:
 	crown.height = 3.4
 	crown.radial_segments = 8
 	crown.rings = 4
-	for i in 10:
+	for i in count:
 		var p := Vector3(
 			rng.randf_range(area.position.x + 3, area.end.x - 3), 0,
 			rng.randf_range(area.position.y + 3, area.end.y - 3))

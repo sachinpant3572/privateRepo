@@ -17,6 +17,7 @@ func _ready() -> void:
 func _run() -> void:
 	var tests := [
 		"test_city_is_one_mesh",
+		"test_city_follows_world_map",
 		"test_wanted_level_decays_out_of_sight",
 		"test_player_walks",
 		"test_punching_civilian_gives_one_star",
@@ -44,6 +45,21 @@ func test_city_is_one_mesh() -> void:
 	_check(meshes.size() == 1, "city draws as a single mesh, got %d" % meshes.size())
 	_check(game.city.building_count > 40, "city has buildings")
 	_check(game.city.sidewalk_loops.size() == 36, "one sidewalk loop per block")
+
+
+func test_city_follows_world_map() -> void:
+	await _new_game(false)
+	var city = game.city
+	var styles := {}
+	for i in city.BLOCKS:
+		for j in city.BLOCKS:
+			styles[city._block_style(Vector2i(i, j))] = true
+	_check(styles.has("quarter") and styles.has("docks") and styles.has("wards"), "blocks use the map's district styles, got %s" % [styles.keys()])
+	for landmark in ["police", "hospital", "park", "court"]:
+		_check(styles.has(landmark), "map landmark '%s' is placed" % landmark)
+	_check(city.district_at(city.spawn_point).name == "Lantern Quarter", "player starts in the Lantern Quarter")
+	var station_offset: Vector3 = city.police_station - city.spawn_point
+	_check(station_offset.length() > 10.0, "police station comes from the map, not the fallback")
 
 
 func test_wanted_level_decays_out_of_sight() -> void:

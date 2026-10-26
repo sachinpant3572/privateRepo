@@ -1,4 +1,4 @@
-# Port Lafitte prototype (Godot 4.7)
+# Solvera prototype (Godot 4.7)
 
 Milestone 1 of `MVP_DESIGN.md`: one grey-box district to prove that driving,
 fighting and the wanted system are fun on a phone and run at 30 fps on a
@@ -6,10 +6,14 @@ min-spec device.
 
 ## What's in it
 
-- **District**: a 6 x 6 block grid built in code, with pastel low-rise blocks
-  with iron balconies, downtown towers, docks with containers, two parks, a
-  basketball court, a police station, a hospital and a river. The whole city
-  is baked into one mesh, so it draws in a single call.
+- **District**: a 6 x 6 block slice of Bellerive where the Lantern Quarter,
+  Floodline Wards and Ironwharf meet, built from the world map
+  (`data/world_map.json`, the city's `prototype_window`). Each block takes
+  its style from the map district it falls in (pastel balconied quarter,
+  small colourful ward houses, docks with containers) and the map's
+  landmarks become the precinct, clinic, square and street court. The whole
+  city is baked into one mesh, so it draws in a single call. The district
+  name shows on screen as you enter it.
 - **On foot**: jog, sprint, punch. The player shows as a silhouette when
   buildings hide them.
 - **Driving**: arcade cars steered toward the stick direction (reverse by
@@ -38,7 +42,7 @@ Tab toggles the on-screen controls on desktop.
 
 ## Play it on Android
 
-Install `build/port-lafitte-debug.apk` (built by `tools/build_apk.sh`, arm64,
+Install `build/solvera-prototype-debug.apk` (built by `tools/build_apk.sh`, arm64,
 debug-signed). Android will ask you to allow installing from that source.
 
 **Performance check for this milestone**: play for a few minutes on a
@@ -67,7 +71,9 @@ FPS in screenshots is meaningless: the container renders without a GPU.
 | Path | Purpose |
 |---|---|
 | `scripts/main.gd` | Entry point; wires systems, BUSTED/WASTED |
-| `scripts/city.gd` | District generator and road graph |
+| `scripts/city.gd` | Builds the city from the map data; road graph |
+| `data/world_map.json` | The world map: regions, cities, districts, routes, landmarks |
+| `tools/render_map.py` | Renders the map data to `world_map.svg` and `bellerive_map.svg` |
 | `scripts/mesh_builder.gd` | Bakes coloured boxes into single meshes; shared toon and x-ray materials |
 | `scripts/humanoid.gd` | Shared body: health, punches, knockdowns |
 | `scripts/player.gd`, `pedestrian.gd`, `cop.gd` | Characters |
@@ -83,4 +89,4 @@ FPS in screenshots is meaningless: the container renders without a GPU.
 ## Not yet (later milestones)
 
 Weapons, missions, phone, shops, businesses, interiors, day/night and
-weather, audio, wanted levels 3-5, boats, and the real Old Quarter art.
+weather, audio, wanted levels 3-5, boats, and the real Lantern Quarter art.

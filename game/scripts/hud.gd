@@ -12,6 +12,9 @@ var _perf: Label
 var _prompt: Label
 var _message: Label
 var _message_tween: Tween
+var _district: Label
+var _district_tween: Tween
+var _district_id := ""
 var _blink := 0.0
 
 
@@ -47,6 +50,11 @@ func _ready() -> void:
 	_message.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_message.modulate.a = 0.0
 
+	_district = _label(root, 30)
+	_anchor(_district, Vector2(0.5, 0), Rect2(-300, 70, 600, 44))
+	_district.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_district.modulate.a = 0.0
+
 	touch = TouchControls.new()
 	root.add_child(touch)
 	touch.visible = DisplayServer.is_touchscreen_available() or OS.has_feature("mobile")
@@ -57,6 +65,7 @@ func _process(delta: float) -> void:
 	_health.value = player.health / player.max_health * 100.0
 	_perf.text = "FPS %d  draws %d" % [Engine.get_frames_per_second(), Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)]
 	_blink += delta
+	_update_district(player.focus_node().global_position)
 	_stars.queue_redraw()
 	if player.vehicle != null:
 		_prompt.text = "%d km/h" % int(absf(player.vehicle.speed) * 3.6)
@@ -82,6 +91,21 @@ func show_message(text: String) -> void:
 	_message.modulate.a = 1.0
 	_message_tween.tween_interval(2.0)
 	_message_tween.tween_property(_message, "modulate:a", 0.0, 0.6)
+
+
+## Shows the district name for a few seconds whenever the player enters one.
+func _update_district(pos: Vector3) -> void:
+	var d: Dictionary = game.city.district_at(pos)
+	if d.is_empty() or d.id == _district_id:
+		return
+	_district_id = d.id
+	_district.text = d.name
+	if _district_tween:
+		_district_tween.kill()
+	_district.modulate.a = 1.0
+	_district_tween = create_tween()
+	_district_tween.tween_interval(2.5)
+	_district_tween.tween_property(_district, "modulate:a", 0.0, 0.8)
 
 
 func _draw_stars() -> void:
