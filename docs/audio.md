@@ -155,5 +155,18 @@ deterministic: the same code always renders the same files.
 - Big moments: `synergy`, `evolve`, `limit_break`, `alarm`.
 - Interface: `card_show`, `card_pick`, `ui_tap`.
 
+**Upgrade callouts:** every upgrade picked (tapped or auto-picked by the
+countdown) is called out by name. Each of the 56 names (44 items, 12
+evolutions) is recorded twice: `u_<name>` (excited) and `x_<name>` (roaring).
+`sfx.announce_upgrade()` picks the intensity from the card: a common level-up
+is quieter, rare, epic, new or level 5+ is full volume, and legendary, maxed,
+an evolution or a Limit Break roars. It adds "ONLINE!" for a new item,
+"MAXED OUT!" at level 8, "EVOLUTION!" before an evolved name and "LIMIT
+BREAK!" after one. A callout only interrupts one of lower or equal priority.
+
+**Destruction callouts:** kills within one second trigger MULTI KILL (25),
+MEGA KILL (50), ULTRA KILL (100) and MONSTER KILL (200), each step louder,
+once per burst.
+
 Announcer lines play by themselves from HUD banners (see `BANNER_VOICES` in
 `sfx.gd`), or directly with `sfx.announce(id)`.

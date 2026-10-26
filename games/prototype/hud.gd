@@ -92,6 +92,8 @@ var card_timer_on := false
 var card_fresh := true  # Next show_cards is a new choice (not a reroll).
 var card_count := 0
 var card_last_tick := -1
+var card_infos: Array = []
+var card_banish := false
 
 
 func _ready() -> void:
@@ -154,6 +156,8 @@ func show_cards(infos: Array, third_left: int, reroll_left: int, is_chest: bool,
 	card_fresh = false
 	card_timer_on = not banish_mode
 	card_count = infos.size()
+	card_infos = infos
+	card_banish = banish_mode
 	card_timer_bar.visible = not banish_mode
 	card_timer_label.visible = not banish_mode
 	_tick_card_timer(0.0)
@@ -166,6 +170,7 @@ func show_cards(infos: Array, third_left: int, reroll_left: int, is_chest: bool,
 		var hit: Button = parts[1]
 		hit.pressed.connect(_ui_sound.bind("card_pick"))
 		hit.pressed.connect(_card_taken)
+		hit.pressed.connect(_announce_card.bind(i))
 		hit.pressed.connect(card_chosen.emit.bind(i))
 		card_list.add_child(card)
 		# Cards slide in from the right one after another; rare ones pulse.
@@ -797,7 +802,15 @@ func _tick_card_timer(delta: float) -> void:
 		card_timer_on = false
 		_ui_sound("card_pick")
 		_card_taken()
-		card_chosen.emit(randi() % card_count)
+		var pick := randi() % card_count
+		_announce_card(pick)
+		card_chosen.emit(pick)
+
+
+## The announcer calls out the chosen upgrade (sfx.gd picks how hard).
+func _announce_card(index: int) -> void:
+	if sfx and not card_banish and index < card_infos.size():
+		sfx.announce_upgrade(card_infos[index])
 
 
 func _card_taken() -> void:
