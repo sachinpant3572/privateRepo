@@ -74,7 +74,8 @@ const BANNER_VOICES := [
 	["AIR RAID", "air_raid"], ["NUKE", "nuke"], ["FREEZE", "freeze"], ["VACUUM", "vacuum"], ["MEDKIT", "medkit"],
 	["SECOND WIND", "second_wind"], ["BOMBING RUN", "bombing_run"], ["GUNSHIPS", "gunships"],
 	["ARMORED ASSAULT", "armored_assault"], ["SIEGE COLOSSUS", "siege"], ["THE DOMINION STRIKES BACK", "strikes_back"],
-	["THE IRON DOMINION FALLS", "dominion_falls"], ["METEOR SLAM", "meteor_slam"], ["SHIELD CELL", "shield_cell"], ["KILLING SPREE", "killing_spree"], ["RAMPAGE", "rampage"], ["MASSACRE", "massacre"],
+	["THE IRON DOMINION FALLS", "dominion_falls"], ["METEOR SLAM", "meteor_slam"],
+	["BREATHER", "breather"], ["VETERANS", "veterans"], ["ELITE GUARD", "elite_guard"], ["WAVE ", "theyre_back"], ["SHIELD CELL", "shield_cell"], ["KILLING SPREE", "killing_spree"], ["RAMPAGE", "rampage"], ["MASSACRE", "massacre"],
 	["UNSTOPPABLE", "unstoppable"], ["GODLIKE", "godlike"], ["APOCALYPSE", "apocalypse"], ["FINAL WAVE", "final_wave"],
 ]
 

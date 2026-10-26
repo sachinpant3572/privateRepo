@@ -161,7 +161,11 @@ func _update_intensity(delta: float) -> void:
 	var target := clampf(enemies / 160.0, 0.0, 1.0) * 0.75 + clampf(combo / 120.0, 0.0, 1.0) * 0.25
 	if t < 15.0:
 		target = minf(target, 0.3)
-	var rate := 1.2 if target > intensity else 0.12
+	# A breather between waves: the drums drop out, so the next wave hits.
+	var calm: bool = _prop("calm", false)
+	if calm:
+		target = minf(target, 0.1)
+	var rate := 1.2 if target > intensity else (0.5 if calm else 0.12)
 	intensity = move_toward(intensity, target, rate * delta)
 	var p: AudioStreamPlayer = players["combat"]
 	if p.playing and p.stream:
