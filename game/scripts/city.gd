@@ -1,42 +1,43 @@
 extends Node3D
-## Grey-box city built from the world map (res://data/world_map.json): a grid
-## of blocks whose building style, faction and landmarks come from the map's
-## districts. Builds the city's "prototype_window" for now.
+## Bellerive demo map, built from the world map (res://data/world_map.json):
+## the city's "demo_window" is a grid of blocks whose style, faction and
+## landmarks come from the map's districts, cut by the Morrow River.
 ##
-## Intersections ("nodes") sit at (i * PITCH, j * PITCH) for i, j in 0..BLOCKS.
-## Local (0, 0) is the window origin in world-map metres (map y = game z).
-## Traffic drives on the right, LANE_OFFSET from the road centre line.
+## Intersections ("nodes") sit at (i * PITCH, j * PITCH). Local (0, 0) is the
+## window origin in world-map metres (map y = game z). A cell (i, j) owns its
+## block, node (i, j) and the road segments running east and south from it.
+## Cells are built on a worker thread as the focus moves and freed when far
+## away; each one is a single mesh plus one static body. A ring of MARGIN
+## cells outside the window is built without collisions so the city doesn't
+## end at the edge of the screen. Traffic drives on the right.
 
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
+const Cells = preload("res://scripts/city_cells.gd")
 const L = preload("res://scripts/layers.gd")
 
 const MAP_PATH := "res://data/world_map.json"
 const CITY_ID := "bellerive"
-const BLOCKS := 6
 const BLOCK := 40.0
 const ROAD := 12.0
 const PITCH := BLOCK + ROAD
-const SIZE := BLOCKS * PITCH
 const LANE_OFFSET := 3.0
 const SIDEWALK := 3.0
+const WALK_INSET := 1.2
 const CURB_PARKING := 4.6
+const MARGIN := 2
+const LOAD_RADIUS := 115.0
+const UNLOAD_RADIUS := 165.0
 
-const ASPHALT := Color(0.2, 0.2, 0.23)
-const PAVEMENT := Color(0.55, 0.53, 0.5)
-const MARKING := Color(0.92, 0.8, 0.3)
-const GRASS := Color(0.32, 0.55, 0.28)
-const PASTELS := [
-	Color(0.9, 0.58, 0.45), Color(0.95, 0.78, 0.38), Color(0.45, 0.72, 0.68),
-	Color(0.65, 0.55, 0.82), Color(0.9, 0.48, 0.58), Color(0.52, 0.7, 0.45),
-	Color(0.88, 0.84, 0.72),
-]
-const IRON := Color(0.12, 0.16, 0.14)
-
+## Window size in blocks, from the map.
+var blocks := Vector2i(25, 22)
+var seed_value := 0
 var rng := RandomNumberGenerator.new()
+## Buildings in the cells that are currently loaded.
 var building_count := 0
-## One closed walking loop per block, ordered around its perimeter.
+## One closed walking loop per land block, ordered around its perimeter.
 var sidewalk_loops: Array[PackedVector3Array] = []
-## [position, yaw] pairs for cars parked along the curbs.
+## [position, yaw] pairs for cars parked along the curbs. The first one is
+## next to the spawn point.
 var parked_spots: Array = []
 var spawn_point := Vector3.ZERO
 var hospital := Vector3.ZERO
@@ -44,38 +45,83 @@ var police_station := Vector3.ZERO
 ## World-map position of local (0, 0).
 var map_origin := Vector2.ZERO
 var districts: Array = []
-var _landmark_blocks := {}
+## Streetcar lines: [from node, to node, rusty], straight along one axis.
+var rail_lines: Array = []
+## Node the streaming follows; the spawn point when unset.
+var focus_node: Node3D
 
-var _mesh := MeshBuilder.new()
-var _body: StaticBody3D
+var _landmarks := {} # block -> {id, type, name}
+var _water := {} # node -> true where the river covers it
+var _river: PackedVector2Array
+var _river_half := 80.0
+var _loop_of_block := {}
+var _cells := {} # cell -> Node3D
+var _task := -1
+var _task_cell := Vector2i.ZERO
+var _task_result: Dictionary
+var _stream_tick := 0.0
 
 
-func build(seed_value: int) -> void:
-	rng.seed = seed_value
+func build(seed_v: int) -> void:
+	seed_value = seed_v
+	rng.seed = seed_v
 	_load_map()
-	_body = StaticBody3D.new()
-	_body.collision_layer = L.WORLD
-	_body.collision_mask = 0
-	add_child(_body)
-
-	_mesh.box(Vector3(SIZE * 0.5, -0.05, SIZE * 0.5), Vector3(SIZE + 60.0, 0.1, SIZE + 60.0), ASPHALT)
-	_build_river()
-	_build_markings()
-	for i in BLOCKS:
-		for j in BLOCKS:
-			_build_block(Vector2i(i, j))
-	_build_bounds()
+	for i in range(-MARGIN, blocks.x + MARGIN + 1):
+		for j in range(-MARGIN, blocks.y + MARGIN + 1):
+			if _river_distance(_map_pos(Vector2i(i, j))) < _river_half:
+				_water[Vector2i(i, j)] = true
+	rail_lines = [
+		[Vector2i(6, 3), Vector2i(6, 20), false], # Lantern Line, Union Station to the river
+		[Vector2i(18, 15), Vector2i(25, 15), true], # the drowned line to the old depot
+	]
+	for i in blocks.x:
+		for j in blocks.y:
+			var b := Vector2i(i, j)
+			if block_land(b):
+				_loop_of_block[b] = sidewalk_loops.size()
+				sidewalk_loops.append(_make_loop(b))
+	_place_points()
 	_pick_parking()
+	_build_water()
+	_build_bounds()
+	stream_now(spawn_point)
 
-	var inst := _mesh.make_instance()
-	inst.material_override = MeshBuilder.cutaway_material()
-	add_child(inst)
-	spawn_point = node_pos(Vector2i(2, 3)) + Vector3(7.5, 0.0, 7.5)
-	if police_station == Vector3.ZERO:
-		police_station = spawn_point
-	if hospital == Vector3.ZERO:
-		hospital = spawn_point
 
+func _process(delta: float) -> void:
+	_poll_task()
+	_stream_tick -= delta
+	if _stream_tick > 0.0:
+		return
+	_stream_tick = 0.2
+	var focus := focus_node.global_position if is_instance_valid(focus_node) else spawn_point
+	var wanted := _cells_near(focus, LOAD_RADIUS)
+	for cell in _cells.keys():
+		if _cell_center(cell).distance_to(Vector2(focus.x, focus.z)) > UNLOAD_RADIUS:
+			_unload(cell)
+	if _task < 0:
+		for cell in wanted:
+			if not _cells.has(cell):
+				_start_task(cell)
+				break
+
+
+## Builds every missing cell around `pos` right away (spawn, respawn, tests).
+func stream_now(pos: Vector3) -> void:
+	_finish_task()
+	for cell in _cells_near(pos, LOAD_RADIUS):
+		if not _cells.has(cell):
+			_add_cell(cell, Cells.build(self, cell))
+
+
+func loaded_cells() -> Array:
+	return _cells.keys()
+
+
+func cell_node(cell: Vector2i) -> Node3D:
+	return _cells.get(cell)
+
+
+# --- Map queries ---------------------------------------------------------------
 
 ## The map district containing a local position, or the nearest one.
 func district_at(pos: Vector3) -> Dictionary:
@@ -93,41 +139,90 @@ func district_at(pos: Vector3) -> Dictionary:
 	return best
 
 
-func _load_map() -> void:
-	var world: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(MAP_PATH))
-	var city: Dictionary = {}
-	for c in world.cities:
-		if c.id == CITY_ID:
-			city = c
-	var window: Dictionary = city.prototype_window
-	assert(int(window.blocks) == BLOCKS and is_equal_approx(window.pitch, PITCH), "prototype_window must match BLOCKS and PITCH")
-	map_origin = Vector2(window.origin[0], window.origin[1])
-	for d in city.districts:
-		districts.append({
-			"id": d.id, "name": d.name, "style": d.style, "faction": d.faction,
-			"rect": Rect2(d.rect[0], d.rect[1], d.rect[2], d.rect[3]),
-		})
-	for lm in world.landmarks:
-		var local := Vector2(lm.pos[0], lm.pos[1]) - map_origin
-		var b := Vector2i(floori(local.x / PITCH), floori(local.y / PITCH))
-		if b.x >= 0 and b.y >= 0 and b.x < BLOCKS and b.y < BLOCKS:
-			_landmark_blocks[b] = lm.type
+func landmark_at(b: Vector2i) -> Dictionary:
+	return _landmarks.get(b, {})
 
 
-# --- Road graph helpers used by traffic, police and spawning ---------------
+## Block holding the map landmark `id`, or (-1, -1).
+func landmark_block(id: String) -> Vector2i:
+	for b in _landmarks:
+		if _landmarks[b].id == id:
+			return b
+	return Vector2i(-1, -1)
+
+
+func in_window(b: Vector2i) -> bool:
+	return b.x >= 0 and b.y >= 0 and b.x < blocks.x and b.y < blocks.y
+
+
+func node_ok(n: Vector2i) -> bool:
+	return not _water.has(n)
+
+
+## A block is land when all four corners are; land blocks always have a road
+## on every side.
+func block_land(b: Vector2i) -> bool:
+	return node_ok(b) and node_ok(b + Vector2i(1, 0)) and node_ok(b + Vector2i(0, 1)) and node_ok(b + Vector2i(1, 1))
+
+
+## "water", the landmark type if the map puts one in this block, else the
+## district style.
+func block_style(b: Vector2i) -> String:
+	if not block_land(b):
+		return "water"
+	if _landmarks.has(b):
+		return _landmarks[b].type
+	return district_at(block_center(b)).get("style", "quarter")
+
+
+func block_center(b: Vector2i) -> Vector3:
+	return Vector3((b.x + 0.5) * PITCH, 0.0, (b.y + 0.5) * PITCH)
+
+
+func block_of(pos: Vector3) -> Vector2i:
+	return Vector2i(floori(pos.x / PITCH), floori(pos.z / PITCH))
+
+
+## Index into rail_lines of the line running along segment a-b, or -1.
+func rail_on(a: Vector2i, b: Vector2i) -> int:
+	for k in rail_lines.size():
+		var from: Vector2i = rail_lines[k][0]
+		var to: Vector2i = rail_lines[k][1]
+		if _between(a, from, to) and _between(b, from, to):
+			return k
+	return -1
+
+
+# --- Road graph helpers used by traffic, police and spawning -------------------
 
 func node_pos(n: Vector2i) -> Vector3:
 	return Vector3(n.x * PITCH, 0.0, n.y * PITCH)
 
 
+## Drivable node inside the window.
 func in_grid(n: Vector2i) -> bool:
-	return n.x >= 0 and n.y >= 0 and n.x <= BLOCKS and n.y <= BLOCKS
+	return n.x >= 0 and n.y >= 0 and n.x <= blocks.x and n.y <= blocks.y and node_ok(n)
 
 
 func nearest_node(pos: Vector3) -> Vector2i:
-	return Vector2i(
-		clampi(roundi(pos.x / PITCH), 0, BLOCKS),
-		clampi(roundi(pos.z / PITCH), 0, BLOCKS))
+	var n := Vector2i(
+		clampi(roundi(pos.x / PITCH), 0, blocks.x),
+		clampi(roundi(pos.z / PITCH), 0, blocks.y))
+	if in_grid(n):
+		return n
+	var best := n
+	var best_d := INF
+	for r in range(1, 4):
+		for dx in range(-r, r + 1):
+			for dz in range(-r, r + 1):
+				var m := n + Vector2i(dx, dz)
+				var d := node_pos(m).distance_squared_to(pos)
+				if in_grid(m) and d < best_d:
+					best_d = d
+					best = m
+		if best_d < INF:
+			break
+	return best
 
 
 ## Where a car heading `dir` should aim when approaching node `n`.
@@ -149,8 +244,12 @@ func pick_turn(n: Vector2i, dir: Vector2i, rand: RandomNumberGenerator) -> Vecto
 
 
 func random_node_between(center: Vector3, min_d: float, max_d: float, rand: RandomNumberGenerator) -> Vector2i:
+	var c := nearest_node(center)
+	var r := ceili(max_d / PITCH)
 	for attempt in 24:
-		var n := Vector2i(rand.randi_range(0, BLOCKS), rand.randi_range(0, BLOCKS))
+		var n := c + Vector2i(rand.randi_range(-r, r), rand.randi_range(-r, r))
+		if not in_grid(n):
+			continue
 		var d := node_pos(n).distance_to(Vector3(center.x, 0.0, center.z))
 		if d >= min_d and d <= max_d:
 			return n
@@ -160,8 +259,13 @@ func random_node_between(center: Vector3, min_d: float, max_d: float, rand: Rand
 ## Returns [loop index, point index] of a sidewalk point in the distance band,
 ## or an empty array if none was found.
 func random_sidewalk_between(center: Vector3, min_d: float, max_d: float, rand: RandomNumberGenerator) -> Array:
+	var c := block_of(center)
+	var r := ceili(max_d / PITCH)
 	for attempt in 24:
-		var li := rand.randi() % sidewalk_loops.size()
+		var b := c + Vector2i(rand.randi_range(-r, r), rand.randi_range(-r, r))
+		if not _loop_of_block.has(b):
+			continue
+		var li: int = _loop_of_block[b]
 		var loop := sidewalk_loops[li]
 		var pi := rand.randi() % loop.size()
 		var d := loop[pi].distance_to(center)
@@ -173,232 +277,241 @@ func random_sidewalk_between(center: Vector3, min_d: float, max_d: float, rand: 
 func nearest_sidewalk(pos: Vector3) -> Array:
 	var best := [0, 0]
 	var best_d := INF
-	for li in sidewalk_loops.size():
-		var loop := sidewalk_loops[li]
-		for pi in loop.size():
-			var d := loop[pi].distance_squared_to(pos)
-			if d < best_d:
-				best_d = d
-				best = [li, pi]
+	var c := block_of(pos)
+	for r in [1, 3, 8]:
+		for dx in range(-r, r + 1):
+			for dz in range(-r, r + 1):
+				var li: int = _loop_of_block.get(c + Vector2i(dx, dz), -1)
+				if li < 0:
+					continue
+				var loop := sidewalk_loops[li]
+				for pi in loop.size():
+					var d := loop[pi].distance_squared_to(pos)
+					if d < best_d:
+						best_d = d
+						best = [li, pi]
+		if best_d < INF:
+			break
 	return best
 
 
-# --- Construction ------------------------------------------------------------
+# --- Setup ---------------------------------------------------------------------
 
-func _block_rect(b: Vector2i) -> Rect2:
-	var origin := Vector2(b.x * PITCH + ROAD * 0.5, b.y * PITCH + ROAD * 0.5)
-	return Rect2(origin, Vector2(BLOCK, BLOCK))
-
-
-## Landmark type if the map puts one in this block, else the district style.
-func _block_style(b: Vector2i) -> String:
-	if _landmark_blocks.has(b):
-		return _landmark_blocks[b]
-	var center := node_pos(b) + Vector3(PITCH * 0.5, 0, PITCH * 0.5)
-	return district_at(center).get("style", "quarter")
-
-
-func _build_block(b: Vector2i) -> void:
-	var r := _block_rect(b)
-	var center := Vector3(r.get_center().x, 0.0, r.get_center().y)
-	_mesh.box(center + Vector3(0, 0.075, 0), Vector3(BLOCK, 0.15, BLOCK), PAVEMENT)
-	_add_sidewalk_loop(r)
-	var inner := r.grow(-SIDEWALK)
-	match _block_style(b):
-		"park":
-			_build_park(inner)
-		"court":
-			_build_court(inner)
-		"police":
-			_solid(Vector3(inner.get_center().x, 0, inner.get_center().y), Vector3(inner.size.x, 9.0, inner.size.y * 0.6), Color(0.45, 0.55, 0.75))
-			police_station = Vector3(r.get_center().x, 0, r.end.y - 1.5)
-		"hospital":
-			_solid(Vector3(inner.get_center().x, 0, inner.get_center().y), Vector3(inner.size.x * 0.8, 14.0, inner.size.y * 0.8), Color(0.95, 0.95, 0.97))
-			_mesh.box(Vector3(inner.get_center().x, 14.1, inner.get_center().y), Vector3(8, 0.2, 2.5), Color(0.85, 0.15, 0.15))
-			_mesh.box(Vector3(inner.get_center().x, 14.1, inner.get_center().y), Vector3(2.5, 0.2, 8), Color(0.85, 0.15, 0.15))
-			hospital = Vector3(r.get_center().x, 0, r.position.y + 1.5)
-		"docks":
-			_build_docks(inner)
-		"downtown":
-			_build_lots(inner, 2, 18.0, 42.0, [Color(0.55, 0.6, 0.68), Color(0.7, 0.72, 0.75), Color(0.45, 0.5, 0.58)], false)
-		"wards":
-			_build_lots(inner, 4, 3.5, 5.5, PASTELS, false)
-		"heights":
-			_build_heights(inner)
-		"bayou":
-			_build_bayou(inner)
-		_:
-			_build_lots(inner, 3, 6.5, 11.0, PASTELS, true)
+func _load_map() -> void:
+	var world: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(MAP_PATH))
+	var city: Dictionary = {}
+	for c in world.cities:
+		if c.id == CITY_ID:
+			city = c
+	var window: Dictionary = city.demo_window
+	assert(is_equal_approx(window.pitch, PITCH), "demo_window pitch must match PITCH")
+	blocks = Vector2i(int(window.blocks[0]), int(window.blocks[1]))
+	map_origin = Vector2(window.origin[0], window.origin[1])
+	for d in city.districts:
+		districts.append({
+			"id": d.id, "name": d.name, "style": d.style, "faction": d.faction,
+			"rect": Rect2(d.rect[0], d.rect[1], d.rect[2], d.rect[3]),
+		})
+	for lm in world.landmarks:
+		var local := Vector2(lm.pos[0], lm.pos[1]) - map_origin
+		var b := Vector2i(floori(local.x / PITCH), floori(local.y / PITCH))
+		if in_window(b):
+			_landmarks[b] = {"id": lm.id, "type": lm.type, "name": lm.name}
+	for w in world.water:
+		if w.id == "morrow":
+			_river_half = w.width * 0.5
+			for p in w.line:
+				_river.append(Vector2(p[0], p[1]))
 
 
-func _build_lots(area: Rect2, split: int, min_h: float, max_h: float, palette: Array, balconies: bool) -> void:
-	var lot := area.size / split
-	for x in split:
-		for z in split:
-			if split == 3 and x == 1 and z == 1:
-				continue # courtyard
-			var w := lot.x - 1.0
-			var d := lot.y - 1.0
-			var h := rng.randf_range(min_h, max_h)
-			var c := Vector3(area.position.x + lot.x * (x + 0.5), 0.0, area.position.y + lot.y * (z + 0.5))
-			var color: Color = palette[rng.randi() % palette.size()]
-			_solid(c, Vector3(w, h, d), color)
-			_mesh.box(c + Vector3(0, h + 0.15, 0), Vector3(w + 0.4, 0.3, d + 0.4), color.darkened(0.3))
-			if balconies:
-				_mesh.box(c + Vector3(0, 3.6, 0), Vector3(w + 1.4, 0.15, d + 1.4), IRON)
-				_mesh.box(c + Vector3(0, 4.15, 0), Vector3(w + 1.45, 0.08, d + 1.45), IRON)
+func _map_pos(n: Vector2i) -> Vector2:
+	return map_origin + Vector2(n.x, n.y) * PITCH
 
 
-## Mansions set back in gardens.
-func _build_heights(area: Rect2) -> void:
-	var c := Vector3(area.get_center().x, 0, area.get_center().y)
-	_mesh.box(c + Vector3(0, 0.17, 0), Vector3(area.size.x, 0.05, area.size.y), GRASS)
-	var half := area.size.x * 0.25
-	for x in [-1.0, 1.0]:
-		for z in [-1.0, 1.0]:
-			var p := c + Vector3(x * half, 0, z * half)
-			_solid(p, Vector3(12.0, 7.5, 9.0), Color(0.95, 0.93, 0.86))
-			_mesh.box(p + Vector3(0, 7.65, 0), Vector3(12.6, 0.3, 9.6), Color(0.35, 0.3, 0.32))
-	_add_trees(area, 6, c)
+func _river_distance(p: Vector2) -> float:
+	var best := INF
+	for k in _river.size() - 1:
+		var q := Geometry2D.get_closest_point_to_segment(p, _river[k], _river[k + 1])
+		best = minf(best, q.distance_to(p))
+	return best
 
 
-## Swamp edge: wet ground, a couple of stilt shacks and trees.
-func _build_bayou(area: Rect2) -> void:
-	var c := Vector3(area.get_center().x, 0, area.get_center().y)
-	_mesh.box(c + Vector3(0, 0.17, 0), Vector3(area.size.x, 0.05, area.size.y), Color(0.28, 0.4, 0.27))
-	_mesh.box(c + Vector3(4, 0.2, 4), Vector3(area.size.x * 0.5, 0.02, area.size.y * 0.4), Color(0.25, 0.38, 0.42))
-	for p in [c + Vector3(-8, 0, -6), c + Vector3(7, 0, -9)]:
-		_solid(p + Vector3(0, 1.2, 0), Vector3(6.0, 3.0, 5.0), Color(0.5, 0.4, 0.3))
-	_add_trees(area, 8, c)
+func _between(n: Vector2i, a: Vector2i, b: Vector2i) -> bool:
+	return n.x >= mini(a.x, b.x) and n.x <= maxi(a.x, b.x) and n.y >= mini(a.y, b.y) and n.y <= maxi(a.y, b.y)
 
 
-func _build_park(area: Rect2) -> void:
-	var c := Vector3(area.get_center().x, 0, area.get_center().y)
-	_mesh.box(c + Vector3(0, 0.17, 0), Vector3(area.size.x, 0.05, area.size.y), GRASS)
-	_mesh.box(c + Vector3(0, 0.2, 0), Vector3(area.size.x, 0.02, 3.0), PAVEMENT)
-	_mesh.box(c + Vector3(0, 0.2, 0), Vector3(3.0, 0.02, area.size.y), PAVEMENT)
-	_add_trees(area, 10, c)
+## Spawn in front of Union Station, respawns in front of the precinct and the
+## clinic: all on the south sidewalk, facing the camera.
+func _place_points() -> void:
+	for b in _landmarks:
+		var front := block_center(b) + Vector3(0, 0, BLOCK * 0.5 - WALK_INSET)
+		match _landmarks[b].id:
+			"union_station":
+				spawn_point = front
+			"bpd_lantern":
+				police_station = front
+			"floodline_clinic":
+				hospital = front
+	if police_station == Vector3.ZERO:
+		police_station = spawn_point
+	if hospital == Vector3.ZERO:
+		hospital = spawn_point
 
 
-## Scatters trees in an area, keeping the cross paths through `c` clear.
-func _add_trees(area: Rect2, count: int, c: Vector3) -> void:
-	var trunk := CylinderMesh.new()
-	trunk.top_radius = 0.25
-	trunk.bottom_radius = 0.3
-	trunk.height = 2.4
-	trunk.radial_segments = 6
-	var crown := SphereMesh.new()
-	crown.radius = 2.0
-	crown.height = 3.4
-	crown.radial_segments = 8
-	crown.rings = 4
-	for i in count:
-		var p := Vector3(
-			rng.randf_range(area.position.x + 3, area.end.x - 3), 0,
-			rng.randf_range(area.position.y + 3, area.end.y - 3))
-		if absf(p.x - c.x) < 3.0 or absf(p.z - c.z) < 3.0:
-			continue # keep the paths clear
-		_mesh.primitive(trunk, Transform3D(Basis(), p + Vector3(0, 1.2, 0)), Color(0.4, 0.28, 0.18))
-		_mesh.primitive(crown, Transform3D(Basis(), p + Vector3(0, 3.6, 0)), GRASS.darkened(0.25))
-		_collider(p + Vector3(0, 1.2, 0), Vector3(0.6, 2.4, 0.6))
-
-
-func _build_court(area: Rect2) -> void:
-	var c := Vector3(area.get_center().x, 0, area.get_center().y)
-	_mesh.box(c + Vector3(0, 0.17, 0), Vector3(area.size.x, 0.05, area.size.y), Color(0.75, 0.45, 0.3))
-	_mesh.box(c + Vector3(0, 0.2, 0), Vector3(15.0, 0.02, 28.0), Color(0.2, 0.42, 0.65))
-	_mesh.box(c + Vector3(0, 0.21, 0), Vector3(15.0, 0.02, 0.2), Color.WHITE)
-	for side in [-1.0, 1.0]:
-		var post := c + Vector3(0, 0, side * 13.5)
-		_solid(post, Vector3(0.25, 3.0, 0.25), Color(0.3, 0.3, 0.3))
-		_mesh.box(post + Vector3(0, 3.1, -side * 0.3), Vector3(1.8, 1.1, 0.1), Color.WHITE)
-
-
-func _build_docks(area: Rect2) -> void:
-	var c := Vector3(area.get_center().x, 0, area.get_center().y)
-	_solid(c + Vector3(0, 0, -area.size.y * 0.2), Vector3(area.size.x - 2, 8.0, area.size.y * 0.5), Color(0.55, 0.52, 0.48))
-	var palette := [Color(0.8, 0.3, 0.2), Color(0.2, 0.45, 0.7), Color(0.3, 0.6, 0.35), Color(0.85, 0.6, 0.2)]
-	for i in 5:
-		var p := Vector3(area.position.x + 4 + i * 6.5, 0, area.end.y - 6)
-		var stack := rng.randi_range(1, 2)
-		for s in stack:
-			_mesh.box(p + Vector3(0, 1.3 + s * 2.6, 0), Vector3(2.4, 2.6, 6.0), palette[rng.randi() % palette.size()])
-		_collider(p + Vector3(0, 1.3 * stack, 0), Vector3(2.4, 2.6 * stack, 6.0))
-
-
-func _build_river() -> void:
-	var z0 := SIZE + ROAD * 0.5 + 4.0
-	_mesh.box(Vector3(SIZE * 0.5, 0.15, z0 - 2.0), Vector3(SIZE + 60.0, 0.3, 4.0), Color(0.5, 0.47, 0.42))
-	_mesh.box(Vector3(SIZE * 0.5, -0.02, z0 + 60.0), Vector3(SIZE + 400.0, 0.1, 120.0), Color(0.2, 0.42, 0.55))
-
-
-func _build_markings() -> void:
-	for line in BLOCKS + 1:
-		for seg in BLOCKS:
-			var start := seg * PITCH + ROAD * 0.5 + 2.0
-			var t := start
-			while t < (seg + 1) * PITCH - ROAD * 0.5 - 2.0:
-				var a := line * PITCH
-				_mesh.box(Vector3(t + 1.5, 0.01, a), Vector3(3.0, 0.02, 0.2), MARKING)
-				_mesh.box(Vector3(a, 0.01, t + 1.5), Vector3(0.2, 0.02, 3.0), MARKING)
-				t += 6.0
-
-
-func _build_bounds() -> void:
-	var lo := -ROAD * 0.5 - 1.0
-	var hi := SIZE + ROAD * 0.5 + 1.0
-	var mid := SIZE * 0.5
-	var span := SIZE + ROAD + 4.0
-	_collider(Vector3(mid, 2, lo), Vector3(span, 4, 1))
-	_collider(Vector3(mid, 2, hi), Vector3(span, 4, 1))
-	_collider(Vector3(lo, 2, mid), Vector3(1, 4, span))
-	_collider(Vector3(hi, 2, mid), Vector3(1, 4, span))
-
-
-func _add_sidewalk_loop(r: Rect2) -> void:
-	var inset := r.grow(-1.5)
+func _make_loop(b: Vector2i) -> PackedVector3Array:
+	var c := block_center(b)
+	var half := BLOCK * 0.5 - WALK_INSET
 	var corners := [
-		Vector2(inset.position.x, inset.position.y), Vector2(inset.end.x, inset.position.y),
-		Vector2(inset.end.x, inset.end.y), Vector2(inset.position.x, inset.end.y),
+		Vector2(c.x - half, c.z - half), Vector2(c.x + half, c.z - half),
+		Vector2(c.x + half, c.z + half), Vector2(c.x - half, c.z + half),
 	]
 	var loop := PackedVector3Array()
 	for k in 4:
 		var a: Vector2 = corners[k]
-		var b: Vector2 = corners[(k + 1) % 4]
-		var steps := int(a.distance_to(b) / 6.0)
+		var e: Vector2 = corners[(k + 1) % 4]
+		var steps := int(a.distance_to(e) / 6.0)
 		for s in steps:
-			var p := a.lerp(b, float(s) / steps)
+			var p := a.lerp(e, float(s) / steps)
 			loop.append(Vector3(p.x, 0.0, p.y))
-	sidewalk_loops.append(loop)
+	return loop
 
 
 func _pick_parking() -> void:
-	# Always leave one car next to the player's spawn.
-	var home := node_pos(Vector2i(2, 3))
-	parked_spots.append([home + Vector3(16.0, 0, CURB_PARKING), -PI / 2])
-	for line in BLOCKS + 1:
-		for seg in BLOCKS:
-			if rng.randf() > 0.18:
+	# Always leave one car at the curb in front of the spawn point.
+	var front := spawn_point + Vector3(9.0, 0, WALK_INSET + ROAD * 0.5 - CURB_PARKING)
+	parked_spots.append([front, -PI / 2])
+	for i in blocks.x + 1:
+		for j in blocks.y + 1:
+			var n := Vector2i(i, j)
+			for dir in [Vector2i(1, 0), Vector2i(0, 1)]:
+				if not (in_grid(n) and in_grid(n + dir)) or rng.randf() > 0.2:
+					continue
+				var mid := (node_pos(n) + node_pos(n + dir)) * 0.5
+				var along := rng.randf_range(-12.0, 12.0)
+				var side := CURB_PARKING if rng.randf() < 0.5 else -CURB_PARKING
+				if dir.x != 0:
+					parked_spots.append([mid + Vector3(along, 0, side), -PI / 2])
+				else:
+					parked_spots.append([mid + Vector3(side, 0, along), 0.0])
+
+
+## One water plane under the whole map; land is built on top of it.
+func _build_water() -> void:
+	var mb := MeshBuilder.new()
+	var lo := -MARGIN * PITCH - 200.0
+	var size := Vector2((blocks.x + 2 * MARGIN) * PITCH + 400.0, (blocks.y + 2 * MARGIN) * PITCH + 400.0)
+	mb.box(Vector3(lo + size.x * 0.5, -0.55, lo + size.y * 0.5), Vector3(size.x, 0.1, size.y), Color(0.16, 0.36, 0.42))
+	var inst := mb.make_instance()
+	inst.name = "Water"
+	inst.material_override = MeshBuilder.water_material()
+	inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(inst)
+
+
+## Invisible walls just outside the window's edge roads.
+func _build_bounds() -> void:
+	var body := StaticBody3D.new()
+	body.name = "Bounds"
+	body.collision_layer = L.WORLD
+	body.collision_mask = 0
+	add_child(body)
+	var lo := -ROAD * 0.5 - 0.8
+	var hi := Vector2(blocks.x * PITCH + ROAD * 0.5 + 0.8, blocks.y * PITCH + ROAD * 0.5 + 0.8)
+	var mid := Vector2((lo + hi.x) * 0.5, (lo + hi.y) * 0.5)
+	var span := Vector2(hi.x - lo + 2.0, hi.y - lo + 2.0)
+	for wall in [
+		[Vector3(mid.x, 3, lo), Vector3(span.x, 6, 1)], [Vector3(mid.x, 3, hi.y), Vector3(span.x, 6, 1)],
+		[Vector3(lo, 3, mid.y), Vector3(1, 6, span.y)], [Vector3(hi.x, 3, mid.y), Vector3(1, 6, span.y)],
+	]:
+		_add_shape(body, wall[0], wall[1])
+
+
+# --- Streaming -----------------------------------------------------------------
+
+func _cell_center(cell: Vector2i) -> Vector2:
+	return Vector2((cell.x + 0.5) * PITCH, (cell.y + 0.5) * PITCH)
+
+
+## Cells whose centre is within `radius` of `pos`, nearest first.
+func _cells_near(pos: Vector3, radius: float) -> Array:
+	var p := Vector2(pos.x, pos.z)
+	var c := block_of(pos)
+	var r := ceili(radius / PITCH)
+	var found: Array = []
+	for dx in range(-r, r + 1):
+		for dz in range(-r, r + 1):
+			var cell := c + Vector2i(dx, dz)
+			if cell.x < -MARGIN or cell.y < -MARGIN or cell.x >= blocks.x + MARGIN or cell.y >= blocks.y + MARGIN:
 				continue
-			var along := seg * PITCH + PITCH * 0.5 + rng.randf_range(-12, 12)
-			var side := CURB_PARKING if rng.randf() < 0.5 else -CURB_PARKING
-			if rng.randf() < 0.5:
-				parked_spots.append([Vector3(along, 0, line * PITCH + side), -PI / 2])
-			else:
-				parked_spots.append([Vector3(line * PITCH + side, 0, along), 0.0])
+			if _cell_center(cell).distance_to(p) <= radius:
+				found.append(cell)
+	found.sort_custom(func(a, b): return _cell_center(a).distance_squared_to(p) < _cell_center(b).distance_squared_to(p))
+	return found
 
 
-func _solid(base_center: Vector3, size: Vector3, color: Color) -> void:
-	var center := base_center + Vector3(0, size.y * 0.5, 0)
-	_mesh.box(center, size, color)
-	_collider(center, size)
-	building_count += 1
+func _start_task(cell: Vector2i) -> void:
+	_task_cell = cell
+	_task = WorkerThreadPool.add_task(_run_task.bind(cell), false, "city cell")
 
 
-func _collider(center: Vector3, size: Vector3) -> void:
+func _run_task(cell: Vector2i) -> void:
+	_task_result = Cells.build(self, cell)
+
+
+func _poll_task() -> void:
+	if _task >= 0 and WorkerThreadPool.is_task_completed(_task):
+		_finish_task()
+
+
+func _finish_task() -> void:
+	if _task < 0:
+		return
+	WorkerThreadPool.wait_for_task_completion(_task)
+	_task = -1
+	if not _cells.has(_task_cell):
+		_add_cell(_task_cell, _task_result)
+	_task_result = {}
+
+
+func _add_cell(cell: Vector2i, built: Dictionary) -> void:
+	var root := Node3D.new()
+	root.name = "Cell_%d_%d" % [cell.x, cell.y]
+	if built.mesh.triangle_count() > 0: # open water cells have nothing to draw
+		var inst: MeshInstance3D = built.mesh.make_instance()
+		inst.material_override = MeshBuilder.cutaway_material()
+		root.add_child(inst)
+	for group in [[built.colliders, L.WORLD], [built.props, L.PROPS]]:
+		if group[0].is_empty():
+			continue
+		var body := StaticBody3D.new()
+		body.collision_layer = group[1]
+		body.collision_mask = 0
+		root.add_child(body)
+		for c in group[0]:
+			_add_shape(body, c[0], c[1])
+	root.set_meta("buildings", built.buildings)
+	building_count += built.buildings
+	add_child(root)
+	_cells[cell] = root
+
+
+func _unload(cell: Vector2i) -> void:
+	var root: Node3D = _cells[cell]
+	building_count -= int(root.get_meta("buildings"))
+	_cells.erase(cell)
+	root.queue_free()
+
+
+func _add_shape(body: StaticBody3D, center: Vector3, size: Vector3) -> void:
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
 	box.size = size
 	shape.shape = box
 	shape.position = center
-	_body.add_child(shape)
+	body.add_child(shape)
+
+
+func _exit_tree() -> void:
+	if _task >= 0:
+		WorkerThreadPool.wait_for_task_completion(_task)
+		_task = -1

@@ -31,8 +31,8 @@
 <polyline points="-1176.0,-1560.0 -1176.0,-960.0" fill="none" stroke="#7b4fa0" stroke-width="6.0" stroke-linejoin="round" stroke-dasharray="6 4"/>
 <polyline points="2244.0,-150.0 2364.0,360.0 2304.0,960.0" fill="none" stroke="#ffffff" stroke-width="4.5" stroke-linejoin="round" stroke-dasharray="10 8"/>
 <polyline points="1194.0,840.0 1464.0,1230.0 1914.0,1230.0 2124.0,1110.0" fill="none" stroke="#ffffff" stroke-width="4.5" stroke-linejoin="round" stroke-dasharray="10 8"/>
-<rect x="828.0" y="570.0" width="187.2" height="187.2" fill="none" stroke="#111" stroke-width="3" stroke-dasharray="8 5"/>
-<text x="828.0" y="562.0" font-size="14" font-weight="700" fill="#222" text-anchor="start" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="3.5" stroke-opacity="0.8">prototype area</text>
+<rect x="564.0" y="150.0" width="780.0" height="686.4" fill="none" stroke="#111" stroke-width="3" stroke-dasharray="8 5"/>
+<text x="564.0" y="142.0" font-size="14" font-weight="700" fill="#222" text-anchor="start" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="3.5" stroke-opacity="0.8">demo area</text>
 <circle cx="834.0" cy="612.0" r="7" fill="#2c3e70" stroke="#fff" stroke-width="2" data-kind="landmark" data-id="bpd_lantern" data-phase="1"/>
 <text x="834.0" y="600.0" font-size="13" font-weight="600" fill="#222" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" paint-order="stroke" stroke="#fff" stroke-width="3.2" stroke-opacity="0.8">Lantern Quarter Precinct</text>
 <circle cx="870.0" cy="678.0" r="7" fill="#555" stroke="#fff" stroke-width="2" data-kind="landmark" data-id="lantern_square" data-phase="1"/>

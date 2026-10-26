@@ -779,7 +779,8 @@ Each is a proposal. Approve, change or reject; approved ones go into
 
 ## C3. Decisions for you
 
-1. **Business model.** The evidence:
+1. **Business model.** **Decided Oct 26, 2026: free-to-play**, with the
+   guardrails recorded in `MVP_DESIGN.md`. The evidence that informed it:
    - Premium worked for Stardew and Crashlands 1 (strong word of mouth,
      depth, no timers); Crashlands 1 sold mostly on mobile but was heavily
      pirated on Android.

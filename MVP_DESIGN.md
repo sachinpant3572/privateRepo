@@ -193,7 +193,7 @@ New Game+, real-time multiplayer.
 
 ## Economy and monetization
 
-**Proposal**: free-to-play, which is how most Android revenue is earned.
+**Decision (Oct 26, 2026): free-to-play.**
 - Soft currency: cash (earned everywhere). Premium currency: buys cosmetics,
   vehicles and time-savers only.
 - Optional rewarded ads (double payout, instant taxi); never forced ads
@@ -202,7 +202,18 @@ New Game+, real-time multiplayer.
 - No energy timers, no pay-to-win, no paid loot boxes (from the design
   pillar).
 
-Alternative: paid upfront plus cosmetic store. Simpler, fewer players.
+Guardrails from the research (`reference/README.md`, B12):
+- **Tune the economy for play, not for sales.** Never sell relief from pain
+  the design creates (Survival RPG's diamonds, Bad 2 Bad's paid storage).
+- **Rewarded ads only, after missions, capped per hour.** No interstitials
+  at area transitions; load ads off the main thread and never during combat.
+- **One-time "Remove ads + starter pack" purchase.**
+- **Main paid items:** outfits, vehicle paint and parts, safehouse decor,
+  the cosmetic season track; later, optional story packs at a fair price.
+- **Depth for revenue:** cosmetics and seasons, not a thin finite game
+  (Survival RPG's ~20M installs earn little).
+- **Value tied to the account** (cloud save, events) rather than DRM.
+- **One brand word** in every store title ("Solvera: ...").
 
 ## Controls
 
@@ -228,15 +239,18 @@ device.
 | 6. Global launch | Android, then iOS | |
 
 **Status**: milestone 1 (prototype) is playable in `game/`, pending the
-fun and 30 fps checks on a real phone. See `game/README.md`.
+fun and 30 fps checks on a real phone. Since then the 6-block grey box has
+grown into the **demo map**: 1.3 km x 1.1 km of Bellerive (25 x 22 blocks:
+Gilt District, Lantern Quarter, Floodline Wards, Ironwharf and the Morrow
+River), streamed in cells, built from the asset kits (buildings, props,
+vehicles, people) that the vertical slice will reuse. See `game/README.md`.
 
 Timelines depend on team size; to be estimated once the team and the split
 between Claude, AI tools and people are decided.
 
 ## Open decisions
 
-1. Business model: free-to-play (proposed) or paid upfront.
-2. Names: proposed in `WORLD_BIBLE.md`, awaiting approval.
-3. Protagonist: fixed character or customizable.
-4. Launch markets for soft launch.
-5. Team: who does art, animation and QA alongside Claude.
+1. Protagonist: fixed character or customizable.
+2. Launch markets for soft launch.
+3. Team: who does art, animation and QA alongside Claude.
+4. Which of the 25 research proposals to adopt (`reference/README.md`, C2).

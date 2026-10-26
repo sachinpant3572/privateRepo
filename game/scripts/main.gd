@@ -1,6 +1,6 @@
 extends Node3D
-## Prototype entry point: builds the grey-box district and wires the player,
-## camera, police, population and HUD together. Handles BUSTED and WASTED.
+## Entry point: builds the Bellerive demo map and wires the player, camera,
+## police, population and HUD together. Handles BUSTED and WASTED.
 
 const City = preload("res://scripts/city.gd")
 const Player = preload("res://scripts/player.gd")
@@ -30,20 +30,20 @@ func _ready() -> void:
 	add_child(city)
 	city.build(1234)
 
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 99
-	for spot in city.parked_spots:
-		var car = Vehicle.new()
-		car.body_color = Vehicle.COLORS[rng.randi() % Vehicle.COLORS.size()]
-		car.city = city
-		car.position = spot[0]
-		car.rotation.y = spot[1]
-		add_child(car)
+	# The car waiting outside Union Station; population parks the rest.
+	var home = Vehicle.new()
+	home.kind = "sports"
+	home.body_color = Color(0.82, 0.16, 0.16)
+	home.city = city
+	home.position = city.parked_spots[0][0]
+	home.rotation.y = city.parked_spots[0][1]
+	add_child(home)
 
 	player = Player.new()
 	player.position = city.spawn_point
-	player.rotation.y = PI * 0.75
+	player.rotation.y = PI
 	add_child(player)
+	city.focus_node = player
 	player.died.connect(func(_who): _respawn("WASTED", city.hospital))
 
 	camera = TopDownCamera.new()
@@ -79,6 +79,7 @@ func _respawn(text: String, point: Vector3) -> void:
 	await get_tree().create_timer(RESPAWN_DELAY, true, true).timeout
 	Wanted.clear()
 	police.clear_all()
+	city.stream_now(point)
 	player.respawn(point)
 	camera.snap()
 	respawning = false

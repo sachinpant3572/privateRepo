@@ -191,12 +191,12 @@ def city_svg(world, city_id, missions=()):
             continue
         dash_attr = f' stroke-dasharray="{dash}"' if dash else ""
         out.append(f'<polyline points="{pts(r["line"], s, ox, oy)}" fill="none" stroke="{color}" stroke-width="{width * 1.5}" stroke-linejoin="round"{dash_attr}/>')
-    win = city.get("prototype_window")
+    win = city.get("demo_window")
     if win:
-        size = win["blocks"] * win["pitch"]
+        sw, sh = (b * win["pitch"] for b in win["blocks"])
         wx, wy = win["origin"]
-        out.append(f'<rect x="{(wx - ox) * s:.1f}" y="{(wy - oy) * s:.1f}" width="{size * s:.1f}" height="{size * s:.1f}" fill="none" stroke="#111" stroke-width="3" stroke-dasharray="8 5"/>')
-        out.append(text((wx - ox) * s, (wy - oy) * s - 8, "prototype area", 14, "700", anchor="start"))
+        out.append(f'<rect x="{(wx - ox) * s:.1f}" y="{(wy - oy) * s:.1f}" width="{sw * s:.1f}" height="{sh * s:.1f}" fill="none" stroke="#111" stroke-width="3" stroke-dasharray="8 5"/>')
+        out.append(text((wx - ox) * s, (wy - oy) * s - 8, "demo area", 14, "700", anchor="start"))
     for lm in world["landmarks"]:
         if lm.get("city") != city_id and not _inside(lm["pos"], (ox, oy, vw, vh)):
             continue

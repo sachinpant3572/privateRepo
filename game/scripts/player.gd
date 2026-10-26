@@ -10,9 +10,11 @@ var controllable := true
 
 
 func _init() -> void:
-	shirt = Color(0.85, 0.18, 0.2)
-	pants = Color(0.18, 0.3, 0.55)
-	skin = SKIN_TONES[1]
+	# Jules: red jacket, jeans, short dark hair.
+	look = {
+		"shirt": Color(0.85, 0.18, 0.2), "pants": Color(0.18, 0.3, 0.55), "skin": CharacterKit.SKIN[2],
+		"hair": "short", "hair_color": CharacterKit.HAIR[0],
+	}
 	punch_damage = 15.0
 	xray_color = Color(1.0, 0.85, 0.25, 0.6)
 
@@ -120,7 +122,7 @@ func _free_spot_beside(car) -> Vector3:
 	var sphere := SphereShape3D.new()
 	sphere.radius = 0.45
 	query.shape = sphere
-	query.collision_mask = L.WORLD | L.VEHICLES
+	query.collision_mask = L.WORLD | L.PROPS | L.VEHICLES
 	query.exclude = [car.get_rid()]
 	var space := get_world_3d().direct_space_state
 	for offset in [-b.x * 1.8, b.x * 1.8, b.z * 3.0, -b.z * 3.0]:

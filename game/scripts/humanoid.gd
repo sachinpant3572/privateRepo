@@ -1,26 +1,24 @@
 extends CharacterBody3D
 ## Shared body for the player, pedestrians and police on foot: health,
-## punches, knockdowns and a placeholder blocky model.
+## punches, knockdowns and a cartoon model from CharacterKit.
 ## Subclasses put their behaviour in _think() and react to hits in _on_hit().
 
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
+const CharacterKit = preload("res://scripts/kits/character_kit.gd")
 const L = preload("res://scripts/layers.gd")
 
 signal died(who)
 
 const PUNCH_RANGE := 1.6
 const PUNCH_COOLDOWN := 0.45
-const SKIN_TONES := [Color(0.98, 0.82, 0.68), Color(0.85, 0.64, 0.45), Color(0.6, 0.42, 0.28), Color(0.38, 0.25, 0.17)]
 
 var max_health := 100.0
 var health := 100.0
 var walk_speed := 1.6
 var run_speed := 5.0
 var punch_damage := 12.0
-var shirt := Color(0.5, 0.5, 0.5)
-var pants := Color(0.2, 0.22, 0.3)
-var skin: Color = SKIN_TONES[0]
-var hat := Color(0, 0, 0, 0)
+## Clothes, skin and hair; see CharacterKit.build().
+var look := {}
 ## Silhouette colour shown through buildings; transparent means none.
 var xray_color := Color(0, 0, 0, 0)
 
@@ -138,7 +136,7 @@ func hit_by_vehicle(vehicle, impact_speed: float) -> void:
 func knock_down(seconds: float) -> void:
 	knocked_time = seconds
 	collision_layer = L.DOWNED
-	collision_mask = L.WORLD
+	collision_mask = L.WORLD | L.PROPS
 
 
 func _die() -> void:
@@ -146,7 +144,7 @@ func _die() -> void:
 	health = 0.0
 	knocked_time = 0.0
 	collision_layer = L.DOWNED
-	collision_mask = L.WORLD
+	collision_mask = L.WORLD | L.PROPS
 	died.emit(self)
 
 
@@ -163,22 +161,12 @@ func revive(at: Vector3) -> void:
 
 func _set_standing_layers() -> void:
 	collision_layer = L.CHARACTERS
-	collision_mask = L.WORLD | L.CHARACTERS | L.VEHICLES
+	collision_mask = L.WORLD | L.PROPS | L.CHARACTERS | L.VEHICLES
 
 
 func _build_model() -> void:
 	var mb := MeshBuilder.new()
-	mb.box(Vector3(0, 0.42, 0), Vector3(0.5, 0.84, 0.3), pants)
-	mb.box(Vector3(0, 1.17, 0), Vector3(0.62, 0.68, 0.36), shirt)
-	var head := SphereMesh.new()
-	head.radius = 0.21
-	head.height = 0.42
-	head.radial_segments = 8
-	head.rings = 4
-	mb.primitive(head, Transform3D(Basis(), Vector3(0, 1.72, 0)), skin)
-	mb.box(Vector3(0, 1.7, -0.2), Vector3(0.12, 0.08, 0.08), skin.darkened(0.3)) # nose shows facing
-	if hat.a > 0.0:
-		mb.box(Vector3(0, 1.9, -0.05), Vector3(0.46, 0.12, 0.5), hat)
+	CharacterKit.build(mb, look)
 	model = mb.make_instance()
 	add_child(model)
 	set_xray(xray_color)

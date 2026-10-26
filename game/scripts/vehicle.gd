@@ -5,26 +5,25 @@ extends CharacterBody3D
 ## joystick under a top-down camera.
 
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
+const VehicleKit = preload("res://scripts/kits/vehicle_kit.gd")
 const L = preload("res://scripts/layers.gd")
 
 signal officer_deployed(car)
 
 enum Driver { NONE, PLAYER, TRAFFIC, POLICE }
 
-const MAX_SPEED := 24.0
 const REVERSE_SPEED := 8.0
-const ACCEL := 14.0
 const BRAKE := 32.0
 const COAST := 4.0
-const TURN_RATE := 2.4
 const GRIP := 8.0
 const DRIFT_GRIP := 1.5
 const TRAFFIC_THROTTLE := 0.5
 const POLICE_XRAY := Color(0.3, 0.55, 1.0, 0.6)
-const COLORS := [Color(0.8, 0.15, 0.15), Color(0.15, 0.35, 0.75), Color(0.95, 0.8, 0.2), Color(0.2, 0.55, 0.3), Color(0.9, 0.9, 0.9), Color(0.15, 0.15, 0.17), Color(0.6, 0.3, 0.6)]
 
 var driver := Driver.NONE
 var is_police := false
+## Body style from VehicleKit.KINDS; sets the model and the handling.
+var kind := "sedan"
 var body_color := Color(0.8, 0.15, 0.15)
 var city
 var occupant = null
@@ -39,6 +38,9 @@ var handbrake := false
 var braking := false
 
 var rng := RandomNumberGenerator.new()
+var max_speed := 24.0
+var accel := 14.0
+var turn_rate := 2.4
 var _next_node := Vector2i.ZERO
 var _heading := Vector2i(1, 0)
 var _stuck_time := 0.0
@@ -54,15 +56,22 @@ func _ready() -> void:
 	add_to_group("vehicles")
 	motion_mode = MOTION_MODE_FLOATING
 	collision_layer = L.VEHICLES
-	collision_mask = L.WORLD | L.VEHICLES | L.CHARACTERS
+	collision_mask = L.WORLD | L.PROPS | L.VEHICLES | L.CHARACTERS
+	if is_police:
+		kind = "police"
+	var spec: Dictionary = VehicleKit.KINDS.get(kind, VehicleKit.KINDS.sedan)
+	max_speed = spec.max_speed
+	accel = spec.accel
+	turn_rate = spec.turn
+	var size: Vector3 = spec.size
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
-	box.size = Vector3(2.0, 1.2, 4.3)
+	box.size = Vector3(size.x + 0.1, 1.2, size.z + 0.1)
 	shape.shape = box
 	shape.position.y = 0.6
 	add_child(shape)
 	_ahead = RayCast3D.new()
-	_ahead.position = Vector3(0, 0.7, -2.3)
+	_ahead.position = Vector3(0, 0.7, -size.z * 0.5 - 0.2)
 	_ahead.target_position = Vector3(0, 0, -8.0)
 	_ahead.collision_mask = L.VEHICLES | L.CHARACTERS
 	add_child(_ahead)
@@ -71,6 +80,8 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if driver == Driver.NONE and speed == 0.0 and velocity == Vector3.ZERO and _lights.is_empty():
+		return # parked: nothing to simulate until something drives or hits it
 	desired_dir = Vector3.ZERO
 	throttle = 0.0
 	handbrake = false
@@ -195,12 +206,12 @@ func _drive(delta: float) -> void:
 			angle = (-fwd).signed_angle_to(desired_dir, Vector3.UP)
 		else:
 			# Ease off for sharp corners so the car can make the turn.
-			target = MAX_SPEED * throttle * lerpf(1.0, 0.45, absf(angle) / PI)
+			target = max_speed * throttle * lerpf(1.0, 0.45, absf(angle) / PI)
 		var grip_turn := clampf(absf(speed) / 5.0, 0.0, 1.0)
-		var turn := clampf(angle * 2.0, -1.0, 1.0) * TURN_RATE * grip_turn * delta
+		var turn := clampf(angle * 2.0, -1.0, 1.0) * turn_rate * grip_turn * delta
 		rotate_y(turn * (1.6 if handbrake else 1.0))
 
-	var rate := ACCEL
+	var rate := accel
 	if desired_dir == Vector3.ZERO:
 		rate = COAST
 	elif signf(target) != signf(speed) and absf(speed) > 0.5:
@@ -263,17 +274,7 @@ func _flash_lights(delta: float) -> void:
 
 func _build_model() -> void:
 	var mb := MeshBuilder.new()
-	var paint := Color(0.95, 0.95, 0.95) if is_police else body_color
-	mb.box(Vector3(0, 0.55, 0), Vector3(1.9, 0.6, 4.2), paint)
-	mb.box(Vector3(0, 1.1, 0.35), Vector3(1.7, 0.55, 2.1), Color(0.12, 0.16, 0.2))
-	mb.box(Vector3(0, 1.39, 0.35), Vector3(1.6, 0.04, 1.9), paint)
-	for x in [-0.9, 0.9]:
-		for z in [-1.35, 1.35]:
-			mb.box(Vector3(x, 0.35, z), Vector3(0.3, 0.7, 0.8), Color(0.07, 0.07, 0.07))
-		mb.box(Vector3(x * 0.65, 0.62, -2.11), Vector3(0.4, 0.15, 0.04), Color(1.0, 0.95, 0.7))
-		mb.box(Vector3(x * 0.65, 0.62, 2.11), Vector3(0.4, 0.15, 0.04), Color(0.8, 0.1, 0.1))
-	if is_police:
-		mb.box(Vector3(0, 0.45, 0), Vector3(1.94, 0.22, 4.24), Color(0.05, 0.06, 0.1))
+	VehicleKit.build(mb, kind, body_color)
 	_model = mb.make_instance()
 	if is_police:
 		_model.material_override = MeshBuilder.xray_material(POLICE_XRAY)

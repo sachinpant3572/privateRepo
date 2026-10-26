@@ -4,9 +4,6 @@ extends "res://scripts/humanoid.gd"
 
 enum State { WANDER, FLEE, FIGHT }
 
-const SHIRTS := [Color(0.95, 0.85, 0.3), Color(0.3, 0.6, 0.85), Color(0.9, 0.5, 0.2), Color(0.55, 0.8, 0.45), Color(0.95, 0.95, 0.95), Color(0.6, 0.35, 0.65)]
-const PANTS := [Color(0.15, 0.15, 0.2), Color(0.35, 0.3, 0.25), Color(0.2, 0.3, 0.5), Color(0.8, 0.75, 0.65)]
-
 var city
 var state := State.WANDER
 var state_time := 0.0
@@ -23,9 +20,7 @@ func setup(c, rand: RandomNumberGenerator, loop: int, point: int) -> void:
 	point_index = point
 	step = 1 if rand.randf() < 0.5 else -1
 	brave = rand.randf() < 0.2
-	shirt = SHIRTS[rand.randi() % SHIRTS.size()]
-	pants = PANTS[rand.randi() % PANTS.size()]
-	skin = SKIN_TONES[rand.randi() % SKIN_TONES.size()]
+	look = CharacterKit.random_look(rand)
 	max_health = 40.0
 	walk_speed = rand.randf_range(1.3, 1.9)
 	run_speed = 5.2

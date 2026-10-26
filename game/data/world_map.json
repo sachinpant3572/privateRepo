@@ -56,7 +56,7 @@
        {"id": "floodline_wards", "name": "Floodline Wards", "style": "wards", "faction": "highwater", "rect": [4800, 3600, 700, 900]},
        {"id": "blackwater_bayou", "name": "Blackwater Bayou", "style": "bayou", "faction": "marrow", "rect": [3550, 4200, 600, 550]}
      ],
-     "prototype_window": {"origin": [4590, 4350], "blocks": 6, "pitch": 52}},
+     "demo_window": {"origin": [4150, 3650], "blocks": [25, 22], "pitch": 52}},
     {"id": "porto_brisa", "name": "Porto Brisa", "inspired_by": "Rio de Janeiro", "phase": 2,
      "rect": [6300, 1800, 1200, 1500],
      "districts": [

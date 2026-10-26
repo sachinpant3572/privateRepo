@@ -16,7 +16,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	var tests := [
-		"test_city_is_one_mesh",
+		"test_city_streams_cells",
 		"test_city_follows_world_map",
 		"test_wanted_level_decays_out_of_sight",
 		"test_player_walks",
@@ -40,27 +40,47 @@ func _run() -> void:
 
 # --- Tests -------------------------------------------------------------------
 
-func test_city_is_one_mesh() -> void:
+func test_city_streams_cells() -> void:
 	await _new_game(false)
-	var meshes: Array = game.city.get_children().filter(func(n): return n is MeshInstance3D)
-	_check(meshes.size() == 1, "city draws as a single mesh, got %d" % meshes.size())
-	_check(game.city.building_count > 40, "city has buildings")
-	_check(game.city.sidewalk_loops.size() == 36, "one sidewalk loop per block")
+	var city = game.city
+	var cells: Array = city.loaded_cells()
+	_check(cells.size() >= 10, "cells around the spawn are built, got %d" % cells.size())
+	var single := cells.all(func(c): return city.cell_node(c).get_children().filter(func(n): return n is MeshInstance3D).size() <= 1)
+	_check(single, "every cell draws as at most one mesh")
+	_check(city.building_count > 20, "city has buildings, got %d" % city.building_count)
+	var land := 0
+	for i in city.blocks.x:
+		for j in city.blocks.y:
+			land += 1 if city.block_land(Vector2i(i, j)) else 0
+	_check(city.sidewalk_loops.size() == land, "one sidewalk loop per land block")
+	# Teleport across the map: the old cells go, new ones stream in.
+	_place_player_at(city.hospital)
+	await _frames(240)
+	var near: Vector2i = city.block_of(city.hospital)
+	_check(city.cell_node(near) != null, "cells stream in around the player")
+	_check(city.cell_node(city.block_of(city.spawn_point)) == null, "far cells are unloaded")
 
 
 func test_city_follows_world_map() -> void:
 	await _new_game(false)
 	var city = game.city
 	var styles := {}
-	for i in city.BLOCKS:
-		for j in city.BLOCKS:
-			styles[city._block_style(Vector2i(i, j))] = true
-	_check(styles.has("quarter") and styles.has("docks") and styles.has("wards"), "blocks use the map's district styles, got %s" % [styles.keys()])
-	for landmark in ["police", "hospital", "park", "court"]:
+	for i in city.blocks.x:
+		for j in city.blocks.y:
+			styles[city.block_style(Vector2i(i, j))] = true
+	for style in ["quarter", "docks", "wards", "downtown", "water"]:
+		_check(styles.has(style), "map district style '%s' is used" % style)
+	for landmark in ["police", "hospital", "park", "court", "station", "tower", "club", "safehouse"]:
 		_check(styles.has(landmark), "map landmark '%s' is placed" % landmark)
-	_check(city.district_at(city.spawn_point).name == "Lantern Quarter", "player starts in the Lantern Quarter")
-	var station_offset: Vector3 = city.police_station - city.spawn_point
-	_check(station_offset.length() > 10.0, "police station comes from the map, not the fallback")
+	_check(city.landmark_at(city.block_of(city.spawn_point)).get("id") == "union_station", "player starts at Union Station")
+	_check(city.district_at(city.spawn_point).name == "Gilt District", "Union Station is in the Gilt District")
+	_check(city.police_station.distance_to(city.spawn_point) > 100.0, "police station comes from the map, not the fallback")
+	_check(city.district_at(city.hospital).name == "Floodline Wards", "clinic is in the Floodline Wards")
+	var wet := 0
+	for i in city.blocks.x + 1:
+		for j in city.blocks.y + 1:
+			wet += 0 if city.in_grid(Vector2i(i, j)) else 1
+	_check(wet > 10, "the river takes out road nodes, got %d" % wet)
 
 
 func test_wanted_level_decays_out_of_sight() -> void:
@@ -90,7 +110,7 @@ func test_player_walks() -> void:
 func test_punching_civilian_gives_one_star() -> void:
 	await _new_game(false)
 	var p = game.player
-	_place_player(Vector2i(2, 2), Vector3(7.5, 0, 7.5))
+	_place_player(_home(), Vector3(7.5, 0, 7.5))
 	var ped = game.population.spawn_ped_at(p.global_position + p.forward() * 1.0)
 	ped.walk_speed = 0.0
 	await _frames(2)
@@ -103,8 +123,8 @@ func test_punching_civilian_gives_one_star() -> void:
 
 func test_enter_drive_and_exit_car() -> void:
 	await _new_game(false)
-	var car = _spawn_car(Vector2i(2, 2), Vector3(0, 0, -3), 0.0)
-	_place_player(Vector2i(2, 2), Vector3.ZERO)
+	var car = _spawn_car(_home(), Vector3(0, 0, -3), 0.0)
+	_place_player(_home(), Vector3.ZERO)
 	await _frames(2)
 	await _press("interact")
 	_check(game.player.vehicle == car, "player gets in the car")
@@ -125,10 +145,11 @@ func test_enter_drive_and_exit_car() -> void:
 
 func test_carjacking_ejects_driver() -> void:
 	await _new_game(false)
-	var car = _spawn_car(Vector2i(3, 2), Vector3(0, 0, -3), 0.0)
-	car.start_traffic(game.city, Vector2i(3, 2), Vector2i(0, -1))
+	var node := _home() + Vector2i(1, 0)
+	var car = _spawn_car(node, Vector3(0, 0, -3), 0.0)
+	car.start_traffic(game.city, node, Vector2i(0, -1))
 	car.driver = Vehicle.Driver.TRAFFIC
-	_place_player(Vector2i(3, 2), Vector3.ZERO)
+	_place_player(node, Vector3.ZERO)
 	var peds_before: int = game.population.peds.size()
 	await _press("interact")
 	_check(game.player.vehicle == car, "player takes the car")
@@ -139,7 +160,7 @@ func test_carjacking_ejects_driver() -> void:
 func test_hitting_cop_brings_police_cars() -> void:
 	await _new_game(false)
 	var p = game.player
-	_place_player(Vector2i(2, 2), Vector3(7.5, 0, 7.5))
+	_place_player(_home(), Vector3(7.5, 0, 7.5))
 	var cop = game.police.spawn_cop_at(p.global_position + p.forward() * 1.0)
 	cop.active = false
 	await _frames(2)
@@ -153,7 +174,7 @@ func test_hitting_cop_brings_police_cars() -> void:
 func test_busted_when_cop_holds_player() -> void:
 	await _new_game(false)
 	var p = game.player
-	_place_player(Vector2i(2, 2), Vector3(7.5, 0, 7.5))
+	_place_player(_home(), Vector3(7.5, 0, 7.5))
 	Wanted.report_crime(1)
 	game.police.spawn_cop_at(p.global_position + Vector3(1.0, 0, 0))
 	await _frames(150)
@@ -175,8 +196,8 @@ func test_wasted_respawns_at_hospital() -> void:
 
 func test_city_runs_with_population() -> void:
 	await _new_game(true)
-	var car = _spawn_car(Vector2i(2, 2), Vector3(0, 0, -3), 0.0)
-	_place_player(Vector2i(2, 2), Vector3.ZERO)
+	var car = _spawn_car(_home(), Vector3(0, 0, -3), 0.0)
+	_place_player(_home(), Vector3.ZERO)
 	await _press("interact")
 	# Weave around for a while to exercise traffic, pedestrians and collisions.
 	for i in 12:
@@ -191,7 +212,7 @@ func test_city_runs_with_population() -> void:
 func test_camera_is_classic_top_down() -> void:
 	await _new_game(false)
 	var cam = game.camera
-	_place_player(Vector2i(2, 2), Vector3.ZERO)
+	_place_player(_home(), Vector3.ZERO)
 	_check(cam.global_basis.z.y > 0.8 and absf(cam.global_basis.z.x) < 0.01, "camera looks down at a 3/4 angle with north up")
 	var start: Vector3 = game.player.global_position
 	Controls.override_vector = Vector2(0, -1)
@@ -222,9 +243,18 @@ func _free_game() -> void:
 	Wanted.clear()
 
 
+## The road node next to the spawn point (in front of Union Station).
+func _home() -> Vector2i:
+	return game.city.nearest_node(game.city.spawn_point)
+
+
 func _place_player(node: Vector2i, offset: Vector3) -> void:
+	_place_player_at(game.city.node_pos(node) + offset)
+
+
+func _place_player_at(pos: Vector3) -> void:
 	var p = game.player
-	p.global_position = game.city.node_pos(node) + offset
+	p.global_position = pos
 	p.rotation.y = 0.0
 	p.reset_physics_interpolation()
 	game.camera.snap()
