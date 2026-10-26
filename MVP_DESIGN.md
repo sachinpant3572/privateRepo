@@ -4,6 +4,9 @@ Status: **draft**, Oct 26, 2026. Builds on `GANGSTAR_CONCEPT.md` (phase 1 of
 its suggested phasing). Names below are placeholders; nothing is decided until
 marked **Decision**.
 
+Research: `reference/README.md` (top-down games reference bible) compares
+five top-down mobile games and proposes 25 changes for Solvera (Part C).
+
 ## MVP goal
 
 Prove, in one city, that the game is fun and keeps players coming back:
