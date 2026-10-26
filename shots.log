@@ -1,0 +1,36 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+WARNING: Could not set V-Sync mode, as changing V-Sync mode is not supported by the graphics driver.
+     at: set_use_vsync (platform/linuxbsd/x11/gl_manager_x11.cpp:372)
+OpenGL API 4.5 (Core Profile) Mesa 25.2.8-0ubuntu0.24.04.4 - Compatibility - Using Device: Mesa - llvmpipe (LLVM 20.1.2, 256 bits)
+libpulse.so.0: cannot open shared object file: No such file or directory
+libpulse.so.0: cannot open shared object file: No such file or directory
+ALSA lib confmisc.c:855:(parse_card) cannot find card '0'
+ALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_card_inum returned error: No such file or directory
+ALSA lib confmisc.c:422:(snd_func_concat) error evaluating strings
+ALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_concat returned error: No such file or directory
+ALSA lib confmisc.c:1342:(snd_func_refer) error evaluating name
+ALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
+ALSA lib conf.c:5731:(snd_config_expand) Evaluate error: No such file or directory
+ALSA lib pcm.c:2721:(snd_pcm_open_noupdate) Unknown PCM default
+ERROR: Condition "status < 0" is true. Returning: ERR_CANT_OPEN
+   at: init_output_device (drivers/alsa/audio_driver_alsa.cpp:97)
+WARNING: All audio drivers failed, falling back to the dummy driver.
+     at: initialize (servers/audio/audio_server.cpp:258)
+
+SHOTS: saved /home/runner/work/privateRepo/privateRepo/shots/menu.png quality=Medium state=0 enemies=0 unit_sprites=0 shots=0 rockets=0 enemy_bullets=0 gems=0 sparks=0 rings=0 boss=false
+SHOTS: saved /home/runner/work/privateRepo/privateRepo/shots/play_ultra.png quality=Ultra state=1 enemies=69 unit_sprites=76 shots=15 rockets=10 enemy_bullets=16 gems=17 sparks=48 rings=3 boss=false
+SHOTS: saved /home/runner/work/privateRepo/privateRepo/shots/deaths.png quality=Ultra state=1 enemies=69 unit_sprites=76 shots=15 rockets=10 enemy_bullets=16 gems=86 sparks=961 rings=16 boss=false
+SHOTS: saved /home/runner/work/privateRepo/privateRepo/shots/deaths_late.png quality=Ultra state=1 enemies=21 unit_sprites=21 shots=11 rockets=8 enemy_bullets=13 gems=80 sparks=252 rings=9 boss=false
+SHOTS: saved /home/runner/work/privateRepo/privateRepo/shots/cards.png quality=Ultra state=1 enemies=22 unit_sprites=22 shots=11 rockets=8 enemy_bullets=13 gems=78 sparks=162 rings=8 boss=false
+SHOTS: saved /home/runner/work/privateRepo/privateRepo/shots/chest.png quality=Ultra state=5 enemies=22 unit_sprites=22 shots=11 rockets=8 enemy_bullets=13 gems=78 sparks=162 rings=8 boss=false
+SHOTS: saved /home/runner/work/privateRepo/privateRepo/shots/boss.png quality=Ultra state=1 enemies=41 unit_sprites=46 shots=75 rockets=12 enemy_bullets=0 gems=98 sparks=32 rings=0 boss=true
+SHOTS: saved /home/runner/work/privateRepo/privateRepo/shots/gear.png quality=Ultra state=1 enemies=47 unit_sprites=47 shots=11 rockets=0 enemy_bullets=0 gems=17 sparks=0 rings=5 boss=false
+SHOTS: saved /home/runner/work/privateRepo/privateRepo/shots/costumes.png quality=Ultra state=0 enemies=0 unit_sprites=0 shots=0 rockets=0 enemy_bullets=0 gems=0 sparks=0 rings=0 boss=false
+SHOTS: saved /home/runner/work/privateRepo/privateRepo/shots/play_high.png quality=High state=1 enemies=71 unit_sprites=78 shots=13 rockets=12 enemy_bullets=15 gems=15 sparks=36 rings=3 boss=false
+SHOTS: saved /home/runner/work/privateRepo/privateRepo/shots/play_medium.png quality=Medium state=1 enemies=70 unit_sprites=77 shots=14 rockets=11 enemy_bullets=6 gems=16 sparks=28 rings=4 boss=false
+SHOTS: saved /home/runner/work/privateRepo/privateRepo/shots/play_low.png quality=Low state=1 enemies=65 unit_sprites=72 shots=15 rockets=10 enemy_bullets=5 gems=21 sparks=23 rings=5 boss=false
+SHOTS: done
+WARNING: 8 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+ERROR: 4 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)

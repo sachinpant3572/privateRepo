@@ -1,0 +1,118 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+SMOKE: start
+SMOKE: stage run ended state=1 t=415 level=28 kills=3160 boss_spawned=true
+Stage 1: failed
+Time 6:54   Level 28   Kills 3160   (revived)
+Gold 1036   Best combo x721
+Build: Pulse Rifle 2 · Mine Layer 4 · Airstrike Beacon 5 · Combat Drones 6 · Cryo Rounds 1 · Battle Instinct 4 · Kinetic Shield 5 · Nanite Regeneration 8 · Shockwave Stomp 3
+Graphics Ultra, 60 FPS average, worst 1% 60 FPS
+Game logic 1.5 ms average, 8.2 ms worst; most enemies at once 327
+Phone: GenericDevice
+
+--- DETAILS ---
+Stage: 2 escalations, enemy tier 3 of 3, boss at 5:00
+Phases: 0:00 escalation, 1:22 domination, 2:37 escalation 1, 2:49 domination, 4:04 escalation 2, 4:30 domination
+Boss: 49k HP, 76% HP left, fight 1:54
+Damage dealt (to enemies):
+  Meteor Blitz: 65k (32%)
+  Mine Layer: 40k (20%)
+  Airstrike Beacon: 38k (19%)
+  Combat Drones: 24k (12%)
+  Pulse Rifle: 16k (8%)
+  Meteor Slam: 11k (6%)
+  Blitz Dash: 10k (5%)
+  Shockwave Stomp: 553 (0%)
+  Revive blasts: 6 (0%)
+Damage to the boss:
+  Mine Layer: 7661 (67%)
+  Airstrike Beacon: 2067 (18%)
+  Combat Drones: 1304 (11%)
+  Pulse Rifle: 342 (3%)
+  Shockwave Stomp: 76 (1%)
+Damage taken: 538 in 50 hits; lowest HP 0%, 40s below 25% HP
+  Battle Tank: 160 (30%)
+  Grenadier: 156 (29%)
+  Attack Helicopter: 55 (10%)
+  Colossus boss: 36 (7%)
+  Bomber Jet: 32 (6%)
+  Colossus boss (ram): 30 (6%)
+  Trooper: 25 (5%)
+  Gunship: 24 (4%)
+  Trooper (contact): 12 (2%)
+  Shield Trooper (contact): 8 (1%)
+Blocked: dodged 0, shield 27, barrier 0 hits; armor soaked 0, Fortify 0
+Healing: 426
+  Nanite Regeneration: 273 (64%)
+  Level-ups: 117 (27%)
+  Medkit pickups: 36 (8%)
+Downed: 2:08 by Battle Tank
+Kills: Trooper 2099, Shield Trooper 463, Grenadier 408, Juggernaut 2, Battle Tank 60, Attack Helicopter 113, Bomber Jet 2, Gunship 12, Siege Colossus 1
+Pickups: Freeze 1, Medkit 1, Shield Cell 1; chests 1
+Cards: 3rd card 0/3, rerolls 0/1, banished 0/3, skipped 0; Meteor Slams 8, Meteor Blitzes 4
+Timeline (minute: level, kills, enemies avg, lowest HP, damage taken, FPS, logic avg/worst ms):
+  1: L3, +77 kills, 108 enemies, HP 67%, -40, 60 FPS, 0.8/1.6
+  2: L6, +76 kills, 308 enemies, HP 13%, -82, 60 FPS, 1.8/3.0
+  3: L28, +781 kills, 286 enemies, HP 0%, -163, 60 FPS, 1.9/7.2
+  4: L28, +570 kills, 152 enemies, HP 87%, -53, 60 FPS, 1.5/5.2
+  5: L28, +1137 kills, 193 enemies, HP 87%, -39, 60 FPS, 1.8/8.2
+  6: L28, +284 kills, 112 enemies, HP 90%, -24, 60 FPS, 1.4/2.2
+  7: L28, +234 kills, 112 enemies, HP 71%, -137, 60 FPS, 1.3/2.2
+Picks (30):
+  0:14 L2 Cryo Rounds Lv 1 (common) | 0:34 L3 Battle Instinct Lv 1 (rare) | 1:00 L4 Mine Layer Lv 1 (rare)
+  1:42 L5 Battle Instinct Lv 2 (common) | 1:56 L6 Mine Layer Lv 2 (rare) | 2:00 L7 Kinetic Shield Lv 2 (epic)
+  2:13 L8 Nanite Regeneration Lv 1 (common) | 2:28 L9 Nanite Regeneration Lv 2 (rare) | 2:28 L10 Pulse Rifle Lv 2 (common)
+  2:29 L11 Airstrike Beacon Lv 2 (epic) | 2:30 L12 Airstrike Beacon Lv 4 (epic) | 2:30 L13 Combat Drones Lv 1 (rare)
+  2:31 L14 Shockwave Stomp Lv 2 (epic) | 2:38 L18 Kinetic Shield Lv 3 (rare) | 2:38 L18 Combat Drones Lv 2 (rare)
+  2:38 L18 Combat Drones Lv 3 (common) | 2:38 L18 Nanite Regeneration Lv 3 (common) | 2:39 L19 Shockwave Stomp Lv 3 (rare)
+  2:40 L20 Battle Instinct Lv 3 (rare) | 2:44 L21 Nanite Regeneration Lv 4 (rare) | 2:49 chest: Kinetic Shield  Lv 3 → 4
+  2:49 chest: Mine Layer  Lv 2 → 3 | 2:49 chest: Battle Instinct  Lv 3 → 4 | 2:49 L22 Combat Drones Lv 6 (legendary)
+  2:49 L27 Nanite Regeneration Lv 5 (rare) | 2:49 L27 Mine Layer Lv 4 (common) | 2:49 L27 Airstrike Beacon Lv 5 (rare)
+  2:49 L27 Kinetic Shield Lv 5 (rare) | 2:49 L27 Nanite Regeneration Lv 6 (common) | 2:49 L28 Nanite Regeneration Lv 8 (epic)
+SMOKE: everything-at-once kills=162 logic_worst=4.2
+SMOKE: defense ok
+SMOKE: all-items run t=343 state=1 enemies=112 kills=1725 boss_max=219600 boss_fight=42.8s boss_dead=false logic_worst=6.5
+Stage 1: cleared
+Time 5:27   Level 26   Kills 654
+Gold 466   Best combo x545
+Build: Pulse Rifle 4 · Razor Halo 5 · Scatter Cannon 5 · Tesla Coil 3 · Blast Radius 1 · Adrenaline 6 · Repair Drone 3 · Reactive Plating 1 · Kinetic Shield 4
+Graphics Ultra, 60 FPS average, worst 1% 60 FPS
+Game logic 1.8 ms average, 9.5 ms worst; most enemies at once 323
+Phone: GenericDevice
+
+--- DETAILS ---
+Stage: 0 escalations, enemy tier 1 of 3, boss at 5:00
+Boss: 9000 HP, destroyed, fight 0:00, final push 0:25
+Damage dealt (to enemies):
+  Shockwave Stomp: 33k (63%)
+  Meteor Blitz: 9094 (17%)
+  Blitz Dash: 3415 (6%)
+  Pulse Rifle: 3186 (6%)
+  Tesla Coil: 1570 (3%)
+  Razor Halo: 1174 (2%)
+  Scatter Cannon: 767 (1%)
+Damage to the boss:
+  Shockwave Stomp: 1 (100%)
+Damage taken: 0 in 0 hits; lowest HP 100%, 0s below 25% HP
+Blocked: dodged 0, shield 0, barrier 0 hits; armor soaked 0, Fortify 0
+Kills: Trooper 417, Shield Trooper 102, Grenadier 88, Battle Tank 16, Attack Helicopter 22, Gunship 6, Siege Colossus 2
+Pickups: Shield Cell 1; chests 0
+Cards: 3rd card 0/3, rerolls 0/1, banished 0/3, skipped 0; Meteor Slams 3, Meteor Blitzes 3
+Timeline (minute: level, kills, enemies avg, lowest HP, damage taken, FPS, logic avg/worst ms):
+  6: L26, +654 kills, 260 enemies, HP 100%, -0, 60 FPS, 1.8/9.5
+Picks (25):
+  5:01 L12 Blast Radius Lv 1 (rare) | 5:01 L12 Adrenaline Lv 2 (epic) | 5:01 L12 Pulse Rifle Lv 2 (common)
+  5:01 L12 Repair Drone Lv 2 (epic) | 5:01 L12 Razor Halo Lv 1 (rare) | 5:01 L12 Adrenaline Lv 3 (rare)
+  5:01 L12 Reactive Plating Lv 1 (common) | 5:01 L12 Pulse Rifle Lv 3 (common) | 5:01 L12 Adrenaline Lv 4 (rare)
+  5:01 L12 Kinetic Shield Lv 2 (epic) | 5:01 L12 Scatter Cannon Lv 1 (common) | 5:03 L18 Scatter Cannon Lv 2 (common)
+  5:03 L18 Razor Halo Lv 2 (rare) | 5:03 L18 Pulse Rifle Lv 4 (rare) | 5:03 L18 Repair Drone Lv 3 (rare)
+  5:03 L18 Razor Halo Lv 4 (epic) | 5:03 L18 Kinetic Shield Lv 3 (rare) | 5:12 L19 Tesla Coil Lv 2 (epic)
+  5:14 L20 Kinetic Shield Lv 4 (rare) | 5:15 L21 Scatter Cannon Lv 3 (rare) | 5:15 L25 Tesla Coil Lv 3 (rare)
+  5:15 L25 Razor Halo Lv 5 (common) | 5:15 L25 Scatter Cannon Lv 5 (epic) | 5:15 L25 Adrenaline Lv 5 (rare)
+  5:25 L26 Adrenaline Lv 6 (rare)
+SMOKE: final push state=4 final_clear=325.2 jets_seen=true
+SMOKE: passed
+WARNING: 4 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+ERROR: 2 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)
