@@ -1,0 +1,803 @@
+extends Node2D
+## The hero, drawn in layers: costume body, back item (or energy wings),
+## shoulder armor, helmet and the weapon in hand, plus an element aura and a
+## shield bubble. The gear grows with the build during a run (gear tables in
+## data.gd); every change pops and flashes, and a new main weapon swaps in
+## with its own animation.
+##
+## All animation is procedural, so it works for every costume, gear piece and
+## weapon: a step bob and lean while moving, breathing when still, the weapon
+## aiming and recoiling per weapon, and poses for dash, stomp, power-ups, hits,
+## death and revive. The game calls move(), aim(), fire() and the pose
+## functions; effect sprites come from sprites/fx/.
+##
+## The costume art has the arms reaching forward, so the forearms and fists
+## are cut out into their own layer that holds the weapon: the hands aim,
+## swing and recoil with the gun, and the head turns toward the aim.
+##
+## Weapon feel: a firing stance under sustained fire, muzzle climb, brass
+## casings, barrel heat, the scatter pump and the rail charge glow. All of it
+## is cosmetic: movement and fire rate come from game.gd unchanged.
+
+const Data := preload("res://data.gd")
+const Art := preload("res://art.gd")
+const SIZE := 72.0  # On-screen size of the body.
+const TEX := 128.0  # Layer positions below are in body-texture pixels (facing +x).
+const HEAD := Vector2(-4, -2)
+const SHOULDER := Vector2(6, 17)  # Mirrored on y for the other shoulder.
+const BACK := Vector2(-18, 0)
+const WINGS := Vector2(-30, 0)
+const HAND_PIVOT := Vector2(14, 2)  # The weapon swings around the chest...
+const HAND_REACH := 38.0  # ...and sits this far in front of it, between the fists.
+const MUZZLE := 62.0  # Muzzle flash distance from the pivot.
+const HELMET_PX := 40.0
+const SHOULDER_PX := 30.0
+const BACK_PX := 44.0
+const WINGS_PX := 120.0
+const HAND_PX := 54.0
+const AIM_LIMIT := 0.7  # How far the arms and weapon turn from the body (radians).
+const ARM_CUT := 0.58  # Where the forearms start, as a fraction of the costume width.
+const ARM_FEATHER := 0.05
+const DOME_PX := 340.0  # Barrier Dome (game.gd DOME_RADIUS), in body-texture pixels.
+const FX_CAP := 28  # Most world effect sprites alive at once.
+const TURN_SPEED := 14.0  # Radians per second; the hero turns, it doesn't snap.
+const SHADOW_OFFSET := Vector2(7, 10)  # Screen pixels, light from the top-left.
+# Running, in body-texture pixels (the body is drawn at SIZE / TEX, about half).
+const STRIDE_SWAY := 9.0
+const STRIDE_SWING := 7.0  # Shoulders swing forward and back like arms.
+const STRIDE_WADDLE := 0.11
+const STRIDE_BOUNCE := 0.08
+# Recoil kick (0..1) and muzzle flash per weapon; "" = no flash.
+const RECOIL := {
+	"rifle": [0.35, "muzzle_plasma"], "scatter": [1.0, "muzzle"], "rail": [1.0, "muzzle_plasma"],
+	"rockets": [0.3, ""], "grenade": [0.2, ""], "halo": [0.0, ""], "drones": [0.0, ""],
+	"tesla": [0.4, "spark_electric"], "flame": [0.1, "flame_puff"], "mines": [0.2, ""],
+	"sentry": [0.3, ""], "airstrike": [0.25, ""],
+}
+const CASINGS := {"rifle": 1, "scatter": 2}  # Brass ejected per shot.
+const HEATS := {"rifle": 0.07, "scatter": 0.22, "flame": 0.05}  # Barrel heat per shot.
+const AIR_SCALE := 0.85  # Meteor Slam: how much bigger the hero looks at the top.
+const AIR_RISE := 34.0  # ...and how far up the screen (screen pixels).
+
+var shadow: Sprite2D
+var rig: Node2D  # Everything below; animated as one figure.
+var body: Sprite2D
+var back: Sprite2D
+var wings: Sprite2D
+var helmet: Sprite2D
+var shoulders: Array = []
+var hand_pivot: Node2D
+var hand: Sprite2D
+var arms: Sprite2D  # Forearms and fists, cut from the costume; they hold the weapon.
+var flash: Sprite2D
+var dome: Sprite2D
+var costume_tex: Texture2D
+var aura: Sprite2D
+var bubble: Sprite2D
+var helmet_tier := 0
+var shoulder_tier := 0
+var back_id := ""
+var hand_id := ""
+var hand_evolved := false
+var element := ""
+var shield_on := false
+var t := 0.0
+# Animation state.
+var speed_frac := 0.0  # 0 standing still .. 1 full speed.
+var step := 0.0  # Walk cycle phase.
+var last_angle := 0.0
+var lean := 0.0
+var aim_angle := 0.0
+var recoil := 0.0
+var jitter := 0.0
+var squash := Vector2.ONE
+var flinch := 0.0
+var glow := 0.0
+var glow_color := Color.WHITE
+var flash_t := 0.0
+var dash_t := 0.0
+var ghost_t := 0.0
+var dust_t := 0.0
+var back_kick := 0.0
+var trail_t := 0.0
+var lift := 0.0  # 0 on the ground .. 1 at the top of a stride.
+var dead := false
+# Weapon feel and poses.
+var stance := 0.0  # 0 relaxed .. 1 braced under sustained fire.
+var heat := 0.0  # Barrel heat 0..1.
+var pump_t := 0.0  # Scatter pump stroke time left.
+var charge := 0.0  # Hand weapon cooldown, 0 just fired .. 1 ready.
+var twist := 0.0  # Body twist from a hit.
+var idle_t := 0.0  # Time since the last shot.
+var fidget_t := 3.0
+var air := 0.0  # Meteor Slam height, 0..1.
+var air_spin := 0.0
+var last_side := 1.0
+var casing_tex: Texture2D
+var charge_glow: Sprite2D
+var fx_alive := 0
+var fx_tex := {}  # Effect textures by name, loaded once.
+static var split_cache := {}  # Costume -> [torso, arms] textures.
+
+
+func setup(costume: Texture2D, glow_tex: Texture2D, ring: Texture2D) -> void:
+	scale = Vector2.ONE * SIZE / TEX
+	shadow = _layer(self, glow_tex, Vector2.ZERO, 120.0)
+	shadow.modulate = Color(0.0, 0.0, 0.0, 0.42)
+	aura = _layer(self, glow_tex, Vector2.ZERO, 150.0)
+	var add := CanvasItemMaterial.new()
+	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	aura.material = add
+	rig = Node2D.new()
+	add_child(rig)
+	wings = _layer(rig, null, WINGS, WINGS_PX)
+	wings.material = add
+	body = _layer(rig, null, Vector2.ZERO, TEX)
+	# Seen from above, a pack sits on top of the back, so it draws over the body.
+	back = _layer(rig, null, BACK, BACK_PX)
+	for side in [-1.0, 1.0]:
+		var s := _layer(rig, null, Vector2(SHOULDER.x, SHOULDER.y * side), SHOULDER_PX)
+		# The art has its outer edge at the top; the lower shoulder is mirrored.
+		s.flip_v = side > 0.0
+		shoulders.append(s)
+	helmet = _layer(rig, null, HEAD, HELMET_PX)
+	hand_pivot = Node2D.new()
+	hand_pivot.position = HAND_PIVOT
+	rig.add_child(hand_pivot)
+	arms = _layer(hand_pivot, null, -HAND_PIVOT, TEX)
+	# The weapon lies between the fists, drawn over the arms so it reads clearly.
+	hand = _layer(hand_pivot, null, Vector2(HAND_REACH, 0), HAND_PX)
+	flash = _layer(hand_pivot, null, Vector2(MUZZLE, 0), 1.0)
+	flash.material = add
+	flash.visible = false
+	charge_glow = _layer(hand_pivot, glow_tex, Vector2(MUZZLE - 8, 0), 34.0)
+	charge_glow.material = add
+	charge_glow.visible = false
+	casing_tex = _casing_texture()
+	bubble = _layer(self, ring, Vector2.ZERO, 170.0)
+	bubble.material = add
+	bubble.modulate = Color(0.45, 0.85, 1.0, 0.0)
+	dome = _layer(self, ring, Vector2.ZERO, DOME_PX)
+	dome.material = add
+	dome.modulate = Color(0.5, 0.85, 1.0, 0.0)
+	dome.visible = false
+	set_costume(costume)
+	reset()
+
+
+func set_costume(costume: Texture2D) -> void:
+	costume_tex = costume
+	var parts := _split(costume)
+	body.texture = parts[0]
+	body.scale = Vector2.ONE * TEX / costume.get_width()
+	arms.texture = parts[1]
+	arms.visible = parts[1] != null
+	arms.scale = body.scale
+
+
+## Cuts a costume into the torso and the forearms with fists, faded into each
+## other over a few pixels. Every costume shares the layout: arms reaching
+## forward (+x) from the shoulders. Cached, so it runs once per costume.
+static func _split(costume: Texture2D) -> Array:
+	var key := costume.get_instance_id()
+	if split_cache.has(key):
+		return split_cache[key]
+	var img := costume.get_image()
+	if img == null:
+		return [costume, null]
+	if img.is_compressed():
+		img.decompress()
+	img.convert(Image.FORMAT_RGBA8)
+	var w := img.get_width()
+	var h := img.get_height()
+	var torso := Image.create_empty(w, h, false, Image.FORMAT_RGBA8)
+	var front := Image.create_empty(w, h, false, Image.FORMAT_RGBA8)
+	var x0 := w * (ARM_CUT - ARM_FEATHER * 0.5)
+	var fw := maxf(1.0, w * ARM_FEATHER)
+	for x in w:
+		var f := clampf((x - x0) / fw, 0.0, 1.0)  # 0 torso .. 1 arms.
+		for y in h:
+			var c := img.get_pixel(x, y)
+			if c.a <= 0.0:
+				continue
+			if f < 1.0:
+				torso.set_pixel(x, y, Color(c, c.a * (1.0 - f)))
+			if f > 0.0:
+				front.set_pixel(x, y, Color(c, c.a * f))
+	var parts := [ImageTexture.create_from_image(torso), ImageTexture.create_from_image(front)]
+	split_cache[key] = parts
+	return parts
+
+
+## Back to a bare costume at the start of a run.
+func reset() -> void:
+	helmet_tier = 0
+	shoulder_tier = 0
+	back_id = ""
+	hand_id = ""
+	hand_evolved = false
+	element = ""
+	for s in [helmet, back, wings, hand, aura]:
+		s.visible = false
+	for s in shoulders:
+		s.visible = false
+	set_shield(false)
+	revive(false)
+
+
+func set_shield(on: bool) -> void:
+	shield_on = on
+	bubble.visible = on
+
+
+## Barrier Dome up or down.
+func set_barrier(on: bool) -> void:
+	if on and not dome.visible:
+		dome.visible = true
+		var full := Vector2.ONE * DOME_PX / dome.texture.get_width()
+		dome.scale = full * 0.3
+		var tw := dome.create_tween()
+		tw.tween_property(dome, "scale", full, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		_fx_world("shock_ring", position, 0.35, 40.0, 220.0, 0.0, Color(0.6, 0.9, 1.0, 0.9))
+	elif not on and dome.visible:
+		dome.visible = false
+		_fx_world("spark_electric", position, 0.3, 60.0, 160.0, randf() * TAU, Color(0.6, 0.9, 1.0, 0.8))
+
+
+## Re-dresses the hero for the current build. Returns banner lines for the
+## pieces that changed (empty when nothing did).
+func refresh(weapons: Dictionary, powers: Dictionary, evolved: Dictionary) -> Array:
+	var news := []
+	var ht := _tier(_levels(powers, Data.HELMET_POWERS), Data.HELMET_TIERS)
+	if ht != helmet_tier:
+		helmet_tier = ht
+		helmet.visible = ht > 0
+		if ht > 0:
+			_set_tex(helmet, "gear/helmet%d" % ht, HELMET_PX)
+			_pop(helmet)
+			news.append(["HELMET", ["", "COMBAT HELMET", "ASSAULT HELMET", "LEGEND HELMET"][ht]])
+	var st := _tier(_levels(powers, Data.SHOULDER_POWERS), Data.SHOULDER_TIERS)
+	if st != shoulder_tier:
+		shoulder_tier = st
+		for s in shoulders:
+			s.visible = st > 0
+			if st > 0:
+				_set_tex(s, "gear/shoulder%d" % st, SHOULDER_PX)
+				_pop(s)
+		if st > 0:
+			news.append(["ARMOR", ["", "LIGHT PAULDRONS", "HEAVY PAULDRONS", "TITAN PAULDRONS"][st]])
+	var best := ""
+	var best_n := 1
+	for fam in Data.BACK_FAMILIES:
+		var n := _levels(powers, Data.BACK_FAMILIES[fam]) + _levels(weapons, Data.BACK_FAMILIES[fam])
+		if n > best_n:
+			best_n = n
+			best = fam
+	if best != back_id:
+		back_id = best
+		back.visible = best != "" and best != "wings"
+		wings.visible = best == "wings"
+		if best == "wings":
+			_set_tex(wings, "gear/wings", WINGS_PX)
+			_pop(wings)
+		elif best != "":
+			_set_tex(back, "gear/" + best, BACK_PX)
+			_pop(back)
+		if best != "":
+			news.append(["GEAR", {"jetpack": "JETPACK", "missiles": "MISSILE POD", "dronepack": "DRONE DOCK", "wings": "ENERGY WINGS"}[best]])
+	var el := ""
+	var el_n := 0
+	for id in Data.ELEMENT_COLORS:
+		if int(powers.get(id, 0)) > el_n:
+			el_n = powers[id]
+			el = id
+	if el != element:
+		element = el
+		aura.visible = el != ""
+		if el != "":
+			aura.modulate = Data.ELEMENT_COLORS[el]
+			wings.modulate = Data.ELEMENT_COLORS[el].lightened(0.4)
+	# The main weapon: the highest level one (the current one wins ties).
+	var main := hand_id
+	var main_l := int(weapons.get(hand_id, 0)) + (100 if evolved.has(hand_id) else 0)
+	for id in Data.WEAPON_IDS:
+		var l := int(weapons.get(id, 0)) + (100 if evolved.has(id) else 0)
+		if l > main_l:
+			main_l = l
+			main = id
+	if main != hand_id and main != "":
+		_swap_weapon(main)
+		news.append(["WEAPON", String(Data.NAMES[main]).to_upper()])
+	hand_evolved = evolved.has(hand_id)
+	return news
+
+
+# --- Animation hooks (called by the game) -----------------------------------
+
+## Every frame: turn toward the target (world angle). A sharp turn whips
+## around with an afterimage.
+func face(world_angle: float, dt: float) -> void:
+	if absf(wrapf(world_angle - rotation, -PI, PI)) > 2.0 and not dead and air <= 0.0:
+		_ghost(Color(0.6, 0.9, 1.0, 0.35), Vector2.ZERO)
+		squash = Vector2(0.92, 1.06)
+	rotation = rotate_toward(rotation, world_angle, TURN_SPEED * dt)
+
+
+## Every frame from the game: how ready the weapon in hand is (0..1).
+func set_charge(frac: float) -> void:
+	charge = frac
+
+
+## Meteor Slam height (0..1) and progress through the whole jump (0..1).
+func set_air(h: float, progress: float) -> void:
+	air = h
+	air_spin = TAU * smoothstep(0.15, 0.85, progress)
+
+
+func slam_launch() -> void:
+	squash = Vector2(1.3, 0.7)  # Crouch, then spring.
+	var tw := rig.create_tween()
+	tw.tween_property(self, "squash", Vector2(0.8, 1.25), 0.1)
+	tw.tween_property(self, "squash", Vector2.ONE, 0.25)
+	_fx_world("shock_ring", position, 0.35, 30.0, 160.0, 0.0, Color(1.0, 0.7, 0.4, 0.8))
+	for k in 6:
+		_fx_world("dust_puff", position + Vector2.from_angle(TAU * k / 6.0) * 22.0, 0.5, 18.0, 44.0, randf() * TAU, Color(1, 1, 1, 0.8))
+	_fx_world("power_burst", position, 0.4, 30.0, 140.0, randf() * TAU, Color(1.0, 0.6, 0.3, 0.9), true)
+
+
+func slam_land(radius: float) -> void:
+	squash = Vector2(1.45, 0.6)
+	var tw := rig.create_tween()
+	tw.tween_property(self, "squash", Vector2(0.9, 1.12), 0.12)
+	tw.tween_property(self, "squash", Vector2.ONE, 0.25)
+	_fx_world("shock_ring", position, 0.55, 40.0, radius * 2.4, 0.0, Color(1.0, 0.75, 0.45, 0.95))
+	_fx_world("shock_ring", position, 0.4, 20.0, radius * 1.3, 0.0, Color(1.0, 1.0, 1.0, 0.9))
+	_fx_world("power_burst", position, 0.5, 60.0, radius * 1.4, randf() * TAU, Color(1.0, 0.55, 0.25, 0.9), true)
+	for k in 10:
+		var at := position + Vector2.from_angle(TAU * k / 10.0 + randf() * 0.3) * radius * randf_range(0.3, 0.8)
+		_fx_world("dust_puff", at, 0.8, 30.0, 80.0, randf() * TAU, Color(0.85, 0.8, 0.7, 0.85))
+
+
+## Every frame: how fast the hero moves (move vector, length 0..1).
+func move(move_vec: Vector2, dashing: bool) -> void:
+	speed_frac = move_vec.length()
+	# Lean into turns: the change of facing per frame tilts the figure.
+	var turn := wrapf(rotation - last_angle, -PI, PI)
+	last_angle = rotation
+	lean = lerpf(lean, clampf(turn * 4.0, -0.3, 0.3), 0.2)
+	if speed_frac > 0.5 and not dashing and not dead and air <= 0.0:
+		# A puff under each foot as it lands: left, right, left...
+		var foot := signf(sin(step))
+		if foot != 0.0 and foot != last_side:
+			last_side = foot
+			var back_dir := -Vector2.from_angle(rotation)
+			var feet := position + back_dir * 14.0 + back_dir.orthogonal() * 9.0 * foot
+			_fx_world("dust_puff", feet, 0.45, 12.0, 28.0, randf() * TAU, Color(1, 1, 1, 0.65))
+
+
+## Every frame: where the weapon should point (world angle).
+func aim(world_angle: float) -> void:
+	var rel := wrapf(world_angle - rotation, -PI, PI)
+	aim_angle = clampf(rel, -AIM_LIMIT, AIM_LIMIT)
+
+
+## A weapon fired: recoil, muzzle flash and a per-weapon gesture.
+func fire(id: String) -> void:
+	if dead:
+		return
+	var r: Array = RECOIL.get(id, [0.2, ""])
+	if id != hand_id:
+		# A weapon that isn't in hand still gives the body a small jolt.
+		recoil = maxf(recoil, float(r[0]) * 0.3)
+		if id == "rockets" or id == "airstrike":
+			back_kick = 1.0
+		return
+	recoil = maxf(recoil, float(r[0]))
+	stance = minf(1.0, stance + 0.25)
+	idle_t = 0.0
+	heat = minf(1.0, heat + float(HEATS.get(id, 0.0)))
+	# Muzzle climb: each shot nudges the aim; it settles back on its own.
+	hand_pivot.rotation += randf_range(-0.09, 0.09) * float(r[0])
+	for _k in int(CASINGS.get(id, 0)):
+		_casing()
+	if String(r[1]) != "":
+		_flash(String(r[1]), 0.07 if id != "rail" else 0.12)
+	match id:
+		"scatter":
+			squash = Vector2(0.9, 1.08)  # The whole body rocks back...
+			pump_t = 0.3  # ...then racks the pump.
+		"rail":
+			squash = Vector2(0.9, 1.08)
+			_fx_world("dust_puff", get_parent().to_local(hand.global_position), 0.4, 10.0, 26.0, randf() * TAU, Color(0.6, 0.95, 1.0, 0.6))
+		"flame":
+			jitter = 1.0
+		"grenade":
+			_swing(hand_pivot, -0.9, 0.28)
+		"rockets":
+			back_kick = 1.0
+			_swing(hand_pivot, -0.25, 0.2)
+		"mines", "sentry":
+			_pulse(hand, 1.25, 0.22)  # Deploy gesture.
+		"airstrike":
+			_pulse(hand, 1.2, 0.3)
+			_fx_world("spark_star", get_parent().to_local(hand.global_position), 0.25, 6.0, 18.0, 0.0, Color(1.0, 0.4, 0.3))
+
+
+## Phase Dash: stretch along the dash, speed streak and afterimages.
+func dash(world_angle: float) -> void:
+	dash_t = 0.2
+	ghost_t = 0.0
+	squash = Vector2(1.45, 0.7)
+	_fx_world("dash_streak", position, 0.3, 70.0, 110.0, world_angle, Color(0.7, 0.95, 1.0, 0.9))
+
+
+## Shockwave Stomp: crouch, slam, and a ground ring.
+func stomp(radius: float) -> void:
+	squash = Vector2(0.75, 0.75)
+	var tw := rig.create_tween()
+	tw.tween_property(self, "squash", Vector2(1.25, 1.25), 0.08)
+	tw.tween_property(self, "squash", Vector2.ONE, 0.2)
+	_fx_world("shock_ring", position, 0.4, 20.0, radius * 2.0, 0.0, Color(0.7, 0.95, 1.0, 0.9))
+	for k in 5:
+		var at := position + Vector2.from_angle(TAU * k / 5.0) * 26.0
+		_fx_world("dust_puff", at, 0.5, 18.0, 40.0, randf() * TAU, Color(1, 1, 1, 0.8))
+
+
+## Level-ups, card picks, evolutions: a burst behind the hero and a proud pop.
+func power_up(strength: float, color: Color) -> void:
+	glow = minf(1.0, 0.4 + strength * 0.3)
+	glow_color = color
+	squash = Vector2.ONE * (1.0 + 0.12 * minf(strength, 2.0))
+	_fx_world("power_burst", position, 0.35 + 0.15 * strength, 30.0, 90.0 + 60.0 * minf(strength, 2.0), randf() * TAU, color.lightened(0.3), true)
+
+
+func hurt() -> void:
+	flinch = 1.0
+	twist = randf_range(0.25, 0.4) * (1.0 if randf() < 0.5 else -1.0)
+	squash = Vector2(0.88, 1.1)
+	_fx_world("spark_star", position + Vector2(randf_range(-10, 10), randf_range(-10, 10)), 0.2, 10.0, 26.0, randf() * TAU, Color(1.0, 0.5, 0.4))
+
+
+func dodge() -> void:
+	_ghost(Color(0.5, 0.9, 1.0, 0.6), Vector2(randf_range(-20, 20), randf_range(-20, 20)))
+
+
+func shield_hit() -> void:
+	_pulse(bubble, 1.35, 0.25)
+	_fx_world("spark_electric", position, 0.25, 30.0, 60.0, randf() * TAU, Color(0.6, 0.9, 1.0))
+
+
+func heal() -> void:
+	_fx_world("heal_glow", position, 0.6, 30.0, 70.0, 0.0, Color(1, 1, 1, 0.9), true)
+
+
+func die() -> void:
+	dead = true
+	var tw := rig.create_tween().set_parallel()
+	tw.tween_property(rig, "rotation", rig.rotation + TAU * 1.5, 0.7).set_ease(Tween.EASE_OUT)
+	tw.tween_property(rig, "scale", Vector2.ONE * 0.55, 0.7)
+	tw.tween_property(rig, "modulate", Color(0.45, 0.45, 0.5, 0.8), 0.7)
+	body.skew = 0.0
+
+
+func revive(effects: bool = true) -> void:
+	dead = false
+	air = 0.0
+	air_spin = 0.0
+	rig.scale = Vector2.ONE
+	rig.rotation = 0.0
+	rig.modulate = Color.WHITE
+	if effects:
+		heal()
+		power_up(1.2, Color(0.6, 1.0, 0.8))
+
+
+func victory() -> void:
+	power_up(2.0, Color(1.0, 0.85, 0.4))
+	var tw := rig.create_tween().set_loops(3)
+	tw.tween_property(self, "squash", Vector2(1.15, 1.15), 0.25)
+	tw.tween_property(self, "squash", Vector2.ONE, 0.25)
+
+
+# --- Per-frame animation ----------------------------------------------------
+
+func _process(delta: float) -> void:
+	t += delta
+	if not dead:
+		# Stride: one full cycle is two steps. Faster when moving fast.
+		step += delta * (8.0 + 7.0 * speed_frac)
+		var run := speed_frac
+		var idle := 1.0 - speed_frac
+		var stride := sin(step)
+		lift = absf(stride) * run
+		var bounce := 1.0 + STRIDE_BOUNCE * lift
+		var breathe := 1.0 + 0.035 * sin(t * 2.6) * idle
+		squash = squash.lerp(Vector2.ONE, minf(1.0, delta * 9.0))
+		# Running stretches slightly along the run and pops up on each step.
+		rig.scale = Vector2(bounce * breathe * (1.0 + 0.05 * run), breathe * bounce * (1.0 - 0.03 * run)) * squash
+		rig.position = Vector2(-recoil * 8.0, stride * STRIDE_SWAY * run)
+		# A waddle with each step, the lean into turns, and a slow look-around when still.
+		# Braced under sustained fire: leaning in, less bob and sway.
+		stance = maxf(0.0, stance - delta * 1.2)
+		idle_t += delta
+		var calm := 1.0 - 0.6 * stance
+		rig.position += Vector2(3.0 * stance, 0.0)
+		# The torso twists a little toward the aim (the arms lead), and
+		# jolts from a hit.
+		twist = move_toward(twist, 0.0, delta * 2.5)
+		rig.rotation = lean + (stride * STRIDE_WADDLE * run + sin(t * 0.9) * 0.05 * idle) * calm + hand_pivot.rotation * 0.3 + twist + air_spin
+		# Meteor Slam: bigger and higher toward the camera.
+		if air > 0.0:
+			rig.scale *= 1.0 + AIR_SCALE * air
+			rig.position += Vector2(0.0, -AIR_RISE * air / scale.x).rotated(-rotation)
+		# Standing still a while: a quick weapon check.
+		if idle_t > 2.5 and speed_frac < 0.1:
+			fidget_t -= delta
+			if fidget_t <= 0.0:
+				fidget_t = 4.0
+				_swing(hand_pivot, 0.55, 0.7)
+		# Shoulders swing in opposite directions, like arms pumping, and
+		# follow the arms when they aim or kick back.
+		for k in shoulders.size():
+			var s: Sprite2D = shoulders[k]
+			s.position.x = SHOULDER.x + stride * STRIDE_SWING * run * (1.0 if k == 0 else -1.0) - recoil * 4.0
+			s.rotation = hand_pivot.rotation * 0.5
+		# The head looks along the aim and nods back on each shot.
+		helmet.position = HEAD + Vector2(stride * 2.0 * run - recoil * 3.0, 0.0)
+		helmet.rotation = lerp_angle(helmet.rotation, hand_pivot.rotation * 0.6 + sin(t * 0.7) * 0.12 * idle, minf(1.0, delta * 10.0))
+		# The body shears a little, like a cape catching the air.
+		body.skew = stride * 0.12 * run + sin(t * 3.0) * 0.03 * idle
+		# Arms and weapon move as one: they bob with the stride on top of the
+		# aim, and the whole grip slides back on recoil.
+		var gun_bob := cos(step) * 0.08 * run * (1.0 - 0.7 * stance)
+		hand_pivot.rotation = lerp_angle(hand_pivot.rotation, aim_angle + gun_bob, minf(1.0, delta * 14.0))
+		var shake := Vector2(randf_range(-1, 1), randf_range(-1, 1)) * 2.0 * jitter
+		hand_pivot.position = HAND_PIVOT + Vector2(-absf(cos(step)) * 3.0 * run - recoil * 10.0, 0.0) + shake
+		# A faint motion trail at full speed.
+		if run > 0.85:
+			trail_t -= delta
+			if trail_t <= 0.0:
+				trail_t = 0.07
+				_ghost(Color(0.6, 0.9, 1.0, 0.22), Vector2.ZERO)
+	# The shadow stays toward the bottom-right in screen space and drifts out
+	# and shrinks a little as the hero pops up on each step.
+	var off := (SHADOW_OFFSET * (1.0 + 0.6 * lift + 1.5 * air)) / scale.x
+	shadow.position = off.rotated(-rotation)
+	var sh := 120.0 / shadow.texture.get_width() * (1.0 - 0.12 * lift) * (1.0 - 0.45 * air)
+	shadow.scale = Vector2(sh, sh * 0.8)
+	shadow.modulate.a = 0.42 * (1.0 - 0.5 * air)
+	shadow.rotation = -rotation
+	recoil = maxf(0.0, recoil - delta * 6.0)
+	jitter = maxf(0.0, jitter - delta * 3.0)
+	# A little extra kick in the grip, and the scatter's pump stroke.
+	pump_t = maxf(0.0, pump_t - delta)
+	var pump := sin(clampf(1.0 - pump_t / 0.3, 0.0, 1.0) * PI) * 7.0 if pump_t > 0.0 else 0.0
+	hand.position = Vector2(HAND_REACH - recoil * 3.0 - pump, 0.0)
+	heat = maxf(0.0, heat - delta * 0.35)
+	# The rail lance and tesla coil glow brighter as they charge.
+	charge_glow.visible = (hand_id == "rail" or hand_id == "tesla") and hand.visible and not dead
+	if charge_glow.visible:
+		var c := charge * charge
+		charge_glow.modulate = Color(0.5, 0.9, 1.0, 0.15 + 0.7 * c)
+		charge_glow.scale = Vector2.ONE * (14.0 + 26.0 * c) / charge_glow.texture.get_width() * (1.0 + 0.1 * sin(t * 30.0))
+	back_kick = maxf(0.0, back_kick - delta * 5.0)
+	back.position = BACK + Vector2(-6.0 * back_kick, 0.0)
+	flinch = maxf(0.0, flinch - delta * 4.0)
+	glow = maxf(0.0, glow - delta * 1.5)
+	var tint := Color.WHITE.lerp(Color(1.8, 0.5, 0.45), flinch * 0.7)
+	if glow > 0.0:
+		tint = tint.lerp(glow_color * 1.6, glow * 0.5)
+	if not dead:
+		body.self_modulate = tint
+	if flash_t > 0.0:
+		flash_t -= delta
+		flash.visible = flash_t > 0.0
+	if dash_t > 0.0:
+		dash_t -= delta
+		ghost_t -= delta
+		if ghost_t <= 0.0:
+			ghost_t = 0.04
+			_ghost(Color(0.5, 0.9, 1.0, 0.55), Vector2.ZERO)
+	if aura.visible:
+		aura.scale = Vector2.ONE * (150.0 / aura.texture.get_width()) * (1.0 + 0.08 * sin(t * 5.0))
+		aura.modulate.a = 0.3 + 0.12 * sin(t * 7.0)
+	if wings.visible:
+		# Wings flap faster and wider when running.
+		wings.rotation = (0.06 + 0.1 * speed_frac) * sin(t * (4.0 + 8.0 * speed_frac))
+	if bubble.visible:
+		bubble.modulate.a = 0.45 + 0.25 * sin(t * 6.0)
+	if dome.visible:
+		dome.modulate.a = 0.55 + 0.25 * sin(t * 10.0)
+		dome.rotation = -rotation  # Steady on screen while the hero turns.
+	if hand.visible and hand_evolved:
+		hand.self_modulate = Color(1.0, 0.85, 0.4).lerp(Color.WHITE, 0.5 + 0.5 * sin(t * 8.0)) * 1.4
+	elif hand.visible:
+		# A hot barrel glows orange.
+		hand.self_modulate = Color.WHITE.lerp(Color(1.7, 0.85, 0.45), smoothstep(0.35, 1.0, heat) * 0.6)
+
+
+## The old weapon spins away behind the hero; the new one snaps in with a flash.
+func _swap_weapon(id: String) -> void:
+	if hand.visible and hand.texture != null:
+		var ghost := Sprite2D.new()
+		ghost.texture = hand.texture
+		ghost.position = hand.position
+		ghost.scale = hand.scale
+		hand_pivot.add_child(ghost)
+		var tw := ghost.create_tween().set_parallel()
+		tw.tween_property(ghost, "position", hand.position + Vector2(-60, -40), 0.35)
+		tw.tween_property(ghost, "rotation", -TAU, 0.35)
+		tw.tween_property(ghost, "scale", Vector2.ZERO, 0.35)
+		tw.tween_property(ghost, "modulate:a", 0.0, 0.35)
+		tw.chain().tween_callback(ghost.queue_free)
+	hand_id = id
+	hand.visible = true
+	_set_tex(hand, "hand/" + id, HAND_PX)
+	var full := hand.scale
+	hand.scale = Vector2.ZERO
+	hand.rotation = 1.2
+	hand.self_modulate = Color(3, 3, 3)
+	var tw2 := hand.create_tween().set_parallel()
+	tw2.tween_property(hand, "scale", full, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT).set_delay(0.12)
+	tw2.tween_property(hand, "rotation", 0.0, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT).set_delay(0.12)
+	tw2.tween_property(hand, "self_modulate", Color.WHITE, 0.45).set_delay(0.12)
+
+
+func _flash(fx_name: String, time: float) -> void:
+	var tex := _fx_tex(fx_name)
+	if tex == null:
+		return
+	flash.texture = tex
+	# Muzzle flashes are drawn from their left edge (the muzzle) to the right.
+	flash.offset = Vector2(tex.get_width() * 0.5, 0.0) if fx_name != "spark_electric" else Vector2.ZERO
+	flash.scale = Vector2.ONE * randf_range(34.0, 44.0) / tex.get_width()
+	flash.rotation = randf_range(-0.15, 0.15)
+	flash.visible = true
+	flash_t = time
+
+
+## A world effect for the game (impacts, chain sparks). It keeps `reserve`
+## of the effect slots free so the hero's own effects always have room.
+func effect(fx_name: String, at: Vector2, life: float, size0: float, size1: float, color: Color, reserve: int = 10) -> void:
+	if fx_alive < FX_CAP - reserve:
+		_fx_world(fx_name, at, life, size0, size1, randf() * TAU, color)
+
+
+## A brass casing flipped out of the weapon's side, spinning to the ground.
+func _casing() -> void:
+	if fx_alive >= FX_CAP - 8 or get_parent() == null or not hand.visible:
+		return
+	var c := Sprite2D.new()
+	c.texture = casing_tex
+	var from: Vector2 = get_parent().to_local(hand.global_position)
+	c.position = from
+	c.rotation = randf() * TAU
+	get_parent().add_child(c)
+	_track(c, 0.45)
+	var side := Vector2.from_angle(global_rotation + hand_pivot.rotation).orthogonal() * (1.0 if randf() < 0.8 else -1.0)
+	var land := from + side * randf_range(22.0, 38.0) + Vector2(randf_range(-6, 6), randf_range(-6, 6))
+	var tw := c.create_tween().set_parallel()
+	tw.tween_property(c, "position", land, 0.3).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tw.tween_property(c, "rotation", c.rotation + randf_range(8.0, 14.0), 0.3)
+	tw.tween_property(c, "modulate:a", 0.0, 0.15).set_delay(0.3)
+
+
+static func _casing_texture() -> Texture2D:
+	var img := Image.create_empty(8, 4, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0.15, 0.1, 0.02))
+	for x in range(1, 7):
+		for y in range(1, 3):
+			img.set_pixel(x, y, Color(1.0, 0.8, 0.3) if y == 1 else Color(0.8, 0.55, 0.15))
+	return ImageTexture.create_from_image(img)
+
+
+## A fading copy of the body left behind (dash afterimages, dodges).
+func _ghost(color: Color, offset: Vector2) -> void:
+	if fx_alive >= FX_CAP or get_parent() == null:
+		return
+	var g := Sprite2D.new()
+	g.texture = costume_tex
+	g.modulate = color
+	# Same parent as the hero, so the hero's own transform places it.
+	g.position = position + offset
+	g.rotation = rotation + rig.rotation
+	g.scale = scale * rig.scale * body.scale
+	get_parent().add_child(g)
+	get_parent().move_child(g, get_index())
+	_track(g, 0.25)
+	var tw := g.create_tween()
+	tw.tween_property(g, "modulate:a", 0.0, 0.25)
+
+
+## A one-shot effect sprite in the world: it grows from size0 to size1 pixels
+## and fades out. `at` is in world coordinates (the hero's parent), like the
+## game's positions. behind = drawn under the hero.
+func _fx_world(fx_name: String, at: Vector2, life: float, size0: float, size1: float, rot: float, color: Color, behind: bool = false) -> void:
+	if fx_alive >= FX_CAP or get_parent() == null:
+		return
+	var tex := _fx_tex(fx_name)
+	if tex == null:
+		return
+	var s := Sprite2D.new()
+	s.texture = tex
+	s.modulate = color
+	var w := float(tex.get_width())
+	s.scale = Vector2.ONE * size0 / w
+	s.position = at
+	s.rotation = rot
+	get_parent().add_child(s)
+	if behind:
+		get_parent().move_child(s, get_index())
+	_track(s, life)
+	var tw := s.create_tween().set_parallel()
+	tw.tween_property(s, "scale", Vector2.ONE * size1 / w, life).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tw.tween_property(s, "modulate:a", 0.0, life).set_ease(Tween.EASE_IN)
+
+
+func _fx_tex(fx_name: String) -> Texture2D:
+	if not fx_tex.has(fx_name):
+		fx_tex[fx_name] = Art.sprite("fx/" + fx_name)
+	return fx_tex[fx_name]
+
+
+## Counts a live effect and frees it after its life.
+func _track(node: Node, life: float) -> void:
+	fx_alive += 1
+	get_tree().create_timer(life).timeout.connect(func() -> void:
+		fx_alive -= 1
+		node.queue_free())
+
+
+func _swing(node: Node2D, amount: float, time: float) -> void:
+	var tw := node.create_tween()
+	tw.tween_property(node, "rotation", node.rotation + amount, time * 0.35)
+	tw.tween_property(node, "rotation", aim_angle, time * 0.65).set_trans(Tween.TRANS_BACK)
+
+
+func _pulse(s: Node2D, amount: float, time: float) -> void:
+	var full := s.scale
+	var tw := s.create_tween()
+	tw.tween_property(s, "scale", full * amount, time * 0.4)
+	tw.tween_property(s, "scale", full, time * 0.6)
+
+
+func _pop(s: Sprite2D) -> void:
+	var full := s.scale
+	s.scale = full * 1.8
+	s.self_modulate = Color(3, 3, 3)
+	var tw := s.create_tween().set_parallel()
+	tw.tween_property(s, "scale", full, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(s, "self_modulate", Color.WHITE, 0.5)
+
+
+func _layer(parent: Node, tex: Texture2D, pos: Vector2, px: float) -> Sprite2D:
+	var s := Sprite2D.new()
+	s.position = pos
+	parent.add_child(s)
+	if tex != null:
+		s.texture = tex
+		s.scale = Vector2.ONE * px / tex.get_width()
+	return s
+
+
+func _set_tex(s: Sprite2D, tex_name: String, px: float) -> void:
+	var tex := Art.sprite(tex_name)
+	if tex == null:
+		return
+	s.texture = tex
+	s.scale = Vector2.ONE * px / tex.get_width()
+
+
+func _levels(owned: Dictionary, ids: Array) -> int:
+	var n := 0
+	for id in ids:
+		n += int(owned.get(id, 0))
+	return n
+
+
+func _tier(n: int, steps: Array) -> int:
+	var tier := 0
+	for k in steps.size():
+		if n >= int(steps[k]):
+			tier = k + 1
+	return tier
