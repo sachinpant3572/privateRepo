@@ -8,7 +8,8 @@ studio-quality tracks.
 | Part | Files | Made with |
 |---|---|---|
 | Music | `games/prototype/audio/music/*.ogg` | `tools/audio/compose.py` (original, composed in code) |
-| Sound effects | `games/prototype/audio/sfx/<id>_<n>.ogg` (29 sounds, 69 variations) | `tools/audio/sfx.py` |
+| Combat sound effects | `games/prototype/audio/sfx/<id>_<n>.ogg`: weapons, impacts, explosions, alarm, freeze | Recorded-style audio from Higgsfield video clips, cut by `tools/audio/realistic.py` |
+| Interface and reward sounds | same folder: pickups, level-up, cards, synergy, evolution | `tools/audio/sfx.py` (synthesized: clean and crisp suits these) |
 | Announcer | `games/prototype/audio/voice/*.ogg` (28 lines) | Higgsfield, ElevenLabs v4, voice "Gideon" |
 
 **Adaptive music (`music.gd`):**
@@ -96,6 +97,36 @@ into `stage_combat.ogg`, everything else into `stage_calm.ogg`.)
 **`defeat.ogg`, about 6 s, not looped**
 > Short somber orchestral sting in D minor, descending low brass, one deep
 > impact, fading strings.
+
+## Realistic combat sounds
+
+The weapon, impact and explosion sounds come from short Higgsfield video
+clips with native audio (Seedance 2.0 Mini, 480p, 5 s, about 2 credits
+each; 14 clips in all). `tools/audio/realistic.py` finds each event in a
+clip, cuts it out, trims and fades it, and matches its loudness to the sound
+it replaces. Each clip gives 3 to 7 variations.
+
+| Clip | Prompt (short) | Becomes |
+|---|---|---|
+| cannon | battle tank fires its main cannon, explosions downrange | `boom`, `big_boom` |
+| rifle | futuristic energy rifle firing rapid plasma bursts | `shot` |
+| shotgun | heavy combat shotgun, four blasts with a pump rack | `scatter` |
+| rocket | small guided missiles launching one by one | `rocket` |
+| railgun | railgun charging and firing with a supersonic crack | `rail` |
+| flame | flamethrower, three roaring bursts | `flame` |
+| grenade | grenade launcher thunks and distant blasts | `grenade` |
+| tesla | giant tesla coil throwing lightning | `zap` |
+| drone | combat drone firing laser blaster bursts | `drone` |
+| armor | bullets striking a steel armor plate | `hit` |
+| depot | fuel depot detonating in one gigantic explosion | `big_boom` |
+| explosions | medium explosions one at a time | `boom` |
+| siren | air-raid siren and klaxon | `alarm` |
+| frost | frost blast freezing water into ice | `freeze` |
+
+Every prompt ends with "No music, no voices, only ... sound effects", and
+asks for pauses between events so they can be cut apart. To redo one: make
+the clip, save it as `<clip>.mp4` in a folder, then run
+`python3 tools/audio/sfx.py && python3 tools/audio/realistic.py <folder>`.
 
 ## Regenerating the built-in audio
 
