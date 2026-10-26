@@ -144,6 +144,13 @@ faces): every enemy within the cut's width is destroyed (heavies lose about
 30%, the boss 3%), enemy bullets on the path vanish, a lightning trail stays
 for a moment and the screen jolts. Untouchable while dashing.
 
+**Meteor Blitz (both buttons):** with both charged, press DASH during a
+slam or SLAM during a dash (or both at once): the hero leaps and streaks in
+a straight line to the biggest crowd within 900 px, cutting through the
+path, and lands with a crater up to twice the slam's size. Timing sets the
+power: DASH at the top of the jump is PERFECT, both at once or late in a
+dash GREAT, early or late in the jump GOOD. Code: `specials.gd`.
+
 **Limit Breaks** only come up once the build is complete: every weapon and
 power slot filled and every item at level 8. Until then, maxed items simply
 stop appearing.

@@ -10,7 +10,7 @@ const NAMES := {
 	"other": "Other", "burn": "Burning", "toxin": "Toxin clouds", "shock": "Shock arcs", "static": "Static Dash",
 	"explosive": "Explosive Rounds blasts", "stomp": "Shockwave Stomp", "dash": "Phase Dash", "thorns": "Reactive Plating",
 	"evolution": "Evolution blasts", "revive": "Revive blasts", "nuke": "Nuke", "bombs": "Bombs", "slam": "Meteor Slam",
-	"blitz": "Blitz Dash",
+	"blitz": "Blitz Dash", "combo": "Meteor Blitz",
 }
 const HEAL_NAMES := {
 	"regen": "Nanite Regeneration", "lifesteal": "Vampiric Rounds", "repair": "Repair Drone",

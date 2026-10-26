@@ -12,6 +12,7 @@ const Data := preload("res://data.gd")
 const Art := preload("res://art.gd")
 const Report := preload("res://report.gd")
 const SelfTest := preload("res://selftest.gd")
+const Specials := preload("res://specials.gd")
 const FX := preload("res://fx.gd")
 const Overlay := preload("res://overlay.gd")
 const HeroRig := preload("res://hero.gd")
@@ -74,6 +75,12 @@ const BLITZ_NEED := 90.0
 const BLITZ_LEN := 520.0
 const BLITZ_WIDTH := 70.0
 const BLITZ_TIME := 0.16
+# Meteor Blitz: Blitz Dash and Meteor Slam together (one pressed while the
+# other is under way) launch the hero in a leaping streak at the biggest
+# horde and a far bigger crater. Timing sets the power: dash at the top of
+# the jump for a PERFECT.
+const MBLITZ_TIME := 0.6
+const MBLITZ_REACH := 900.0
 const BANISHES := 3
 const MINE_CAP := 40
 const CLOUD_CAP := 12
@@ -246,6 +253,11 @@ var blitz_charge := 0.0
 var blitz_from := Vector2.ZERO
 var blitz_hit := {}  # Enemies already cut by this dash.
 var blitz_cuts := 0
+var combo_t := -1.0  # Time into a Meteor Blitz; below 0 when none.
+var combo_q := 0.0  # Its power, 0.6 .. 1 (from the timing).
+var combo_from := Vector2.ZERO
+var combo_to := Vector2.ZERO
+var combos := 0
 var stomp_lvl := 0
 var stomp_t := 0.0
 var bt_lvl := 0
@@ -476,6 +488,7 @@ var peak_enemies := 0
 var hud_timer := 0.0
 var last_results := ""
 var selftest: RefCounted  # CI smoke test and screenshots (selftest.gd), kept alive while they run.
+var specials := Specials.new(self)  # Meteor Slam, Blitz Dash, Meteor Blitz (specials.gd).
 # Run report (COPY RESULTS): what dealt and took the damage, healing, a
 # minute-by-minute timeline and the picks, so balance problems show up.
 var cur_src := "other"  # What is dealing damage right now (weapon or power id).
@@ -616,8 +629,8 @@ func _build_scene() -> void:
 	hud.option_toggled.connect(_on_option)
 	hud.chest_collected.connect(_on_chest_collected)
 	hud.double_gold_pressed.connect(_on_double_gold)
-	hud.blitz_pressed.connect(_dash)
-	hud.jump_pressed.connect(_slam)
+	hud.blitz_pressed.connect(specials.dash)
+	hud.jump_pressed.connect(specials.slam)
 	hud.banish_pressed.connect(_on_banish)
 	hud.skip_pressed.connect(_on_skip)
 	hud.costumes_pressed.connect(_show_costumes)
@@ -810,6 +823,8 @@ func _start(auto: bool) -> void:
 	dash_t = 0.0
 	blitz_charge = 0.0
 	blitz_hit = {}
+	combo_t = -1.0
+	combos = 0
 	stomp_t = 0.0
 	bt_t = 0.0
 	slow_t = 0.0
@@ -1138,7 +1153,7 @@ func _process(delta: float) -> void:
 		_on_death()
 	elif final_clear_t >= 0.0 and t - final_clear_t > 2.5:
 		_game_over(true)
-	elif pending_levels > 0 and state == State.PLAYING and slam_t < 0.0:
+	elif pending_levels > 0 and state == State.PLAYING and slam_t < 0.0 and combo_t < 0.0:
 		_open_cards(false)
 
 
@@ -1154,13 +1169,15 @@ func _update_player(dt: float) -> void:
 	if mv.length() > 1.0:
 		mv = mv.normalized()
 	move_vec = mv
-	if dash_t > 0.0:
+	if combo_t >= 0.0:
+		specials.update_combo(dt)
+	elif dash_t > 0.0:
 		dash_t -= dt
 		var from := player
-		player += dash_dir * _blitz_len() / BLITZ_TIME * dt
-		_blitz_cut(from, player)
+		player += dash_dir * specials.blitz_len() / BLITZ_TIME * dt
+		specials.blitz_cut(from, player)
 		if dash_t <= 0.0:
-			_blitz_end()
+			specials.blitz_end()
 		if int(t * 60.0) % 2 == 0:
 			_vfx(player, Vector2.ZERO, 0.25, 14.0, 4.0, Color(0.5, 0.95, 1.0, 0.6), Color(0.3, 0.6, 1.0, 0.0), true)
 	else:
@@ -1707,7 +1724,7 @@ func _kill(j: int) -> void:
 	if slam_t < 0.0:
 		slam_charge = minf(slam_need, slam_charge + float(t_xp[ty]))
 	if dash_t <= 0.0:
-		blitz_charge = minf(_blitz_need(), blitz_charge + float(t_xp[ty]))
+		blitz_charge = minf(specials.blitz_need(), blitz_charge + float(t_xp[ty]))
 	_gem(p, maxi(1, int(round(t_xp[ty] * hp_mult * TIER_XP[e_tier[j]]))))
 	_add_combo()
 	var big := ty >= Data.ELITE
@@ -2629,16 +2646,18 @@ func _update_actives(dt: float) -> void:
 			sfx.play("powerup", 0.5, -6.0)
 	slow_t = maxf(slow_t - dt, 0.0)
 	_update_defense(dt)
-	_update_slam(dt)
+	specials.update_slam(dt)
 	if shield_max > 0 and shield_charges < shield_max:
 		shield_cd -= dt
 		if shield_cd <= 0.0:
 			shield_charges += 1
 			shield_cd = _shield_time()
 			hero.set_shield(true)
-	if dash_t <= 0.0:
-		if autoplay and blitz_charge >= _blitz_need() and e_count > 30:
-			_dash()
+	if dash_t <= 0.0 and combo_t < 0.0:
+		if autoplay and slam_t >= SLAM_RISE and blitz_charge >= specials.blitz_need():
+			specials.dash()  # A PERFECT Meteor Blitz.
+		elif autoplay and blitz_charge >= specials.blitz_need() and e_count > 30 and slam_charge < slam_need:
+			specials.dash()
 
 
 ## Barrier Dome, EMP Burst, Repair Drone and Fortify.
@@ -2675,86 +2694,6 @@ func _update_defense(dt: float) -> void:
 		var a := -t * 1.3
 		repair_node.position = repair_node.position.lerp(player + Vector2.from_angle(a) * 56.0, minf(1.0, dt * 6.0))
 		repair_node.rotation = a - PI * 0.5
-
-
-## Meteor Slam: up, a moment in the air, then down hard.
-func _slam() -> void:
-	if state != State.PLAYING or slam_t >= 0.0 or slam_charge < slam_need:
-		return
-	slam_t = 0.0
-	slam_charge = 0.0
-	slam_need = minf(slam_need + 100.0, 900.0)
-	slams += 1
-	invuln = maxf(invuln, SLAM_RISE + SLAM_HANG + SLAM_FALL + 0.3)
-	hud.set_jump(0.0)
-	hud.show_banner("METEOR SLAM!", Color(1.0, 0.55, 0.2))
-	hero.slam_launch()
-	_ring(player, 2.5)
-	sfx.play("slam_launch")
-
-
-func _update_slam(dt: float) -> void:
-	if slam_t < 0.0:
-		if autoplay and slam_charge >= slam_need and e_count > 40:
-			_slam()
-		return
-	slam_t += dt
-	var total := SLAM_RISE + SLAM_HANG + SLAM_FALL
-	invuln = maxf(invuln, 0.2)
-	var h := 1.0
-	if slam_t < SLAM_RISE:
-		h = sin(slam_t / SLAM_RISE * PI * 0.5)
-	elif slam_t > SLAM_RISE + SLAM_HANG:
-		var k := (slam_t - SLAM_RISE - SLAM_HANG) / SLAM_FALL
-		h = 1.0 - k * k
-	hero.set_air(clampf(h, 0.0, 1.0), clampf(slam_t / total, 0.0, 1.0))
-	if slam_t >= total:
-		slam_t = -1.0
-		hero.set_air(0.0, 0.0)
-		_slam_impact()
-
-
-func _slam_impact() -> void:
-	cur_src = "slam"
-	var r := SLAM_RADIUS * area_mult
-	var dmg := 300.0 + 30.0 * level
-	var grow := (1.0 + 0.2 * _diff_t() / 60.0) * hp_mult
-	for j in e_count:
-		if e_hp[j] <= 0.0:
-			continue
-		var ty := e_type[j]
-		var to := e_pos[j] - player
-		var d := to.length()
-		var rr := r + t_radius[ty]
-		if d < rr:
-			if ty == Data.ELITE or ty == Data.GUNSHIP or ty == Data.SIEGE:
-				# The heavies survive a slam, badly hurt.
-				_damage(j, (t_hp[ty] * grow * big_mult * 0.4) / dmg_mult + dmg, player, false)
-			else:
-				_damage(j, e_hp[j] * 4.0 / dmg_mult + dmg, player, false)  # Destroyed, shields and all.
-		elif d < rr * 1.7 and ty < Data.TANK:
-			e_pos[j] += to / maxf(d, 1.0) * 140.0 * (1.0 - (d - rr) / (rr * 0.7))
-			_damage(j, dmg * 0.3, player, false)
-	if boss_on and player.distance_to(boss_pos) < r + BOSS_RADIUS:
-		_damage_boss(boss_max * 0.06 / dmg_mult, false)
-	var r2 := r * r * 1.7
-	for i in b_count:
-		if b_pos[i].distance_squared_to(player) < r2:
-			b_life[i] = 0.0
-	_decal(player, r * 0.8)
-	_explosion(player, r * 0.55, 2.0)
-	for k in 8:
-		_explosion(player + Vector2.from_angle(TAU * k / 8.0 + randf()) * r * randf_range(0.4, 0.75), 90.0, 1.2)
-	_ring(player, r / RING_SIZE * 1.2)
-	_ring(player, r / RING_SIZE * 0.6)
-	_sparks(player, int(fx.tier["sparks"]) * 6)
-	hero.slam_land(r)
-	trauma = 1.0
-	hitstop = maxf(hitstop, 0.1)
-	hud.flash(Color(1.0, 0.75, 0.45, 0.45))
-	sfx.play("slam_impact")
-	if not smoke:
-		Input.vibrate_handheld(120)
 
 
 func _fortify_now() -> float:
@@ -2807,86 +2746,6 @@ func _set_repair_drone(on: bool) -> void:
 
 func _shield_time() -> float:
 	return maxf(4.0, 13.0 - float(_lv("shield")))
-
-
-func _blitz_need() -> float:
-	return BLITZ_NEED * maxf(0.4, 1.0 - 0.08 * dash_lvl)
-
-
-func _blitz_len() -> float:
-	return BLITZ_LEN * (1.0 + 0.05 * dash_lvl)
-
-
-func _blitz_width() -> float:
-	return (BLITZ_WIDTH + 6.0 * dash_lvl) * area_mult
-
-
-## Blitz Dash: along the stick (or the facing when still), through everything.
-func _dash() -> void:
-	if state != State.PLAYING or dash_t > 0.0 or slam_t >= 0.0 or blitz_charge < _blitz_need():
-		return
-	blitz_charge = 0.0
-	hud.set_blitz(0.0)
-	dash_t = BLITZ_TIME
-	dash_dir = move_vec.normalized() if move_vec.length_squared() > 0.01 else facing
-	blitz_from = player
-	blitz_hit = {}
-	blitz_cuts = 0
-	invuln = maxf(invuln, BLITZ_TIME + 0.35)
-	hero.dash(dash_dir.angle())
-	hud.show_banner("BLITZ DASH!", Color(0.6, 0.95, 1.0))
-	_ring(player, 2.5)
-	sfx.play("dash_launch")
-
-
-## Cuts every enemy within the dash's width of the stretch just travelled.
-func _blitz_cut(a: Vector2, b: Vector2) -> void:
-	cur_src = "blitz"
-	var w := _blitz_width()
-	var dmg := 200.0 + 25.0 * level
-	var grow := (1.0 + 0.2 * _diff_t() / 60.0) * hp_mult
-	for j in e_count:
-		if e_hp[j] <= 0.0 or blitz_hit.has(j):
-			continue
-		var ty := e_type[j]
-		var closest := Geometry2D.get_closest_point_to_segment(e_pos[j], a, b)
-		var rr := w + t_radius[ty]
-		if e_pos[j].distance_squared_to(closest) > rr * rr:
-			continue
-		blitz_hit[j] = true
-		blitz_cuts += 1
-		if blitz_cuts <= 12:
-			hero.effect("spark_star", e_pos[j], 0.18, 14.0, 40.0, Color(0.7, 0.95, 1.0), 6)
-		if ty == Data.ELITE or ty == Data.GUNSHIP or ty == Data.SIEGE:
-			_damage(j, (t_hp[ty] * grow * big_mult * 0.3) / dmg_mult + dmg, b, false)
-		else:
-			_damage(j, e_hp[j] * 4.0 / dmg_mult + dmg, b, false)
-	if boss_on and not blitz_hit.has(-1):
-		var c := Geometry2D.get_closest_point_to_segment(boss_pos, a, b)
-		if boss_pos.distance_to(c) < w + BOSS_RADIUS:
-			blitz_hit[-1] = true
-			_damage_boss(boss_max * 0.03 / dmg_mult, false)
-	var w2 := w * w
-	for i in b_count:
-		if b_pos[i].distance_squared_to(Geometry2D.get_closest_point_to_segment(b_pos[i], a, b)) < w2:
-			b_life[i] = 0.0
-
-
-## The dash lands: a lightning trail along the path, a slice flash, a jolt.
-func _blitz_end() -> void:
-	var path := player - blitz_from
-	var side := path.orthogonal().normalized()
-	var pts := PackedVector2Array()
-	for k in 9:
-		pts.append(blitz_from + path * (k / 8.0) + side * (0.0 if k == 0 or k == 8 else randf_range(-18.0, 18.0)))
-	bolts.append([pts, 0.35])
-	bolts.append([PackedVector2Array([blitz_from + side * 10.0, player + side * 10.0]), 0.2])
-	_ring(player, 3.0)
-	if blitz_cuts > 0:
-		sfx.play("dash_hit")
-		hitstop = maxf(hitstop, 0.05)
-		trauma = minf(trauma + 0.35, 0.8)
-		hud.flash(Color(0.7, 0.95, 1.0, 0.25))
 
 
 ## Shock Rounds: a small arc to two nearby enemies.
@@ -4248,7 +4107,7 @@ func _update_hud() -> void:
 	if slam_t < 0.0:
 		hud.set_jump(slam_charge / slam_need)
 	if dash_t <= 0.0:
-		hud.set_blitz(blitz_charge / _blitz_need())
+		hud.set_blitz(blitz_charge / specials.blitz_need())
 
 
 func _build_text() -> String:
@@ -4277,7 +4136,7 @@ func _clock(at: float) -> String:
 
 
 func _cards_line() -> String:
-	return "Cards: 3rd card %d/3, rerolls %d/1, banished %d/%d, skipped %d; Meteor Slams %d" % [3 - third_left, 1 - reroll_left, BANISHES - banish_left, BANISHES, rep.skips, slams]
+	return "Cards: 3rd card %d/3, rerolls %d/1, banished %d/%d, skipped %d; Meteor Slams %d, Meteor Blitzes %d" % [3 - third_left, 1 - reroll_left, BANISHES - banish_left, BANISHES, rep.skips, slams, combos]
 
 
 func _pick_text(o: Dictionary) -> String:
