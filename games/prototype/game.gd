@@ -826,6 +826,7 @@ func _alloc() -> void:
 
 func _clear_entities() -> void:
 	e_count = 0
+	nearest = -1
 	s_count = 0
 	k_count = 0
 	b_count = 0
@@ -871,6 +872,8 @@ func _game_over(victory: bool) -> void:
 	_record_run(victory)
 	last_results = _results_text(victory)
 	hud.show_results(victory, last_results, gold)
+	if victory:
+		hero.victory()
 	sfx.play("fanfare" if victory else "hurt")
 	if autoplay:
 		print(last_results)
@@ -887,8 +890,10 @@ func _on_death() -> void:
 		_damage_around(player, 300.0, 300.0)
 		_power_moment(1.6, Color(0.6, 1.0, 0.8))
 		hud.show_banner("SECOND WIND!", Color(0.6, 1.0, 0.8))
+		hero.revive()
 		return
 	state = State.DEAD
+	hero.die()
 	joy_on = false
 	hud.set_joystick(false, Vector2.ZERO, Vector2.ZERO)
 	hud.show_death(not revived)
@@ -909,6 +914,7 @@ func _on_revive() -> void:
 	b_count = 0
 	telegraphs.clear()
 	_damage_around(player, 260.0, 200.0)
+	hero.revive()
 	_power_moment(1.5, Color(0.5, 0.9, 1.0))
 	state = State.PLAYING
 	hud.show_play()
@@ -1013,6 +1019,8 @@ func _update_player(dt: float) -> void:
 	ls_on = laststand > 0 and hp < max_hp * 0.35
 	hero.position = player
 	hero.rotation = facing.angle()
+	hero.move(move_vec, dash_t > 0.0)
+	hero.aim((_target() - player).angle() if _has_target() else facing.angle())
 	hero.modulate.a = 0.35 if invuln > 0.0 and int(t * 20.0) % 2 == 0 else 1.0
 
 
@@ -1034,11 +1042,13 @@ func _hurt(amount: float) -> void:
 		invuln = INVULN * 0.5
 		_vfx(player, Vector2(randf_range(-60.0, 60.0), -40.0), 0.3, 22.0, 6.0, Color(0.6, 0.95, 1.0, 0.7), Color(0.3, 0.6, 1.0, 0.0), true)
 		_ring(player, 1.5)
+		hero.dodge()
 		return
 	if shield_charges > 0:
 		shield_charges -= 1
 		invuln = INVULN
 		shield_cd = maxf(shield_cd, _shield_time())
+		hero.shield_hit()
 		hero.set_shield(shield_charges > 0)
 		_ring(player, 3.0)
 		sfx.play("zap", 1.6, -6.0)
@@ -1046,6 +1056,7 @@ func _hurt(amount: float) -> void:
 	if thorns > 0:
 		_blast(player, 90.0 + 10.0 * thorns, 15.0 * thorns + armor * 4.0, false)
 	hp -= maxf(1.0, amount - armor)
+	hero.hurt()
 	invuln = INVULN
 	trauma = minf(trauma + 0.35, 1.0)
 	combo = int(combo / 2.0)
@@ -1562,7 +1573,7 @@ func _boss_killed() -> void:
 # --- Weapons ----------------------------------------------------------------
 
 func _target() -> Vector2:
-	var has := nearest >= 0 and e_hp[nearest] > 0.0
+	var has := _nearest_ok()
 	var p := e_pos[nearest] if has else player + facing * 300.0
 	if boss_on and (not has or boss_pos.distance_squared_to(player) < p.distance_squared_to(player)):
 		p = boss_pos
@@ -1570,7 +1581,13 @@ func _target() -> Vector2:
 
 
 func _has_target() -> bool:
-	return nearest >= 0 or boss_on
+	return _nearest_ok() or boss_on
+
+
+## The nearest enemy from the last enemy update, if it is still valid (the
+## pools can shrink between frames when the quality tier changes).
+func _nearest_ok() -> bool:
+	return nearest >= 0 and nearest < e_count and e_hp[nearest] > 0.0
 
 
 func _fire_weapons(dt: float) -> void:
@@ -1582,7 +1599,11 @@ func _fire_weapons(dt: float) -> void:
 			continue
 		var tm: float = float(w_timer.get(id, 0.0)) - dt * fire_rate * (1.0 + 0.06 * laststand if ls_on else 1.0)
 		if tm <= 0.0:
-			tm = tm + float(st["cd"]) if _fire(id, st) else 0.1
+			if _fire(id, st):
+				tm += float(st["cd"])
+				hero.fire(id)
+			else:
+				tm = 0.1
 		w_timer[id] = tm
 
 
@@ -1925,7 +1946,7 @@ func _update_halo(dt: float) -> void:
 func _tesla(st: Dictionary) -> bool:
 	var reach: float = st["range"]
 	var points := PackedVector2Array([player])
-	if nearest < 0 or e_pos[nearest].distance_to(player) > reach:
+	if not _nearest_ok() or e_pos[nearest].distance_to(player) > reach:
 		if boss_on and boss_pos.distance_to(player) < reach + BOSS_RADIUS:
 			_damage_boss(st["dmg"], false)
 			points.append(boss_pos)
@@ -2158,6 +2179,7 @@ func _update_actives(dt: float) -> void:
 					e_pos[j] += (e_pos[j] - player).normalized() * 70.0
 			_damage_around(player, r, 20.0 + 10.0 * stomp_lvl)
 			_ring(player, r / RING_SIZE * 1.1)
+			hero.stomp(r)
 			trauma = minf(trauma + 0.2, 0.6)
 			sfx.play("boom", 0.7, -4.0)
 			if weapons.has("mines") and w_stats["mines"]["quake"]:
@@ -2200,6 +2222,7 @@ func _dash() -> void:
 	dash_t = 0.16
 	dash_dir = move_vec.normalized() if move_vec.length_squared() > 0.01 else facing
 	invuln = maxf(invuln, 0.3)
+	hero.dash(dash_dir.angle())
 	_ring(player, 2.5)
 	sfx.play("shot", 0.5, -6.0)
 
@@ -2893,6 +2916,7 @@ func _on_card(index: int) -> void:
 				powers[id] = mini(MAX_LEVEL, int(powers.get(id, 0)) + int(o["levels"]))
 		"heal":
 			hp = minf(max_hp, hp + max_hp * 0.4)
+			hero.heal()
 		"gold":
 			bonus_dmg += 0.03
 	if int(o["rarity"]) == 1 and (o["kind"] == "weapon" or o["kind"] == "power"):
@@ -3251,6 +3275,7 @@ func _update_vfx(dt: float) -> void:
 ## energy, enemies knocked back, and a short slow-down. Bigger for rarer cards
 ## and higher levels.
 func _power_moment(strength: float, color: Color) -> void:
+	hero.power_up(strength, color)
 	hud.flash(Color(color.r, color.g, color.b, clampf(0.12 + 0.18 * strength, 0.0, 0.7)))
 	_ring(player, 5.0 + 6.0 * strength)
 	var reach := 160.0 + 140.0 * strength
@@ -3403,6 +3428,7 @@ func _apply_pickup(kind: int) -> void:
 		Data.MEDKIT:
 			hp = minf(max_hp, hp + max_hp * 0.3)
 			sfx.play("powerup")
+			hero.heal()
 
 
 # --- Saved progress ---------------------------------------------------------
