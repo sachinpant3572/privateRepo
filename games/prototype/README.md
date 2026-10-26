@@ -29,8 +29,11 @@ the ramp, so 5:00 is as hard as before).
 | Veterans | Waves 3–4 | Gold trim, amber glow | 125% |
 | Elite Guard | Wave 5, boss, final push | Bigger, crimson glow | 150% |
 
-Upgraded skins load from `sprites/<unit>_t2.png` (Veterans) and `_t3.png`
-(Elite Guard) when they exist; until then the tint and glow mark the tier.
+Each tier has its own skin: `sprites/<unit>_t2.png` (Veterans: gold trim,
+extra plating) and `_t3.png` (Elite Guard: black and crimson, glowing lines,
+spikes) for all ten enemy sprites, AI-generated with Higgsfield from the
+base sprites and fitted to their size and pivot. The tint and glow stay on
+top.
 
 **Enemy animation (code):** infantry sway and waddle as they walk, everything
 kicks back when it fires, pops when hit and drops in when it spawns; tanks
