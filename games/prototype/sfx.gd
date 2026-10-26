@@ -48,6 +48,9 @@ const SOUNDS := {
 	"shield": [0.2, -6.0, 0.05, "ui"],
 	"jet": [0.6, -3.0, 0.05, "fx"],
 	"barrier": [1.0, -4.0, 0.02, "ui"],
+	"slam_ready": [1.0, -3.0, 0.0, "ui"],
+	"slam_launch": [0.5, -2.0, 0.03, "ui"],
+	"slam_impact": [0.5, 2.0, 0.03, "ui"],
 	"emp": [0.5, -10.0, 0.08, "fx"],
 	"repair": [2.5, -16.0, 0.05, "fx"],
 	"gunship": [0.15, -7.0, 0.06, "fx"],
@@ -59,7 +62,7 @@ const SOUNDS := {
 const MAX_AT_ONCE := {"jet": 2, "gunship": 2, "siege": 2, "boom": 3, "big_boom": 2, "grenade": 3, "scatter": 2, "flame": 2, "rocket": 3, "rail": 2, "hit": 4, "shot": 4, "zap": 3}
 
 # Sounds big enough to push the music down for a moment (dB).
-const DUCK := {"big_boom": 4.0, "synergy": 7.0, "evolve": 9.0, "level": 3.0, "fanfare": 5.0, "alarm": 4.0}
+const DUCK := {"slam_impact": 12.0, "slam_launch": 4.0, "big_boom": 4.0, "synergy": 7.0, "evolve": 9.0, "level": 3.0, "fanfare": 5.0, "alarm": 4.0}
 
 # Kills within one second -> callout. Each step up is louder.
 const KILL_BURSTS := [[25, "multi_kill"], [50, "mega_kill"], [100, "ultra_kill"], [200, "monster_kill"]]
@@ -71,7 +74,7 @@ const BANNER_VOICES := [
 	["AIR RAID", "air_raid"], ["NUKE", "nuke"], ["FREEZE", "freeze"], ["VACUUM", "vacuum"], ["MEDKIT", "medkit"],
 	["SECOND WIND", "second_wind"], ["BOMBING RUN", "bombing_run"], ["GUNSHIPS", "gunships"],
 	["ARMORED ASSAULT", "armored_assault"], ["SIEGE COLOSSUS", "siege"], ["THE DOMINION STRIKES BACK", "strikes_back"],
-	["THE IRON DOMINION FALLS", "dominion_falls"], ["SHIELD CELL", "shield_cell"], ["KILLING SPREE", "killing_spree"], ["RAMPAGE", "rampage"], ["MASSACRE", "massacre"],
+	["THE IRON DOMINION FALLS", "dominion_falls"], ["METEOR SLAM", "meteor_slam"], ["SHIELD CELL", "shield_cell"], ["KILLING SPREE", "killing_spree"], ["RAMPAGE", "rampage"], ["MASSACRE", "massacre"],
 	["UNSTOPPABLE", "unstoppable"], ["GODLIKE", "godlike"], ["APOCALYPSE", "apocalypse"], ["FINAL WAVE", "final_wave"],
 ]
 

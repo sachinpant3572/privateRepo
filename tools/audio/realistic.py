@@ -41,9 +41,10 @@ PLAN = {
     "siege": [("siege", 3, 1.5, 1.0)],
 }
 # Loudness (RMS, dB) for sounds with no synthesized original to match.
-TARGETS = {"jet": -16.0, "gunship": -17.0, "siege": -15.0}
+TARGETS = {"jet": -16.0, "gunship": -17.0, "siege": -15.0, "slam_impact": -12.0, "slam_launch": -16.0}
 # Sounds taken as one stretch of the clip rather than by onsets: start, length.
-STRETCH = {"alarm": ("siren", 0.8, 1.6), "freeze": ("frost", None, 1.2)}
+STRETCH = {"alarm": ("siren", 0.8, 1.6), "freeze": ("frost", None, 1.2),
+           "slam_impact": ("slam2", None, 3.0), "slam_launch": ("slam1", None, 1.1)}
 
 
 def rms(x):

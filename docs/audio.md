@@ -130,6 +130,8 @@ it replaces. Each clip gives 3 to 7 variations.
 | jet | two fighter jets screaming past overhead | `jet` |
 | gunship | attack helicopter firing its autocannon in bursts | `gunship` |
 | siege | huge siege artillery cannon, three deep thumps | `siege` |
+| slam1 | armored robot launching on jet boots, then crashing down | `slam_launch` |
+| slam2 | an armored figure smashing into concrete from above | `slam_impact` |
 
 Every prompt ends with "No music, no voices, only ... sound effects", and
 asks for pauses between events so they can be cut apart. To redo one: make

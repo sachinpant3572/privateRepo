@@ -15,6 +15,7 @@ signal option_toggled(option: String)
 signal chest_collected
 signal double_gold_pressed
 signal dash_pressed
+signal jump_pressed
 signal banish_pressed
 signal skip_pressed
 signal costumes_pressed
@@ -23,6 +24,7 @@ signal costume_chosen(id: String)
 const Art := preload("res://art.gd")
 const UI := preload("res://ui_style.gd")
 const Bar := preload("res://ui_bar.gd")
+const Ring := preload("res://ui_ring.gd")
 const JOY_RING := 180.0
 const JOY_KNOB := 76.0
 const KEY_ART := "res://sprites/ui/key_art.jpg"
@@ -77,6 +79,10 @@ var quality_button: Button
 var cap_button: Button
 var results := ""
 var dash_button: Button
+var slam_root: Control
+var slam_ring: Ring
+var slam_hit: Button
+var slam_ready := false
 var banish_button: Button
 var skip_button: Button
 var costumes: ColorRect
@@ -323,6 +329,34 @@ func set_options(quality: String, fps_cap: int) -> void:
 	cap_button.text = "FPS CAP: %s" % ("%d" % fps_cap if fps_cap > 0 else "MAX")
 
 
+## The Meteor Slam charge, 0..1 (below 0 hides the button). Reaching full
+## blazes the ring, plays a cue and the announcer calls it.
+func set_jump(frac: float) -> void:
+	slam_root.visible = frac >= 0.0
+	if frac < 0.0:
+		return
+	slam_ring.charge = clampf(frac, 0.0, 1.0)
+	var now_ready := frac >= 1.0
+	slam_hit.disabled = not now_ready
+	if now_ready and not slam_ready:
+		if sfx:
+			sfx.play("slam_ready")
+			sfx.announce("slam_ready", 2)
+		slam_root.scale = Vector2(1.35, 1.35)
+		slam_root.create_tween().tween_property(slam_root, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	slam_ready = now_ready
+
+
+func _on_slam() -> void:
+	if not slam_ready:
+		return
+	slam_ready = false
+	slam_hit.disabled = true
+	slam_root.scale = Vector2(0.8, 0.8)
+	slam_root.create_tween().tween_property(slam_root, "scale", Vector2.ONE, 0.25)
+	jump_pressed.emit()
+
+
 ## The dash button: hidden until Phase Dash is owned; dims while cooling down.
 func set_dash(on: bool, cooldown_frac: float) -> void:
 	dash_button.visible = on
@@ -489,6 +523,29 @@ func _build_play() -> void:
 	dash_button.pressed.connect(dash_pressed.emit)
 	dash_button.visible = false
 	play.add_child(dash_button)
+
+	# Meteor Slam: bottom-left, opposite the dash.
+	slam_root = Control.new()
+	slam_root.anchor_top = 1.0
+	slam_root.anchor_bottom = 1.0
+	slam_root.offset_left = 26
+	slam_root.offset_right = 186
+	slam_root.offset_top = -250
+	slam_root.offset_bottom = -90
+	slam_root.pivot_offset = Vector2(80, 80)
+	slam_root.visible = false
+	play.add_child(slam_root)
+	slam_ring = Ring.new()
+	slam_ring.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	slam_root.add_child(slam_ring)
+	slam_hit = Button.new()
+	slam_hit.flat = true
+	for k in ["normal", "hover", "focus", "pressed", "disabled"]:
+		slam_hit.add_theme_stylebox_override(k, StyleBoxEmpty.new())
+	slam_hit.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	slam_hit.disabled = true
+	slam_hit.pressed.connect(_on_slam)
+	slam_root.add_child(slam_hit)
 
 
 func _build_menu() -> void:

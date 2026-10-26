@@ -379,6 +379,22 @@ def repair():
     return finish(x, 0.35, 0.03)
 
 
+def slam_ready():
+    """Charge complete: a rising power-up sweep into a bright, heavy chord."""
+    n = seconds(0.9)
+    f = np.geomspace(120.0, 900.0, n)
+    sweep = (saw(f, n) * 0.5 + square(f * 0.5, n, 0.3) * 0.3) * np.linspace(0.2, 1.0, n) ** 2
+    sweep = fft_filter(sweep, low=4000.0)
+    m = seconds(1.0)
+    chord = np.zeros(m, np.float32)
+    for note in (62, 69, 74, 78):
+        chord += saw(np.full(m, midi_hz(note)), m) * 0.25
+    chord = fft_filter(chord, low=3500.0) * adsr(m, 0.01, 0.3, 0.4, 0.5)
+    thump = sine(env_sweep(m, 130, 50, 0.05), m) * expdecay(m, 0.15)
+    out = np.concatenate([sweep * 0.5, mix(chord, thump, chime([86, 93], 0.05, 0.7) * 0.5)])
+    return finish(out, 0.75, 0.25)
+
+
 SOUNDS = {
     "shot": (shot, 4), "scatter": (scatter, 3), "rocket": (rocket, 3), "rail": (rail, 2),
     "flame": (flame, 3), "grenade": (grenade, 3), "mine": (mine, 1), "drone": (drone, 3), "zap": (zap, 4),
@@ -388,7 +404,7 @@ SOUNDS = {
     "synergy": (synergy, 1), "evolve": (evolve, 1), "limit_break": (limit_break, 2),
     "card_show": (card_show, 2), "card_pick": (card_pick, 2), "ui_tap": (ui_tap, 2),
     "heal": (heal, 1), "shield": (shield, 2),
-    "barrier": (barrier, 1), "emp": (emp, 3), "repair": (repair, 2),
+    "barrier": (barrier, 1), "emp": (emp, 3), "repair": (repair, 2), "slam_ready": (slam_ready, 1),
 }
 
 
