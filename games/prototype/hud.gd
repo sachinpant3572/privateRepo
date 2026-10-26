@@ -132,10 +132,15 @@ func show_cards(infos: Array, third_left: int, reroll_left: int, is_chest: bool,
 		card_tag.text = "//  POWER CHEST" if is_chest else "//  FIELD UPGRADE"
 		card_title.text = "CHOOSE YOUR REWARD" if is_chest else "LEVEL UP"
 		card_title.add_theme_color_override("font_color", UI.AMBER)
+	# The banner would show through behind the cards' title.
+	banner_time = 0.0
+	banner_band.visible = false
 	for i in infos.size():
-		var card := _card(infos[i], banish_mode)
-		card.pressed.connect(_ui_sound.bind("card_pick"))
-		card.pressed.connect(card_chosen.emit.bind(i))
+		var parts := _card(infos[i], banish_mode)
+		var card: PanelContainer = parts[0]
+		var hit: Button = parts[1]
+		hit.pressed.connect(_ui_sound.bind("card_pick"))
+		hit.pressed.connect(card_chosen.emit.bind(i))
 		card_list.add_child(card)
 		# Cards slide in from the right one after another; rare ones pulse.
 		card.modulate.a = 0.0
@@ -578,26 +583,27 @@ func _build_cards() -> void:
 
 
 ## One level-up card: icon in a rarity frame, name, rarity chip, description.
-func _card(d: Dictionary, banish_mode: bool) -> Button:
+## Returns [panel, button]: the panel grows to fit its text, and an invisible
+## button over it takes the tap.
+func _card(d: Dictionary, banish_mode: bool) -> Array:
 	var col: Color = UI.RED if banish_mode else d["color"]
 	var rarity_glow := clampf((col.s - 0.2) * 1.5, 0.0, 1.0)
-	var card := Button.new()
-	card.custom_minimum_size = Vector2(0, 196)
 	var normal := UI.panel(Color(0.055, 0.08, 0.11, 0.97), col, 3, rarity_glow, 22)
 	var pressed := UI.panel(Color(0.12, 0.16, 0.21, 0.98), col.lightened(0.3), 4, 1.0, 22)
-	for k in ["normal", "hover", "focus", "disabled"]:
-		card.add_theme_stylebox_override(k, normal)
-	card.add_theme_stylebox_override("pressed", pressed)
-	var margin := MarginContainer.new()
-	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 16)
-	card.add_child(margin)
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(0, 170)
+	card.add_theme_stylebox_override("panel", normal)
 	var row := HBoxContainer.new()
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_theme_constant_override("separation", 16)
-	margin.add_child(row)
+	card.add_child(row)
+	var hit := Button.new()
+	hit.flat = true
+	for k in ["normal", "hover", "focus", "pressed", "disabled"]:
+		hit.add_theme_stylebox_override(k, StyleBoxEmpty.new())
+	hit.button_down.connect(card.add_theme_stylebox_override.bind("panel", pressed))
+	hit.button_up.connect(card.add_theme_stylebox_override.bind("panel", normal))
+	card.add_child(hit)
 	var frame := _plate(UI.panel(Color(col.r * 0.15, col.g * 0.15, col.b * 0.15, 0.95), col, 2, 0.0, 14))
 	frame.custom_minimum_size = Vector2(124, 124)
 	frame.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -623,7 +629,7 @@ func _card(d: Dictionary, banish_mode: bool) -> Button:
 	var desc := _small(String(d["desc"]), 21, Color(0.8, 0.87, 0.92))
 	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	text.add_child(desc)
-	return card
+	return [card, hit]
 
 
 func _build_death() -> void:
