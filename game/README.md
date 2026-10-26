@@ -14,8 +14,8 @@ min-spec device.
   landmarks become the precinct, clinic, square and street court. The whole
   city is baked into one mesh, so it draws in a single call. The district
   name shows on screen as you enter it.
-- **On foot**: jog, sprint, punch. The player shows as a silhouette when
-  buildings hide them.
+- **On foot**: jog, sprint, punch. The player (and their car) shows as a
+  silhouette when buildings hide them (stencil x-ray, no self-tinting).
 - **Driving**: arcade cars steered toward the stick direction (reverse by
   pointing behind), handbrake drift, damage and wrecks, parked cars,
   carjacking.
@@ -26,6 +26,9 @@ min-spec device.
   stop and send an officer out when you're on foot). Stay out of sight to lose
   them. Getting held by a cop means **BUSTED** (respawn at the police
   station); dying means **WASTED** (respawn at the hospital).
+- **Two cameras**: the isometric view (default) and a **Classic** steep
+  top-down view, north up, like the Java-era Gangstar games. Same world and
+  models; controls follow the chosen view. The choice is remembered.
 - **HUD**: health, wanted stars (flashing while police can't see you),
   speed, prompts, FPS and draw-call readout.
 
@@ -37,6 +40,7 @@ min-spec device.
 | Punch | PUNCH | Space / J | X |
 | Run / handbrake | RUN / BRAKE | Shift | A |
 | Get in / out | ENTER / EXIT | E / F | Y |
+| Switch camera | CAM | C | Back / Select |
 
 Tab toggles the on-screen controls on desktop.
 

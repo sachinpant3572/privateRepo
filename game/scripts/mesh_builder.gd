@@ -37,14 +37,11 @@ static func material() -> StandardMaterial3D:
 ## mesh is hidden behind buildings, so the player never gets lost.
 static func xray_material() -> StandardMaterial3D:
 	if _xray_material == null:
+		# Stencil x-ray marks the mesh's own pixels first, so parts of the mesh
+		# hidden by other parts of itself are not tinted; only world occlusion is.
 		_xray_material = material().duplicate()
-		var silhouette := StandardMaterial3D.new()
-		silhouette.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		silhouette.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		silhouette.albedo_color = Color(1.0, 0.85, 0.25, 0.6)
-		silhouette.depth_test = BaseMaterial3D.DEPTH_TEST_INVERTED
-		silhouette.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
-		_xray_material.next_pass = silhouette
+		_xray_material.stencil_mode = BaseMaterial3D.STENCIL_MODE_XRAY
+		_xray_material.stencil_color = Color(1.0, 0.85, 0.25, 0.6)
 	return _xray_material
 
 

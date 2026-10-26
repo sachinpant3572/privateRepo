@@ -11,11 +11,13 @@ const KEYS := {
 	"sprint": [KEY_SHIFT], # handbrake while driving
 	"attack": [KEY_SPACE, KEY_J],
 	"interact": [KEY_E, KEY_F],
+	"camera": [KEY_C],
 }
 const PAD_BUTTONS := {
 	"sprint": JOY_BUTTON_A,
 	"attack": JOY_BUTTON_X,
 	"interact": JOY_BUTTON_Y,
+	"camera": JOY_BUTTON_BACK,
 }
 const PAD_AXES := {
 	"move_left": [JOY_AXIS_LEFT_X, -1.0],
@@ -76,11 +78,8 @@ func move_vector() -> Vector2:
 
 ## Inverse of world_move(): the stick vector that moves along `dir`.
 func screen_from_world(dir: Vector3) -> Vector2:
-	var right := camera.global_basis.x
-	right.y = 0.0
-	var forward := -camera.global_basis.z
-	forward.y = 0.0
-	return Vector2(dir.dot(right.normalized()), -dir.dot(forward.normalized())).limit_length(1.0)
+	var axes: Array[Vector3] = camera.ground_axes()
+	return Vector2(dir.dot(axes[0]), -dir.dot(axes[1])).limit_length(1.0)
 
 
 ## The stick direction mapped onto the ground plane as seen by the camera.
@@ -88,8 +87,5 @@ func world_move() -> Vector3:
 	var v := move_vector()
 	if camera == null:
 		return Vector3(v.x, 0.0, v.y)
-	var right := camera.global_basis.x
-	right.y = 0.0
-	var forward := -camera.global_basis.z
-	forward.y = 0.0
-	return right.normalized() * v.x - forward.normalized() * v.y
+	var axes: Array[Vector3] = camera.ground_axes()
+	return axes[0] * v.x - axes[1] * v.y

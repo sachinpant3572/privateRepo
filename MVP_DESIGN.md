@@ -26,6 +26,23 @@ Everything not needed to prove that waits for later phases.
 | Install size | Base under 150 MB, rest downloaded as content packs | Store limits and data costs. |
 | Offline | Fully playable offline; online only for leaderboards, events, cloud save | Patchy connections. |
 
+## Visual direction: classic + modern
+
+**Decision (Oct 26, 2026)**: "high-quality graphics" means a readable cartoon
+look that combines old and new game mechanics and effects, not realism.
+Every effect must look good at a glance on a phone screen and have a low-end
+setting that keeps 30 fps on the min-spec device.
+
+| From the classic games (Java Gangstar, GTA 2 era) | From modern games |
+|---|---|
+| **Classic camera**: optional steep top-down view, north up (in the prototype) | Isometric 3D default view with smooth follow, lead and speed zoom |
+| Wanted stars, instant carjacking, arcade driving | Day/night lighting, neon at night, weather (rain, storms, flooding) |
+| Big, readable characters and cars; clear colours | Particles: skid marks, tyre smoke, sparks, dust, splashes |
+| Arrows and markers to the next objective | Screen shake and hit-stop on punches and crashes, phone vibration |
+| Rampages, hidden packages, stunt jumps | Knockdowns with physics, breakable props (hydrants, lamp posts, fences) |
+| Radio stations in cars | Music that changes by district and action (AI-generated) |
+| Quick mission restarts | X-ray silhouettes when buildings hide the player (in the prototype) |
+
 ## Engine decision
 
 **Decision (Oct 26, 2026): Godot 4**, chosen over Unity 6.

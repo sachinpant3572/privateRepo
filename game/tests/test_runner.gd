@@ -27,6 +27,7 @@ func _run() -> void:
 		"test_busted_when_cop_holds_player",
 		"test_wasted_respawns_at_hospital",
 		"test_city_runs_with_population",
+		"test_classic_camera_toggle",
 	]
 	for name in tests:
 		var before := failed
@@ -187,6 +188,25 @@ func test_city_runs_with_population() -> void:
 	_check(is_instance_valid(car), "player car still exists")
 
 
+func test_classic_camera_toggle() -> void:
+	await _new_game(false)
+	var cam = game.camera
+	_place_player(Vector2i(2, 2), Vector3.ZERO)
+	await _press("camera")
+	_check(cam.mode == cam.Mode.CLASSIC, "camera switches to classic")
+	# In classic view, screen-up is north (world -Z).
+	var start: Vector3 = game.player.global_position
+	Controls.override_vector = Vector2(0, -1)
+	await _frames(40)
+	Controls.override_vector = null
+	var moved: Vector3 = game.player.global_position - start
+	_check(moved.z < -2.0 and absf(moved.x) < 0.5, "screen-up walks north in classic view, moved %s" % moved)
+	await _frames(30)
+	_check(cam.global_basis.z.y > 0.9, "camera looks steeply down")
+	await _press("camera")
+	_check(cam.mode == cam.Mode.ISOMETRIC, "camera switches back")
+
+
 # --- Helpers -----------------------------------------------------------------
 
 func _new_game(with_population: bool) -> void:
@@ -194,12 +214,14 @@ func _new_game(with_population: bool) -> void:
 	game = MainScene.instantiate()
 	game.population_enabled = with_population
 	add_child(game)
+	# Tests assume the default view, whatever the saved setting is.
+	game.camera.set_mode(game.camera.Mode.ISOMETRIC, true)
 	await _frames(2)
 
 
 func _free_game() -> void:
 	Controls.override_vector = null
-	for action in ["attack", "interact", "sprint"]:
+	for action in ["attack", "interact", "sprint", "camera"]:
 		Input.action_release(action)
 	if game != null:
 		game.queue_free()

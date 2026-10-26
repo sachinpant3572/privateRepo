@@ -17,20 +17,25 @@ func _ready() -> void:
 func _run() -> void:
 	var game = MainScene.instantiate()
 	add_child(game)
+	game.camera.set_mode(game.camera.Mode.ISOMETRIC, true)
 	await _frames(180)
 	await _shot("1_on_foot.png")
+	game.camera.toggle()
+	await _frames(90)
+	await _shot("2_classic_on_foot.png")
 
 	var p = game.player
 	await _walk_to_car(game)
 	Controls.override_vector = Controls.screen_from_world(Vector3.RIGHT)
 	await _frames(100)
-	await _shot("2_driving.png")
+	await _shot("3_classic_driving.png")
+	game.camera.toggle()
 
 	Wanted.report_crime(2)
 	await _frames(150)
 	Controls.override_vector = null
 	await _frames(60)
-	await _shot("3_police_chase.png")
+	await _shot("4_police_chase.png")
 	print("player at ", p.global_position, " wanted ", Wanted.level)
 	get_tree().quit()
 
