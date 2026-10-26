@@ -124,7 +124,7 @@ const DESCS := {
 	"cryo": "Hits chill enemies, slowing them. At level 5 a chilled enemy can freeze solid.",
 	"shock": "Hits can arc lightning to 2 nearby enemies. More chance and damage each level.",
 	"toxin": "Kills leave a toxic cloud that hurts enemies inside. Bigger clouds each level.",
-	"dash": "Tap the DASH button to dash and dodge. Shorter cooldown; damages what you pass at 5.",
+	"dash": "Blitz Dash (DASH button, charged by kills) charges 8% faster per level and cuts a longer, wider path.",
 	"stomp": "Every few seconds, a shockwave knocks back and damages enemies around you.",
 	"bullettime": "Every 20 seconds, enemies slow down for a moment. Longer with level.",
 	"luck": "Better card rarities and more drops, per level.",
@@ -301,8 +301,8 @@ static func limit_break(st: Dictionary, n: int) -> void:
 	st["dmg"] = float(st["dmg"]) * (1.0 + 0.12 * n)
 	if st.has("cd"):
 		st["cd"] = maxf(0.06, float(st["cd"]) / (1.0 + 0.04 * n))
-	var extra := int(n / 4.0)
-	for key in ["count", "chains", "bombs"]:
+	var extra := int(n / 2.0)
+	for key in ["count", "chains", "bombs", "arcs"]:
 		if st.has(key):
 			st[key] = int(st[key]) + extra
 
@@ -311,45 +311,45 @@ static func weapon_stats(id: String, l: int, evolved: bool) -> Dictionary:
 	match id:
 		"rifle":
 			if evolved:
-				return {"cd": 0.09, "count": 2, "dmg": 16.0, "pierce": 99, "speed": 820.0, "spread": 0.05, "life": 1.1}
-			return {"cd": 0.55 - 0.03 * l, "count": 1 + int((l - 1) / 2.0), "dmg": 9.0 + 3.0 * l, "pierce": 2 if l >= 6 else 0, "speed": 760.0, "spread": 0.1, "life": 1.1}
+				return {"cd": 0.1, "count": 5, "dmg": 16.0, "pierce": 99, "speed": 820.0, "spread": 0.07, "life": 1.1}
+			return {"cd": 0.55 - 0.03 * l, "count": 1 + int(l * 0.75), "dmg": 9.0 + 3.0 * l, "pierce": 2 if l >= 6 else 0, "speed": 760.0, "spread": 0.09, "life": 1.1}
 		"scatter":
-			var sc := {"cd": 1.15 - 0.05 * l, "count": 5 + l, "dmg": 6.0 + 2.0 * l, "pierce": 1 if l >= 5 else 0, "speed": 620.0, "spread": deg_to_rad(40.0 + 4.0 * l), "life": 0.42, "leech": false}
+			var sc := {"cd": 1.15 - 0.05 * l, "count": 6 + 2 * l, "dmg": 6.0 + 2.0 * l, "pierce": 1 if l >= 5 else 0, "speed": 620.0, "spread": deg_to_rad(40.0 + 4.0 * l), "life": 0.42, "leech": false}
 			if evolved:
 				sc["count"] = int(sc["count"]) * 2
 				sc["cd"] = 0.6
 				sc["leech"] = true
 			return sc
 		"rail":
-			var rl := {"cd": 2.2 - 0.12 * l, "count": 2 if l >= 5 else 1, "dmg": 40.0 + 14.0 * l, "speed": 1500.0, "life": 0.7, "freeze": false}
+			var rl := {"cd": 2.2 - 0.12 * l, "count": 1 + int(l / 3.0), "dmg": 40.0 + 14.0 * l, "speed": 1500.0, "life": 0.7, "freeze": false}
 			if evolved:
-				rl["count"] = 3
+				rl["count"] = 5
 				rl["cd"] = 0.9
 				rl["freeze"] = true
 			return rl
 		"rockets":
-			var r := {"cd": 1.7 - 0.08 * l, "count": 2 + int(l / 2.0), "dmg": 14.0 + 5.0 * l, "radius": 42.0 + 6.0 * l, "crit": false}
+			var r := {"cd": 1.7 - 0.08 * l, "count": 2 + l, "dmg": 14.0 + 5.0 * l, "radius": 42.0 + 6.0 * l, "crit": false}
 			if evolved:
 				r["count"] = int(r["count"]) * 2
 				r["cd"] = 0.9
 				r["crit"] = true
 			return r
 		"grenade":
-			return {"cd": 2.4 - 0.12 * l, "count": 1 + int((l + 1) / 2.0), "dmg": 22.0 + 7.0 * l, "radius": 55.0 + 5.0 * l, "cluster": evolved}
+			return {"cd": 2.4 - 0.12 * l, "count": 1 + l, "dmg": 22.0 + 7.0 * l, "radius": 55.0 + 5.0 * l, "cluster": evolved}
 		"halo":
-			var h := {"count": 2 + int(l / 2.0), "radius": 70.0 + 7.0 * l, "speed": 3.0 + 0.25 * l, "dmg": 8.0 + 3.0 * l, "evolved": evolved}
+			var h := {"count": 2 + int(l * 0.75), "radius": 70.0 + 7.0 * l, "speed": 3.0 + 0.25 * l, "dmg": 8.0 + 3.0 * l, "evolved": evolved}
 			if evolved:
-				h["count"] = int(h["count"]) + 3
+				h["count"] = int(h["count"]) + 4
 				h["dmg"] = float(h["dmg"]) * 1.5
 			return h
 		"drones":
-			var dr := {"count": 1 + int(l / 3.0), "cd": 0.9 - 0.05 * l, "dmg": 8.0 + 3.0 * l, "homing": l >= 6}
+			var dr := {"count": 1 + int(l / 2.0), "cd": 0.9 - 0.05 * l, "dmg": 8.0 + 3.0 * l, "homing": l >= 6}
 			if evolved:
 				dr["count"] = int(dr["count"]) * 2
 				dr["cd"] = float(dr["cd"]) * 0.5
 			return dr
 		"tesla":
-			return {"cd": 1.5 - 0.07 * l, "chains": 2 + l, "dmg": 14.0 + 4.0 * l, "range": 380.0, "jump": 170.0, "fork": evolved}
+			return {"cd": 1.5 - 0.07 * l, "chains": 3 + l, "arcs": 1 + int(l / 3.0) + (1 if evolved else 0), "dmg": 14.0 + 4.0 * l, "range": 380.0, "jump": 170.0, "fork": evolved}
 		"flame":
 			var fl := {"cd": 0.12, "range": 120.0 + 12.0 * l, "cone": deg_to_rad(50.0 + 5.0 * l), "dmg": 3.0 + 1.2 * l, "ring": false}
 			if l >= MAX_LEVEL:
@@ -359,15 +359,15 @@ static func weapon_stats(id: String, l: int, evolved: bool) -> Dictionary:
 				fl["dmg"] = float(fl["dmg"]) * 1.6
 			return fl
 		"mines":
-			return {"cd": 1.6 - 0.08 * l, "dmg": 30.0 + 10.0 * l, "radius": 60.0 + 6.0 * l, "life": 12.0, "quake": evolved}
+			return {"cd": 1.6 - 0.08 * l, "count": 1 + int(l / 3.0) + (1 if evolved else 0), "dmg": 30.0 + 10.0 * l, "radius": 60.0 + 6.0 * l, "life": 12.0, "quake": evolved}
 		"sentry":
-			var se := {"cd": 9.0 - 0.5 * l, "max": 1 + int(l / 3.0), "life": 8.0 + 1.0 * l, "fire": 0.5, "dmg": 10.0 + 3.5 * l, "rockets": l >= 6}
+			var se := {"cd": 9.0 - 0.5 * l, "max": 1 + int(l / 2.0), "life": 8.0 + 1.0 * l, "fire": 0.5, "dmg": 10.0 + 3.5 * l, "rockets": l >= 6}
 			if evolved:
 				se["life"] = float(se["life"]) * 2.0
 				se["max"] = int(se["max"]) + 1
 			return se
 		"airstrike":
-			var a := {"cd": 8.0 - 0.45 * l, "bombs": 6 + l, "radius": 64.0 + 5.0 * l, "dmg": 35.0 + 10.0 * l}
+			var a := {"cd": 8.0 - 0.45 * l, "bombs": 8 + 2 * l, "radius": 64.0 + 5.0 * l, "dmg": 35.0 + 10.0 * l}
 			if evolved:
 				a["cd"] = 1.8
 				a["bombs"] = int(int(a["bombs"]) * 1.5)

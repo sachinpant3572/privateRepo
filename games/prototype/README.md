@@ -14,25 +14,29 @@ The Iron Dominion, then a boss.
   three turrets and three attacks: a shell sweep, a minefield, and a charge.
   It attacks faster below 50% HP.
 
-**Domination and escalation:** the stage swings between two phases, so it
-feels like losing, then winning, again and again:
-- **Domination** (the start, and after every escalation): the difficulty
-  stops rising (enemies stay exactly as strong as when it began) and XP
-  comes 50% faster, so you outgrow them with more powers, offensive or
-  defensive. It ends once you clearly overpower the horde (4+ levels gained
-  and it melting faster than it arrives, after at least 20 s) or after 50 s.
-- **Escalation** (30 s): a ring of fresh troops closes in, the next two
-  stage events hit (Ambush and Shield Wall first, the Siege Colossus last),
-  a Juggernaut joins the 2nd and 4th, and the difficulty climbs fast.
+**Escalation and domination:** the stage swings between two phases, driven
+by what happens on screen, so it feels like losing, then winning, again and
+again:
+- **Escalation** (the start, and whenever the screen is nearly clear):
+  reinforcements pour in and the difficulty climbs, slowly at first and
+  faster the longer you hold out. A ring of fresh troops opens each one
+  with the next stage event; the rest of the events (Ambush, Shield Wall,
+  ... Siege Colossus) and the Juggernauts arrive as the difficulty reaches
+  their old times. It ends when you're swarmed: 40 enemies within 360 px,
+  HP under 35%, or heavy recent damage (after at least 12 s).
+- **Domination**: the difficulty stops where it is (enemies stay exactly as
+  strong), reinforcements slow to a trickle and XP comes 50% faster, so you
+  power up and fight your way out. When 12 or fewer enemies are left (after
+  at least 10 s, at most 75 s), the next escalation starts.
 - Level-ups heal 5% of your HP.
 
 **Enemy tiers:** enemies look tougher as the stage goes on, and pay more.
 
 | Tier | When | Look | XP |
 |---|---|---|---|
-| Regulars | Start, 1st escalation | Standard | 100% |
-| Veterans | 2nd and 3rd escalation | Gold trim, extra plating | 125% |
-| Elite Guard | 4th escalation, boss, final push | Black and crimson, a size bigger | 150% |
+| Regulars | Difficulty under 1:50 | Standard | 100% |
+| Veterans | Difficulty 1:50 to 3:50 | Gold trim, extra plating | 125% |
+| Elite Guard | Difficulty past 3:50, boss, final push | Black and crimson, a size bigger | 150% |
 
 Each tier has its own skin: `sprites/<unit>_t2.png` (Veterans: gold trim,
 extra plating) and `_t3.png` (Elite Guard: black and crimson, glowing lines,
@@ -76,7 +80,7 @@ Airstrike Beacon. The pairings are in `data.gd` (`EVOLUTIONS`).
   - **Fortify:** up to 32% less damage taken, 64% while standing still.
 - **Elements:** Incendiary (burn), Cryo (slow, freeze), Shock (arcs), Toxin
   (clouds).
-- **Actives:** Phase Dash (DASH button), Shockwave Stomp, Bullet Time, Last
+- **Actives:** Phase Dash (Blitz Dash charges faster, cuts longer and wider), Shockwave Stomp, Bullet Time, Last
   Stand, Blood Oath (harder enemies, more XP and gold).
 - **Utility:** Magnet Field, Adrenaline, Long Fuse, Lucky Charm, Battle
   Instinct (XP), Scavenger (gold).
@@ -134,6 +138,22 @@ of any costume.
 
 **Revive:** once per run, free.
 
+**Blitz Dash (DASH button):** kills charge it (90 XP, 8% less per Phase Dash
+level). Tap it and the hero streaks about 520 px along the stick (or where it
+faces): every enemy within the cut's width is destroyed (heavies lose about
+30%, the boss 3%), enemy bullets on the path vanish, a lightning trail stays
+for a moment and the screen jolts. Untouchable while dashing.
+
+**Limit Breaks** only come up once the build is complete: every weapon and
+power slot filled and every item at level 8. Until then, maxed items simply
+stop appearing.
+
+**More projectiles with every level:** at level 8 the Pulse Rifle fires 7
+shots (Storm Rifle: 5-shot streams), Scatter 22 pellets, Rail Lance 3 lances,
+Rockets 10, Grenades 9, Razor Halo 8 blades, Drones 5, Tesla 3 separate arcs
+of 11 jumps, Mine Layer 3 mines a drop, Sentry 5 turrets, Airstrike 24 bombs;
+every 2nd Limit Break stack adds one more.
+
 **Meteor Slam (button, bottom left):** kills charge it (by their XP; the
 first slam needs 250, each one after 100 more, up to 900). Tap it and the
 hero leaps toward the camera (bigger, higher, a spin, the shadow shrinking
@@ -141,6 +161,8 @@ on the ground), hangs, then crashes down: everything within 330 px is
 destroyed, Juggernauts, gunships and Siege Colossi lose about 40%, the boss
 6%, enemy bullets nearby vanish and a crater stays on the ground. The hero
 can't be hit in the air and can steer the landing.
+
+**Self-tests (`selftest.gd`):** the CI smoke test and screenshots.
 
 **Run report (`report.gd`):** the results screen shows the summary; COPY
 RESULTS copies the full report: damage dealt by each weapon and power (and to the boss), damage

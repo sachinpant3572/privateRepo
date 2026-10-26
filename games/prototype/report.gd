@@ -10,6 +10,7 @@ const NAMES := {
 	"other": "Other", "burn": "Burning", "toxin": "Toxin clouds", "shock": "Shock arcs", "static": "Static Dash",
 	"explosive": "Explosive Rounds blasts", "stomp": "Shockwave Stomp", "dash": "Phase Dash", "thorns": "Reactive Plating",
 	"evolution": "Evolution blasts", "revive": "Revive blasts", "nuke": "Nuke", "bombs": "Bombs", "slam": "Meteor Slam",
+	"blitz": "Blitz Dash",
 }
 const HEAL_NAMES := {
 	"regen": "Nanite Regeneration", "lifesteal": "Vampiric Rounds", "repair": "Repair Drone",
@@ -114,7 +115,7 @@ func text(g: Node, summary: String, cards: String) -> String:
 	var max_tier: int = g.max_tier
 	lines.append("Stage: %d escalations, enemy tier %d of 3%s" % [wave_n, max_tier, "" if boss_spawn_t < 0.0 else ", boss at %s" % clock(boss_spawn_t)])
 	if not phases.is_empty():
-		lines.append("Phases: 0:00 domination, " + ", ".join(PackedStringArray(phases)))
+		lines.append("Phases: 0:00 escalation, " + ", ".join(PackedStringArray(phases)))
 	if boss_spawn_t >= 0.0:
 		var fight := (boss_dead_t if boss_dead_t >= 0.0 else now) - boss_spawn_t
 		var state := "destroyed" if boss_dead_t >= 0.0 else "%d%% HP left" % roundi(100.0 * boss_hp / maxf(boss_max, 1.0))

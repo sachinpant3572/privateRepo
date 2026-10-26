@@ -11,6 +11,7 @@ extends Node2D
 const Data := preload("res://data.gd")
 const Art := preload("res://art.gd")
 const Report := preload("res://report.gd")
+const SelfTest := preload("res://selftest.gd")
 const FX := preload("res://fx.gd")
 const Overlay := preload("res://overlay.gd")
 const HeroRig := preload("res://hero.gd")
@@ -20,21 +21,28 @@ const CELL := 64.0
 const GRID_PAD := 200.0
 const WORLD_BOUNDS := 1.0e7  # Culling bounds for the MultiMesh layers; the world itself is endless.
 const STAGE_TIME := 300.0
-# The stage swings between two phases, so it feels like losing, then winning:
-# - Domination: the difficulty clock stops (enemies stay exactly as strong)
-#   and XP comes faster, so the hero outgrows them with more powers, until
-#   the hero clearly overpowers them (or DOM_MAX runs out).
-# - Escalation: a hard horde (the stage's big events) hits at once, and the
-#   difficulty climbs fast for ESC_TIME.
-const DOM_MIN := 20.0
-const DOM_MAX := 50.0
-const DOM_LEVELS := 4  # Levels gained in a domination before it can end early...
-const DOM_CLEAR := 0.6  # ...once fewer than this share of the wanted enemies are alive.
+# The stage swings between two phases, driven by what happens on screen, so
+# it feels like losing, then winning, again and again:
+# - Escalation: reinforcements pour in and the difficulty climbs, slowly at
+#   first and faster the longer the hero holds out, until the hero is
+#   swarmed (SWARM_N enemies close by, low HP, or heavy recent damage).
+# - Domination: the difficulty stops where it is (enemies stay exactly as
+#   strong), reinforcements slow to a trickle and XP comes faster, so the
+#   hero powers up and fights out of it. Once the screen is nearly clear,
+#   the next escalation starts.
+const ESC_RATE := 1.4  # Difficulty-clock seconds per second as an escalation starts...
+const ESC_SPEEDUP := 30.0  # ...and one more ESC_RATE for every this many seconds it lasts.
+const ESC_MIN := 12.0  # An escalation runs at least this long...
+const SWARM_N := 40  # ...until this many enemies are within SWARM_R...
+const SWARM_R := 360.0
+const SWARM_HP := 0.35  # ...or HP drops below this share...
+const SWARM_HURT := 0.3  # ...or recent damage (fading over a few seconds) passes this share of max HP.
+const DOM_MIN := 10.0  # A domination runs at least this long...
+const DOM_CLEAR := 12  # ...until no more than this many enemies are left...
+const DOM_MAX := 75.0  # ...or this runs out.
+const DOM_SPAWN := 0.08  # Reinforcement rate during a domination: a trickle, so the screen can be cleared.
 const DOM_XP := 1.5  # XP multiplier during a domination.
-const ESC_TIME := 30.0
-const ESC_RATE := 2.5  # Difficulty-clock seconds per second during an escalation.
-const ESC_TIERS := [1, 2, 2, 3]  # Enemy tier from the 1st, 2nd, 3rd and 4th+ escalation.
-const D_CAP := 320.0  # Escalations stop raising the difficulty here (5:20 of the old curve).
+const D_CAP := 900.0  # The difficulty clock's ceiling (enemy HP keeps rising with it).
 const TIER_NAMES := ["Conscripts", "Regulars", "Veterans", "Elite Guard"]
 const TIER_XP := [0.6, 1.0, 1.25, 1.5]  # Tougher-looking enemies pay more.
 const TIER_TINT := [Color(0.8, 0.8, 0.76), Color.WHITE, Color(1.06, 1.02, 0.96), Color(1.08, 0.97, 0.96)]
@@ -59,8 +67,15 @@ const SLAM_HANG := 0.22
 const SLAM_FALL := 0.16
 const SLAM_RADIUS := 330.0
 const SLAM_NEED := 250.0  # Charge (kill XP) for the first slam; each one after needs 100 more.
+# Blitz Dash: charged by kills like the slam but faster; a lightning-fast
+# dash that cuts down everything in a wide line. Phase Dash levels charge it
+# faster and make the cut longer and wider.
+const BLITZ_NEED := 90.0
+const BLITZ_LEN := 520.0
+const BLITZ_WIDTH := 70.0
+const BLITZ_TIME := 0.16
 const BANISHES := 3
-const MINE_CAP := 24
+const MINE_CAP := 40
 const CLOUD_CAP := 12
 const MAX_LEVEL := 8
 const SHOT_CAP := 2500
@@ -225,9 +240,12 @@ var curse := 0
 var ls_on := false
 # Actives.
 var dash_lvl := 0
-var dash_cd := 0.0
 var dash_t := 0.0
 var dash_dir := Vector2.RIGHT
+var blitz_charge := 0.0
+var blitz_from := Vector2.ZERO
+var blitz_hit := {}  # Enemies already cut by this dash.
+var blitz_cuts := 0
 var stomp_lvl := 0
 var stomp_t := 0.0
 var bt_lvl := 0
@@ -278,8 +296,8 @@ var surge := false  # In an escalation.
 var calm := false  # The first seconds of a domination (the music breathes).
 var wave_n := 0  # Escalations so far.
 var phase_t0 := 0.0
-var dom_level0 := 1
-var dom_op_t := 0.0  # How long the hero has been overpowering this domination.
+var phase_hold := 0.0  # How long the phase's end condition has held.
+var recent_hurt := 0.0  # Damage taken lately, fading (swarm check).
 var d_clock := 0.0  # Difficulty clock: runs during escalations only.
 var events_due := 0
 var event_t := -99.0  # Last stage event, so an escalation's events come a few seconds apart.
@@ -457,6 +475,7 @@ var logic_worst := 0.0
 var peak_enemies := 0
 var hud_timer := 0.0
 var last_results := ""
+var selftest: RefCounted  # CI smoke test and screenshots (selftest.gd), kept alive while they run.
 # Run report (COPY RESULTS): what dealt and took the damage, healing, a
 # minute-by-minute timeline and the picks, so balance problems show up.
 var cur_src := "other"  # What is dealing damage right now (weapon or power id).
@@ -487,9 +506,11 @@ func _ready() -> void:
 	_set_quality("Ultra" if DisplayServer.screen_get_refresh_rate() >= 90.0 else "Medium")
 	_to_menu()
 	if shots_dir != "":
-		_run_shots(shots_dir)
+		selftest = SelfTest.new(self)
+		selftest.run_shots(shots_dir)
 	elif smoke:
-		_run_smoke()
+		selftest = SelfTest.new(self)
+		selftest.run_smoke()
 
 
 func _build_scene() -> void:
@@ -595,7 +616,7 @@ func _build_scene() -> void:
 	hud.option_toggled.connect(_on_option)
 	hud.chest_collected.connect(_on_chest_collected)
 	hud.double_gold_pressed.connect(_on_double_gold)
-	hud.dash_pressed.connect(_dash)
+	hud.blitz_pressed.connect(_dash)
 	hud.jump_pressed.connect(_slam)
 	hud.banish_pressed.connect(_on_banish)
 	hud.skip_pressed.connect(_on_skip)
@@ -786,8 +807,9 @@ func _start(auto: bool) -> void:
 	slams = 0
 	hero.set_air(0.0, 0.0)
 	hud.set_jump(0.0)
-	dash_cd = 0.0
 	dash_t = 0.0
+	blitz_charge = 0.0
+	blitz_hit = {}
 	stomp_t = 0.0
 	bt_t = 0.0
 	slow_t = 0.0
@@ -812,9 +834,10 @@ func _start(auto: bool) -> void:
 	surge = false
 	calm = false
 	phase_t0 = 0.0
-	dom_level0 = 1
-	dom_op_t = 0.0
+	phase_hold = 0.0
+	recent_hurt = 0.0
 	d_clock = 0.0
+	surge = true
 	events_due = 0
 	event_t = -99.0
 	last_target = 0
@@ -1133,10 +1156,11 @@ func _update_player(dt: float) -> void:
 	move_vec = mv
 	if dash_t > 0.0:
 		dash_t -= dt
-		player += dash_dir * 1100.0 * dt
-		if dash_lvl >= 5:
-			cur_src = "dash"
-			_damage_around(player, 50.0, 6.0 * dash_lvl)
+		var from := player
+		player += dash_dir * _blitz_len() / BLITZ_TIME * dt
+		_blitz_cut(from, player)
+		if dash_t <= 0.0:
+			_blitz_end()
 		if int(t * 60.0) % 2 == 0:
 			_vfx(player, Vector2.ZERO, 0.25, 14.0, 4.0, Color(0.5, 0.95, 1.0, 0.6), Color(0.3, 0.6, 1.0, 0.0), true)
 	else:
@@ -1216,6 +1240,7 @@ func _hurt(amount: float, src: String = "") -> void:
 	rep.count(rep.blocks, "fortify", cut)
 	rep.count(rep.blocks, "armor", amount - cut - taken)
 	hp -= taken
+	recent_hurt += taken
 	rep.last_hit = src
 	var row: Array = rep.taken_by.get(src, [0, 0.0])
 	rep.taken_by[src] = [int(row[0]) + 1, float(row[1]) + taken]
@@ -1269,6 +1294,11 @@ func _spawn_director(dt: float) -> void:
 		return
 	_update_final(dt)
 	_update_wave(dt)
+	if elites_spawned < 2 and d_clock >= 120.0 * (elites_spawned + 1):
+		elites_spawned += 1
+		_spawn_enemy(Data.ELITE)
+		hud.show_banner("JUGGERNAUT INCOMING")
+		sfx.play("alarm")
 	# Late escalations bring bomber squadrons every 16 seconds.
 	if _diff_t() >= 200.0 and not boss_on and boss_dead_t < 0.0 and surge:
 		flyby_t -= dt
@@ -1287,7 +1317,7 @@ func _spawn_director(dt: float) -> void:
 	hp_mult = maxf(1.0, float(target) / maxf(cap, 1.0))
 	target = cap
 	last_target = target
-	spawn_acc = minf(spawn_acc + dt * (12.0 + d * 0.25) * (1.0 + 0.1 * curse), 30.0)
+	spawn_acc = minf(spawn_acc + dt * (12.0 + d * 0.25) * (1.0 + 0.1 * curse) * (1.0 if surge or boss_spawned else DOM_SPAWN), 30.0)
 	shot_budget = minf(shot_budget + dt * (1.5 + d / 60.0), 5.0)
 	var weights := Data.spawn_weights(d)
 	while spawn_acc >= 1.0 and e_count < target and e_count < e_cap:
@@ -1304,11 +1334,12 @@ func _diff_t() -> float:
 	return maxf(d_clock, t) if boss_spawned else d_clock
 
 
-## Tier of newly spawned enemies: set by the escalations so far.
+## Tier of newly spawned enemies, from the difficulty reached.
 func _tier_now() -> int:
 	if boss_spawned:
 		return 3
-	return 1 if wave_n == 0 else ESC_TIERS[mini(wave_n, ESC_TIERS.size()) - 1]
+	var d := _diff_t()
+	return 1 if d < 110.0 else (2 if d < 230.0 else 3)
 
 
 func _update_wave(dt: float) -> void:
@@ -1317,27 +1348,31 @@ func _update_wave(dt: float) -> void:
 		calm = false
 		return
 	var held := t - phase_t0
-	calm = not surge and held < 6.0 and wave_n > 0
+	calm = not surge
+	recent_hurt = maxf(0.0, recent_hurt - recent_hurt * dt / 4.0)
 	if surge:
-		d_clock = minf(d_clock + dt * ESC_RATE, D_CAP)
-		if held >= ESC_TIME:
+		d_clock = minf(d_clock + dt * ESC_RATE * (1.0 + held / ESC_SPEEDUP), D_CAP)
+		# Swarmed: plenty of enemies close by, or the hero is hurting.
+		var near := 0
+		var r2 := SWARM_R * SWARM_R
+		for i in e_count:
+			if e_hp[i] > 0.0 and e_pos[i].distance_squared_to(player) < r2:
+				near += 1
+		var swarmed := near >= SWARM_N or hp < max_hp * SWARM_HP or recent_hurt > max_hp * SWARM_HURT
+		phase_hold = phase_hold + dt if swarmed else 0.0
+		if held >= ESC_MIN and phase_hold >= 1.0:
 			_start_domination()
 		return
-	# The hero is overpowering them: plenty of levels gained and the horde
-	# melting faster than it arrives.
-	if level - dom_level0 >= DOM_LEVELS and e_count < last_target * DOM_CLEAR:
-		dom_op_t += dt
-	else:
-		dom_op_t = maxf(0.0, dom_op_t - dt)
-	if held >= DOM_MAX or (held >= DOM_MIN and dom_op_t >= 2.0):
+	# Nearly cleared: the next escalation.
+	phase_hold = phase_hold + dt if e_count <= DOM_CLEAR else 0.0
+	if held >= DOM_MAX or (held >= DOM_MIN and phase_hold >= 1.0):
 		_start_escalation()
 
 
 func _start_domination() -> void:
 	surge = false
 	phase_t0 = t
-	dom_level0 = level
-	dom_op_t = 0.0
+	phase_hold = 0.0
 	rep.phases.append("%s domination" % _clock(t))
 	hud.show_banner("DOMINATION! +50% XP", Color(0.5, 1.0, 0.6))
 
@@ -1347,8 +1382,9 @@ func _start_domination() -> void:
 func _start_escalation() -> void:
 	surge = true
 	phase_t0 = t
+	phase_hold = 0.0
 	wave_n += 1
-	events_due = mini(events_due + 2, Data.EVENTS.size())
+	events_due = mini(events_done + 1, Data.EVENTS.size())
 	var tier := _tier_now()
 	rep.phases.append("%s escalation %d" % [_clock(t), wave_n])
 	if tier > max_tier:
@@ -1357,12 +1393,9 @@ func _start_escalation() -> void:
 	else:
 		hud.show_banner("THE DOMINION ESCALATES!", TIER_COLORS[tier])
 	sfx.play("alarm")
-	if wave_n == 2 or wave_n == 4:
-		elites_spawned += 1
-		_spawn_enemy(Data.ELITE)
-		hud.show_banner("JUGGERNAUT INCOMING")
+
 	# The horde: a ring of fresh troops closing in.
-	var n := 14 + 6 * wave_n
+	var n := mini(14 + 4 * wave_n, 40)
 	for k in n:
 		var before := e_count
 		_spawn_enemy(Data.TROOPER if k % 3 else Data.SHIELD)
@@ -1372,7 +1405,9 @@ func _start_escalation() -> void:
 
 
 func _run_events() -> void:
-	if events_done >= events_due or t - event_t < 3.0:
+	if events_done >= Data.EVENTS.size() or t - event_t < 3.0:
+		return
+	if d_clock < float(Data.EVENTS[events_done][0]) and events_done >= events_due:
 		return
 	event_t = t
 	var ev: Array = Data.EVENTS[events_done]
@@ -1671,6 +1706,8 @@ func _kill(j: int) -> void:
 	rep.kills_by[ty] += 1
 	if slam_t < 0.0:
 		slam_charge = minf(slam_need, slam_charge + float(t_xp[ty]))
+	if dash_t <= 0.0:
+		blitz_charge = minf(_blitz_need(), blitz_charge + float(t_xp[ty]))
 	_gem(p, maxi(1, int(round(t_xp[ty] * hp_mult * TIER_XP[e_tier[j]]))))
 	_add_combo()
 	var big := ty >= Data.ELITE
@@ -2035,12 +2072,16 @@ func _fire(id: String, st: Dictionary) -> bool:
 		"mines":
 			if mines.size() >= MINE_CAP:
 				return false
-			var spr := Sprite2D.new()
-			spr.texture = mine_tex
-			spr.position = player - facing * 20.0
-			spr.scale = Vector2.ONE * 0.6
-			_add_below_hero(spr)
-			mines.append([spr.position, 0.4, spr, float(st["life"])])
+			var n := int(st.get("count", 1))
+			for k in n:
+				if mines.size() >= MINE_CAP:
+					break
+				var spr := Sprite2D.new()
+				spr.texture = mine_tex
+				spr.position = player - facing * 20.0 + (facing.orthogonal() * (k - (n - 1) * 0.5) * 34.0 if n > 1 else Vector2.ZERO)
+				spr.scale = Vector2.ONE * 0.6
+				_add_below_hero(spr)
+				mines.append([spr.position, 0.4, spr, float(st["life"])])
 			sfx.play("mine")
 		"sentry":
 			var alive := sentries.size()
@@ -2322,16 +2363,24 @@ func _tesla(st: Dictionary) -> bool:
 		return false
 	var hit := {}
 	var cur := nearest
-	for k in int(st["chains"]):
-		var p := e_pos[cur]
-		points.append(p)
-		_damage(cur, st["dmg"], player, false)
-		hit[cur] = true
-		hero.effect("spark_electric", p, 0.2, 16.0, 36.0, Color(0.7, 0.9, 1.0), 14)
-		cur = _nearest_in_radius(p, st["jump"], hit)
-		if cur < 0:
-			break
-	_bolt(points)
+	# Several separate arcs, each from the player to its own first target.
+	for a in int(st.get("arcs", 1)):
+		if a > 0:
+			cur = _nearest_in_radius(player, reach, hit)
+			if cur < 0:
+				break
+			points = PackedVector2Array([player])
+		for k in int(st["chains"]):
+			var p := e_pos[cur]
+			points.append(p)
+			_damage(cur, st["dmg"], player, false)
+			hit[cur] = true
+			if k < 4:
+				hero.effect("spark_electric", p, 0.2, 16.0, 36.0, Color(0.7, 0.9, 1.0), 14)
+			cur = _nearest_in_radius(p, st["jump"], hit)
+			if cur < 0:
+				break
+		_bolt(points)
 	if st["fork"]:
 		# Storm Network: every enemy hit forks one more bolt to a fresh target.
 		for j in hit.keys():
@@ -2587,10 +2636,8 @@ func _update_actives(dt: float) -> void:
 			shield_charges += 1
 			shield_cd = _shield_time()
 			hero.set_shield(true)
-	if dash_lvl > 0:
-		dash_cd = maxf(dash_cd - dt, 0.0)
-		hud.set_dash(true, dash_cd / _dash_time())
-		if autoplay and dash_cd <= 0.0 and hp < max_hp * 0.5:
+	if dash_t <= 0.0:
+		if autoplay and blitz_charge >= _blitz_need() and e_count > 30:
 			_dash()
 
 
@@ -2762,20 +2809,84 @@ func _shield_time() -> float:
 	return maxf(4.0, 13.0 - float(_lv("shield")))
 
 
-func _dash_time() -> float:
-	return maxf(1.5, 6.0 - 0.45 * dash_lvl)
+func _blitz_need() -> float:
+	return BLITZ_NEED * maxf(0.4, 1.0 - 0.08 * dash_lvl)
 
 
+func _blitz_len() -> float:
+	return BLITZ_LEN * (1.0 + 0.05 * dash_lvl)
+
+
+func _blitz_width() -> float:
+	return (BLITZ_WIDTH + 6.0 * dash_lvl) * area_mult
+
+
+## Blitz Dash: along the stick (or the facing when still), through everything.
 func _dash() -> void:
-	if state != State.PLAYING or dash_lvl <= 0 or dash_cd > 0.0:
+	if state != State.PLAYING or dash_t > 0.0 or slam_t >= 0.0 or blitz_charge < _blitz_need():
 		return
-	dash_cd = _dash_time()
-	dash_t = 0.16
+	blitz_charge = 0.0
+	hud.set_blitz(0.0)
+	dash_t = BLITZ_TIME
 	dash_dir = move_vec.normalized() if move_vec.length_squared() > 0.01 else facing
-	invuln = maxf(invuln, 0.3)
+	blitz_from = player
+	blitz_hit = {}
+	blitz_cuts = 0
+	invuln = maxf(invuln, BLITZ_TIME + 0.35)
 	hero.dash(dash_dir.angle())
+	hud.show_banner("BLITZ DASH!", Color(0.6, 0.95, 1.0))
 	_ring(player, 2.5)
-	sfx.play("shot", 0.5, -6.0)
+	sfx.play("dash_launch")
+
+
+## Cuts every enemy within the dash's width of the stretch just travelled.
+func _blitz_cut(a: Vector2, b: Vector2) -> void:
+	cur_src = "blitz"
+	var w := _blitz_width()
+	var dmg := 200.0 + 25.0 * level
+	var grow := (1.0 + 0.2 * _diff_t() / 60.0) * hp_mult
+	for j in e_count:
+		if e_hp[j] <= 0.0 or blitz_hit.has(j):
+			continue
+		var ty := e_type[j]
+		var closest := Geometry2D.get_closest_point_to_segment(e_pos[j], a, b)
+		var rr := w + t_radius[ty]
+		if e_pos[j].distance_squared_to(closest) > rr * rr:
+			continue
+		blitz_hit[j] = true
+		blitz_cuts += 1
+		if blitz_cuts <= 12:
+			hero.effect("spark_star", e_pos[j], 0.18, 14.0, 40.0, Color(0.7, 0.95, 1.0), 6)
+		if ty == Data.ELITE or ty == Data.GUNSHIP or ty == Data.SIEGE:
+			_damage(j, (t_hp[ty] * grow * big_mult * 0.3) / dmg_mult + dmg, b, false)
+		else:
+			_damage(j, e_hp[j] * 4.0 / dmg_mult + dmg, b, false)
+	if boss_on and not blitz_hit.has(-1):
+		var c := Geometry2D.get_closest_point_to_segment(boss_pos, a, b)
+		if boss_pos.distance_to(c) < w + BOSS_RADIUS:
+			blitz_hit[-1] = true
+			_damage_boss(boss_max * 0.03 / dmg_mult, false)
+	var w2 := w * w
+	for i in b_count:
+		if b_pos[i].distance_squared_to(Geometry2D.get_closest_point_to_segment(b_pos[i], a, b)) < w2:
+			b_life[i] = 0.0
+
+
+## The dash lands: a lightning trail along the path, a slice flash, a jolt.
+func _blitz_end() -> void:
+	var path := player - blitz_from
+	var side := path.orthogonal().normalized()
+	var pts := PackedVector2Array()
+	for k in 9:
+		pts.append(blitz_from + path * (k / 8.0) + side * (0.0 if k == 0 or k == 8 else randf_range(-18.0, 18.0)))
+	bolts.append([pts, 0.35])
+	bolts.append([PackedVector2Array([blitz_from + side * 10.0, player + side * 10.0]), 0.2])
+	_ring(player, 3.0)
+	if blitz_cuts > 0:
+		sfx.play("dash_hit")
+		hitstop = maxf(hitstop, 0.05)
+		trauma = minf(trauma + 0.35, 0.8)
+		hud.flash(Color(0.7, 0.95, 1.0, 0.25))
 
 
 ## Shock Rounds: a small arc to two nearby enemies.
@@ -3036,11 +3147,12 @@ func _open_chest() -> void:
 		taken[evo] = true
 	while chest_rewards.size() < size:
 		var pool := []
+		var lb := _build_maxed()
 		for id in weapons:
-			if not taken.has(id):
+			if not taken.has(id) and (int(weapons[id]) < MAX_LEVEL or lb):
 				pool.append(["weapon" if int(weapons[id]) < MAX_LEVEL else "limit", id])
 		for id in powers:
-			if not taken.has(id):
+			if not taken.has(id) and (int(powers[id]) < MAX_LEVEL or lb):
 				pool.append(["power" if int(powers[id]) < MAX_LEVEL else "limit", id])
 		if pool.is_empty():
 			chest_rewards.append(["gold", "gold"])
@@ -3194,7 +3306,6 @@ func _recalc() -> void:
 	_check_synergies()
 	_set_drones(int(w_stats["drones"]["count"]) if weapons.has("drones") else 0)
 	hud.set_build(_build_text())
-	hud.set_dash(dash_lvl > 0, 0.0)
 	if state != State.MENU:
 		for n in hero.refresh(weapons, powers, evolved):
 			if smoke:
@@ -3393,11 +3504,27 @@ func _make_offers(n: int, chest: bool, skip: Array) -> Array:
 func _add_candidate(pool: Array, kind: String, id: String, lvl: int, slot_free: bool) -> void:
 	if (lvl == 0 and not slot_free) or banished.has(id):
 		return
-	pool.append([kind, id])  # A maxed item stays in the pool as a Limit Break.
+	if lvl >= MAX_LEVEL and not _build_maxed():
+		return  # Limit Breaks wait until the whole build is full and maxed.
+	pool.append([kind, id])
 	if lvl >= 1 and lvl < MAX_LEVEL:
 		pool.append([kind, id])  # Owned items come up more often, so builds come together.
 	if lvl >= 3 and lvl < MAX_LEVEL:
 		pool.append([kind, id])
+
+
+## Every slot filled and every item at MAX_LEVEL: from here on, maxed items
+## come back as Limit Breaks.
+func _build_maxed() -> bool:
+	if weapons.size() < MAX_SLOTS or powers.size() < POWER_SLOTS + DEFENSE_SLOTS:
+		return false
+	for id in weapons:
+		if int(weapons[id]) < MAX_LEVEL:
+			return false
+	for id in powers:
+		if int(powers[id]) < MAX_LEVEL:
+			return false
+	return true
 
 
 ## Powers: 4 slots for anything, plus 1 that only takes a defense power.
@@ -4120,6 +4247,8 @@ func _update_hud() -> void:
 	hud.set_combo(combo, combo_timer / COMBO_TIME)
 	if slam_t < 0.0:
 		hud.set_jump(slam_charge / slam_need)
+	if dash_t <= 0.0:
+		hud.set_blitz(blitz_charge / _blitz_need())
 
 
 func _build_text() -> String:
@@ -4261,211 +4390,3 @@ func _bot_pick() -> void:
 			best = i
 	_on_card(best)
 
-
-func _grant(items: Dictionary) -> void:
-	for id in items:
-		if Data.WEAPON_IDS.has(id):
-			weapons[id] = items[id]
-		else:
-			powers[id] = items[id]
-	_recalc()
-	hp = max_hp
-
-
-func _run_smoke() -> void:
-	print("SMOKE: start")
-	_set_quality("Ultra")
-	_start(true)
-	var frames := 0
-	while state != State.OVER and frames < 60 * 420:
-		await get_tree().process_frame
-		frames += 1
-	print("SMOKE: stage run ended state=%d t=%.0f level=%d kills=%d boss_spawned=%s" % [state, t, level, kills, boss_spawned])
-	print(rep.text(self, _results_text(boss_dead_t >= 0.0), _cards_line()))
-	if not _check(t > 30.0 and kills > 0, "the bot played the stage"):
-		return
-	# Every weapon and power at once (more than the slots allow) for a few
-	# seconds, so every code path runs at least once.
-	_start(true)
-	var all := {}
-	for id in Data.WEAPON_IDS:
-		all[id] = 8
-	for id in Data.POWER_IDS:
-		all[id] = 8
-	_grant(all)
-	for id in Data.EVOLUTIONS:
-		evolved[id] = true
-	_recalc()
-	god = true
-	t = 200.0
-	await _frames(60 * 8)
-	print("SMOKE: everything-at-once kills=%d logic_worst=%.1f" % [kills, logic_worst])
-	if not _check(synergies.size() == Data.SYNERGIES.size(), "every synergy unlocks"):
-		return
-	# Defense: the dome blocks a hit, Fortify cuts damage, the EMP wipes bullets.
-	_start(true)
-	god = false
-	_grant({"barrier": 8, "emp": 8, "repair": 8, "fortify": 8})
-	_recalc()
-	invuln = 0.0
-	var hp_before := hp
-	_hurt(50.0)
-	if not _check(hp == hp_before and barrier_t > 0.0, "Barrier Dome rep.blocks a hit"):
-		return
-	barrier_t = 0.0
-	barrier_cd = 99.0
-	invuln = 0.0
-	_hurt(50.0)
-	if not _check(hp_before - hp < 50.0 * 0.75 and hp < hp_before, "Fortify cuts damage"):
-		return
-	_ebullet(player + Vector2(100.0, 0.0), Vector2.ZERO, 5.0, 5.0)
-	_emp()
-	if not _check(b_life[b_count - 1] <= 0.0, "EMP wipes enemy bullets"):
-		return
-	print("SMOKE: defense ok")
-	# Second run: a heavy legal build (4 weapons, 4 powers plus the defense
-	# slot) maxed and evolved, near the boss.
-	_start(true)
-	weapons = {}  # Drop the starting rifle so the slots hold exactly this build.
-	_grant({"flame": 8, "drones": 8, "mines": 8, "grenade": 8, "titan": 8, "magnet": 8, "stomp": 8, "luck": 8, "fortify": 8})
-	for id in ["flame", "drones", "mines", "grenade"]:
-		evolved[id] = true
-	_recalc()
-	var lb_offers := _make_offers(2, false, [])
-	if not _check(lb_offers.all(func(o): return o.get("limit", false)), "a maxed build is offered Limit Breaks"):
-		return
-	god = true
-	t = 280.0
-	await _frames(60 * 70)
-	god = false
-	print("SMOKE: all-items run t=%.0f state=%d enemies=%d kills=%d boss_max=%.0f boss_fight=%.1fs boss_dead=%s logic_worst=%.1f" % [t, state, e_count, kills, boss_max, (boss_dead_t if boss_dead_t >= 0.0 else t) - STAGE_TIME, boss_dead_t >= 0.0, logic_worst])
-	if not _check(kills > 100, "the all-items run killed enemies"):
-		return
-	if not _check(boss_dead_t < 0.0 or boss_dead_t - STAGE_TIME > 8.0, "a maxed build does not kill the boss in seconds"):
-		return
-	# The final push: killing the Colossus starts it, and clearing it wins.
-	_start(true)
-	god = true
-	t = STAGE_TIME
-	await _frames(10)
-	if not _check(boss_on, "the Colossus spawns at the stage time"):
-		return
-	boss_hp = 1.0
-	_damage_boss(1000.0, true)
-	await _frames(5)
-	if not _check(type_alive[Data.SIEGE] >= 1 and state == State.PLAYING, "the final push spawns Siege Colossi"):
-		return
-	for j in e_count:
-		if e_type[j] == Data.SIEGE and e_hp[j] > 0.0:
-			_damage(j, 1.0e9, e_pos[j], true)
-	await _frames(int(60 * (Data.FINAL_TIME + 5.0)))
-	print("SMOKE: final push state=%d final_clear=%.1f jets_seen=%s" % [state, final_clear_t, str(peak_enemies > 0)])
-	if not _check(state == State.OVER, "clearing the final push wins the stage"):
-		return
-	god = false
-	print("SMOKE: passed")
-	get_tree().quit(0)
-
-
-func _run_shots(dir: String) -> void:
-	DirAccess.make_dir_recursive_absolute(dir)
-	god = true
-	await _frames(5)
-	await _save_shot(dir, "menu")
-	for tier_name in ["Ultra", "High", "Medium", "Low"]:
-		_set_quality(tier_name)
-		_start(true)
-		_grant({"rifle": 5, "rockets": 4, "halo": 4, "tesla": 3, "airstrike": 3, "scatter": 2, "overclock": 3, "explosive": 2})
-		t = 200.0
-		await _frames(60 * 3)
-		# A fixed ring of every enemy type around a still player, made tough so
-		# it survives until the screenshot.
-		bot_still = true
-		_showcase()
-		await _frames(30)
-		await _save_shot(dir, "play_" + tier_name.to_lower())
-		if tier_name == "Ultra":
-			# Every unit type dying at once (deaths.gd): mid-blast, then the
-			# wrecks and falling aircraft a moment later.
-			for i in e_count:
-				e_hp[i] = 0.0
-				_kill(i)
-			await _frames(8)
-			await _save_shot(dir, "deaths")
-			await _frames(30)
-			await _save_shot(dir, "deaths_late")
-		bot_still = false
-		if tier_name == "Ultra":
-			bot_cards = false
-			pending_levels += 1
-			await _frames(3)
-			await _save_shot(dir, "cards")
-			_bot_pick()
-			_grant({"rifle": 8, "overclock": 3})
-			_open_chest()
-			await _frames(90)
-			await _save_shot(dir, "chest")
-			_on_chest_collected()
-			bot_cards = true
-			t = STAGE_TIME - 1.0
-			await _frames(5)
-			bot_still = true
-			boss_pos = player + Vector2(0.0, -330.0)
-			await _frames(90)
-			await _save_shot(dir, "boss")
-			bot_still = false
-			# A fully geared hero: helmet, pauldrons, wings, aura and an evolved weapon.
-			_start(true)
-			_grant({"rail": 8, "drones": 6, "sentry": 5, "mines": 4, "flame": 8, "grenade": 4, "titan": 6, "shield": 4, "dodge": 3, "thorns": 3, "regen": 3, "burn": 5, "cryo": 3, "might": 3, "bullettime": 3})
-			evolved["rail"] = true
-			_recalc()
-			t = 150.0
-			bot_still = true
-			await _frames(60 * 4)
-			await _save_shot(dir, "gear")
-			bot_still = false
-			_to_menu()
-			_show_costumes()
-			await _frames(10)
-			await _save_shot(dir, "costumes")
-	print("SHOTS: done")
-	get_tree().quit(0)
-
-
-func _showcase() -> void:
-	var kinds := [Data.TROOPER, Data.TROOPER, Data.SHIELD, Data.GRENADIER, Data.TROOPER, Data.TANK, Data.TROOPER, Data.HELI, Data.SHIELD, Data.TROOPER, Data.GRENADIER, Data.ELITE]
-	for k in 36:
-		var ty: int = kinds[k % kinds.size()]
-		_spawn_enemy(ty)
-		var i := e_count - 1
-		e_pos[i] = player + Vector2.from_angle(TAU * k / 36.0) * (190.0 + (k % 3) * 80.0)
-		e_hp[i] = 1.0e6
-	# The late-game units, outside the ring.
-	for spot in [[Data.SIEGE, Vector2(0.0, 470.0)], [Data.GUNSHIP, Vector2(-250.0, -440.0)], [Data.JET, Vector2(260.0, -470.0)]]:
-		_spawn_enemy(spot[0])
-		var i := e_count - 1
-		e_pos[i] = player + spot[1]
-		e_ang[i] = PI
-		e_hp[i] = 1.0e6
-
-
-func _save_shot(dir: String, shot_name: String) -> void:
-	await RenderingServer.frame_post_draw
-	var path := dir.path_join(shot_name + ".png")
-	get_viewport().get_texture().get_image().save_png(path)
-	var units := 0
-	for n in unit_n:
-		units += n
-	print("SHOTS: saved %s quality=%s state=%d enemies=%d unit_sprites=%d shots=%d rockets=%d enemy_bullets=%d gems=%d sparks=%d rings=%d boss=%s" % [path, quality, state, e_count, units, s_count, k_count, b_count, g_count, p_count, r_count, boss_on])
-
-
-func _frames(n: int) -> void:
-	for i in n:
-		await get_tree().process_frame
-
-
-func _check(ok: bool, what: String) -> bool:
-	if not ok:
-		printerr("SMOKE FAILED: " + what)
-		get_tree().quit(1)
-	return ok
