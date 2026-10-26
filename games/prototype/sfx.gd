@@ -47,6 +47,9 @@ const SOUNDS := {
 	"heal": [0.3, -4.0, 0.0, "ui"],
 	"shield": [0.2, -6.0, 0.05, "ui"],
 	"jet": [0.6, -3.0, 0.05, "fx"],
+	"barrier": [1.0, -4.0, 0.02, "ui"],
+	"emp": [0.5, -10.0, 0.08, "fx"],
+	"repair": [2.5, -16.0, 0.05, "fx"],
 	"gunship": [0.15, -7.0, 0.06, "fx"],
 	"siege": [0.4, -4.0, 0.05, "fx"],
 }
@@ -68,7 +71,7 @@ const BANNER_VOICES := [
 	["AIR RAID", "air_raid"], ["NUKE", "nuke"], ["FREEZE", "freeze"], ["VACUUM", "vacuum"], ["MEDKIT", "medkit"],
 	["SECOND WIND", "second_wind"], ["BOMBING RUN", "bombing_run"], ["GUNSHIPS", "gunships"],
 	["ARMORED ASSAULT", "armored_assault"], ["SIEGE COLOSSUS", "siege"], ["THE DOMINION STRIKES BACK", "strikes_back"],
-	["THE IRON DOMINION FALLS", "dominion_falls"], ["KILLING SPREE", "killing_spree"], ["RAMPAGE", "rampage"], ["MASSACRE", "massacre"],
+	["THE IRON DOMINION FALLS", "dominion_falls"], ["SHIELD CELL", "shield_cell"], ["KILLING SPREE", "killing_spree"], ["RAMPAGE", "rampage"], ["MASSACRE", "massacre"],
 	["UNSTOPPABLE", "unstoppable"], ["GODLIKE", "godlike"], ["APOCALYPSE", "apocalypse"], ["FINAL WAVE", "final_wave"],
 ]
 

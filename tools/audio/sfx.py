@@ -352,6 +352,33 @@ def shield():
     return finish(x * expdecay(n, 0.15), 0.55)
 
 
+def barrier():
+    """An energy dome going up: a rising shimmer over a soft bass thump."""
+    n = seconds(1.1)
+    f = np.geomspace(180.0, 720.0, n)
+    hum = (saw(f, n) * 0.4 + saw(f * 1.5, n) * 0.25 + sine(f * 2.0, n) * 0.3)
+    hum = fft_filter(hum, low=3500.0) * adsr(n, 0.12, 0.3, 0.6, 0.5)
+    thump = sine(env_sweep(n, 140, 55, 0.05), n) * expdecay(n, 0.15)
+    return finish(mix(hum * 0.6, thump, chime([81, 88, 93], 0.05, 0.8, 0.6) * 0.35), 0.7, 0.25)
+
+
+def emp():
+    """A short electric pulse: frequent, so brief and soft-edged."""
+    n = seconds(0.35)
+    f = env_sweep(n, r(900, 1100), 70.0, 0.06)
+    pulse = sine(f, n) * expdecay(n, 0.09)
+    crackle_ = fft_filter(noise(n), center=3000.0, width=0.8) * expdecay(n, 0.04) * 0.5
+    return finish(mix(pulse, crackle_), 0.55, 0.05)
+
+
+def repair():
+    """A tiny two-note chirp, quiet enough to hear every two seconds."""
+    a = seconds(0.05)
+    b = seconds(0.12)
+    x = np.concatenate([sine(np.full(a, midi_hz(84)), a) * 0.6, sine(np.full(b, midi_hz(91)), b) * expdecay(b, 0.04)])
+    return finish(x, 0.35, 0.03)
+
+
 SOUNDS = {
     "shot": (shot, 4), "scatter": (scatter, 3), "rocket": (rocket, 3), "rail": (rail, 2),
     "flame": (flame, 3), "grenade": (grenade, 3), "mine": (mine, 1), "drone": (drone, 3), "zap": (zap, 4),
@@ -361,6 +388,7 @@ SOUNDS = {
     "synergy": (synergy, 1), "evolve": (evolve, 1), "limit_break": (limit_break, 2),
     "card_show": (card_show, 2), "card_pick": (card_pick, 2), "ui_tap": (ui_tap, 2),
     "heal": (heal, 1), "shield": (shield, 2),
+    "barrier": (barrier, 1), "emp": (emp, 3), "repair": (repair, 2),
 }
 
 
