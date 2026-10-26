@@ -10,6 +10,7 @@ extends Node2D
 
 const Data := preload("res://data.gd")
 const Art := preload("res://art.gd")
+const Report := preload("res://report.gd")
 const FX := preload("res://fx.gd")
 const Overlay := preload("res://overlay.gd")
 const HeroRig := preload("res://hero.gd")
@@ -41,6 +42,13 @@ const MAX_SLOTS := 4  # Weapons, of 12: every run is a different build.
 const POWER_SLOTS := 4  # Of 36.
 const DEFENSE_SLOTS := 1  # One more power slot that only takes a defense power.
 const DOME_RADIUS := 95.0  # Barrier Dome.
+# Meteor Slam: charged by kills (their XP), the hero leaps toward the camera
+# and crashes down, destroying everything around the crater.
+const SLAM_RISE := 0.38
+const SLAM_HANG := 0.22
+const SLAM_FALL := 0.16
+const SLAM_RADIUS := 330.0
+const SLAM_NEED := 250.0  # Charge (kill XP) for the first slam; each one after needs 100 more.
 const BANISHES := 3
 const MINE_CAP := 24
 const CLOUD_CAP := 12
@@ -191,6 +199,10 @@ var repair_node: Sprite2D
 var fortify := 0.0  # Damage cut while moving; doubled standing still.
 var still_t := 0.0
 var bonus_shield := 0  # Shield Cell charges, on top of Kinetic Shield's.
+var slam_charge := 0.0
+var slam_need := SLAM_NEED
+var slam_t := -1.0  # Time into the jump; below 0 on the ground.
+var slams := 0
 var burn_dps := 0.0
 var cryo_lvl := 0
 var shock_lvl := 0
@@ -433,24 +445,7 @@ var last_results := ""
 # minute-by-minute timeline and the picks, so balance problems show up.
 var cur_src := "other"  # What is dealing damage right now (weapon or power id).
 var cur_shooter := "?"  # Which enemy is attacking right now.
-var dmg_by := {}  # Source -> damage dealt (overkill not counted).
-var boss_dmg_by := {}
-var taken_by := {}  # Enemy -> [hits, damage taken].
-var healed_by := {}
-var blocks := {}  # "dodge", "shield", "barrier" -> hits; "armor", "fortify" -> damage.
-var wiped := {}  # Enemy bullets destroyed: "emp", "dome", "bulwark".
-var kills_by := PackedInt32Array()
-var pickups_got := PackedInt32Array()
-var picks: Array = []
-var timeline: Array = []  # One row per minute (see _track_minute).
-var tl_row := {}
-var hp_low := 1.0
-var low_hp_time := 0.0
-var deaths: Array = []  # "m:ss by <enemy>"
-var last_hit := ""
-var boss_spawn_t := -1.0
-var chests_opened := 0
-var skips := 0
+var rep := Report.new()
 
 
 func _ready() -> void:
@@ -584,6 +579,7 @@ func _build_scene() -> void:
 	hud.chest_collected.connect(_on_chest_collected)
 	hud.double_gold_pressed.connect(_on_double_gold)
 	hud.dash_pressed.connect(_dash)
+	hud.jump_pressed.connect(_slam)
 	hud.banish_pressed.connect(_on_banish)
 	hud.skip_pressed.connect(_on_skip)
 	hud.costumes_pressed.connect(_show_costumes)
@@ -757,7 +753,9 @@ func _start(auto: bool) -> void:
 	steal_pool = 0.0
 	shield_charges = 0
 	shield_cd = 0.0
-	_reset_report()
+	rep.reset()
+	cur_src = "other"
+	cur_shooter = "?"
 	barrier_t = 0.0
 	barrier_cd = 0.0
 	emp_t = 4.0
@@ -765,6 +763,12 @@ func _start(auto: bool) -> void:
 	still_t = 0.0
 	bonus_shield = 0
 	hero.set_barrier(false)
+	slam_charge = 0.0
+	slam_need = SLAM_NEED
+	slam_t = -1.0
+	slams = 0
+	hero.set_air(0.0, 0.0)
+	hud.set_jump(0.0)
 	dash_cd = 0.0
 	dash_t = 0.0
 	stomp_t = 0.0
@@ -970,7 +974,7 @@ func _game_over(victory: bool) -> void:
 	if victory:
 		gold += 100
 	_record_run(victory)
-	last_results = _report_text(victory)
+	last_results = rep.text(self, _results_text(victory), _cards_line())
 	hud.show_results(victory, _results_text(victory), gold, last_results)
 	if victory:
 		hero.victory()
@@ -987,7 +991,7 @@ func _on_death() -> void:
 		invuln = 2.0
 		b_count = 0
 		telegraphs.clear()
-		deaths.append("%s by %s (Second Wind)" % [_clock(t), last_hit])
+		rep.deaths.append("%s by %s (Second Wind)" % [_clock(t), rep.last_hit])
 		cur_src = "revive"
 		_damage_around(player, 300.0, 300.0)
 		_power_moment(1.6, Color(0.6, 1.0, 0.8))
@@ -995,7 +999,7 @@ func _on_death() -> void:
 		hero.revive()
 		return
 	state = State.DEAD
-	deaths.append("%s by %s" % [_clock(t), last_hit])
+	rep.deaths.append("%s by %s" % [_clock(t), rep.last_hit])
 	hero.die()
 	joy_on = false
 	hud.set_joystick(false, Vector2.ZERO, Vector2.ZERO)
@@ -1076,7 +1080,8 @@ func _process(delta: float) -> void:
 	sim_ms = (Time.get_ticks_usec() - t0) / 1000.0
 	logic_sum += sim_ms
 	logic_worst = maxf(logic_worst, sim_ms)
-	_track_minute(dt, delta)
+	if state == State.PLAYING:
+		rep.track_minute(self, dt, delta)
 	frame_ms.append((dt if smoke else delta) * 1000.0)
 	hud.set_bars(hp / max_hp, xp / xp_need)
 	hud_timer -= dt
@@ -1087,7 +1092,7 @@ func _process(delta: float) -> void:
 		_on_death()
 	elif final_clear_t >= 0.0 and t - final_clear_t > 2.5:
 		_game_over(true)
-	elif pending_levels > 0 and state == State.PLAYING:
+	elif pending_levels > 0 and state == State.PLAYING and slam_t < 0.0:
 		_open_cards(false)
 
 
@@ -1150,7 +1155,7 @@ func _hurt(amount: float, src: String = "") -> void:
 	if src == "":
 		src = cur_shooter
 	if dodge > 0.0 and randf() < dodge:
-		_count(blocks, "dodge", 1.0)
+		rep.count(rep.blocks, "dodge", 1.0)
 		invuln = INVULN * 0.5
 		_vfx(player, Vector2(randf_range(-60.0, 60.0), -40.0), 0.3, 22.0, 6.0, Color(0.6, 0.95, 1.0, 0.7), Color(0.3, 0.6, 1.0, 0.0), true)
 		_ring(player, 1.5)
@@ -1159,10 +1164,10 @@ func _hurt(amount: float, src: String = "") -> void:
 	if barrier_t > 0.0:
 		invuln = INVULN * 0.5
 		hero.shield_hit()
-		_count(blocks, "barrier", 1.0)
+		rep.count(rep.blocks, "barrier", 1.0)
 		return
 	if shield_charges > 0 or bonus_shield > 0:
-		_count(blocks, "shield", 1.0)
+		rep.count(rep.blocks, "shield", 1.0)
 		if bonus_shield > 0:
 			bonus_shield -= 1
 		else:
@@ -1176,7 +1181,7 @@ func _hurt(amount: float, src: String = "") -> void:
 		return
 	if barrier_lvl > 0 and barrier_cd <= 0.0:
 		_raise_barrier()
-		_count(blocks, "barrier", 1.0)
+		rep.count(rep.blocks, "barrier", 1.0)
 		return
 	if thorns > 0:
 		var saved := cur_src
@@ -1185,13 +1190,13 @@ func _hurt(amount: float, src: String = "") -> void:
 		cur_src = saved
 	var cut := amount * _fortify_now()
 	var taken := maxf(1.0, amount - cut - armor)
-	_count(blocks, "fortify", cut)
-	_count(blocks, "armor", amount - cut - taken)
+	rep.count(rep.blocks, "fortify", cut)
+	rep.count(rep.blocks, "armor", amount - cut - taken)
 	hp -= taken
-	last_hit = src
-	var row: Array = taken_by.get(src, [0, 0.0])
-	taken_by[src] = [int(row[0]) + 1, float(row[1]) + taken]
-	tl_row["taken"] = float(tl_row.get("taken", 0.0)) + taken
+	rep.last_hit = src
+	var row: Array = rep.taken_by.get(src, [0, 0.0])
+	rep.taken_by[src] = [int(row[0]) + 1, float(row[1]) + taken]
+	rep.tl_row["taken"] = float(rep.tl_row.get("taken", 0.0)) + taken
 	hero.hurt()
 	invuln = INVULN
 	trauma = minf(trauma + 0.35, 1.0)
@@ -1588,7 +1593,7 @@ func _damage(j: int, amount: float, from: Vector2, force_crit: bool, procs: bool
 		a *= 0.25  # The shield blocks most damage from the front.
 		if randf() < 0.3:
 			_vfx(e_pos[j] + Vector2.from_angle(e_ang[j]) * 16.0, Vector2.ZERO, 0.1, 4.0, 14.0, Color(0.9, 0.95, 1.0, 0.9), Color(0.6, 0.8, 1.0, 0.0), true)
-	dmg_by[cur_src] = float(dmg_by.get(cur_src, 0.0)) + minf(a, maxf(e_hp[j], 0.0))
+	rep.dmg_by[cur_src] = float(rep.dmg_by.get(cur_src, 0.0)) + minf(a, maxf(e_hp[j], 0.0))
 	var h := e_hp[j] - a
 	e_hp[j] = h
 	e_flash[j] = 0.06
@@ -1618,7 +1623,9 @@ func _kill(j: int) -> void:
 	var p := e_pos[j]
 	kills += 1
 	type_alive[ty] -= 1
-	kills_by[ty] += 1
+	rep.kills_by[ty] += 1
+	if slam_t < 0.0:
+		slam_charge = minf(slam_need, slam_charge + float(t_xp[ty]))
 	_gem(p, maxi(1, int(round(t_xp[ty] * hp_mult * TIER_XP[e_tier[j]]))))
 	_add_combo()
 	var big := ty >= Data.ELITE
@@ -1745,7 +1752,7 @@ func _enemy_blast(p: Vector2, radius: float, dmg: float) -> void:
 
 func _spawn_boss() -> void:
 	boss_spawned = true
-	boss_spawn_t = t
+	rep.boss_spawn_t = t
 	boss_on = true
 	# The Colossus is built to match you: strong builds face a bigger health
 	# bar, so the last fight is never over in a second.
@@ -1849,7 +1856,7 @@ func _damage_boss(amount: float, force_crit: bool) -> void:
 	if boss_rate > cap:
 		a *= cap / boss_rate
 	boss_rate += a
-	boss_dmg_by[cur_src] = float(boss_dmg_by.get(cur_src, 0.0)) + minf(a, maxf(boss_hp, 0.0))
+	rep.boss_dmg_by[cur_src] = float(rep.boss_dmg_by.get(cur_src, 0.0)) + minf(a, maxf(boss_hp, 0.0))
 	boss_hp -= a
 	boss_flash = 0.05
 	if boss_hp <= 0.0:
@@ -1914,6 +1921,8 @@ func _fire_weapons(dt: float) -> void:
 			else:
 				tm = 0.1
 		w_timer[id] = tm
+		if id == hero.hand_id:
+			hero.set_charge(1.0 - clampf(tm / maxf(float(st["cd"]), 0.01), 0.0, 1.0))
 
 
 ## Static Dash: every 320 px run releases a lightning nova at up to 6 enemies.
@@ -2370,13 +2379,13 @@ func _update_enemy_bullets(dt: float) -> void:
 			hit = false
 			life = 0.0
 			_sparks(p, 2)
-			_count(wiped, "dome", 1.0)
+			rep.count(rep.wiped, "dome", 1.0)
 		elif not hit and not halo_pts.is_empty() and synergies.has("bulwark"):
 			for bp in halo_pts:
 				if p.distance_squared_to(bp) < 900.0:
 					life = 0.0
 					_sparks(p, 3)
-					_count(wiped, "bulwark", 1.0)
+					rep.count(rep.wiped, "bulwark", 1.0)
 					break
 		if life <= 0.0 or hit:
 			if hit:
@@ -2532,6 +2541,7 @@ func _update_actives(dt: float) -> void:
 			sfx.play("powerup", 0.5, -6.0)
 	slow_t = maxf(slow_t - dt, 0.0)
 	_update_defense(dt)
+	_update_slam(dt)
 	if shield_max > 0 and shield_charges < shield_max:
 		shield_cd -= dt
 		if shield_cd <= 0.0:
@@ -2581,6 +2591,86 @@ func _update_defense(dt: float) -> void:
 		repair_node.rotation = a - PI * 0.5
 
 
+## Meteor Slam: up, a moment in the air, then down hard.
+func _slam() -> void:
+	if state != State.PLAYING or slam_t >= 0.0 or slam_charge < slam_need:
+		return
+	slam_t = 0.0
+	slam_charge = 0.0
+	slam_need = minf(slam_need + 100.0, 900.0)
+	slams += 1
+	invuln = maxf(invuln, SLAM_RISE + SLAM_HANG + SLAM_FALL + 0.3)
+	hud.set_jump(0.0)
+	hud.show_banner("METEOR SLAM!", Color(1.0, 0.55, 0.2))
+	hero.slam_launch()
+	_ring(player, 2.5)
+	sfx.play("slam_launch")
+
+
+func _update_slam(dt: float) -> void:
+	if slam_t < 0.0:
+		if autoplay and slam_charge >= slam_need and e_count > 40:
+			_slam()
+		return
+	slam_t += dt
+	var total := SLAM_RISE + SLAM_HANG + SLAM_FALL
+	invuln = maxf(invuln, 0.2)
+	var h := 1.0
+	if slam_t < SLAM_RISE:
+		h = sin(slam_t / SLAM_RISE * PI * 0.5)
+	elif slam_t > SLAM_RISE + SLAM_HANG:
+		var k := (slam_t - SLAM_RISE - SLAM_HANG) / SLAM_FALL
+		h = 1.0 - k * k
+	hero.set_air(clampf(h, 0.0, 1.0), clampf(slam_t / total, 0.0, 1.0))
+	if slam_t >= total:
+		slam_t = -1.0
+		hero.set_air(0.0, 0.0)
+		_slam_impact()
+
+
+func _slam_impact() -> void:
+	cur_src = "slam"
+	var r := SLAM_RADIUS * area_mult
+	var dmg := 300.0 + 30.0 * level
+	var grow := (1.0 + 0.2 * _diff_t() / 60.0) * hp_mult
+	for j in e_count:
+		if e_hp[j] <= 0.0:
+			continue
+		var ty := e_type[j]
+		var to := e_pos[j] - player
+		var d := to.length()
+		var rr := r + t_radius[ty]
+		if d < rr:
+			if ty == Data.ELITE or ty == Data.GUNSHIP or ty == Data.SIEGE:
+				# The heavies survive a slam, badly hurt.
+				_damage(j, (t_hp[ty] * grow * big_mult * 0.4) / dmg_mult + dmg, player, false)
+			else:
+				_damage(j, e_hp[j] * 4.0 / dmg_mult + dmg, player, false)  # Destroyed, shields and all.
+		elif d < rr * 1.7 and ty < Data.TANK:
+			e_pos[j] += to / maxf(d, 1.0) * 140.0 * (1.0 - (d - rr) / (rr * 0.7))
+			_damage(j, dmg * 0.3, player, false)
+	if boss_on and player.distance_to(boss_pos) < r + BOSS_RADIUS:
+		_damage_boss(boss_max * 0.06 / dmg_mult, false)
+	var r2 := r * r * 1.7
+	for i in b_count:
+		if b_pos[i].distance_squared_to(player) < r2:
+			b_life[i] = 0.0
+	_decal(player, r * 0.8)
+	_explosion(player, r * 0.55, 2.0)
+	for k in 8:
+		_explosion(player + Vector2.from_angle(TAU * k / 8.0 + randf()) * r * randf_range(0.4, 0.75), 90.0, 1.2)
+	_ring(player, r / RING_SIZE * 1.2)
+	_ring(player, r / RING_SIZE * 0.6)
+	_sparks(player, int(fx.tier["sparks"]) * 6)
+	hero.slam_land(r)
+	trauma = 1.0
+	hitstop = maxf(hitstop, 0.1)
+	hud.flash(Color(1.0, 0.75, 0.45, 0.45))
+	sfx.play("slam_impact")
+	if not smoke:
+		Input.vibrate_handheld(120)
+
+
 func _fortify_now() -> float:
 	return fortify * (2.0 if still_t > 0.4 else 1.0)
 
@@ -2603,7 +2693,7 @@ func _emp() -> void:
 	for i in b_count:
 		if b_pos[i].distance_squared_to(player) < r2 and b_life[i] > 0.0:
 			b_life[i] = 0.0
-			_count(wiped, "emp", 1.0)
+			rep.count(rep.wiped, "emp", 1.0)
 	var stun := (0.5 + 0.08 * emp_lvl) * dur_mult
 	for j in e_count:
 		if e_hp[j] > 0.0 and e_type[j] != Data.JET and e_pos[j].distance_squared_to(player) < r2:
@@ -2951,9 +3041,9 @@ func _reward_name(r: Array) -> String:
 func _on_chest_collected() -> void:
 	if state != State.CHEST:
 		return
-	chests_opened += 1
+	rep.chests_opened += 1
 	for r in chest_rewards:
-		picks.append("%s chest: %s" % [_clock(t), _reward_name(r)])
+		rep.picks.append("%s chest: %s" % [_clock(t), _reward_name(r)])
 		match String(r[0]):
 			"evolve":
 				_evolve(r[1])
@@ -3384,7 +3474,7 @@ func _on_card(index: int) -> void:
 		bonus_dmg += Data.RARE_BONUS
 	_recalc()
 	var rarity: int = o["rarity"]
-	picks.append("%s L%d %s" % [_clock(t), level, _pick_text(o)])
+	rep.picks.append("%s L%d %s" % [_clock(t), level, _pick_text(o)])
 	if o["kind"] == "weapon" or o["kind"] == "power":
 		var lvl: int = (weapons if o["kind"] == "weapon" else powers).get(id, 0)
 		if o.get("limit", false):
@@ -3432,7 +3522,7 @@ func _on_skip() -> void:
 		return
 	banish_mode = false
 	gold += 5
-	skips += 1
+	rep.skips += 1
 	_heal(max_hp * 0.1, "skip")
 	if chest_cards:
 		chest_cards = false
@@ -3920,7 +4010,7 @@ func _update_powerups(dt: float) -> void:
 
 func _apply_pickup(kind: int) -> void:
 	hud.show_banner(Data.PICKUP_LABELS[kind])
-	pickups_got[kind] += 1
+	rep.pickups_got[kind] += 1
 	match kind:
 		Data.NUKE:
 			# Wipes every normal enemy near the screen; elites and the boss
@@ -4011,6 +4101,8 @@ func _update_hud() -> void:
 	hud.set_info("Lv %d   Kills %d" % [level, kills], clock)
 	hud.set_gold(gold)
 	hud.set_combo(combo, combo_timer / COMBO_TIME)
+	if slam_t < 0.0:
+		hud.set_jump(slam_charge / slam_need)
 
 
 func _build_text() -> String:
@@ -4026,46 +4118,20 @@ func _build_text() -> String:
 	return " · ".join(parts)
 
 
-func _reset_report() -> void:
-	cur_src = "other"
-	cur_shooter = "?"
-	dmg_by = {}
-	boss_dmg_by = {}
-	taken_by = {}
-	healed_by = {}
-	blocks = {}
-	wiped = {}
-	kills_by = PackedInt32Array()
-	kills_by.resize(Data.ENEMY_NAMES.size())
-	pickups_got = PackedInt32Array()
-	pickups_got.resize(Data.PICKUP_LABELS.size())
-	picks = []
-	timeline = []
-	tl_row = {}
-	hp_low = 1.0
-	low_hp_time = 0.0
-	deaths = []
-	last_hit = ""
-	boss_spawn_t = -1.0
-	chests_opened = 0
-	skips = 0
-
-
-func _count(d: Dictionary, key: String, n: float) -> void:
-	if n > 0.0:
-		d[key] = float(d.get(key, 0.0)) + n
-
-
 func _heal(amount: float, src: String) -> void:
 	var gain := minf(amount, max_hp - hp)
 	if gain <= 0.0:
 		return
 	hp += gain
-	_count(healed_by, src, gain)
+	rep.count(rep.healed_by, src, gain)
 
 
 func _clock(at: float) -> String:
-	return "%d:%02d" % [floori(at / 60.0), int(at) % 60]
+	return Report.clock(at)
+
+
+func _cards_line() -> String:
+	return "Cards: 3rd card %d/3, rerolls %d/1, banished %d/%d, skipped %d; Meteor Slams %d" % [3 - third_left, 1 - reroll_left, BANISHES - banish_left, BANISHES, rep.skips, slams]
 
 
 func _pick_text(o: Dictionary) -> String:
@@ -4080,112 +4146,6 @@ func _pick_text(o: Dictionary) -> String:
 	elif o.get("limit", false):
 		what = "Limit Break %d" % _lb(id)
 	return "%s %s (%s)" % [Data.NAMES[id], what, ["common", "rare", "epic", "legendary"][int(o["rarity"])]]
-
-
-## One timeline row per minute of play: what the fight looked like then.
-func _track_minute(dt: float, delta: float) -> void:
-	if state != State.PLAYING:
-		return
-	var frac := hp / max_hp
-	hp_low = minf(hp_low, frac)
-	if frac < 0.25:
-		low_hp_time += dt
-	var minute := int(t / 60.0)
-	if int(tl_row.get("min", -1)) != minute:
-		if not tl_row.is_empty():
-			timeline.append(tl_row)
-		tl_row = {"min": minute, "frames": 0, "alive": 0, "hp_low": 1.0, "taken": 0.0, "ms": 0.0, "logic": 0.0, "logic_max": 0.0, "kills0": kills}
-	tl_row["frames"] = int(tl_row["frames"]) + 1
-	tl_row["alive"] = int(tl_row["alive"]) + e_count
-	tl_row["hp_low"] = minf(float(tl_row["hp_low"]), frac)
-	tl_row["ms"] = float(tl_row["ms"]) + (dt if smoke else delta) * 1000.0
-	tl_row["logic"] = float(tl_row["logic"]) + sim_ms
-	tl_row["logic_max"] = maxf(float(tl_row["logic_max"]), sim_ms)
-	tl_row["level"] = level
-	tl_row["kills"] = kills
-
-
-## Name: value (share%) lines, biggest first.
-func _share_lines(d: Dictionary, names: Dictionary, max_lines: int) -> PackedStringArray:
-	var keys := d.keys()
-	keys.sort_custom(func(a: Variant, b: Variant) -> bool: return float(d[a]) > float(d[b]))
-	var total := 0.0
-	for k in keys:
-		total += float(d[k])
-	var out := PackedStringArray()
-	for n in mini(keys.size(), max_lines):
-		var k: String = keys[n]
-		out.append("  %s: %s (%d%%)" % [names.get(k, k), _big(float(d[k])), roundi(100.0 * float(d[k]) / maxf(total, 0.001))])
-	return out
-
-
-func _big(v: float) -> String:
-	if v >= 1.0e6:
-		return "%.1fM" % (v / 1.0e6)
-	if v >= 1.0e4:
-		return "%.0fk" % (v / 1.0e3)
-	return "%d" % roundi(v)
-
-
-## The full report for COPY RESULTS: the summary, then the details.
-func _report_text(victory: bool) -> String:
-	var lines := PackedStringArray([_results_text(victory), "", "--- DETAILS ---"])
-	var names := {"other": "Other", "burn": "Burning", "toxin": "Toxin clouds", "shock": "Shock arcs", "static": "Static Dash", "explosive": "Explosive Rounds blasts", "stomp": "Shockwave Stomp", "dash": "Phase Dash", "thorns": "Reactive Plating", "evolution": "Evolution blasts", "revive": "Revive blasts", "nuke": "Nuke", "bombs": "Bombs"}
-	for id in Data.NAMES:
-		names[id] = Data.NAMES[id]
-	lines.append("Stage: %d of 5 calm/ramp waves, enemy tier %d of 3%s" % [mini(wave_n + 1, 5), max_tier, "" if boss_spawn_t < 0.0 else ", boss at %s" % _clock(boss_spawn_t)])
-	if boss_spawn_t >= 0.0:
-		var fight := (boss_dead_t if boss_dead_t >= 0.0 else t) - boss_spawn_t
-		lines.append("Boss: %s HP, %s, fight %s%s" % [_big(boss_max), "destroyed" if boss_dead_t >= 0.0 else "%d%% HP left" % roundi(100.0 * boss_hp / boss_max), _clock(fight), "" if final_clear_t < 0.0 else ", final push %s" % _clock(final_clear_t - boss_dead_t)])
-	lines.append("Damage dealt (to enemies):")
-	lines.append_array(_share_lines(dmg_by, names, 14))
-	if not boss_dmg_by.is_empty():
-		lines.append("Damage to the boss:")
-		lines.append_array(_share_lines(boss_dmg_by, names, 6))
-	var taken := {}
-	var hits := 0
-	for k in taken_by:
-		taken[k] = float(taken_by[k][1])
-		hits += int(taken_by[k][0])
-	lines.append("Damage taken: %s in %d hits; lowest HP %d%%, %ds below 25%% HP" % [_big(_sum(taken)), hits, roundi(maxf(hp_low, 0.0) * 100.0), roundi(low_hp_time)])
-	lines.append_array(_share_lines(taken, {}, 10))
-	lines.append("Blocked: dodged %d, shield %d, barrier %d hits; armor soaked %s, Fortify %s" % [int(blocks.get("dodge", 0.0)), int(blocks.get("shield", 0.0)), int(blocks.get("barrier", 0.0)), _big(float(blocks.get("armor", 0.0))), _big(float(blocks.get("fortify", 0.0)))])
-	if not wiped.is_empty():
-		lines.append("Enemy bullets destroyed: EMP %d, dome %d, Bulwark %d" % [int(wiped.get("emp", 0.0)), int(wiped.get("dome", 0.0)), int(wiped.get("bulwark", 0.0))])
-	if not healed_by.is_empty():
-		lines.append("Healing: %s" % _big(_sum(healed_by)))
-		lines.append_array(_share_lines(healed_by, {"regen": "Nanite Regeneration", "lifesteal": "Vampiric Rounds", "repair": "Repair Drone", "medkit": "Medkit pickups", "medkit card": "Medkit cards", "skip": "Skipped cards"}, 8))
-	if not deaths.is_empty():
-		lines.append("Downed: " + ", ".join(PackedStringArray(deaths)))
-	var kl := PackedStringArray()
-	for ty in kills_by.size():
-		if kills_by[ty] > 0:
-			kl.append("%s %d" % [Data.ENEMY_NAMES[ty], kills_by[ty]])
-	lines.append("Kills: " + ", ".join(kl))
-	var pk := PackedStringArray()
-	for k in pickups_got.size():
-		if pickups_got[k] > 0:
-			pk.append("%s %d" % [String(Data.PICKUP_LABELS[k]).trim_suffix("!").capitalize(), pickups_got[k]])
-	lines.append("Pickups: %s; chests %d" % [", ".join(pk) if not pk.is_empty() else "none", chests_opened])
-	lines.append("Cards: 3rd card %d/3, rerolls %d/1, banished %d/%d, skipped %d" % [3 - third_left, 1 - reroll_left, BANISHES - banish_left, BANISHES, skips])
-	lines.append("Timeline (minute: level, kills, enemies avg, lowest HP, damage taken, FPS, logic avg/worst ms):")
-	var rows := timeline.duplicate()
-	if not tl_row.is_empty():
-		rows.append(tl_row)
-	for r in rows:
-		var f := maxi(int(r["frames"]), 1)
-		lines.append("  %d: L%d, +%d kills, %d enemies, HP %d%%, -%s, %.0f FPS, %.1f/%.1f" % [int(r["min"]) + 1, int(r.get("level", level)), int(r.get("kills", kills)) - int(r["kills0"]), roundi(float(r["alive"]) / f), roundi(maxf(float(r["hp_low"]), 0.0) * 100.0), _big(float(r["taken"])), f * 1000.0 / maxf(float(r["ms"]), 0.001), float(r["logic"]) / f, float(r["logic_max"])])
-	lines.append("Picks (%d):" % picks.size())
-	for n in range(0, picks.size(), 3):
-		lines.append("  " + " | ".join(PackedStringArray(picks.slice(n, n + 3))))
-	return "\n".join(lines)
-
-
-func _sum(d: Dictionary) -> float:
-	var total := 0.0
-	for k in d:
-		total += float(d[k])
-	return total
 
 
 func _results_text(victory: bool) -> String:
@@ -4304,7 +4264,7 @@ func _run_smoke() -> void:
 		await get_tree().process_frame
 		frames += 1
 	print("SMOKE: stage run ended state=%d t=%.0f level=%d kills=%d boss_spawned=%s" % [state, t, level, kills, boss_spawned])
-	print(_report_text(boss_dead_t >= 0.0))
+	print(rep.text(self, _results_text(boss_dead_t >= 0.0), _cards_line()))
 	if not _check(t > 30.0 and kills > 0, "the bot played the stage"):
 		return
 	# Every weapon and power at once (more than the slots allow) for a few
@@ -4333,7 +4293,7 @@ func _run_smoke() -> void:
 	invuln = 0.0
 	var hp_before := hp
 	_hurt(50.0)
-	if not _check(hp == hp_before and barrier_t > 0.0, "Barrier Dome blocks a hit"):
+	if not _check(hp == hp_before and barrier_t > 0.0, "Barrier Dome rep.blocks a hit"):
 		return
 	barrier_t = 0.0
 	barrier_cd = 99.0

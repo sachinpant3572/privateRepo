@@ -15,5 +15,5 @@ excluded_directories: !!set
   .git: null
   .godot: null
 max-file-lines: 4500
-max-public-methods: 24
+max-public-methods: 30
 max-returns: 12

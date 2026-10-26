@@ -14,6 +14,10 @@ extends Node2D
 ## The costume art has the arms reaching forward, so the forearms and fists
 ## are cut out into their own layer that holds the weapon: the hands aim,
 ## swing and recoil with the gun, and the head turns toward the aim.
+##
+## Weapon feel: a firing stance under sustained fire, muzzle climb, brass
+## casings, barrel heat, the scatter pump and the rail charge glow. All of it
+## is cosmetic: movement and fire rate come from game.gd unchanged.
 
 const Data := preload("res://data.gd")
 const Art := preload("res://art.gd")
@@ -50,6 +54,10 @@ const RECOIL := {
 	"tesla": [0.4, "spark_electric"], "flame": [0.1, "flame_puff"], "mines": [0.2, ""],
 	"sentry": [0.3, ""], "airstrike": [0.25, ""],
 }
+const CASINGS := {"rifle": 1, "scatter": 2}  # Brass ejected per shot.
+const HEATS := {"rifle": 0.07, "scatter": 0.22, "flame": 0.05}  # Barrel heat per shot.
+const AIR_SCALE := 0.85  # Meteor Slam: how much bigger the hero looks at the top.
+const AIR_RISE := 34.0  # ...and how far up the screen (screen pixels).
 
 var shadow: Sprite2D
 var rig: Node2D  # Everything below; animated as one figure.
@@ -94,6 +102,19 @@ var back_kick := 0.0
 var trail_t := 0.0
 var lift := 0.0  # 0 on the ground .. 1 at the top of a stride.
 var dead := false
+# Weapon feel and poses.
+var stance := 0.0  # 0 relaxed .. 1 braced under sustained fire.
+var heat := 0.0  # Barrel heat 0..1.
+var pump_t := 0.0  # Scatter pump stroke time left.
+var charge := 0.0  # Hand weapon cooldown, 0 just fired .. 1 ready.
+var twist := 0.0  # Body twist from a hit.
+var idle_t := 0.0  # Time since the last shot.
+var fidget_t := 3.0
+var air := 0.0  # Meteor Slam height, 0..1.
+var air_spin := 0.0
+var last_side := 1.0
+var casing_tex: Texture2D
+var charge_glow: Sprite2D
 var fx_alive := 0
 var fx_tex := {}  # Effect textures by name, loaded once.
 static var split_cache := {}  # Costume -> [torso, arms] textures.
@@ -129,6 +150,10 @@ func setup(costume: Texture2D, glow_tex: Texture2D, ring: Texture2D) -> void:
 	flash = _layer(hand_pivot, null, Vector2(MUZZLE, 0), 1.0)
 	flash.material = add
 	flash.visible = false
+	charge_glow = _layer(hand_pivot, glow_tex, Vector2(MUZZLE - 8, 0), 34.0)
+	charge_glow.material = add
+	charge_glow.visible = false
+	casing_tex = _casing_texture()
 	bubble = _layer(self, ring, Vector2.ZERO, 170.0)
 	bubble.material = add
 	bubble.modulate = Color(0.45, 0.85, 1.0, 0.0)
@@ -289,9 +314,48 @@ func refresh(weapons: Dictionary, powers: Dictionary, evolved: Dictionary) -> Ar
 
 # --- Animation hooks (called by the game) -----------------------------------
 
-## Every frame: turn toward the movement direction (world angle).
+## Every frame: turn toward the target (world angle). A sharp turn whips
+## around with an afterimage.
 func face(world_angle: float, dt: float) -> void:
+	if absf(wrapf(world_angle - rotation, -PI, PI)) > 2.0 and not dead and air <= 0.0:
+		_ghost(Color(0.6, 0.9, 1.0, 0.35), Vector2.ZERO)
+		squash = Vector2(0.92, 1.06)
 	rotation = rotate_toward(rotation, world_angle, TURN_SPEED * dt)
+
+
+## Every frame from the game: how ready the weapon in hand is (0..1).
+func set_charge(frac: float) -> void:
+	charge = frac
+
+
+## Meteor Slam height (0..1) and progress through the whole jump (0..1).
+func set_air(h: float, progress: float) -> void:
+	air = h
+	air_spin = TAU * smoothstep(0.15, 0.85, progress)
+
+
+func slam_launch() -> void:
+	squash = Vector2(1.3, 0.7)  # Crouch, then spring.
+	var tw := rig.create_tween()
+	tw.tween_property(self, "squash", Vector2(0.8, 1.25), 0.1)
+	tw.tween_property(self, "squash", Vector2.ONE, 0.25)
+	_fx_world("shock_ring", position, 0.35, 30.0, 160.0, 0.0, Color(1.0, 0.7, 0.4, 0.8))
+	for k in 6:
+		_fx_world("dust_puff", position + Vector2.from_angle(TAU * k / 6.0) * 22.0, 0.5, 18.0, 44.0, randf() * TAU, Color(1, 1, 1, 0.8))
+	_fx_world("power_burst", position, 0.4, 30.0, 140.0, randf() * TAU, Color(1.0, 0.6, 0.3, 0.9), true)
+
+
+func slam_land(radius: float) -> void:
+	squash = Vector2(1.45, 0.6)
+	var tw := rig.create_tween()
+	tw.tween_property(self, "squash", Vector2(0.9, 1.12), 0.12)
+	tw.tween_property(self, "squash", Vector2.ONE, 0.25)
+	_fx_world("shock_ring", position, 0.55, 40.0, radius * 2.4, 0.0, Color(1.0, 0.75, 0.45, 0.95))
+	_fx_world("shock_ring", position, 0.4, 20.0, radius * 1.3, 0.0, Color(1.0, 1.0, 1.0, 0.9))
+	_fx_world("power_burst", position, 0.5, 60.0, radius * 1.4, randf() * TAU, Color(1.0, 0.55, 0.25, 0.9), true)
+	for k in 10:
+		var at := position + Vector2.from_angle(TAU * k / 10.0 + randf() * 0.3) * radius * randf_range(0.3, 0.8)
+		_fx_world("dust_puff", at, 0.8, 30.0, 80.0, randf() * TAU, Color(0.85, 0.8, 0.7, 0.85))
 
 
 ## Every frame: how fast the hero moves (move vector, length 0..1).
@@ -301,12 +365,14 @@ func move(move_vec: Vector2, dashing: bool) -> void:
 	var turn := wrapf(rotation - last_angle, -PI, PI)
 	last_angle = rotation
 	lean = lerpf(lean, clampf(turn * 4.0, -0.3, 0.3), 0.2)
-	if speed_frac > 0.5 and not dashing and not dead:
-		dust_t -= get_process_delta_time()
-		if dust_t <= 0.0:
-			dust_t = 0.16
-			var feet := position - Vector2.from_angle(rotation) * 18.0
-			_fx_world("dust_puff", feet + Vector2(randf_range(-6, 6), randf_range(-6, 6)), 0.45, 14.0, 30.0, randf() * TAU, Color(1, 1, 1, 0.7))
+	if speed_frac > 0.5 and not dashing and not dead and air <= 0.0:
+		# A puff under each foot as it lands: left, right, left...
+		var foot := signf(sin(step))
+		if foot != 0.0 and foot != last_side:
+			last_side = foot
+			var back_dir := -Vector2.from_angle(rotation)
+			var feet := position + back_dir * 14.0 + back_dir.orthogonal() * 9.0 * foot
+			_fx_world("dust_puff", feet, 0.45, 12.0, 28.0, randf() * TAU, Color(1, 1, 1, 0.65))
 
 
 ## Every frame: where the weapon should point (world angle).
@@ -327,11 +393,22 @@ func fire(id: String) -> void:
 			back_kick = 1.0
 		return
 	recoil = maxf(recoil, float(r[0]))
+	stance = minf(1.0, stance + 0.25)
+	idle_t = 0.0
+	heat = minf(1.0, heat + float(HEATS.get(id, 0.0)))
+	# Muzzle climb: each shot nudges the aim; it settles back on its own.
+	hand_pivot.rotation += randf_range(-0.09, 0.09) * float(r[0])
+	for _k in int(CASINGS.get(id, 0)):
+		_casing()
 	if String(r[1]) != "":
 		_flash(String(r[1]), 0.07 if id != "rail" else 0.12)
 	match id:
-		"scatter", "rail":
-			squash = Vector2(0.9, 1.08)  # The whole body rocks back.
+		"scatter":
+			squash = Vector2(0.9, 1.08)  # The whole body rocks back...
+			pump_t = 0.3  # ...then racks the pump.
+		"rail":
+			squash = Vector2(0.9, 1.08)
+			_fx_world("dust_puff", get_parent().to_local(hand.global_position), 0.4, 10.0, 26.0, randf() * TAU, Color(0.6, 0.95, 1.0, 0.6))
 		"flame":
 			jitter = 1.0
 		"grenade":
@@ -376,6 +453,7 @@ func power_up(strength: float, color: Color) -> void:
 
 func hurt() -> void:
 	flinch = 1.0
+	twist = randf_range(0.25, 0.4) * (1.0 if randf() < 0.5 else -1.0)
 	squash = Vector2(0.88, 1.1)
 	_fx_world("spark_star", position + Vector2(randf_range(-10, 10), randf_range(-10, 10)), 0.2, 10.0, 26.0, randf() * TAU, Color(1.0, 0.5, 0.4))
 
@@ -404,6 +482,8 @@ func die() -> void:
 
 func revive(effects: bool = true) -> void:
 	dead = false
+	air = 0.0
+	air_spin = 0.0
 	rig.scale = Vector2.ONE
 	rig.rotation = 0.0
 	rig.modulate = Color.WHITE
@@ -437,8 +517,25 @@ func _process(delta: float) -> void:
 		rig.scale = Vector2(bounce * breathe * (1.0 + 0.05 * run), breathe * bounce * (1.0 - 0.03 * run)) * squash
 		rig.position = Vector2(-recoil * 8.0, stride * STRIDE_SWAY * run)
 		# A waddle with each step, the lean into turns, and a slow look-around when still.
-		# The torso twists a little toward the aim (the arms lead).
-		rig.rotation = lean + stride * STRIDE_WADDLE * run + sin(t * 0.9) * 0.05 * idle + hand_pivot.rotation * 0.3
+		# Braced under sustained fire: leaning in, less bob and sway.
+		stance = maxf(0.0, stance - delta * 1.2)
+		idle_t += delta
+		var calm := 1.0 - 0.6 * stance
+		rig.position += Vector2(3.0 * stance, 0.0)
+		# The torso twists a little toward the aim (the arms lead), and
+		# jolts from a hit.
+		twist = move_toward(twist, 0.0, delta * 2.5)
+		rig.rotation = lean + (stride * STRIDE_WADDLE * run + sin(t * 0.9) * 0.05 * idle) * calm + hand_pivot.rotation * 0.3 + twist + air_spin
+		# Meteor Slam: bigger and higher toward the camera.
+		if air > 0.0:
+			rig.scale *= 1.0 + AIR_SCALE * air
+			rig.position += Vector2(0.0, -AIR_RISE * air / scale.x).rotated(-rotation)
+		# Standing still a while: a quick weapon check.
+		if idle_t > 2.5 and speed_frac < 0.1:
+			fidget_t -= delta
+			if fidget_t <= 0.0:
+				fidget_t = 4.0
+				_swing(hand_pivot, 0.55, 0.7)
 		# Shoulders swing in opposite directions, like arms pumping, and
 		# follow the arms when they aim or kick back.
 		for k in shoulders.size():
@@ -452,7 +549,7 @@ func _process(delta: float) -> void:
 		body.skew = stride * 0.12 * run + sin(t * 3.0) * 0.03 * idle
 		# Arms and weapon move as one: they bob with the stride on top of the
 		# aim, and the whole grip slides back on recoil.
-		var gun_bob := cos(step) * 0.08 * run
+		var gun_bob := cos(step) * 0.08 * run * (1.0 - 0.7 * stance)
 		hand_pivot.rotation = lerp_angle(hand_pivot.rotation, aim_angle + gun_bob, minf(1.0, delta * 14.0))
 		var shake := Vector2(randf_range(-1, 1), randf_range(-1, 1)) * 2.0 * jitter
 		hand_pivot.position = HAND_PIVOT + Vector2(-absf(cos(step)) * 3.0 * run - recoil * 10.0, 0.0) + shake
@@ -464,14 +561,25 @@ func _process(delta: float) -> void:
 				_ghost(Color(0.6, 0.9, 1.0, 0.22), Vector2.ZERO)
 	# The shadow stays toward the bottom-right in screen space and drifts out
 	# and shrinks a little as the hero pops up on each step.
-	var off := (SHADOW_OFFSET * (1.0 + 0.6 * lift)) / scale.x
+	var off := (SHADOW_OFFSET * (1.0 + 0.6 * lift + 1.5 * air)) / scale.x
 	shadow.position = off.rotated(-rotation)
-	var sh := 120.0 / shadow.texture.get_width() * (1.0 - 0.12 * lift)
+	var sh := 120.0 / shadow.texture.get_width() * (1.0 - 0.12 * lift) * (1.0 - 0.45 * air)
 	shadow.scale = Vector2(sh, sh * 0.8)
+	shadow.modulate.a = 0.42 * (1.0 - 0.5 * air)
 	shadow.rotation = -rotation
 	recoil = maxf(0.0, recoil - delta * 6.0)
 	jitter = maxf(0.0, jitter - delta * 3.0)
-	hand.position = Vector2(HAND_REACH - recoil * 3.0, 0.0)  # A little extra kick in the grip.
+	# A little extra kick in the grip, and the scatter's pump stroke.
+	pump_t = maxf(0.0, pump_t - delta)
+	var pump := sin(clampf(1.0 - pump_t / 0.3, 0.0, 1.0) * PI) * 7.0 if pump_t > 0.0 else 0.0
+	hand.position = Vector2(HAND_REACH - recoil * 3.0 - pump, 0.0)
+	heat = maxf(0.0, heat - delta * 0.35)
+	# The rail lance and tesla coil glow brighter as they charge.
+	charge_glow.visible = (hand_id == "rail" or hand_id == "tesla") and hand.visible and not dead
+	if charge_glow.visible:
+		var c := charge * charge
+		charge_glow.modulate = Color(0.5, 0.9, 1.0, 0.15 + 0.7 * c)
+		charge_glow.scale = Vector2.ONE * (14.0 + 26.0 * c) / charge_glow.texture.get_width() * (1.0 + 0.1 * sin(t * 30.0))
 	back_kick = maxf(0.0, back_kick - delta * 5.0)
 	back.position = BACK + Vector2(-6.0 * back_kick, 0.0)
 	flinch = maxf(0.0, flinch - delta * 4.0)
@@ -503,6 +611,9 @@ func _process(delta: float) -> void:
 		dome.rotation = -rotation  # Steady on screen while the hero turns.
 	if hand.visible and hand_evolved:
 		hand.self_modulate = Color(1.0, 0.85, 0.4).lerp(Color.WHITE, 0.5 + 0.5 * sin(t * 8.0)) * 1.4
+	elif hand.visible:
+		# A hot barrel glows orange.
+		hand.self_modulate = Color.WHITE.lerp(Color(1.7, 0.85, 0.45), smoothstep(0.35, 1.0, heat) * 0.6)
 
 
 ## The old weapon spins away behind the hero; the new one snaps in with a flash.
@@ -550,6 +661,34 @@ func _flash(fx_name: String, time: float) -> void:
 func effect(fx_name: String, at: Vector2, life: float, size0: float, size1: float, color: Color, reserve: int = 10) -> void:
 	if fx_alive < FX_CAP - reserve:
 		_fx_world(fx_name, at, life, size0, size1, randf() * TAU, color)
+
+
+## A brass casing flipped out of the weapon's side, spinning to the ground.
+func _casing() -> void:
+	if fx_alive >= FX_CAP - 8 or get_parent() == null or not hand.visible:
+		return
+	var c := Sprite2D.new()
+	c.texture = casing_tex
+	var from: Vector2 = get_parent().to_local(hand.global_position)
+	c.position = from
+	c.rotation = randf() * TAU
+	get_parent().add_child(c)
+	_track(c, 0.45)
+	var side := Vector2.from_angle(global_rotation + hand_pivot.rotation).orthogonal() * (1.0 if randf() < 0.8 else -1.0)
+	var land := from + side * randf_range(22.0, 38.0) + Vector2(randf_range(-6, 6), randf_range(-6, 6))
+	var tw := c.create_tween().set_parallel()
+	tw.tween_property(c, "position", land, 0.3).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tw.tween_property(c, "rotation", c.rotation + randf_range(8.0, 14.0), 0.3)
+	tw.tween_property(c, "modulate:a", 0.0, 0.15).set_delay(0.3)
+
+
+static func _casing_texture() -> Texture2D:
+	var img := Image.create_empty(8, 4, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0.15, 0.1, 0.02))
+	for x in range(1, 7):
+		for y in range(1, 3):
+			img.set_pixel(x, y, Color(1.0, 0.8, 0.3) if y == 1 else Color(0.8, 0.55, 0.15))
+	return ImageTexture.create_from_image(img)
 
 
 ## A fading copy of the body left behind (dash afterimages, dodges).

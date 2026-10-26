@@ -77,6 +77,11 @@ Airstrike Beacon. The pairings are in `data.gd` (`EVOLUTIONS`).
 at load time and hold the weapon, so the hands aim, swing and recoil with
 it. The hero turns to face its target, and the torso and helmet twist toward
 the aim.
+Weapon feel, all cosmetic (movement and fire rate don't change): a braced
+stance under sustained fire, muzzle climb, brass casings from the rifle and
+scatter, barrel heat glow, the scatter's pump, rail steam and a charge glow
+on the rail and tesla, footstep dust on alternating feet, a body twist on
+hits, a whip-around on sharp turns and a weapon check when standing still.
 
 **Gear that grows with the build (`hero.gd`):**
 - **Helmet** (3 tiers) from survival powers, **pauldrons** (3 tiers) from
@@ -121,8 +126,16 @@ of any costume.
 
 **Revive:** once per run, free.
 
-**Run report:** the results screen shows the summary; COPY RESULTS copies the
-full report: damage dealt by each weapon and power (and to the boss), damage
+**Meteor Slam (button, bottom left):** kills charge it (by their XP; the
+first slam needs 250, each one after 100 more, up to 900). Tap it and the
+hero leaps toward the camera (bigger, higher, a spin, the shadow shrinking
+on the ground), hangs, then crashes down: everything within 330 px is
+destroyed, Juggernauts, gunships and Siege Colossi lose about 40%, the boss
+6%, enemy bullets nearby vanish and a crater stays on the ground. The hero
+can't be hit in the air and can steer the landing.
+
+**Run report (`report.gd`):** the results screen shows the summary; COPY
+RESULTS copies the full report: damage dealt by each weapon and power (and to the boss), damage
 taken by enemy type, hits blocked, bullets destroyed, healing by source, when
 and by what you went down, kills by enemy, pickups, card use, a
 minute-by-minute timeline (level, kills, enemies, lowest HP, damage taken,
