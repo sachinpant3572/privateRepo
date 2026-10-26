@@ -14,25 +14,31 @@ The Iron Dominion, then a boss.
   three turrets and three attacks: a shell sweep, a minefield, and a charge.
   It attacks faster below 50% HP.
 
-**Waves:** the 5:00 comes in five 1-minute waves. From the second wave, each
-opens with a 14 s **breather**: weak Conscripts (30% HP, slow to shoot, 60%
-XP) pour in to be mowed down. Then the wave ramps hard to the next level of
-difficulty (the difficulty clock holds during the breather and catches up in
-the ramp, so 5:00 is as hard as before).
+**Domination and escalation:** the stage swings between two phases, so it
+feels like losing, then winning, again and again:
+- **Domination** (the start, and after every escalation): the difficulty
+  stops rising, and new enemies get weaker (down to half HP) and more
+  numerous while you keep leveling; late in it most are faded Conscripts.
+  It ends once you clearly overpower the horde (4+ levels gained and it
+  melting faster than it arrives, after at least 20 s) or after 50 s.
+- **Escalation** (30 s): a ring of fresh troops closes in, the next two
+  stage events hit (Ambush and Shield Wall first, the Siege Colossus last),
+  a Juggernaut joins the 2nd and 4th, and the difficulty climbs fast.
+- Level-ups heal 5% of your HP.
 
 **Enemy tiers:** enemies look tougher as the stage goes on, and pay more.
 
 | Tier | When | Look | XP |
 |---|---|---|---|
-| Conscripts | Breathers | Faded | 60% |
-| Regulars | Waves 1–2 | Standard | 100% |
-| Veterans | Waves 3–4 | Gold trim, amber glow | 125% |
-| Elite Guard | Wave 5, boss, final push | Bigger, crimson glow | 150% |
+| Conscripts | Late in a domination | Faded | 60% |
+| Regulars | Start, 1st escalation | Standard | 100% |
+| Veterans | 2nd and 3rd escalation | Gold trim, extra plating | 125% |
+| Elite Guard | 4th escalation, boss, final push | Black and crimson, a size bigger | 150% |
 
 Each tier has its own skin: `sprites/<unit>_t2.png` (Veterans: gold trim,
 extra plating) and `_t3.png` (Elite Guard: black and crimson, glowing lines,
 spikes) for all ten enemy sprites, AI-generated with Higgsfield from the
-base sprites and fitted to their size and pivot. The tint and glow stay on
+base sprites and fitted to their size and pivot. A light tint stays on
 top.
 
 **Enemy animation (code):** infantry sway and waddle as they walk, everything
@@ -200,8 +206,8 @@ playing.
     of energy, enemies knocked back, and a brief slow-down. It's sized by
     rarity and level, with the item's name shown in its rarity color.
   - Evolutions are a gold blast that damages everything within 420 px.
-- **Timed events:** Ambush (1:30), Shield Wall (2:30), Tank Column (3:15),
-  Air Raid (4:30).
+- **Stage events**, two per escalation, in order: Ambush, Shield Wall, Tank
+  Column, Bombing Run, Gunships, Armored Assault, Air Raid, Siege Colossus.
 - **Sound effects:** synthesized in code (`sfx.gd`), so there are no audio
   files.
 - **End of run:** +100 gold for a win, and "Double your gold (watch ad)",

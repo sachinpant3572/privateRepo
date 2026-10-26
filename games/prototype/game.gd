@@ -20,15 +20,25 @@ const CELL := 64.0
 const GRID_PAD := 200.0
 const WORLD_BOUNDS := 1.0e7  # Culling bounds for the MultiMesh layers; the world itself is endless.
 const STAGE_TIME := 300.0
-# The stage comes in waves: each one opens with a calm (weak Conscripts pour
-# in to be mowed down), then ramps hard to the next wave's difficulty.
-const WAVE_TIME := 60.0
-const CALM_TIME := 14.0
-const CALM_HP := 0.3  # Conscript HP, of a normal enemy's.
+# The stage swings between two phases, so it feels like losing, then winning:
+# - Domination: the difficulty clock stops and new enemies get weaker and
+#   more numerous while the hero keeps leveling, until the hero clearly
+#   overpowers them (or DOM_MAX runs out).
+# - Escalation: a hard horde (the stage's big events) hits at once, and the
+#   difficulty climbs fast for ESC_TIME.
+const DOM_MIN := 20.0
+const DOM_MAX := 50.0
+const DOM_LEVELS := 4  # Levels gained in a domination before it can end early...
+const DOM_CLEAR := 0.6  # ...once fewer than this share of the wanted enemies are alive.
+const DOM_EASE := 0.5  # New enemies' HP at the end of a domination, of normal.
+const ESC_TIME := 30.0
+const ESC_RATE := 2.5  # Difficulty-clock seconds per second during an escalation.
+const ESC_TIERS := [1, 2, 2, 3]  # Enemy tier from the 1st, 2nd, 3rd and 4th+ escalation.
+const D_CAP := 320.0  # Escalations stop raising the difficulty here (5:20 of the old curve).
 const TIER_NAMES := ["Conscripts", "Regulars", "Veterans", "Elite Guard"]
 const TIER_XP := [0.6, 1.0, 1.25, 1.5]  # Tougher-looking enemies pay more.
-const TIER_TINT := [Color(0.8, 0.8, 0.76), Color.WHITE, Color(1.12, 1.04, 0.9), Color(1.2, 0.92, 0.9)]
-const TIER_AURA := [Color(0, 0, 0, 0), Color(0, 0, 0, 0), Color(1.0, 0.65, 0.15, 0.5), Color(1.0, 0.12, 0.08, 0.65)]
+const TIER_TINT := [Color(0.8, 0.8, 0.76), Color.WHITE, Color(1.06, 1.02, 0.96), Color(1.08, 0.97, 0.96)]
+const TIER_COLORS := [Color(0.7, 0.7, 0.7), Color(1.0, 0.6, 0.4), Color(1.0, 0.75, 0.3), Color(1.0, 0.3, 0.25)]
 const BOSS_HP := 9000.0
 const BOSS_CAP := 0.02  # Share of the boss's HP per second above which damage tapers off.
 const BOSS_RADIUS := 62.0
@@ -264,14 +274,19 @@ var e_frozen := PackedFloat32Array()  # Frozen solid time left.
 var e_tier := PackedByteArray()  # 0 Conscript .. 3 Elite Guard (looks and rewards).
 var e_kick := PackedFloat32Array()  # Firing recoil, 1 .. 0 (animation).
 var e_born := PackedFloat32Array()  # Spawn time (drop-in animation).
-var wave_n := 0  # Current wave (WAVE_TIME each).
-var calm := false
+var surge := false  # In an escalation.
+var calm := false  # The first seconds of a domination (the music breathes).
+var wave_n := 0  # Escalations so far.
+var phase_t0 := 0.0
+var dom_level0 := 1
+var dom_op_t := 0.0  # How long the hero has been overpowering this domination.
+var d_clock := 0.0  # Difficulty clock: runs during escalations only.
+var events_due := 0
+var event_t := -99.0  # Last stage event, so an escalation's events come a few seconds apart.
+var last_target := 0
 var max_tier := 1
 var tier_cells := {}  # Unit cell -> [cell, cell, tier-2 cell, tier-3 cell] when tier sprites exist.
 var tier_base := PackedInt32Array()  # Base cell of each tier sprite layer.
-var aura_mm: MultiMesh
-var aura_buf := PackedFloat32Array()
-var aura_n := 0
 var e_next := PackedInt32Array()
 var e_count := 0
 var e_cap := 0
@@ -500,7 +515,6 @@ func _build_scene() -> void:
 	for kind in Data.PICKUP_LABELS.size():
 		pickup_textures.append(Art.pickup_icon(kind, 64))
 	# Veteran and Elite Guard glow under the unit sprites.
-	aura_mm = _layer(Art.soft_disc(64, 0.25), 0.5, true, Color(0, 0, 0, 0))
 	var cell_tex := Art.cell_textures()
 	for tex in cell_tex:
 		unit_mms.append(_layer(tex, 0.5, false, Color(0.25, 0.25, 0.25)))
@@ -792,7 +806,15 @@ func _start(auto: bool) -> void:
 	final_jet_t = 0.0
 	flyby_t = 0.0
 	wave_n = 0
+	surge = false
 	calm = false
+	phase_t0 = 0.0
+	dom_level0 = 1
+	dom_op_t = 0.0
+	d_clock = 0.0
+	events_due = 0
+	event_t = -99.0
+	last_target = 0
 	max_tier = 1
 	boss_node.visible = false
 	elites_spawned = 0
@@ -835,8 +857,6 @@ func _alloc() -> void:
 	e_tier.resize(e_cap)
 	e_kick.resize(e_cap)
 	e_born.resize(e_cap)
-	aura_mm.instance_count = e_cap
-	aura_buf = _buffer(e_cap, Color(0, 0, 0, 0))
 	e_next.resize(e_cap)
 	# Every unit sprite gets a slice of one shared buffer.
 	unit_cap = PackedInt32Array([e_cap, e_cap, e_cap, 8, 12, 12, 12, 12, 10, 4, 3])
@@ -1227,8 +1247,8 @@ func _spawn_enemy(ty: int) -> void:
 	var tier := _tier_now()
 	e_hp[i] = t_hp[ty] * (1.0 + 0.2 * _diff_t() / 60.0) * hp_mult
 	e_hp[i] *= big_mult if ty >= Data.ELITE else horde_mult
-	if tier == 0:
-		e_hp[i] *= CALM_HP
+	if not surge and not boss_spawned:
+		e_hp[i] *= lerpf(1.0, DOM_EASE, _dom_progress())
 	e_tier[i] = tier
 	e_kick[i] = 0.0
 	e_born[i] = t
@@ -1247,22 +1267,18 @@ func _spawn_director(dt: float) -> void:
 	if final_clear_t >= 0.0:
 		return
 	_update_final(dt)
-	# From 3:20 to the boss, a bomber squadron every 16 seconds.
-	_update_wave()
-	if t >= 200.0 and not boss_on and boss_dead_t < 0.0 and not calm:
+	_update_wave(dt)
+	# Late escalations bring bomber squadrons every 16 seconds.
+	if _diff_t() >= 200.0 and not boss_on and boss_dead_t < 0.0 and surge:
 		flyby_t -= dt
 		if flyby_t <= 0.0:
 			flyby_t = 16.0
 			_flyby(2 + int(t >= 260.0))
 	if not boss_spawned and t >= STAGE_TIME:
 		_spawn_boss()
-	if (elites_spawned == 0 and t >= 120.0 + CALM_TIME) or (elites_spawned == 1 and t >= 240.0 + CALM_TIME):
-		elites_spawned += 1
-		_spawn_enemy(Data.ELITE)
-		hud.show_banner("JUGGERNAUT INCOMING")
-		sfx.play("alarm")
 	var d := _diff_t()
-	var target := int(lerpf(18.0, GAME_PEAK, clampf(d / 240.0, 0.0, 1.0)) * (1.0 + 0.1 * curse) * (1.1 if calm else 1.0))
+	var dom := 0.0 if surge or boss_spawned else _dom_progress()
+	var target := int(lerpf(18.0, GAME_PEAK, clampf(d / 240.0, 0.0, 1.0)) * (1.0 + 0.1 * curse) * (1.0 + 0.2 * dom))
 	if boss_on:
 		target = int(target * 0.35)
 	# The same fight on every tier: if this tier draws fewer enemies, each one
@@ -1270,8 +1286,9 @@ func _spawn_director(dt: float) -> void:
 	var cap := mini(target, int(int(fx.tier["enemies"]) * 0.9))
 	hp_mult = maxf(1.0, float(target) / maxf(cap, 1.0))
 	target = cap
-	spawn_acc = minf(spawn_acc + dt * (12.0 + d * 0.25) * (1.0 + 0.1 * curse) * (1.8 if calm else 1.0), 30.0)
-	shot_budget = minf(shot_budget + dt * (1.5 + d / 60.0) * (0.35 if calm else 1.0), 5.0)
+	last_target = target
+	spawn_acc = minf(spawn_acc + dt * (12.0 + d * 0.25) * (1.0 + 0.1 * curse) * (1.0 + 0.6 * dom), 30.0)
+	shot_budget = minf(shot_budget + dt * (1.5 + d / 60.0) * (1.0 - 0.5 * dom), 5.0)
 	var weights := Data.spawn_weights(d)
 	while spawn_acc >= 1.0 and e_count < target and e_count < e_cap:
 		spawn_acc -= 1.0
@@ -1281,56 +1298,94 @@ func _spawn_director(dt: float) -> void:
 		_spawn_enemy(ty)
 
 
-## Difficulty clock: it holds during each calm, then runs faster through the
-## ramp, so it still reaches STAGE_TIME when the boss arrives.
+## Difficulty clock: it only runs during escalations. From the boss on it is
+## at least the stage clock, so the boss fight is as hard as before.
 func _diff_t() -> float:
-	var w := floorf(t / WAVE_TIME)
-	if w < 1.0 or boss_spawned or t >= STAGE_TIME:
-		return t
-	var into := t - w * WAVE_TIME
-	if into < CALM_TIME:
-		return w * WAVE_TIME
-	return w * WAVE_TIME + (into - CALM_TIME) / (WAVE_TIME - CALM_TIME) * WAVE_TIME
+	return maxf(d_clock, t) if boss_spawned else d_clock
 
 
-func _is_calm() -> bool:
-	return t >= WAVE_TIME and not boss_spawned and t < STAGE_TIME and t - floorf(t / WAVE_TIME) * WAVE_TIME < CALM_TIME
+## How far into the current domination (0..1 of DOM_MAX): new enemies get
+## weaker and more numerous as it goes.
+func _dom_progress() -> float:
+	return clampf((t - phase_t0) / DOM_MAX, 0.0, 1.0)
 
 
-## Tier of newly spawned enemies: Conscripts in a calm, then Regulars,
-## Veterans from wave 3 and the Elite Guard from wave 5 and the boss on.
+## Tier of newly spawned enemies: set by the escalations so far. Late in a
+## domination more and more of them are Conscripts.
 func _tier_now() -> int:
-	if calm:
-		return 0
-	if boss_spawned or t >= STAGE_TIME:
+	if boss_spawned:
 		return 3
-	return [1, 1, 2, 2, 3][clampi(int(t / WAVE_TIME), 0, 4)]
+	var tier: int = 1 if wave_n == 0 else ESC_TIERS[mini(wave_n, ESC_TIERS.size()) - 1]
+	if not surge and randf() < _dom_progress() * 0.8:
+		return 0
+	return tier
 
 
-func _update_wave() -> void:
-	var now := _is_calm()
-	wave_n = int(t / WAVE_TIME)
-	if now == calm:
+func _update_wave(dt: float) -> void:
+	if boss_spawned:
+		surge = false
+		calm = false
 		return
-	calm = now
-	if calm:
-		hud.show_banner("BREATHER! MOW THEM DOWN!", Color(0.5, 1.0, 0.6))
+	var held := t - phase_t0
+	calm = not surge and held < 6.0 and wave_n > 0
+	if surge:
+		d_clock = minf(d_clock + dt * ESC_RATE, D_CAP)
+		if held >= ESC_TIME:
+			_start_domination()
 		return
+	# The hero is overpowering them: plenty of levels gained and the horde
+	# melting faster than it arrives.
+	if level - dom_level0 >= DOM_LEVELS and e_count < last_target * DOM_CLEAR:
+		dom_op_t += dt
+	else:
+		dom_op_t = maxf(0.0, dom_op_t - dt)
+	if held >= DOM_MAX or (held >= DOM_MIN and dom_op_t >= 2.0):
+		_start_escalation()
+
+
+func _start_domination() -> void:
+	surge = false
+	phase_t0 = t
+	dom_level0 = level
+	dom_op_t = 0.0
+	rep.phases.append("%s domination" % _clock(t))
+	hud.show_banner("THEY'RE BREAKING! CRUSH THEM!", Color(0.5, 1.0, 0.6))
+
+
+## A hard horde hits at once: the next two stage events, a Juggernaut on the
+## 2nd and 4th escalation, and tougher-looking troops from now on.
+func _start_escalation() -> void:
+	surge = true
+	phase_t0 = t
+	wave_n += 1
+	events_due = mini(events_due + 2, Data.EVENTS.size())
 	var tier := _tier_now()
+	rep.phases.append("%s escalation %d" % [_clock(t), wave_n])
 	if tier > max_tier:
 		max_tier = tier
-		hud.show_banner("%s DEPLOYED!" % String(TIER_NAMES[tier]).to_upper(), TIER_AURA[tier].lightened(0.3))
+		hud.show_banner("%s DEPLOYED!" % String(TIER_NAMES[tier]).to_upper(), TIER_COLORS[tier])
 	else:
-		hud.show_banner("WAVE %d: THEY'RE BACK!" % (wave_n + 1), Color(1.0, 0.6, 0.4))
+		hud.show_banner("THE DOMINION ESCALATES!", TIER_COLORS[tier])
 	sfx.play("alarm")
+	if wave_n == 2 or wave_n == 4:
+		elites_spawned += 1
+		_spawn_enemy(Data.ELITE)
+		hud.show_banner("JUGGERNAUT INCOMING")
+	# The horde: a ring of fresh troops closing in.
+	var n := 14 + 6 * wave_n
+	for k in n:
+		var before := e_count
+		_spawn_enemy(Data.TROOPER if k % 3 else Data.SHIELD)
+		if e_count == before:
+			break
+		e_pos[e_count - 1] = player + Vector2.from_angle(TAU * k / n) * 460.0
 
 
 func _run_events() -> void:
-	if events_done >= Data.EVENTS.size():
+	if events_done >= events_due or t - event_t < 3.0:
 		return
+	event_t = t
 	var ev: Array = Data.EVENTS[events_done]
-	if t < float(ev[0]):
-		return
 	events_done += 1
 	hud.show_banner(ev[1])
 	sfx.play("alarm")
@@ -1512,7 +1567,7 @@ func _update_enemies(dt: float) -> void:
 				if d < t_range[ty]:
 					_enemy_attack(ty, p, dir)
 					e_kick[i] = 1.0
-					tm = fire * randf_range(0.85, 1.15) * (2.0 if e_tier[i] == 0 else 1.0) * (1.5 if calm else 1.0)
+					tm = fire * randf_range(0.85, 1.15) * (2.0 if e_tier[i] == 0 else 1.0)
 				else:
 					tm = 0.5
 			e_timer[i] = tm
@@ -2980,6 +3035,7 @@ func _gain_xp(value: int) -> void:
 		level += 1
 		xp_need = _xp_need(level)
 		pending_levels += 1
+		_heal(max_hp * 0.05, "level-up")
 
 
 ## Treasure chest: a slot-machine roll for 1, 3 or 5 rewards. An evolution
@@ -3628,7 +3684,6 @@ func _update_rings(dt: float) -> void:
 ## rumble and recoil their turrets, helicopters hover and drift.
 func _render_units() -> void:
 	unit_n.fill(0)
-	aura_n = 0
 	for i in e_count:
 		var ty := e_type[i]
 		var p := e_pos[i]
@@ -3651,8 +3706,6 @@ func _render_units() -> void:
 		# Drop in over 0.25 s, pop on a hit, Elite Guard a size bigger.
 		var grow := minf(1.0, (t - e_born[i]) / 0.25)
 		var size := t_size[ty] * (0.55 + 0.45 * grow * (2.0 - grow)) * (1.0 + 1.8 * e_flash[i]) * (1.08 if tier == 3 else 1.0)
-		if TIER_AURA[tier].a > 0.0:
-			_put_aura(p, size * (1.25 + 0.08 * sin(t * 6.0 + i)), TIER_AURA[tier])
 		var ph := 0.0 if still else t * t_speed[ty] * 0.16 + i * 1.7
 		match ty:
 			Data.TANK:
@@ -3707,27 +3760,7 @@ func _put_unit(cell: int, p: Vector2, ang: float, size: float, tint: Color, sx: 
 	u_buf[o + 10] = tint.b
 
 
-func _put_aura(p: Vector2, size: float, color: Color) -> void:
-	if aura_n >= e_cap:
-		return
-	var o := aura_n * STRIDE
-	aura_n += 1
-	aura_buf[o] = size
-	aura_buf[o + 1] = 0.0
-	aura_buf[o + 3] = p.x
-	aura_buf[o + 4] = 0.0
-	aura_buf[o + 5] = size
-	aura_buf[o + 7] = p.y
-	aura_buf[o + 8] = color.r
-	aura_buf[o + 9] = color.g
-	aura_buf[o + 10] = color.b
-	aura_buf[o + 11] = color.a
-
-
 func _upload() -> void:
-	aura_mm.visible_instance_count = aura_n
-	if aura_buf.size() > 0:
-		RenderingServer.multimesh_set_buffer(aura_mm.get_rid(), aura_buf)
 	for c in unit_mms.size():
 		var mm: MultiMesh = unit_mms[c]
 		mm.visible_instance_count = unit_n[c]

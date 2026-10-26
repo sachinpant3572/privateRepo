@@ -13,7 +13,7 @@ const NAMES := {
 }
 const HEAL_NAMES := {
 	"regen": "Nanite Regeneration", "lifesteal": "Vampiric Rounds", "repair": "Repair Drone",
-	"medkit": "Medkit pickups", "medkit card": "Medkit cards", "skip": "Skipped cards",
+	"medkit": "Medkit pickups", "medkit card": "Medkit cards", "skip": "Skipped cards", "level-up": "Level-ups",
 }
 
 var dmg_by := {}  # Source -> damage dealt (overkill not counted).
@@ -30,6 +30,7 @@ var tl_row := {}
 var hp_low := 1.0
 var low_hp_time := 0.0
 var deaths: Array = []  # "m:ss by <enemy>"
+var phases: Array = []  # "m:ss domination" / "m:ss escalation n"
 var last_hit := ""
 var boss_spawn_t := -1.0
 var chests_opened := 0
@@ -53,6 +54,7 @@ func reset() -> void:
 	hp_low = 1.0
 	low_hp_time = 0.0
 	deaths = []
+	phases = []
 	last_hit = ""
 	boss_spawn_t = -1.0
 	chests_opened = 0
@@ -110,7 +112,9 @@ func text(g: Node, summary: String, cards: String) -> String:
 	var final_clear_t: float = g.final_clear_t
 	var wave_n: int = g.wave_n
 	var max_tier: int = g.max_tier
-	lines.append("Stage: %d of 5 calm/ramp waves, enemy tier %d of 3%s" % [mini(wave_n + 1, 5), max_tier, "" if boss_spawn_t < 0.0 else ", boss at %s" % clock(boss_spawn_t)])
+	lines.append("Stage: %d escalations, enemy tier %d of 3%s" % [wave_n, max_tier, "" if boss_spawn_t < 0.0 else ", boss at %s" % clock(boss_spawn_t)])
+	if not phases.is_empty():
+		lines.append("Phases: 0:00 domination, " + ", ".join(PackedStringArray(phases)))
 	if boss_spawn_t >= 0.0:
 		var fight := (boss_dead_t if boss_dead_t >= 0.0 else now) - boss_spawn_t
 		var state := "destroyed" if boss_dead_t >= 0.0 else "%d%% HP left" % roundi(100.0 * boss_hp / maxf(boss_max, 1.0))
