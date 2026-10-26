@@ -10,6 +10,10 @@ extends Node2D
 ## aiming and recoiling per weapon, and poses for dash, stomp, power-ups, hits,
 ## death and revive. The game calls move(), aim(), fire() and the pose
 ## functions; effect sprites come from sprites/fx/.
+##
+## The costume art has the arms reaching forward, so the forearms and fists
+## are cut out into their own layer that holds the weapon: the hands aim,
+## swing and recoil with the gun, and the head turns toward the aim.
 
 const Data := preload("res://data.gd")
 const Art := preload("res://art.gd")
@@ -20,14 +24,17 @@ const SHOULDER := Vector2(6, 17)  # Mirrored on y for the other shoulder.
 const BACK := Vector2(-18, 0)
 const WINGS := Vector2(-30, 0)
 const HAND_PIVOT := Vector2(14, 2)  # The weapon swings around the chest...
-const HAND_REACH := 34.0  # ...and sits this far in front of it.
+const HAND_REACH := 38.0  # ...and sits this far in front of it, between the fists.
 const MUZZLE := 62.0  # Muzzle flash distance from the pivot.
 const HELMET_PX := 40.0
 const SHOULDER_PX := 30.0
 const BACK_PX := 44.0
 const WINGS_PX := 120.0
 const HAND_PX := 54.0
-const AIM_LIMIT := 1.1  # How far the weapon turns from the body (radians).
+const AIM_LIMIT := 0.7  # How far the arms and weapon turn from the body (radians).
+const ARM_CUT := 0.58  # Where the forearms start, as a fraction of the costume width.
+const ARM_FEATHER := 0.05
+const DOME_PX := 340.0  # Barrier Dome (game.gd DOME_RADIUS), in body-texture pixels.
 const FX_CAP := 28  # Most world effect sprites alive at once.
 const TURN_SPEED := 14.0  # Radians per second; the hero turns, it doesn't snap.
 const SHADOW_OFFSET := Vector2(7, 10)  # Screen pixels, light from the top-left.
@@ -53,7 +60,10 @@ var helmet: Sprite2D
 var shoulders: Array = []
 var hand_pivot: Node2D
 var hand: Sprite2D
+var arms: Sprite2D  # Forearms and fists, cut from the costume; they hold the weapon.
 var flash: Sprite2D
+var dome: Sprite2D
+var costume_tex: Texture2D
 var aura: Sprite2D
 var bubble: Sprite2D
 var helmet_tier := 0
@@ -86,6 +96,7 @@ var lift := 0.0  # 0 on the ground .. 1 at the top of a stride.
 var dead := false
 var fx_alive := 0
 var fx_tex := {}  # Effect textures by name, loaded once.
+static var split_cache := {}  # Costume -> [torso, arms] textures.
 
 
 func setup(costume: Texture2D, glow_tex: Texture2D, ring: Texture2D) -> void:
@@ -100,7 +111,7 @@ func setup(costume: Texture2D, glow_tex: Texture2D, ring: Texture2D) -> void:
 	add_child(rig)
 	wings = _layer(rig, null, WINGS, WINGS_PX)
 	wings.material = add
-	body = _layer(rig, costume, Vector2.ZERO, TEX)
+	body = _layer(rig, null, Vector2.ZERO, TEX)
 	# Seen from above, a pack sits on top of the back, so it draws over the body.
 	back = _layer(rig, null, BACK, BACK_PX)
 	for side in [-1.0, 1.0]:
@@ -112,6 +123,8 @@ func setup(costume: Texture2D, glow_tex: Texture2D, ring: Texture2D) -> void:
 	hand_pivot = Node2D.new()
 	hand_pivot.position = HAND_PIVOT
 	rig.add_child(hand_pivot)
+	arms = _layer(hand_pivot, null, -HAND_PIVOT, TEX)
+	# The weapon lies between the fists, drawn over the arms so it reads clearly.
 	hand = _layer(hand_pivot, null, Vector2(HAND_REACH, 0), HAND_PX)
 	flash = _layer(hand_pivot, null, Vector2(MUZZLE, 0), 1.0)
 	flash.material = add
@@ -119,11 +132,56 @@ func setup(costume: Texture2D, glow_tex: Texture2D, ring: Texture2D) -> void:
 	bubble = _layer(self, ring, Vector2.ZERO, 170.0)
 	bubble.material = add
 	bubble.modulate = Color(0.45, 0.85, 1.0, 0.0)
+	dome = _layer(self, ring, Vector2.ZERO, DOME_PX)
+	dome.material = add
+	dome.modulate = Color(0.5, 0.85, 1.0, 0.0)
+	dome.visible = false
+	set_costume(costume)
 	reset()
 
 
 func set_costume(costume: Texture2D) -> void:
-	body.texture = costume
+	costume_tex = costume
+	var parts := _split(costume)
+	body.texture = parts[0]
+	body.scale = Vector2.ONE * TEX / costume.get_width()
+	arms.texture = parts[1]
+	arms.visible = parts[1] != null
+	arms.scale = body.scale
+
+
+## Cuts a costume into the torso and the forearms with fists, faded into each
+## other over a few pixels. Every costume shares the layout: arms reaching
+## forward (+x) from the shoulders. Cached, so it runs once per costume.
+static func _split(costume: Texture2D) -> Array:
+	var key := costume.get_instance_id()
+	if split_cache.has(key):
+		return split_cache[key]
+	var img := costume.get_image()
+	if img == null:
+		return [costume, null]
+	if img.is_compressed():
+		img.decompress()
+	img.convert(Image.FORMAT_RGBA8)
+	var w := img.get_width()
+	var h := img.get_height()
+	var torso := Image.create_empty(w, h, false, Image.FORMAT_RGBA8)
+	var front := Image.create_empty(w, h, false, Image.FORMAT_RGBA8)
+	var x0 := w * (ARM_CUT - ARM_FEATHER * 0.5)
+	var fw := maxf(1.0, w * ARM_FEATHER)
+	for x in w:
+		var f := clampf((x - x0) / fw, 0.0, 1.0)  # 0 torso .. 1 arms.
+		for y in h:
+			var c := img.get_pixel(x, y)
+			if c.a <= 0.0:
+				continue
+			if f < 1.0:
+				torso.set_pixel(x, y, Color(c, c.a * (1.0 - f)))
+			if f > 0.0:
+				front.set_pixel(x, y, Color(c, c.a * f))
+	var parts := [ImageTexture.create_from_image(torso), ImageTexture.create_from_image(front)]
+	split_cache[key] = parts
+	return parts
 
 
 ## Back to a bare costume at the start of a run.
@@ -145,6 +203,20 @@ func reset() -> void:
 func set_shield(on: bool) -> void:
 	shield_on = on
 	bubble.visible = on
+
+
+## Barrier Dome up or down.
+func set_barrier(on: bool) -> void:
+	if on and not dome.visible:
+		dome.visible = true
+		var full := Vector2.ONE * DOME_PX / dome.texture.get_width()
+		dome.scale = full * 0.3
+		var tw := dome.create_tween()
+		tw.tween_property(dome, "scale", full, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		_fx_world("shock_ring", position, 0.35, 40.0, 220.0, 0.0, Color(0.6, 0.9, 1.0, 0.9))
+	elif not on and dome.visible:
+		dome.visible = false
+		_fx_world("spark_electric", position, 0.3, 60.0, 160.0, randf() * TAU, Color(0.6, 0.9, 1.0, 0.8))
 
 
 ## Re-dresses the hero for the current build. Returns banner lines for the
@@ -365,18 +437,25 @@ func _process(delta: float) -> void:
 		rig.scale = Vector2(bounce * breathe * (1.0 + 0.05 * run), breathe * bounce * (1.0 - 0.03 * run)) * squash
 		rig.position = Vector2(-recoil * 8.0, stride * STRIDE_SWAY * run)
 		# A waddle with each step, the lean into turns, and a slow look-around when still.
-		rig.rotation = lean + stride * STRIDE_WADDLE * run + sin(t * 0.9) * 0.07 * idle
-		# Shoulders swing in opposite directions, like arms pumping.
+		# The torso twists a little toward the aim (the arms lead).
+		rig.rotation = lean + stride * STRIDE_WADDLE * run + sin(t * 0.9) * 0.05 * idle + hand_pivot.rotation * 0.3
+		# Shoulders swing in opposite directions, like arms pumping, and
+		# follow the arms when they aim or kick back.
 		for k in shoulders.size():
 			var s: Sprite2D = shoulders[k]
-			s.position.x = SHOULDER.x + stride * STRIDE_SWING * run * (1.0 if k == 0 else -1.0)
-		helmet.position = HEAD + Vector2(stride * 2.0 * run, 0.0)
+			s.position.x = SHOULDER.x + stride * STRIDE_SWING * run * (1.0 if k == 0 else -1.0) - recoil * 4.0
+			s.rotation = hand_pivot.rotation * 0.5
+		# The head looks along the aim and nods back on each shot.
+		helmet.position = HEAD + Vector2(stride * 2.0 * run - recoil * 3.0, 0.0)
+		helmet.rotation = lerp_angle(helmet.rotation, hand_pivot.rotation * 0.6 + sin(t * 0.7) * 0.12 * idle, minf(1.0, delta * 10.0))
 		# The body shears a little, like a cape catching the air.
 		body.skew = stride * 0.12 * run + sin(t * 3.0) * 0.03 * idle
-		# The weapon bobs with the stride on top of its aim.
-		var gun_bob := cos(step) * 0.14 * run
+		# Arms and weapon move as one: they bob with the stride on top of the
+		# aim, and the whole grip slides back on recoil.
+		var gun_bob := cos(step) * 0.08 * run
 		hand_pivot.rotation = lerp_angle(hand_pivot.rotation, aim_angle + gun_bob, minf(1.0, delta * 14.0))
-		hand_pivot.position = HAND_PIVOT + Vector2(-absf(cos(step)) * 3.0 * run, 0.0)
+		var shake := Vector2(randf_range(-1, 1), randf_range(-1, 1)) * 2.0 * jitter
+		hand_pivot.position = HAND_PIVOT + Vector2(-absf(cos(step)) * 3.0 * run - recoil * 10.0, 0.0) + shake
 		# A faint motion trail at full speed.
 		if run > 0.85:
 			trail_t -= delta
@@ -392,7 +471,7 @@ func _process(delta: float) -> void:
 	shadow.rotation = -rotation
 	recoil = maxf(0.0, recoil - delta * 6.0)
 	jitter = maxf(0.0, jitter - delta * 3.0)
-	hand.position = Vector2(HAND_REACH - recoil * 14.0, 0.0) + Vector2(randf_range(-1, 1), randf_range(-1, 1)) * 3.0 * jitter
+	hand.position = Vector2(HAND_REACH - recoil * 3.0, 0.0)  # A little extra kick in the grip.
 	back_kick = maxf(0.0, back_kick - delta * 5.0)
 	back.position = BACK + Vector2(-6.0 * back_kick, 0.0)
 	flinch = maxf(0.0, flinch - delta * 4.0)
@@ -419,6 +498,9 @@ func _process(delta: float) -> void:
 		wings.rotation = (0.06 + 0.1 * speed_frac) * sin(t * (4.0 + 8.0 * speed_frac))
 	if bubble.visible:
 		bubble.modulate.a = 0.45 + 0.25 * sin(t * 6.0)
+	if dome.visible:
+		dome.modulate.a = 0.55 + 0.25 * sin(t * 10.0)
+		dome.rotation = -rotation  # Steady on screen while the hero turns.
 	if hand.visible and hand_evolved:
 		hand.self_modulate = Color(1.0, 0.85, 0.4).lerp(Color.WHITE, 0.5 + 0.5 * sin(t * 8.0)) * 1.4
 
@@ -475,12 +557,12 @@ func _ghost(color: Color, offset: Vector2) -> void:
 	if fx_alive >= FX_CAP or get_parent() == null:
 		return
 	var g := Sprite2D.new()
-	g.texture = body.texture
+	g.texture = costume_tex
 	g.modulate = color
 	# Same parent as the hero, so the hero's own transform places it.
 	g.position = position + offset
 	g.rotation = rotation + rig.rotation
-	g.scale = scale * rig.scale
+	g.scale = scale * rig.scale * body.scale
 	get_parent().add_child(g)
 	get_parent().move_child(g, get_index())
 	_track(g, 0.25)

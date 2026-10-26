@@ -30,7 +30,7 @@ const OLIVE := Color(0.28, 0.31, 0.23)
 const OLIVE_LIGHT := Color(0.34, 0.37, 0.28)
 const OUTLINE := Color(0.02, 0.02, 0.03)
 const CELL_NAMES := ["trooper", "shield", "grenadier", "elite", "tank", "turret", "heli", "rotor"]
-const PICKUP_NAMES := ["nuke", "freeze", "vacuum", "medkit"]
+const PICKUP_NAMES := ["nuke", "freeze", "vacuum", "medkit", "shield_cell"]
 
 
 ## A sprite from res://sprites/<name>.png, or null if there isn't one.
@@ -142,7 +142,7 @@ static func pickup_icon(kind: int, size: int) -> Texture2D:
 		return real
 	var img := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
 	var c := Vector2(size, size) * 0.5
-	var bases := [Color(1.0, 0.85, 0.1), Color(0.3, 0.8, 1.0), Color(0.7, 0.35, 1.0), Color(0.95, 0.95, 0.95)]
+	var bases := [Color(1.0, 0.85, 0.1), Color(0.3, 0.8, 1.0), Color(0.7, 0.35, 1.0), Color(0.95, 0.95, 0.95), Color(0.35, 0.65, 1.0)]
 	_disc(img, c, size * 0.48, Color(0, 0, 0, 0.6))
 	_disc(img, c, size * 0.42, bases[kind])
 	for y in size:
@@ -162,6 +162,12 @@ static func pickup_icon(kind: int, size: int) -> Texture2D:
 					mark = mark or (absf(absf(v.x) - size * 0.22) < size * 0.06 and v.y < 0.0 and v.y > -size * 0.25)
 				3:
 					mark = (absf(v.x) < size * 0.08 and absf(v.y) < size * 0.26) or (absf(v.y) < size * 0.08 and absf(v.x) < size * 0.26)
+				4:
+					# A shield outline.
+					var w := size * 0.24 - absf(v.x)
+					var inside := w > 0.0 and v.y > -size * 0.26 and v.y < size * 0.04 + w
+					var inner := w > size * 0.07 and v.y > -size * 0.19 and v.y < w - size * 0.03
+					mark = inside and not inner
 			if mark:
 				img.set_pixel(x, y, Color(0.85, 0.1, 0.1) if kind == 3 else Color(0.05, 0.05, 0.08))
 	return ImageTexture.create_from_image(img)

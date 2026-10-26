@@ -29,7 +29,9 @@ const PLAYER_HP := 120.0
 const PICKUP := 120.0
 const INVULN := 0.5
 const MAX_SLOTS := 4  # Weapons, of 12: every run is a different build.
-const POWER_SLOTS := 4  # Of 32.
+const POWER_SLOTS := 4  # Of 36.
+const DEFENSE_SLOTS := 1  # One more power slot that only takes a defense power.
+const DOME_RADIUS := 95.0  # Barrier Dome.
 const BANISHES := 3
 const MINE_CAP := 24
 const CLOUD_CAP := 12
@@ -169,6 +171,17 @@ var thorns := 0
 var revives := 0
 var revive_given := 0
 var laststand := 0
+var barrier_lvl := 0
+var barrier_t := 0.0  # Dome time left.
+var barrier_cd := 0.0
+var emp_lvl := 0
+var emp_t := 0.0
+var repair_lvl := 0
+var repair_t := 0.0
+var repair_node: Sprite2D
+var fortify := 0.0  # Damage cut while moving; doubled standing still.
+var still_t := 0.0
+var bonus_shield := 0  # Shield Cell charges, on top of Kinetic Shield's.
 var burn_dps := 0.0
 var cryo_lvl := 0
 var shock_lvl := 0
@@ -445,7 +458,7 @@ func _build_scene() -> void:
 	gem_mm = _layer(Art.gem(24), 8.0, true, Color(0.4, 0.4, 0.4))
 	coin_mm = _layer(Art.coin(32), 9.0, false, Color(0.5, 0.4, 0.1))
 	chest_mm = _layer(Art.chest(48), 22.0, false, Color(0.6, 0.6, 0.6))
-	for kind in 4:
+	for kind in Data.PICKUP_LABELS.size():
 		pickup_textures.append(Art.pickup_icon(kind, 64))
 	for tex in Art.cell_textures():
 		unit_mms.append(_layer(tex, 0.5, false, Color(0.25, 0.25, 0.25)))
@@ -683,6 +696,13 @@ func _start(auto: bool) -> void:
 	steal_pool = 0.0
 	shield_charges = 0
 	shield_cd = 0.0
+	barrier_t = 0.0
+	barrier_cd = 0.0
+	emp_t = 4.0
+	repair_t = 0.0
+	still_t = 0.0
+	bonus_shield = 0
+	hero.set_barrier(false)
 	dash_cd = 0.0
 	dash_t = 0.0
 	stomp_t = 0.0
@@ -1024,7 +1044,9 @@ func _update_player(dt: float) -> void:
 		hp = minf(max_hp, hp + heal)
 	ls_on = laststand > 0 and hp < max_hp * 0.35
 	hero.position = player
-	hero.face(facing.angle(), dt)
+	# The hero turns to face its target, like a twin-stick shooter, so the head
+	# and arms follow the weapon; with no target it faces where it runs.
+	hero.face((_target() - player).angle() if _has_target() and dash_t <= 0.0 else facing.angle(), dt)
 	hero.move(move_vec, dash_t > 0.0)
 	hero.aim((_target() - player).angle() if _has_target() else facing.angle())
 	hero.modulate.a = 0.35 if invuln > 0.0 and int(t * 20.0) % 2 == 0 else 1.0
@@ -1050,18 +1072,28 @@ func _hurt(amount: float) -> void:
 		_ring(player, 1.5)
 		hero.dodge()
 		return
-	if shield_charges > 0:
-		shield_charges -= 1
-		invuln = INVULN
-		shield_cd = maxf(shield_cd, _shield_time())
+	if barrier_t > 0.0:
+		invuln = INVULN * 0.5
 		hero.shield_hit()
-		hero.set_shield(shield_charges > 0)
+		return
+	if shield_charges > 0 or bonus_shield > 0:
+		if bonus_shield > 0:
+			bonus_shield -= 1
+		else:
+			shield_charges -= 1
+			shield_cd = maxf(shield_cd, _shield_time())
+		invuln = INVULN
+		hero.shield_hit()
+		hero.set_shield(shield_charges + bonus_shield > 0)
 		_ring(player, 3.0)
 		sfx.play("shield")
 		return
+	if barrier_lvl > 0 and barrier_cd <= 0.0:
+		_raise_barrier()
+		return
 	if thorns > 0:
 		_blast(player, 90.0 + 10.0 * thorns, 15.0 * thorns + armor * 4.0, false)
-	hp -= maxf(1.0, amount - armor)
+	hp -= maxf(1.0, amount * (1.0 - _fortify_now()) - armor)
 	hero.hurt()
 	invuln = INVULN
 	trauma = minf(trauma + 0.35, 1.0)
@@ -1317,7 +1349,7 @@ func _update_enemies(dt: float) -> void:
 			best = d2
 			nearest = i
 		var fire := t_fire[ty]
-		if fire > 0.0 and freeze_t <= 0.0:
+		if fire > 0.0 and freeze_t <= 0.0 and e_frozen[i] <= 0.0:
 			var tm := e_timer[i] - dt
 			if tm <= 0.0:
 				if d < t_range[ty]:
@@ -1437,16 +1469,16 @@ func _kill(j: int) -> void:
 	match ty:
 		Data.ELITE:
 			coins = 15
-			_drop_pickup(p, randi() % 4)
+			_drop_pickup(p, _random_pickup())
 		Data.TANK, Data.HELI, Data.JET:
 			coins = 2 + randi() % 3
 		Data.GUNSHIP:
 			coins = 8 + randi() % 5
 			if randf() < 0.3:
-				_drop_pickup(p, randi() % 4)
+				_drop_pickup(p, _random_pickup())
 		Data.SIEGE:
 			coins = 40
-			_drop_pickup(p, randi() % 4)
+			_drop_pickup(p, _random_pickup())
 		_:
 			coins = 1 if randf() < 0.08 * (1.0 + 0.15 * luck) else 0
 	if big:
@@ -1454,7 +1486,7 @@ func _kill(j: int) -> void:
 	for k in coins:
 		_coin(p + Vector2(randf_range(-20.0, 20.0), randf_range(-20.0, 20.0)))
 	if not big and randf() < PICKUP_CHANCE * (1.0 + 0.2 * luck):
-		_drop_pickup(p, randi() % 4)
+		_drop_pickup(p, _random_pickup())
 	sfx.play("big_boom" if big else "boom", randf_range(0.85, 1.15), -2.0 if big else -10.0)
 	_sparks(p, int(fx.tier["sparks"]) * (3 if big else 1))
 	_ring(p, 3.5 if big else 1.8)
@@ -2162,7 +2194,11 @@ func _update_enemy_bullets(dt: float) -> void:
 		var p := b_pos[i] + b_vel[i] * dt
 		var rr := b_rad[i] + PLAYER_RADIUS
 		var hit := p.distance_squared_to(player) < rr * rr
-		if not hit and not halo_pts.is_empty() and synergies.has("bulwark"):
+		if barrier_t > 0.0 and p.distance_squared_to(player) < DOME_RADIUS * DOME_RADIUS:
+			hit = false
+			life = 0.0
+			_sparks(p, 2)
+		elif not hit and not halo_pts.is_empty() and synergies.has("bulwark"):
 			for bp in halo_pts:
 				if p.distance_squared_to(bp) < 900.0:
 					life = 0.0
@@ -2314,6 +2350,7 @@ func _update_actives(dt: float) -> void:
 			hud.flash(Color(0.6, 0.5, 1.0, 0.25))
 			sfx.play("powerup", 0.5, -6.0)
 	slow_t = maxf(slow_t - dt, 0.0)
+	_update_defense(dt)
 	if shield_max > 0 and shield_charges < shield_max:
 		shield_cd -= dt
 		if shield_cd <= 0.0:
@@ -2325,6 +2362,89 @@ func _update_actives(dt: float) -> void:
 		hud.set_dash(true, dash_cd / _dash_time())
 		if autoplay and dash_cd <= 0.0 and hp < max_hp * 0.5:
 			_dash()
+
+
+## Barrier Dome, EMP Burst, Repair Drone and Fortify.
+func _update_defense(dt: float) -> void:
+	still_t = still_t + dt if move_vec.length_squared() < 0.04 else 0.0
+	if barrier_t > 0.0:
+		barrier_t -= dt
+		# The dome shoves infantry out; vehicles are too heavy.
+		for j in e_count:
+			if e_hp[j] <= 0.0 or e_type[j] >= Data.TANK:
+				continue
+			var to := e_pos[j] - player
+			var lim := DOME_RADIUS + t_radius[e_type[j]]
+			if to.length_squared() < lim * lim and to.length_squared() > 0.01:
+				e_pos[j] = player + to.normalized() * lim
+		if barrier_t <= 0.0:
+			hero.set_barrier(false)
+	elif barrier_cd > 0.0:
+		barrier_cd -= dt
+	if emp_lvl > 0:
+		emp_t -= dt
+		if emp_t <= 0.0:
+			emp_t = maxf(4.0, 9.0 - 0.5 * emp_lvl)
+			_emp()
+	if repair_lvl > 0:
+		repair_t -= dt
+		if repair_t <= 0.0:
+			repair_t = 2.0
+			if hp < max_hp:
+				hp = minf(max_hp, hp + max_hp * 0.01 * repair_lvl * (2.0 if hp < max_hp * 0.4 else 1.0))
+				hero.effect("heal_glow", player, 0.35, 16.0, 40.0, Color(0.6, 1.0, 0.7, 0.8), 6)
+				sfx.play("repair")
+	if repair_node != null:
+		var a := -t * 1.3
+		repair_node.position = repair_node.position.lerp(player + Vector2.from_angle(a) * 56.0, minf(1.0, dt * 6.0))
+		repair_node.rotation = a - PI * 0.5
+
+
+func _fortify_now() -> float:
+	return fortify * (2.0 if still_t > 0.4 else 1.0)
+
+
+## Barrier Dome: blocks every hit and enemy bullet for a moment.
+func _raise_barrier() -> void:
+	barrier_t = (2.0 + 0.2 * barrier_lvl) * dur_mult
+	barrier_cd = maxf(12.0, 30.0 - 2.0 * barrier_lvl)
+	invuln = INVULN * 0.5
+	hero.set_barrier(true)
+	_ring(player, 4.0)
+	hud.flash(Color(0.4, 0.8, 1.0, 0.2))
+	sfx.play("barrier")
+
+
+## EMP Burst: wipes the enemy bullets around you and stuns enemies.
+func _emp() -> void:
+	var r := (260.0 + 25.0 * emp_lvl) * area_mult
+	var r2 := r * r
+	for i in b_count:
+		if b_pos[i].distance_squared_to(player) < r2:
+			b_life[i] = 0.0
+	var stun := (0.5 + 0.08 * emp_lvl) * dur_mult
+	for j in e_count:
+		if e_hp[j] > 0.0 and e_type[j] != Data.JET and e_pos[j].distance_squared_to(player) < r2:
+			e_frozen[j] = maxf(e_frozen[j], stun)
+	_ring(player, r / RING_SIZE)
+	for k in 6:
+		var at := player + Vector2.from_angle(TAU * k / 6.0 + randf()) * r * randf_range(0.3, 0.9)
+		hero.effect("spark_electric", at, 0.3, 20.0, 50.0, Color(0.6, 0.9, 1.0), 4)
+	hud.flash(Color(0.5, 0.8, 1.0, 0.15))
+	sfx.play("emp")
+
+
+func _set_repair_drone(on: bool) -> void:
+	if on and repair_node == null:
+		repair_node = Sprite2D.new()
+		repair_node.texture = Art.pick("drone", Art.hero(32))
+		repair_node.scale = Vector2.ONE * 34.0 / repair_node.texture.get_width()
+		repair_node.modulate = Color(0.6, 1.0, 0.7)
+		repair_node.position = player
+		world.add_child(repair_node)
+	elif not on and repair_node != null:
+		repair_node.queue_free()
+		repair_node = null
 
 
 func _shield_time() -> float:
@@ -2721,6 +2841,11 @@ func _recalc() -> void:
 	shield_max = 0 if sh == 0 else 1 + int(sh / 3.0)
 	shield_charges = mini(shield_charges, shield_max)
 	thorns = _lv("thorns")
+	barrier_lvl = _lv("barrier")
+	emp_lvl = _lv("emp")
+	repair_lvl = _lv("repair")
+	fortify = 0.04 * _lv("fortify")
+	_set_repair_drone(repair_lvl > 0)
 	laststand = _lv("laststand")
 	burn_dps = 4.0 * _lv("burn")
 	cryo_lvl = _lv("cryo")
@@ -2904,9 +3029,9 @@ func _show_cards() -> void:
 func _make_offers(n: int, chest: bool, skip: Array) -> Array:
 	var pool := []
 	for id in Data.WEAPON_IDS:
-		_add_candidate(pool, "weapon", id, int(weapons.get(id, 0)), weapons.size(), MAX_SLOTS)
+		_add_candidate(pool, "weapon", id, int(weapons.get(id, 0)), weapons.size() < MAX_SLOTS)
 	for id in Data.POWER_IDS:
-		_add_candidate(pool, "power", id, int(powers.get(id, 0)), powers.size(), POWER_SLOTS)
+		_add_candidate(pool, "power", id, int(powers.get(id, 0)), _power_slot_free(id))
 	pool.shuffle()
 	var out := []
 	var used := {}
@@ -2928,6 +3053,14 @@ func _make_offers(n: int, chest: bool, skip: Array) -> Array:
 			continue
 		used[entry[1]] = true
 		out.append(_offer(entry[0], entry[1], _roll_rarity(chest)))
+	# A defense card every 3rd level and whenever you're hurt, so an all-out
+	# attack build still gets the offer.
+	var has_defense := out.any(func(o: Dictionary) -> bool: return Data.POWER_KIND.get(o["id"], "") == "defense")
+	if not chest and not out.is_empty() and not has_defense and (level % 3 == 0 or hp < max_hp * 0.5):
+		for entry in pool:
+			if entry[0] == "power" and Data.POWER_KIND.get(entry[1], "") == "defense" and not used.has(entry[1]):
+				out[out.size() - 1] = _offer("power", entry[1], _roll_rarity(chest))
+				break
 	out.shuffle()
 	if out.size() < n:
 		out.append({"kind": "heal", "id": "heal", "rarity": 0, "levels": 0, "evolve": false})
@@ -2936,14 +3069,27 @@ func _make_offers(n: int, chest: bool, skip: Array) -> Array:
 	return out
 
 
-func _add_candidate(pool: Array, kind: String, id: String, lvl: int, owned: int, slots: int) -> void:
-	if (lvl == 0 and owned >= slots) or banished.has(id):
+func _add_candidate(pool: Array, kind: String, id: String, lvl: int, slot_free: bool) -> void:
+	if (lvl == 0 and not slot_free) or banished.has(id):
 		return
 	pool.append([kind, id])  # A maxed item stays in the pool as a Limit Break.
 	if lvl >= 1 and lvl < MAX_LEVEL:
 		pool.append([kind, id])  # Owned items come up more often, so builds come together.
 	if lvl >= 3 and lvl < MAX_LEVEL:
 		pool.append([kind, id])
+
+
+## Powers: 4 slots for anything, plus 1 that only takes a defense power.
+func _power_slot_free(id: String) -> bool:
+	if powers.size() >= POWER_SLOTS + DEFENSE_SLOTS:
+		return false
+	if Data.POWER_KIND.get(id, "") == "defense":
+		return true
+	var others := 0
+	for p in powers:
+		if Data.POWER_KIND.get(p, "") != "defense":
+			others += 1
+	return others < POWER_SLOTS
 
 
 func _roll_rarity(chest: bool) -> int:
@@ -2972,7 +3118,7 @@ func _offer_info(o: Dictionary) -> Dictionary:
 	var rarity: int = o["rarity"]
 	var info := {"color": Data.RARITY_COLORS[rarity], "title": "", "tag": "", "desc": "", "icon": null}
 	var id: String = o["id"]
-	info["icon"] = Art.sprite("icons/" + (id if id != "heal" and id != "gold" else ("regen" if id == "heal" else "might")))
+	info["icon"] = Art.sprite("icons/" + String(Data.ICON_ALIAS.get(id, id)))
 	match String(o["kind"]):
 		"weapon", "power":
 			var cur: int = (weapons if o["kind"] == "weapon" else powers).get(id, 0)
@@ -3492,6 +3638,10 @@ func _update_coins(dt: float) -> void:
 		i += 1
 
 
+func _random_pickup() -> int:
+	return _pick(PackedFloat32Array(Data.PICKUP_WEIGHTS))
+
+
 func _drop_pickup(p: Vector2, kind: int) -> void:
 	if pickups.size() >= PICKUP_CAP:
 		return
@@ -3561,6 +3711,12 @@ func _apply_pickup(kind: int) -> void:
 			hp = minf(max_hp, hp + max_hp * 0.3)
 			sfx.play("heal")
 			hero.heal()
+		Data.SHIELD_CELL:
+			# Two hits blocked, with or without Kinetic Shield.
+			bonus_shield = mini(bonus_shield + 2, 4)
+			hero.set_shield(true)
+			hero.shield_hit()
+			sfx.play("shield")
 
 
 # --- Saved progress ---------------------------------------------------------
@@ -3760,11 +3916,32 @@ func _run_smoke() -> void:
 	print("SMOKE: everything-at-once kills=%d logic_worst=%.1f" % [kills, logic_worst])
 	if not _check(synergies.size() == Data.SYNERGIES.size(), "every synergy unlocks"):
 		return
-	# Second run: a heavy legal build (4 weapons, 4 powers) maxed and evolved,
-	# near the boss.
+	# Defense: the dome blocks a hit, Fortify cuts damage, the EMP wipes bullets.
+	_start(true)
+	god = false
+	_grant({"barrier": 8, "emp": 8, "repair": 8, "fortify": 8})
+	_recalc()
+	invuln = 0.0
+	var hp_before := hp
+	_hurt(50.0)
+	if not _check(hp == hp_before and barrier_t > 0.0, "Barrier Dome blocks a hit"):
+		return
+	barrier_t = 0.0
+	barrier_cd = 99.0
+	invuln = 0.0
+	_hurt(50.0)
+	if not _check(hp_before - hp < 50.0 * 0.75 and hp < hp_before, "Fortify cuts damage"):
+		return
+	_ebullet(player + Vector2(100.0, 0.0), Vector2.ZERO, 5.0, 5.0)
+	_emp()
+	if not _check(b_life[b_count - 1] <= 0.0, "EMP wipes enemy bullets"):
+		return
+	print("SMOKE: defense ok")
+	# Second run: a heavy legal build (4 weapons, 4 powers plus the defense
+	# slot) maxed and evolved, near the boss.
 	_start(true)
 	weapons = {}  # Drop the starting rifle so the slots hold exactly this build.
-	_grant({"flame": 8, "drones": 8, "mines": 8, "grenade": 8, "titan": 8, "magnet": 8, "stomp": 8, "luck": 8})
+	_grant({"flame": 8, "drones": 8, "mines": 8, "grenade": 8, "titan": 8, "magnet": 8, "stomp": 8, "luck": 8, "fortify": 8})
 	for id in ["flame", "drones", "mines", "grenade"]:
 		evolved[id] = true
 	_recalc()

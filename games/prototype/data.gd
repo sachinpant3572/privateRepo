@@ -25,6 +25,7 @@ const POWER_IDS := [
 	"overclock", "titan", "magnet", "adrenaline", "explosive", "crit",
 	"might", "area", "duration", "multishot", "velocity", "pierce", "ricochet", "knockback",
 	"regen", "lifesteal", "dodge", "shield", "thorns", "revival", "laststand",
+	"barrier", "emp", "repair", "fortify",
 	"burn", "cryo", "shock", "toxin",
 	"dash", "stomp", "bullettime",
 	"luck", "growth", "greed", "curse",
@@ -64,6 +65,10 @@ const NAMES := {
 	"thorns": "Reactive Plating",
 	"revival": "Second Wind",
 	"laststand": "Last Stand",
+	"barrier": "Barrier Dome",
+	"emp": "EMP Burst",
+	"repair": "Repair Drone",
+	"fortify": "Fortify",
 	"burn": "Incendiary Rounds",
 	"cryo": "Cryo Rounds",
 	"shock": "Shock Rounds",
@@ -111,6 +116,10 @@ const DESCS := {
 	"thorns": "Getting hit blasts nearby enemies with your armor. Bigger blast each level.",
 	"revival": "One free revive. A second one at level 5.",
 	"laststand": "Below 35% HP: +10% damage and +6% fire rate per level.",
+	"barrier": "When you're hit, a dome blocks all damage and enemy bullets for 2 s (+0.2 s per level). Recharges in 30 s (-2 s per level).",
+	"emp": "Every 9 s (-0.5 s per level), an EMP wipes enemy bullets near you and stuns enemies for a moment. Wider and longer each level.",
+	"repair": "A drone repairs 1% of your max HP every 2 s per level; twice as much below 40% HP.",
+	"fortify": "Take 4% less damage per level, 8% while standing still.",
 	"burn": "Hits set enemies on fire. Stronger burn each level.",
 	"cryo": "Hits chill enemies, slowing them. At level 5 a chilled enemy can freeze solid.",
 	"shock": "Hits can arc lightning to 2 nearby enemies. More chance and damage each level.",
@@ -138,7 +147,7 @@ const POWER_KIND := {
 	"multishot": "attack", "velocity": "attack", "pierce": "attack", "ricochet": "attack", "knockback": "attack",
 	"lifesteal": "attack",
 	"titan": "defense", "regen": "defense", "dodge": "defense", "shield": "defense", "thorns": "defense",
-	"revival": "defense",
+	"revival": "defense", "barrier": "defense", "emp": "defense", "repair": "defense", "fortify": "defense",
 	"magnet": "utility", "adrenaline": "utility", "duration": "utility", "luck": "utility", "growth": "utility",
 	"greed": "utility",
 	"dash": "active", "stomp": "active", "bullettime": "active", "laststand": "active", "curse": "active",
@@ -187,8 +196,8 @@ const EVOLUTIONS := {
 }
 
 # Gear the hero wears during a run: it grows with the build (see hero.gd).
-const HELMET_POWERS := ["titan", "shield", "dodge", "regen", "thorns", "revival"]
-const SHOULDER_POWERS := ["titan", "thorns", "might", "laststand"]
+const HELMET_POWERS := ["titan", "shield", "dodge", "regen", "thorns", "revival", "barrier", "emp", "repair"]
+const SHOULDER_POWERS := ["titan", "thorns", "might", "laststand", "fortify"]
 const HELMET_TIERS := [3, 8, 14]  # Total levels of HELMET_POWERS for tiers 1, 2, 3.
 const SHOULDER_TIERS := [1, 5, 10]
 # Back item: the build family with the most levels wins.
@@ -227,8 +236,11 @@ const RARITY_LEVELS := [1, 1, 2, 3]
 const RARE_BONUS := 0.04  # Rare cards also give +4% damage to everything.
 
 # Screen-clear pickups.
-enum { NUKE, FREEZE, VACUUM, MEDKIT }
-const PICKUP_LABELS := ["NUKE!", "FREEZE!", "VACUUM!", "MEDKIT"]
+enum { NUKE, FREEZE, VACUUM, MEDKIT, SHIELD_CELL }
+const PICKUP_LABELS := ["NUKE!", "FREEZE!", "VACUUM!", "MEDKIT", "SHIELD CELL"]
+const PICKUP_WEIGHTS := [1.0, 1.0, 1.0, 1.4, 1.4]  # Defensive pickups come up more.
+# Items without their own card icon borrow one.
+const ICON_ALIAS := {"barrier": "shield", "emp": "shock", "repair": "regen", "fortify": "titan", "heal": "regen", "gold": "might"}
 
 # Kill-combo milestones: count, banner, gold reward.
 const COMBO_MILESTONES := [

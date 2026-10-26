@@ -30,18 +30,31 @@ start with it), Scatter Cannon, Rail Lance, Rocket Swarm, Grenade Rain, Razor
 Halo, Combat Drones, Tesla Coil, Flame Burst, Mine Layer, Sentry Turret,
 Airstrike Beacon. The pairings are in `data.gd` (`EVOLUTIONS`).
 
-**Powers (32, up to 4 at once):**
+**Powers (36): 4 slots, plus a 5th slot that only takes a defense power:**
 - **Attack:** Overclock, Explosive Rounds, Critical Targeting, Firepower,
   Blast Radius, Multishot, Velocity Rounds, Armor Piercer, Ricochet Matrix,
   Concussive Rounds, Vampiric Rounds.
 - **Defense:** Titan Skin, Nanite Regeneration, Evasion Matrix, Kinetic
-  Shield, Reactive Plating, Second Wind (revives).
+  Shield, Reactive Plating, Second Wind (revives), and four that work on
+  their own, with no button:
+  - **Barrier Dome:** when you're hit, a dome blocks all damage and enemy
+    bullets for 2 s or more and shoves infantry out. Recharges in 30 s or
+    less.
+  - **EMP Burst:** every few seconds, wipes the enemy bullets around you and
+    stuns the enemies there (stunned enemies don't shoot).
+  - **Repair Drone:** a drone that repairs HP, twice as fast below 40%.
+  - **Fortify:** up to 32% less damage taken, 64% while standing still.
 - **Elements:** Incendiary (burn), Cryo (slow, freeze), Shock (arcs), Toxin
   (clouds).
 - **Actives:** Phase Dash (DASH button), Shockwave Stomp, Bullet Time, Last
   Stand, Blood Oath (harder enemies, more XP and gold).
 - **Utility:** Magnet Field, Adrenaline, Long Fuse, Lucky Charm, Battle
   Instinct (XP), Scavenger (gold).
+
+**The hero (`hero.gd`):** the forearms and fists are cut out of the costume
+at load time and hold the weapon, so the hands aim, swing and recoil with
+it. The hero turns to face its target, and the torso and helmet twist toward
+the aim.
 
 **Gear that grows with the build (`hero.gd`):**
 - **Helmet** (3 tiers) from survival powers, **pauldrons** (3 tiers) from
@@ -58,6 +71,8 @@ of any costume.
 
 **Level-up cards**
 - Pick 1 of 2.
+- Every 3rd level, and whenever you're below half HP, one card is a defense
+  power.
 - **Show 3rd card (ad):** free in this build, 3 per run. Real ads come later.
 - **Reroll:** 1 per run.
 - **Banish:** 3 per run; the item never comes back that run.
@@ -110,6 +125,7 @@ playing.
 | Freeze | Stops all enemies for 5 s |
 | Vacuum | Pulls in every gem and coin |
 | Medkit | +30% HP |
+| Shield Cell | Blocks the next 2 hits (up to 4 stored) |
 
 - **Explosions:** layered. A white flash, rolling fireballs, rising smoke,
   sparks, a shockwave ring, and scorch marks that stay on the ground. They

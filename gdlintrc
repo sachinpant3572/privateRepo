@@ -6,6 +6,8 @@
 #   better on one line. Keep new lines under about 120 characters.
 # - game.gd is a single large script for now (one file keeps the hot loops
 #   together); splitting it into modules is on the TODO list.
+# - hero.gd's animation hooks (one per pose) are its API, so it may have a
+#   few more than 20 public methods.
 disable:
 - class-definitions-order
 - max-line-length
@@ -13,5 +15,5 @@ excluded_directories: !!set
   .git: null
   .godot: null
 max-file-lines: 4500
-max-public-methods: 20
+max-public-methods: 24
 max-returns: 12
