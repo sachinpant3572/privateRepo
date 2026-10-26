@@ -211,8 +211,9 @@ func show_death(can_revive: bool) -> void:
 	_fade_in(death)
 
 
-func show_results(victory: bool, text: String, gold: int) -> void:
-	results = text
+func show_results(victory: bool, text: String, gold: int, full_report: String = "") -> void:
+	# Gameplay hook: COPY RESULTS copies the full run report (game.gd _report_text).
+	results = full_report if full_report != "" else text
 	over_tag.text = "//  MISSION REPORT"
 	over_title.text = "SECTOR CLEARED" if victory else "MISSION FAILED"
 	over_title.add_theme_color_override("font_color", UI.AMBER if victory else UI.RED)

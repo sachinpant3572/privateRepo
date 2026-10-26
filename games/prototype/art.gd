@@ -67,6 +67,11 @@ static func cell_textures() -> Array:
 	return out
 
 
+## Sprite names of every unit cell, in cell order (tier skins add _t2, _t3).
+static func cell_names() -> Array:
+	return CELL_NAMES + EXTRA_NAMES
+
+
 static func atlas_image() -> Image:
 	var img := Image.create_empty(CELL * COLS, CELL * ROWS, false, Image.FORMAT_RGBA8)
 	for cell in COLS * ROWS:

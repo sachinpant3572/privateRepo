@@ -20,7 +20,7 @@ func _draw() -> void:
 			draw_polyline(bolt[0], Color(1, 1, 1, a), 2.0)
 		return
 	# Telegraph entries: [kind, start, end (or radius in x), time left, total time,
-	# damage, and for grenades the thrower's position].
+	# damage, attacker name, and for grenades the thrower's position].
 	for tg in game.telegraphs:
 		var k: float = 1.0 - float(tg[3]) / float(tg[4])
 		var start: Vector2 = tg[1]
@@ -30,9 +30,9 @@ func _draw() -> void:
 				draw_circle(start, end.x, Color(1.0, 0.15, 0.1, 0.1 + 0.15 * k))
 				draw_circle(start, end.x * k, Color(1.0, 0.25, 0.15, 0.25))
 				draw_arc(start, end.x, 0.0, TAU, 40, Color(1.0, 0.35, 0.25, 0.8), 2.0)
-				if tg.size() > 6:
+				if tg.size() > 7:
 					# A thrown grenade arcing from the grenadier to the circle.
-					var from: Vector2 = tg[6]
+					var from: Vector2 = tg[7]
 					var g := from.lerp(start, k) + Vector2(0.0, -sin(k * PI) * 90.0)
 					draw_circle(g + Vector2(3, 3), 7.0, Color(0, 0, 0, 0.4))
 					draw_circle(g, 7.0, Color(0.2, 0.22, 0.18))

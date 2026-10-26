@@ -14,6 +14,28 @@ The Iron Dominion, then a boss.
   three turrets and three attacks: a shell sweep, a minefield, and a charge.
   It attacks faster below 50% HP.
 
+**Waves:** the 5:00 comes in five 1-minute waves. From the second wave, each
+opens with a 14 s **breather**: weak Conscripts (30% HP, slow to shoot, 60%
+XP) pour in to be mowed down. Then the wave ramps hard to the next level of
+difficulty (the difficulty clock holds during the breather and catches up in
+the ramp, so 5:00 is as hard as before).
+
+**Enemy tiers:** enemies look tougher as the stage goes on, and pay more.
+
+| Tier | When | Look | XP |
+|---|---|---|---|
+| Conscripts | Breathers | Faded | 60% |
+| Regulars | Waves 1–2 | Standard | 100% |
+| Veterans | Waves 3–4 | Gold trim, amber glow | 125% |
+| Elite Guard | Wave 5, boss, final push | Bigger, crimson glow | 150% |
+
+Upgraded skins load from `sprites/<unit>_t2.png` (Veterans) and `_t3.png`
+(Elite Guard) when they exist; until then the tint and glow mark the tier.
+
+**Enemy animation (code):** infantry sway and waddle as they walk, everything
+kicks back when it fires, pops when hit and drops in when it spawns; tanks
+rumble and recoil their turrets, helicopters hover, drift and bank.
+
 **Enemies**
 
 | Enemy | Behavior |
@@ -98,6 +120,13 @@ of any costume.
 | Airstrike Beacon + Explosive Rounds | Carpet Bomber |
 
 **Revive:** once per run, free.
+
+**Run report:** the results screen shows the summary; COPY RESULTS copies the
+full report: damage dealt by each weapon and power (and to the boss), damage
+taken by enemy type, hits blocked, bullets destroyed, healing by source, when
+and by what you went down, kills by enemy, pickups, card use, a
+minute-by-minute timeline (level, kills, enemies, lowest HP, damage taken,
+FPS, logic time) and every pick.
 
 **Watch auto-play:** a bot plays the stage, so you can see everything without
 playing.

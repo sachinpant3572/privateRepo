@@ -19,6 +19,15 @@ const CELL := 64.0
 const GRID_PAD := 200.0
 const WORLD_BOUNDS := 1.0e7  # Culling bounds for the MultiMesh layers; the world itself is endless.
 const STAGE_TIME := 300.0
+# The stage comes in waves: each one opens with a calm (weak Conscripts pour
+# in to be mowed down), then ramps hard to the next wave's difficulty.
+const WAVE_TIME := 60.0
+const CALM_TIME := 14.0
+const CALM_HP := 0.3  # Conscript HP, of a normal enemy's.
+const TIER_NAMES := ["Conscripts", "Regulars", "Veterans", "Elite Guard"]
+const TIER_XP := [0.6, 1.0, 1.25, 1.5]  # Tougher-looking enemies pay more.
+const TIER_TINT := [Color(0.8, 0.8, 0.76), Color.WHITE, Color(1.12, 1.04, 0.9), Color(1.2, 0.92, 0.9)]
+const TIER_AURA := [Color(0, 0, 0, 0), Color(0, 0, 0, 0), Color(1.0, 0.65, 0.15, 0.5), Color(1.0, 0.12, 0.08, 0.65)]
 const BOSS_HP := 9000.0
 const BOSS_CAP := 0.02  # Share of the boss's HP per second above which damage tapers off.
 const BOSS_RADIUS := 62.0
@@ -240,6 +249,17 @@ var e_halo := PackedFloat32Array()
 var e_burn := PackedFloat32Array()  # Burn time left.
 var e_chill := PackedFloat32Array()  # Slow time left.
 var e_frozen := PackedFloat32Array()  # Frozen solid time left.
+var e_tier := PackedByteArray()  # 0 Conscript .. 3 Elite Guard (looks and rewards).
+var e_kick := PackedFloat32Array()  # Firing recoil, 1 .. 0 (animation).
+var e_born := PackedFloat32Array()  # Spawn time (drop-in animation).
+var wave_n := 0  # Current wave (WAVE_TIME each).
+var calm := false
+var max_tier := 1
+var tier_cells := {}  # Unit cell -> [cell, cell, tier-2 cell, tier-3 cell] when tier sprites exist.
+var tier_base := PackedInt32Array()  # Base cell of each tier sprite layer.
+var aura_mm: MultiMesh
+var aura_buf := PackedFloat32Array()
+var aura_n := 0
 var e_next := PackedInt32Array()
 var e_count := 0
 var e_cap := 0
@@ -267,6 +287,7 @@ var s_last := PackedInt32Array()
 var s_col := PackedColorArray()
 var s_bounce := PackedInt32Array()
 var s_flag := PackedInt32Array()  # SHOT_FREEZE, SHOT_LEECH.
+var s_src := PackedStringArray()  # Which weapon fired each shot (run report).
 var s_count := 0
 
 # Rockets.
@@ -286,6 +307,7 @@ var b_vel := PackedVector2Array()
 var b_life := PackedFloat32Array()
 var b_dmg := PackedFloat32Array()
 var b_rad := PackedFloat32Array()
+var b_src := PackedStringArray()  # Which enemy fired each bullet (run report).
 var b_count := 0
 
 # Pickups.
@@ -331,7 +353,7 @@ var d_life := PackedFloat32Array()
 var d_size := PackedFloat32Array()
 var d_count := 0
 var bl_count := 0
-var telegraphs: Array = []  # [kind, start, end or radius, time left, total, damage]
+var telegraphs: Array = []  # [kind, start, end or radius, time left, total, damage, attacker]
 var bolts: Array = []  # [points, time left]
 var bombs: Array = []  # [position, delay, radius, damage]
 var blasts: Array = []  # Queued Explosive Rounds blasts: [position, radius, damage]
@@ -407,6 +429,28 @@ var logic_worst := 0.0
 var peak_enemies := 0
 var hud_timer := 0.0
 var last_results := ""
+# Run report (COPY RESULTS): what dealt and took the damage, healing, a
+# minute-by-minute timeline and the picks, so balance problems show up.
+var cur_src := "other"  # What is dealing damage right now (weapon or power id).
+var cur_shooter := "?"  # Which enemy is attacking right now.
+var dmg_by := {}  # Source -> damage dealt (overkill not counted).
+var boss_dmg_by := {}
+var taken_by := {}  # Enemy -> [hits, damage taken].
+var healed_by := {}
+var blocks := {}  # "dodge", "shield", "barrier" -> hits; "armor", "fortify" -> damage.
+var wiped := {}  # Enemy bullets destroyed: "emp", "dome", "bulwark".
+var kills_by := PackedInt32Array()
+var pickups_got := PackedInt32Array()
+var picks: Array = []
+var timeline: Array = []  # One row per minute (see _track_minute).
+var tl_row := {}
+var hp_low := 1.0
+var low_hp_time := 0.0
+var deaths: Array = []  # "m:ss by <enemy>"
+var last_hit := ""
+var boss_spawn_t := -1.0
+var chests_opened := 0
+var skips := 0
 
 
 func _ready() -> void:
@@ -460,8 +504,25 @@ func _build_scene() -> void:
 	chest_mm = _layer(Art.chest(48), 22.0, false, Color(0.6, 0.6, 0.6))
 	for kind in Data.PICKUP_LABELS.size():
 		pickup_textures.append(Art.pickup_icon(kind, 64))
-	for tex in Art.cell_textures():
+	# Veteran and Elite Guard glow under the unit sprites.
+	aura_mm = _layer(Art.soft_disc(64, 0.25), 0.5, true, Color(0, 0, 0, 0))
+	var cell_tex := Art.cell_textures()
+	for tex in cell_tex:
 		unit_mms.append(_layer(tex, 0.5, false, Color(0.25, 0.25, 0.25)))
+	# Upgraded skins (sprites/<unit>_t2.png, _t3.png) get their own layers.
+	var names := Art.cell_names()
+	for c in cell_tex.size():
+		for tier in [2, 3]:
+			var tex := Art.sprite("%s_t%d" % [names[c], tier])
+			if tex == null:
+				continue
+			if not tier_cells.has(c):
+				tier_cells[c] = [c, c, c, c]
+			tier_cells[c][tier] = unit_mms.size()
+			if tier == 2:
+				tier_cells[c][3] = unit_mms.size()  # Elite Guard falls back to the Veteran skin.
+			tier_base.append(c)
+			unit_mms.append(_layer(tex, 0.5, false, Color(0.25, 0.25, 0.25)))
 	shot_mm = _layer(Art.bolt(64), 8.0, true, Color(0.6, 0.6, 0.6))
 	rocket_mm = _layer(Art.soft_disc(32, 0.3), 7.0, true, Color.WHITE)
 	blade_mm = _layer(Art.blade(64), 16.0, true, Color(0.8, 0.8, 0.8))
@@ -696,6 +757,7 @@ func _start(auto: bool) -> void:
 	steal_pool = 0.0
 	shield_charges = 0
 	shield_cd = 0.0
+	_reset_report()
 	barrier_t = 0.0
 	barrier_cd = 0.0
 	emp_t = 4.0
@@ -725,6 +787,9 @@ func _start(auto: bool) -> void:
 	final_clear_t = -1.0
 	final_jet_t = 0.0
 	flyby_t = 0.0
+	wave_n = 0
+	calm = false
+	max_tier = 1
 	boss_node.visible = false
 	elites_spawned = 0
 	spawn_acc = 0.0
@@ -763,9 +828,16 @@ func _alloc() -> void:
 	e_burn.resize(e_cap)
 	e_chill.resize(e_cap)
 	e_frozen.resize(e_cap)
+	e_tier.resize(e_cap)
+	e_kick.resize(e_cap)
+	e_born.resize(e_cap)
+	aura_mm.instance_count = e_cap
+	aura_buf = _buffer(e_cap, Color(0, 0, 0, 0))
 	e_next.resize(e_cap)
 	# Every unit sprite gets a slice of one shared buffer.
 	unit_cap = PackedInt32Array([e_cap, e_cap, e_cap, 8, 12, 12, 12, 12, 10, 4, 3])
+	for base in tier_base:
+		unit_cap.append(unit_cap[base])
 	unit_off.resize(unit_cap.size())
 	unit_n.resize(unit_cap.size())
 	var total := 0
@@ -784,6 +856,7 @@ func _alloc() -> void:
 	s_col.resize(SHOT_CAP)
 	s_bounce.resize(SHOT_CAP)
 	s_flag.resize(SHOT_CAP)
+	s_src.resize(SHOT_CAP)
 	shot_mm.instance_count = SHOT_CAP
 	s_buf = _buffer(SHOT_CAP, SHOT_COLOR)
 	k_pos.resize(ROCKET_CAP)
@@ -801,6 +874,7 @@ func _alloc() -> void:
 	b_life.resize(EB_CAP)
 	b_dmg.resize(EB_CAP)
 	b_rad.resize(EB_CAP)
+	b_src.resize(EB_CAP)
 	eb_mm.instance_count = EB_CAP
 	b_buf = _buffer(EB_CAP, Color.WHITE)
 	g_pos.resize(GEM_CAP)
@@ -896,8 +970,8 @@ func _game_over(victory: bool) -> void:
 	if victory:
 		gold += 100
 	_record_run(victory)
-	last_results = _results_text(victory)
-	hud.show_results(victory, last_results, gold)
+	last_results = _report_text(victory)
+	hud.show_results(victory, _results_text(victory), gold, last_results)
 	if victory:
 		hero.victory()
 	sfx.play("fanfare" if victory else "hurt")
@@ -913,12 +987,15 @@ func _on_death() -> void:
 		invuln = 2.0
 		b_count = 0
 		telegraphs.clear()
+		deaths.append("%s by %s (Second Wind)" % [_clock(t), last_hit])
+		cur_src = "revive"
 		_damage_around(player, 300.0, 300.0)
 		_power_moment(1.6, Color(0.6, 1.0, 0.8))
 		hud.show_banner("SECOND WIND!", Color(0.6, 1.0, 0.8))
 		hero.revive()
 		return
 	state = State.DEAD
+	deaths.append("%s by %s" % [_clock(t), last_hit])
 	hero.die()
 	joy_on = false
 	hud.set_joystick(false, Vector2.ZERO, Vector2.ZERO)
@@ -939,6 +1016,7 @@ func _on_revive() -> void:
 	invuln = 2.0
 	b_count = 0
 	telegraphs.clear()
+	cur_src = "revive"
 	_damage_around(player, 260.0, 200.0)
 	hero.revive()
 	_power_moment(1.5, Color(0.5, 0.9, 1.0))
@@ -998,6 +1076,7 @@ func _process(delta: float) -> void:
 	sim_ms = (Time.get_ticks_usec() - t0) / 1000.0
 	logic_sum += sim_ms
 	logic_worst = maxf(logic_worst, sim_ms)
+	_track_minute(dt, delta)
 	frame_ms.append((dt if smoke else delta) * 1000.0)
 	hud.set_bars(hp / max_hp, xp / xp_need)
 	hud_timer -= dt
@@ -1028,6 +1107,7 @@ func _update_player(dt: float) -> void:
 		dash_t -= dt
 		player += dash_dir * 1100.0 * dt
 		if dash_lvl >= 5:
+			cur_src = "dash"
 			_damage_around(player, 50.0, 6.0 * dash_lvl)
 		if int(t * 60.0) % 2 == 0:
 			_vfx(player, Vector2.ZERO, 0.25, 14.0, 4.0, Color(0.5, 0.95, 1.0, 0.6), Color(0.3, 0.6, 1.0, 0.0), true)
@@ -1039,9 +1119,10 @@ func _update_player(dt: float) -> void:
 		facing = mv.normalized()
 	invuln = maxf(invuln - dt, 0.0)
 	if regen > 0.0 or steal_pool > 0.0:
-		var heal := regen * dt + minf(steal_pool, 6.0 * dt)
+		var steal := minf(steal_pool, 6.0 * dt)
 		steal_pool = maxf(0.0, steal_pool - 6.0 * dt)
-		hp = minf(max_hp, hp + heal)
+		_heal(regen * dt, "regen")
+		_heal(steal, "lifesteal")
 	ls_on = laststand > 0 and hp < max_hp * 0.35
 	hero.position = player
 	# The hero turns to face its target, like a twin-stick shooter, so the head
@@ -1063,10 +1144,13 @@ func _update_camera(dt: float) -> void:
 	fx.update(world.position, player, hero.visible, trauma)
 
 
-func _hurt(amount: float) -> void:
+func _hurt(amount: float, src: String = "") -> void:
 	if invuln > 0.0 or god or state != State.PLAYING or dash_t > 0.0:
 		return
+	if src == "":
+		src = cur_shooter
 	if dodge > 0.0 and randf() < dodge:
+		_count(blocks, "dodge", 1.0)
 		invuln = INVULN * 0.5
 		_vfx(player, Vector2(randf_range(-60.0, 60.0), -40.0), 0.3, 22.0, 6.0, Color(0.6, 0.95, 1.0, 0.7), Color(0.3, 0.6, 1.0, 0.0), true)
 		_ring(player, 1.5)
@@ -1075,8 +1159,10 @@ func _hurt(amount: float) -> void:
 	if barrier_t > 0.0:
 		invuln = INVULN * 0.5
 		hero.shield_hit()
+		_count(blocks, "barrier", 1.0)
 		return
 	if shield_charges > 0 or bonus_shield > 0:
+		_count(blocks, "shield", 1.0)
 		if bonus_shield > 0:
 			bonus_shield -= 1
 		else:
@@ -1090,10 +1176,22 @@ func _hurt(amount: float) -> void:
 		return
 	if barrier_lvl > 0 and barrier_cd <= 0.0:
 		_raise_barrier()
+		_count(blocks, "barrier", 1.0)
 		return
 	if thorns > 0:
+		var saved := cur_src
+		cur_src = "thorns"
 		_blast(player, 90.0 + 10.0 * thorns, 15.0 * thorns + armor * 4.0, false)
-	hp -= maxf(1.0, amount * (1.0 - _fortify_now()) - armor)
+		cur_src = saved
+	var cut := amount * _fortify_now()
+	var taken := maxf(1.0, amount - cut - armor)
+	_count(blocks, "fortify", cut)
+	_count(blocks, "armor", amount - cut - taken)
+	hp -= taken
+	last_hit = src
+	var row: Array = taken_by.get(src, [0, 0.0])
+	taken_by[src] = [int(row[0]) + 1, float(row[1]) + taken]
+	tl_row["taken"] = float(tl_row.get("taken", 0.0)) + taken
 	hero.hurt()
 	invuln = INVULN
 	trauma = minf(trauma + 0.35, 1.0)
@@ -1121,8 +1219,14 @@ func _spawn_enemy(ty: int) -> void:
 	e_type[i] = ty
 	e_pos[i] = _spawn_point()
 	e_ang[i] = 0.0
-	e_hp[i] = t_hp[ty] * (1.0 + 0.2 * t / 60.0) * hp_mult
+	var tier := _tier_now()
+	e_hp[i] = t_hp[ty] * (1.0 + 0.2 * _diff_t() / 60.0) * hp_mult
 	e_hp[i] *= big_mult if ty >= Data.ELITE else horde_mult
+	if tier == 0:
+		e_hp[i] *= CALM_HP
+	e_tier[i] = tier
+	e_kick[i] = 0.0
+	e_born[i] = t
 	e_flash[i] = 0.0
 	e_timer[i] = t_fire[ty] * randf()
 	e_halo[i] = 0.0
@@ -1139,19 +1243,21 @@ func _spawn_director(dt: float) -> void:
 		return
 	_update_final(dt)
 	# From 3:20 to the boss, a bomber squadron every 16 seconds.
-	if t >= 200.0 and not boss_on and boss_dead_t < 0.0:
+	_update_wave()
+	if t >= 200.0 and not boss_on and boss_dead_t < 0.0 and not calm:
 		flyby_t -= dt
 		if flyby_t <= 0.0:
 			flyby_t = 16.0
 			_flyby(2 + int(t >= 260.0))
 	if not boss_spawned and t >= STAGE_TIME:
 		_spawn_boss()
-	if (elites_spawned == 0 and t >= 120.0) or (elites_spawned == 1 and t >= 240.0):
+	if (elites_spawned == 0 and t >= 120.0 + CALM_TIME) or (elites_spawned == 1 and t >= 240.0 + CALM_TIME):
 		elites_spawned += 1
 		_spawn_enemy(Data.ELITE)
 		hud.show_banner("JUGGERNAUT INCOMING")
 		sfx.play("alarm")
-	var target := int(lerpf(18.0, GAME_PEAK, clampf(t / 240.0, 0.0, 1.0)) * (1.0 + 0.1 * curse))
+	var d := _diff_t()
+	var target := int(lerpf(18.0, GAME_PEAK, clampf(d / 240.0, 0.0, 1.0)) * (1.0 + 0.1 * curse) * (1.1 if calm else 1.0))
 	if boss_on:
 		target = int(target * 0.35)
 	# The same fight on every tier: if this tier draws fewer enemies, each one
@@ -1159,15 +1265,59 @@ func _spawn_director(dt: float) -> void:
 	var cap := mini(target, int(int(fx.tier["enemies"]) * 0.9))
 	hp_mult = maxf(1.0, float(target) / maxf(cap, 1.0))
 	target = cap
-	spawn_acc = minf(spawn_acc + dt * (12.0 + t * 0.25) * (1.0 + 0.1 * curse), 30.0)
-	shot_budget = minf(shot_budget + dt * (1.5 + t / 60.0), 5.0)
-	var weights := Data.spawn_weights(t)
+	spawn_acc = minf(spawn_acc + dt * (12.0 + d * 0.25) * (1.0 + 0.1 * curse) * (1.8 if calm else 1.0), 30.0)
+	shot_budget = minf(shot_budget + dt * (1.5 + d / 60.0) * (0.35 if calm else 1.0), 5.0)
+	var weights := Data.spawn_weights(d)
 	while spawn_acc >= 1.0 and e_count < target and e_count < e_cap:
 		spawn_acc -= 1.0
 		var ty := _pick(weights)
 		if t_capn[ty] > 0 and type_alive[ty] >= t_capn[ty]:
 			ty = Data.TROOPER
 		_spawn_enemy(ty)
+
+
+## Difficulty clock: it holds during each calm, then runs faster through the
+## ramp, so it still reaches STAGE_TIME when the boss arrives.
+func _diff_t() -> float:
+	var w := floorf(t / WAVE_TIME)
+	if w < 1.0 or boss_spawned or t >= STAGE_TIME:
+		return t
+	var into := t - w * WAVE_TIME
+	if into < CALM_TIME:
+		return w * WAVE_TIME
+	return w * WAVE_TIME + (into - CALM_TIME) / (WAVE_TIME - CALM_TIME) * WAVE_TIME
+
+
+func _is_calm() -> bool:
+	return t >= WAVE_TIME and not boss_spawned and t < STAGE_TIME and t - floorf(t / WAVE_TIME) * WAVE_TIME < CALM_TIME
+
+
+## Tier of newly spawned enemies: Conscripts in a calm, then Regulars,
+## Veterans from wave 3 and the Elite Guard from wave 5 and the boss on.
+func _tier_now() -> int:
+	if calm:
+		return 0
+	if boss_spawned or t >= STAGE_TIME:
+		return 3
+	return [1, 1, 2, 2, 3][clampi(int(t / WAVE_TIME), 0, 4)]
+
+
+func _update_wave() -> void:
+	var now := _is_calm()
+	wave_n = int(t / WAVE_TIME)
+	if now == calm:
+		return
+	calm = now
+	if calm:
+		hud.show_banner("BREATHER! MOW THEM DOWN!", Color(0.5, 1.0, 0.6))
+		return
+	var tier := _tier_now()
+	if tier > max_tier:
+		max_tier = tier
+		hud.show_banner("%s DEPLOYED!" % String(TIER_NAMES[tier]).to_upper(), TIER_AURA[tier].lightened(0.3))
+	else:
+		hud.show_banner("WAVE %d: THEY'RE BACK!" % (wave_n + 1), Color(1.0, 0.6, 0.4))
+	sfx.play("alarm")
 
 
 func _run_events() -> void:
@@ -1343,8 +1493,10 @@ func _update_enemies(dt: float) -> void:
 			e_flash[i] -= dt
 		if e_halo[i] > 0.0:
 			e_halo[i] -= dt
+		if e_kick[i] > 0.0:
+			e_kick[i] = maxf(0.0, e_kick[i] - dt * 5.0)
 		if d < rad + PLAYER_RADIUS and freeze_t <= 0.0 and t_touch[ty] > 0.0:
-			_hurt(t_touch[ty])
+			_hurt(t_touch[ty], String(Data.ENEMY_NAMES[ty]) + " (contact)")
 		if d2 < best:
 			best = d2
 			nearest = i
@@ -1354,13 +1506,15 @@ func _update_enemies(dt: float) -> void:
 			if tm <= 0.0:
 				if d < t_range[ty]:
 					_enemy_attack(ty, p, dir)
-					tm = fire * randf_range(0.85, 1.15)
+					e_kick[i] = 1.0
+					tm = fire * randf_range(0.85, 1.15) * (2.0 if e_tier[i] == 0 else 1.0) * (1.5 if calm else 1.0)
 				else:
 					tm = 0.5
 			e_timer[i] = tm
 
 
 func _enemy_attack(ty: int, p: Vector2, dir: Vector2) -> void:
+	cur_shooter = Data.ENEMY_NAMES[ty]
 	match ty:
 		Data.TROOPER:
 			if shot_budget >= 1.0:
@@ -1413,11 +1567,12 @@ func _ebullet(p: Vector2, vel: Vector2, dmg: float, rad: float) -> void:
 	b_life[b_count] = 3.0
 	b_dmg[b_count] = dmg
 	b_rad[b_count] = rad
+	b_src[b_count] = cur_shooter
 	b_count += 1
 
 
 func _telegraph(kind: int, start: Vector2, end: Vector2, time: float, dmg: float) -> void:
-	telegraphs.append([kind, start, end, time, time, dmg])
+	telegraphs.append([kind, start, end, time, time, dmg, cur_shooter])
 
 
 func _damage(j: int, amount: float, from: Vector2, force_crit: bool, procs: bool = true) -> void:
@@ -1433,6 +1588,7 @@ func _damage(j: int, amount: float, from: Vector2, force_crit: bool, procs: bool
 		a *= 0.25  # The shield blocks most damage from the front.
 		if randf() < 0.3:
 			_vfx(e_pos[j] + Vector2.from_angle(e_ang[j]) * 16.0, Vector2.ZERO, 0.1, 4.0, 14.0, Color(0.9, 0.95, 1.0, 0.9), Color(0.6, 0.8, 1.0, 0.0), true)
+	dmg_by[cur_src] = float(dmg_by.get(cur_src, 0.0)) + minf(a, maxf(e_hp[j], 0.0))
 	var h := e_hp[j] - a
 	e_hp[j] = h
 	e_flash[j] = 0.06
@@ -1462,7 +1618,8 @@ func _kill(j: int) -> void:
 	var p := e_pos[j]
 	kills += 1
 	type_alive[ty] -= 1
-	_gem(p, int(round(t_xp[ty] * hp_mult)))
+	kills_by[ty] += 1
+	_gem(p, maxi(1, int(round(t_xp[ty] * hp_mult * TIER_XP[e_tier[j]]))))
 	_add_combo()
 	var big := ty >= Data.ELITE
 	var coins := 0
@@ -1503,7 +1660,7 @@ func _kill(j: int) -> void:
 	if toxin_lvl > 0 and clouds.size() < CLOUD_CAP and randf() < 0.15 + 0.05 * toxin_lvl:
 		clouds.append([p, 3.0 * dur_mult, (50.0 + 8.0 * toxin_lvl) * area_mult, 5.0 * toxin_lvl, 0.0])
 	if kill_heal > 0.0:
-		hp = minf(max_hp, hp + kill_heal)
+		_heal(kill_heal, "regen")
 
 
 ## Removes enemies marked dead this frame (after all hit checks are done).
@@ -1526,6 +1683,9 @@ func _compact_enemies() -> void:
 			e_burn[i] = e_burn[last]
 			e_chill[i] = e_chill[last]
 			e_frozen[i] = e_frozen[last]
+			e_tier[i] = e_tier[last]
+			e_kick[i] = e_kick[last]
+			e_born[i] = e_born[last]
 
 
 func _nearest_in_radius(p: Vector2, r: float, exclude: Dictionary) -> int:
@@ -1585,6 +1745,7 @@ func _enemy_blast(p: Vector2, radius: float, dmg: float) -> void:
 
 func _spawn_boss() -> void:
 	boss_spawned = true
+	boss_spawn_t = t
 	boss_on = true
 	# The Colossus is built to match you: strong builds face a bigger health
 	# bar, so the last fight is never over in a second.
@@ -1607,6 +1768,7 @@ func _spawn_boss() -> void:
 func _update_boss(dt: float) -> void:
 	if not boss_on:
 		return
+	cur_shooter = "Colossus boss"
 	var to := player - boss_pos
 	var d := to.length()
 	var dir := to / maxf(d, 0.001)
@@ -1642,7 +1804,7 @@ func _update_boss(dt: float) -> void:
 				boss_mode = "move"
 				boss_timer = 1.6
 	if d < BOSS_RADIUS + PLAYER_RADIUS:
-		_hurt(30.0)
+		_hurt(30.0, "Colossus boss (ram)")
 	boss_flash = maxf(boss_flash - dt, 0.0)
 	boss_halo_cd -= dt
 	boss_node.position = boss_pos
@@ -1687,6 +1849,7 @@ func _damage_boss(amount: float, force_crit: bool) -> void:
 	if boss_rate > cap:
 		a *= cap / boss_rate
 	boss_rate += a
+	boss_dmg_by[cur_src] = float(boss_dmg_by.get(cur_src, 0.0)) + minf(a, maxf(boss_hp, 0.0))
 	boss_hp -= a
 	boss_flash = 0.05
 	if boss_hp <= 0.0:
@@ -1758,6 +1921,7 @@ func _static_nova() -> void:
 	if static_charge < 320.0 or not weapons.has("tesla"):
 		return
 	static_charge = 0.0
+	cur_src = "static"
 	var dmg: float = float(w_stats["tesla"]["dmg"]) * 1.5
 	var hit := {}
 	for k in 6:
@@ -1772,6 +1936,7 @@ func _static_nova() -> void:
 
 
 func _fire(id: String, st: Dictionary) -> bool:
+	cur_src = id
 	match id:
 		"rifle":
 			if not _has_target():
@@ -1815,7 +1980,7 @@ func _fire(id: String, st: Dictionary) -> bool:
 			for k in int(st["count"]):
 				var at := _random_target_near(player)
 				_ring(at, 2.0)
-				bombs.append([at, 0.55 + 0.08 * k, st["radius"], st["dmg"], st["cluster"]])
+				bombs.append([at, 0.55 + 0.08 * k, st["radius"], st["dmg"], st["cluster"], "grenade"])
 			sfx.play("grenade")
 		"flame":
 			return _flame(st)
@@ -1863,6 +2028,7 @@ func _shot(vel: Vector2, dmg: float, pierce: int, life: float, color: Color, kin
 	s_pierce[s_count] = pierce
 	s_kind[s_count] = kind
 	s_last[s_count] = -1
+	s_src[s_count] = cur_src
 	s_count += 1
 
 
@@ -1878,6 +2044,7 @@ func _remove_shot(i: int) -> void:
 	s_col[i] = s_col[s_count]
 	s_bounce[i] = s_bounce[s_count]
 	s_flag[i] = s_flag[s_count]
+	s_src[i] = s_src[s_count]
 
 
 func _update_shots(dt: float) -> void:
@@ -1894,6 +2061,7 @@ func _update_shots(dt: float) -> void:
 			continue
 		s_pos[i] = p
 		s_life[i] = life
+		cur_src = s_src[i]
 		if boss_on and p.distance_squared_to(boss_pos) < boss_r2:
 			_damage_boss(s_dmg[i], false)
 			_remove_shot(i)
@@ -1999,6 +2167,7 @@ func _random_target_near(p: Vector2) -> Vector2:
 
 
 func _update_rockets(dt: float) -> void:
+	cur_src = "rockets"
 	var gx0 := grid_origin.x
 	var gy0 := grid_origin.y
 	var i := 0
@@ -2053,6 +2222,7 @@ func _update_halo(dt: float) -> void:
 	halo_pts.clear()
 	if not weapons.has("halo"):
 		return
+	cur_src = "halo"
 	var st: Dictionary = w_stats["halo"]
 	var spin: float = st["speed"]
 	if st["evolved"]:
@@ -2148,7 +2318,7 @@ func _airstrike(st: Dictionary) -> void:
 	var n: int = st["bombs"]
 	_telegraph(2, start, start + dir * length, 0.5, 0.0)
 	for k in n:
-		bombs.append([start + dir * length * (k + 0.5) / n, 0.5 + 0.06 * k, st["radius"], st["dmg"]])
+		bombs.append([start + dir * length * (k + 0.5) / n, 0.5 + 0.06 * k, st["radius"], st["dmg"], false, "airstrike"])
 
 
 func _update_bombs(dt: float) -> void:
@@ -2161,17 +2331,19 @@ func _update_bombs(dt: float) -> void:
 		# chain reactions (cluster grenades, mine quakes) don't stall a frame.
 		if float(bomb[1]) <= 0.0 and booms < 20:
 			booms += 1
+			cur_src = String(bomb[5]) if bomb.size() > 5 else "bombs"
 			var precise := synergies.has("precision")
 			_blast(bomb[0], float(bomb[2]) * (1.25 if precise else 1.0), bomb[3], precise)
 			if bomb.size() > 4 and bomb[4]:
 				# Cluster Jackpot: a ring of smaller blasts.
 				for c in 5:
-					bombs.append([Vector2(bomb[0]) + Vector2.from_angle(TAU * c / 5.0) * float(bomb[2]) * 1.2, 0.15 + 0.04 * c, float(bomb[2]) * 0.6, float(bomb[3]) * 0.5, false])
+					bombs.append([Vector2(bomb[0]) + Vector2.from_angle(TAU * c / 5.0) * float(bomb[2]) * 1.2, 0.15 + 0.04 * c, float(bomb[2]) * 0.6, float(bomb[3]) * 0.5, false, "grenade"])
 			bombs.remove_at(k)
 		k -= 1
 	# Explosive Rounds blasts, capped per frame so chain reactions don't spike.
 	var queued := blasts
 	blasts = []
+	cur_src = "explosive"
 	for n in queued.size():
 		if n < 30:
 			var b: Array = queued[n]
@@ -2198,18 +2370,21 @@ func _update_enemy_bullets(dt: float) -> void:
 			hit = false
 			life = 0.0
 			_sparks(p, 2)
+			_count(wiped, "dome", 1.0)
 		elif not hit and not halo_pts.is_empty() and synergies.has("bulwark"):
 			for bp in halo_pts:
 				if p.distance_squared_to(bp) < 900.0:
 					life = 0.0
 					_sparks(p, 3)
+					_count(wiped, "bulwark", 1.0)
 					break
 		if life <= 0.0 or hit:
 			if hit:
-				_hurt(b_dmg[i])
+				_hurt(b_dmg[i], b_src[i])
 			b_count -= 1
 			b_pos[i] = b_pos[b_count]
 			b_vel[i] = b_vel[b_count]
+			b_src[i] = b_src[b_count]
 			b_life[i] = b_life[b_count]
 			b_dmg[i] = b_dmg[b_count]
 			b_rad[i] = b_rad[b_count]
@@ -2233,8 +2408,10 @@ func _update_telegraphs(dt: float) -> void:
 		if float(tg[3]) <= 0.0:
 			match int(tg[0]):
 				0:
+					cur_shooter = tg[6]
 					_enemy_blast(tg[1], (tg[2] as Vector2).x, tg[5])
 				1:
+					cur_shooter = tg[6]
 					var start: Vector2 = tg[1]
 					var aim := ((tg[2] as Vector2) - start).normalized()
 					_ebullet(start + aim * 40.0, aim * 650.0, tg[5], 9.0)
@@ -2286,6 +2463,7 @@ func _update_status(dt: float) -> void:
 	# Burns tick on one enemy in eight each frame, so a big burning crowd
 	# doesn't land every hit on the same frame.
 	burn_phase = (burn_phase + 1) & 7
+	cur_src = "burn"
 	for j in e_count:
 		if e_hp[j] <= 0.0:
 			continue
@@ -2299,6 +2477,7 @@ func _update_status(dt: float) -> void:
 				_damage(j, maxf(burn_dps, 4.0) * dt * 8.0, e_pos[j], false, false)
 				if fx.tier["vfx"] > 0 and randf() < 0.05:
 					_vfx(e_pos[j], Vector2(0.0, -40.0), 0.4, 6.0, 14.0, FLAME_HOT, FLAME_COOL, true)
+	cur_src = "toxin"
 	var k := clouds.size() - 1
 	while k >= 0:
 		var c: Array = clouds[k]
@@ -2314,6 +2493,7 @@ func _update_status(dt: float) -> void:
 		if float(c[1]) <= 0.0:
 			clouds.remove_at(k)
 		k -= 1
+	cur_src = "flame"
 	if weapons.has("flame") and w_stats["flame"]["ring"] and tick:
 		var r: float = float(w_stats["flame"]["range"]) * 0.7
 		_damage_around(player, r, float(w_stats["flame"]["dmg"]) * 2.0)
@@ -2325,6 +2505,7 @@ func _update_status(dt: float) -> void:
 
 ## Stomp, Bullet Time, shield recharge and the dash cooldown.
 func _update_actives(dt: float) -> void:
+	cur_src = "stomp"
 	if stomp_lvl > 0:
 		stomp_t -= dt
 		if stomp_t <= 0.0:
@@ -2391,7 +2572,7 @@ func _update_defense(dt: float) -> void:
 		if repair_t <= 0.0:
 			repair_t = 2.0
 			if hp < max_hp:
-				hp = minf(max_hp, hp + max_hp * 0.01 * repair_lvl * (2.0 if hp < max_hp * 0.4 else 1.0))
+				_heal(max_hp * 0.01 * repair_lvl * (2.0 if hp < max_hp * 0.4 else 1.0), "repair")
 				hero.effect("heal_glow", player, 0.35, 16.0, 40.0, Color(0.6, 1.0, 0.7, 0.8), 6)
 				sfx.play("repair")
 	if repair_node != null:
@@ -2420,8 +2601,9 @@ func _emp() -> void:
 	var r := (260.0 + 25.0 * emp_lvl) * area_mult
 	var r2 := r * r
 	for i in b_count:
-		if b_pos[i].distance_squared_to(player) < r2:
+		if b_pos[i].distance_squared_to(player) < r2 and b_life[i] > 0.0:
 			b_life[i] = 0.0
+			_count(wiped, "emp", 1.0)
 	var stun := (0.5 + 0.08 * emp_lvl) * dur_mult
 	for j in e_count:
 		if e_hp[j] > 0.0 and e_type[j] != Data.JET and e_pos[j].distance_squared_to(player) < r2:
@@ -2469,6 +2651,8 @@ func _dash() -> void:
 
 ## Shock Rounds: a small arc to two nearby enemies.
 func _shock_arc(from_j: int, dmg: float) -> void:
+	var saved := cur_src
+	cur_src = "shock"
 	var hit := {from_j: true}
 	var pts := PackedVector2Array([e_pos[from_j]])
 	for k in 2:
@@ -2478,6 +2662,7 @@ func _shock_arc(from_j: int, dmg: float) -> void:
 		hit[n] = true
 		pts.append(e_pos[n])
 		_damage(n, dmg, e_pos[from_j], false, false)
+	cur_src = saved
 	if pts.size() > 1:
 		bolts.append([pts, 0.1])
 
@@ -2506,6 +2691,7 @@ func _update_drones(dt: float) -> void:
 		return
 	var st: Dictionary = w_stats["drones"]
 	var n := drone_nodes.size()
+	cur_src = "drones"
 	drone_timer -= dt * fire_rate
 	var shoot := drone_timer <= 0.0 and _has_target()
 	if drone_timer <= 0.0:
@@ -2526,6 +2712,7 @@ func _update_drones(dt: float) -> void:
 func _update_mines(dt: float) -> void:
 	if mines.is_empty():
 		return
+	cur_src = "mines"
 	var st: Dictionary = w_stats.get("mines", {})
 	var k := mines.size() - 1
 	while k >= 0:
@@ -2544,7 +2731,7 @@ func _update_mines(dt: float) -> void:
 					# Seismic Field: a fault line of blasts.
 					var dir := Vector2.from_angle(randf() * TAU)
 					for q in 3:
-						bombs.append([Vector2(m[0]) + dir * 60.0 * (q + 1), 0.1 + 0.08 * q, float(st["radius"]) * 0.7, float(st["dmg"]) * 0.6])
+						bombs.append([Vector2(m[0]) + dir * 60.0 * (q + 1), 0.1 + 0.08 * q, float(st["radius"]) * 0.7, float(st["dmg"]) * 0.6, false, "mines"])
 			m[2].queue_free()
 			mines.remove_at(k)
 		k -= 1
@@ -2554,6 +2741,7 @@ func _update_mines(dt: float) -> void:
 func _update_sentries(dt: float) -> void:
 	if sentries.is_empty():
 		return
+	cur_src = "sentry"
 	var st: Dictionary = w_stats.get("sentry", {})
 	var k := sentries.size() - 1
 	while k >= 0:
@@ -2763,7 +2951,9 @@ func _reward_name(r: Array) -> String:
 func _on_chest_collected() -> void:
 	if state != State.CHEST:
 		return
+	chests_opened += 1
 	for r in chest_rewards:
+		picks.append("%s chest: %s" % [_clock(t), _reward_name(r)])
 		match String(r[0]):
 			"evolve":
 				_evolve(r[1])
@@ -2797,6 +2987,7 @@ func _evolve(id: String) -> void:
 	sfx.play("evolve")
 	# The biggest moment in a run: a gold blast that clears the area.
 	_power_moment(2.2, Color(1.0, 0.8, 0.25))
+	cur_src = "evolution"
 	_damage_around(player, 420.0, 600.0)
 	for k in 6:
 		_explosion(player + Vector2.from_angle(TAU * k / 6.0) * 180.0, 110.0, 1.5)
@@ -3184,7 +3375,7 @@ func _on_card(index: int) -> void:
 			else:
 				powers[id] = mini(MAX_LEVEL, int(powers.get(id, 0)) + int(o["levels"]))
 		"heal":
-			hp = minf(max_hp, hp + max_hp * 0.4)
+			_heal(max_hp * 0.4, "medkit card")
 			hero.heal()
 			sfx.play("heal")
 		"gold":
@@ -3193,6 +3384,7 @@ func _on_card(index: int) -> void:
 		bonus_dmg += Data.RARE_BONUS
 	_recalc()
 	var rarity: int = o["rarity"]
+	picks.append("%s L%d %s" % [_clock(t), level, _pick_text(o)])
 	if o["kind"] == "weapon" or o["kind"] == "power":
 		var lvl: int = (weapons if o["kind"] == "weapon" else powers).get(id, 0)
 		if o.get("limit", false):
@@ -3240,7 +3432,8 @@ func _on_skip() -> void:
 		return
 	banish_mode = false
 	gold += 5
-	hp = minf(max_hp, hp + max_hp * 0.1)
+	skips += 1
+	_heal(max_hp * 0.1, "skip")
 	if chest_cards:
 		chest_cards = false
 	else:
@@ -3340,12 +3533,17 @@ func _update_rings(dt: float) -> void:
 		i += 1
 
 
+## Units, animated in code: infantry sway and waddle as they walk, everything
+## kicks back when it fires, pops when hit and drops in when it spawns; tanks
+## rumble and recoil their turrets, helicopters hover and drift.
 func _render_units() -> void:
 	unit_n.fill(0)
+	aura_n = 0
 	for i in e_count:
 		var ty := e_type[i]
 		var p := e_pos[i]
-		var tint := Color.WHITE
+		var tier := e_tier[i]
+		var tint: Color = TIER_TINT[tier]
 		if e_flash[i] > 0.0:
 			tint = Color(1.9, 1.9, 1.9)
 		elif freeze_t > 0.0 or e_frozen[i] > 0.0:
@@ -3354,26 +3552,53 @@ func _render_units() -> void:
 			tint = Color(1.5, 0.85, 0.6)
 		elif e_chill[i] > 0.0:
 			tint = Color(0.8, 0.95, 1.3)
+		var still := freeze_t > 0.0 or e_frozen[i] > 0.0
 		var spin := 0.0 if freeze_t > 0.0 else t * 25.0
+		var ang := e_ang[i]
+		var fwd := Vector2.from_angle(ang)
+		var side := fwd.orthogonal()
+		var kick := e_kick[i]
+		# Drop in over 0.25 s, pop on a hit, Elite Guard a size bigger.
+		var grow := minf(1.0, (t - e_born[i]) / 0.25)
+		var size := t_size[ty] * (0.55 + 0.45 * grow * (2.0 - grow)) * (1.0 + 1.8 * e_flash[i]) * (1.08 if tier == 3 else 1.0)
+		if TIER_AURA[tier].a > 0.0:
+			_put_aura(p, size * (1.25 + 0.08 * sin(t * 6.0 + i)), TIER_AURA[tier])
+		var ph := 0.0 if still else t * t_speed[ty] * 0.16 + i * 1.7
 		match ty:
 			Data.TANK:
-				_put_unit(Art.TANK, p, e_ang[i], t_size[ty], tint)
-				_put_unit(Art.TURRET, p, (player - p).angle(), t_size[ty], tint)
-			Data.HELI:
-				_put_unit(Art.HELI, p, e_ang[i], t_size[ty], tint)
-				_put_unit(Art.ROTOR, p, spin + i, t_size[ty] * 1.15, tint)
-			Data.GUNSHIP:
-				_put_unit(Art.GUNSHIP, p, e_ang[i], t_size[ty], tint)
-				_put_unit(Art.ROTOR, p, spin * 0.8 + i, t_size[ty] * 1.1, tint)
+				var rumble := side * sin(t * 45.0 + i) * (0.0 if still else 0.7)
+				_put_unit(_cell(Art.TANK, tier), p + rumble - fwd * kick * 4.0, ang, size, tint, 1.0 - 0.05 * kick, 1.0)
+				var aim := (player - p).angle()
+				_put_unit(_cell(Art.TURRET, tier), p + rumble - Vector2.from_angle(aim) * kick * 10.0, aim, size, tint, 1.0 - 0.08 * kick, 1.0 + 0.04 * kick)
+			Data.HELI, Data.GUNSHIP:
+				var hover := 1.0 + 0.035 * sin(t * 2.6 + i)
+				var drift := side * sin(t * 1.7 + i) * 4.0 - fwd * kick * 5.0
+				var bank := sin(t * 1.7 + i) * 0.06
+				var cell := Art.HELI if ty == Data.HELI else Art.GUNSHIP
+				_put_unit(_cell(cell, tier), p + drift, ang + bank, size * hover, tint)
+				_put_unit(Art.ROTOR, p + drift, spin * (1.0 if ty == Data.HELI else 0.8) + i, size * hover * (1.15 if ty == Data.HELI else 1.1), tint)
 			Data.JET:
-				_put_unit(Art.JET, p, e_ang[i], t_size[ty], tint)
+				_put_unit(_cell(Art.JET, tier), p, ang + sin(t * 2.0 + i) * 0.05, size, tint)
 			Data.SIEGE:
-				_put_unit(Art.SIEGE, p, e_ang[i], t_size[ty], tint)
+				_put_unit(_cell(Art.SIEGE, tier), p - fwd * kick * 7.0, ang, size, tint, 1.0 - 0.06 * kick, 1.0 + 0.03 * kick)
+			Data.ELITE:
+				# A heavy stomp: slow, big bounce on each step.
+				var step := absf(sin(ph * 0.7))
+				_put_unit(_cell(ty, tier), p + side * sin(ph * 0.7) * 3.0 - fwd * kick * 8.0, ang + sin(ph * 0.7) * 0.06, size, tint, 1.0 + 0.07 * step - 0.06 * kick, 1.0 - 0.03 * step)
 			_:
-				_put_unit(ty, p, e_ang[i], t_size[ty], tint)
+				# Infantry: sway side to side and waddle with each step.
+				var step := absf(cos(ph))
+				_put_unit(_cell(ty, tier), p + side * sin(ph) * 2.5 - fwd * kick * 6.0, ang + sin(ph) * 0.11, size, tint, 1.0 + 0.05 * step - 0.08 * kick, 1.0 - 0.03 * step)
 
 
-func _put_unit(cell: int, p: Vector2, ang: float, size: float, tint: Color) -> void:
+## The layer for a unit at a tier: its tier skin if there is one.
+func _cell(cell: int, tier: int) -> int:
+	if tier >= 2 and tier_cells.has(cell):
+		return tier_cells[cell][tier]
+	return cell
+
+
+func _put_unit(cell: int, p: Vector2, ang: float, size: float, tint: Color, sx: float = 1.0, sy: float = 1.0) -> void:
 	var n := unit_n[cell]
 	if n >= unit_cap[cell]:
 		return
@@ -3381,18 +3606,38 @@ func _put_unit(cell: int, p: Vector2, ang: float, size: float, tint: Color) -> v
 	var o := (unit_off[cell] + n) * STRIDE
 	var c := cos(ang) * size
 	var s := sin(ang) * size
-	u_buf[o] = c
-	u_buf[o + 1] = -s
+	u_buf[o] = c * sx
+	u_buf[o + 1] = -s * sy
 	u_buf[o + 3] = p.x
-	u_buf[o + 4] = s
-	u_buf[o + 5] = c
+	u_buf[o + 4] = s * sx
+	u_buf[o + 5] = c * sy
 	u_buf[o + 7] = p.y
 	u_buf[o + 8] = tint.r
 	u_buf[o + 9] = tint.g
 	u_buf[o + 10] = tint.b
 
 
+func _put_aura(p: Vector2, size: float, color: Color) -> void:
+	if aura_n >= e_cap:
+		return
+	var o := aura_n * STRIDE
+	aura_n += 1
+	aura_buf[o] = size
+	aura_buf[o + 1] = 0.0
+	aura_buf[o + 3] = p.x
+	aura_buf[o + 4] = 0.0
+	aura_buf[o + 5] = size
+	aura_buf[o + 7] = p.y
+	aura_buf[o + 8] = color.r
+	aura_buf[o + 9] = color.g
+	aura_buf[o + 10] = color.b
+	aura_buf[o + 11] = color.a
+
+
 func _upload() -> void:
+	aura_mm.visible_instance_count = aura_n
+	if aura_buf.size() > 0:
+		RenderingServer.multimesh_set_buffer(aura_mm.get_rid(), aura_buf)
 	for c in unit_mms.size():
 		var mm: MultiMesh = unit_mms[c]
 		mm.visible_instance_count = unit_n[c]
@@ -3675,10 +3920,12 @@ func _update_powerups(dt: float) -> void:
 
 func _apply_pickup(kind: int) -> void:
 	hud.show_banner(Data.PICKUP_LABELS[kind])
+	pickups_got[kind] += 1
 	match kind:
 		Data.NUKE:
 			# Wipes every normal enemy near the screen; elites and the boss
 			# lose a quarter of their health.
+			cur_src = "nuke"
 			var reach2 := pow(view.length() * 0.6, 2.0)
 			for j in e_count:
 				if e_hp[j] <= 0.0 or player.distance_squared_to(e_pos[j]) > reach2:
@@ -3708,7 +3955,7 @@ func _apply_pickup(kind: int) -> void:
 				co_mag[i] = 1
 			sfx.play("powerup")
 		Data.MEDKIT:
-			hp = minf(max_hp, hp + max_hp * 0.3)
+			_heal(max_hp * 0.3, "medkit")
 			sfx.play("heal")
 			hero.heal()
 		Data.SHIELD_CELL:
@@ -3777,6 +4024,168 @@ func _build_text() -> String:
 	for id in powers:
 		parts.append("%s %d%s" % [Data.NAMES[id], powers[id], (" +%d" % _lb(id)) if _lb(id) > 0 else ""])
 	return " · ".join(parts)
+
+
+func _reset_report() -> void:
+	cur_src = "other"
+	cur_shooter = "?"
+	dmg_by = {}
+	boss_dmg_by = {}
+	taken_by = {}
+	healed_by = {}
+	blocks = {}
+	wiped = {}
+	kills_by = PackedInt32Array()
+	kills_by.resize(Data.ENEMY_NAMES.size())
+	pickups_got = PackedInt32Array()
+	pickups_got.resize(Data.PICKUP_LABELS.size())
+	picks = []
+	timeline = []
+	tl_row = {}
+	hp_low = 1.0
+	low_hp_time = 0.0
+	deaths = []
+	last_hit = ""
+	boss_spawn_t = -1.0
+	chests_opened = 0
+	skips = 0
+
+
+func _count(d: Dictionary, key: String, n: float) -> void:
+	if n > 0.0:
+		d[key] = float(d.get(key, 0.0)) + n
+
+
+func _heal(amount: float, src: String) -> void:
+	var gain := minf(amount, max_hp - hp)
+	if gain <= 0.0:
+		return
+	hp += gain
+	_count(healed_by, src, gain)
+
+
+func _clock(at: float) -> String:
+	return "%d:%02d" % [floori(at / 60.0), int(at) % 60]
+
+
+func _pick_text(o: Dictionary) -> String:
+	var id: String = o["id"]
+	var kind := String(o["kind"])
+	if kind != "weapon" and kind != "power":
+		return {"heal": "Field Medkit", "gold": "War Funds"}.get(kind, kind)
+	var owned: Dictionary = weapons if kind == "weapon" else powers
+	var what := "Lv %d" % int(owned.get(id, 0))
+	if o["evolve"]:
+		what = "EVOLVED"
+	elif o.get("limit", false):
+		what = "Limit Break %d" % _lb(id)
+	return "%s %s (%s)" % [Data.NAMES[id], what, ["common", "rare", "epic", "legendary"][int(o["rarity"])]]
+
+
+## One timeline row per minute of play: what the fight looked like then.
+func _track_minute(dt: float, delta: float) -> void:
+	if state != State.PLAYING:
+		return
+	var frac := hp / max_hp
+	hp_low = minf(hp_low, frac)
+	if frac < 0.25:
+		low_hp_time += dt
+	var minute := int(t / 60.0)
+	if int(tl_row.get("min", -1)) != minute:
+		if not tl_row.is_empty():
+			timeline.append(tl_row)
+		tl_row = {"min": minute, "frames": 0, "alive": 0, "hp_low": 1.0, "taken": 0.0, "ms": 0.0, "logic": 0.0, "logic_max": 0.0, "kills0": kills}
+	tl_row["frames"] = int(tl_row["frames"]) + 1
+	tl_row["alive"] = int(tl_row["alive"]) + e_count
+	tl_row["hp_low"] = minf(float(tl_row["hp_low"]), frac)
+	tl_row["ms"] = float(tl_row["ms"]) + (dt if smoke else delta) * 1000.0
+	tl_row["logic"] = float(tl_row["logic"]) + sim_ms
+	tl_row["logic_max"] = maxf(float(tl_row["logic_max"]), sim_ms)
+	tl_row["level"] = level
+	tl_row["kills"] = kills
+
+
+## Name: value (share%) lines, biggest first.
+func _share_lines(d: Dictionary, names: Dictionary, max_lines: int) -> PackedStringArray:
+	var keys := d.keys()
+	keys.sort_custom(func(a: Variant, b: Variant) -> bool: return float(d[a]) > float(d[b]))
+	var total := 0.0
+	for k in keys:
+		total += float(d[k])
+	var out := PackedStringArray()
+	for n in mini(keys.size(), max_lines):
+		var k: String = keys[n]
+		out.append("  %s: %s (%d%%)" % [names.get(k, k), _big(float(d[k])), roundi(100.0 * float(d[k]) / maxf(total, 0.001))])
+	return out
+
+
+func _big(v: float) -> String:
+	if v >= 1.0e6:
+		return "%.1fM" % (v / 1.0e6)
+	if v >= 1.0e4:
+		return "%.0fk" % (v / 1.0e3)
+	return "%d" % roundi(v)
+
+
+## The full report for COPY RESULTS: the summary, then the details.
+func _report_text(victory: bool) -> String:
+	var lines := PackedStringArray([_results_text(victory), "", "--- DETAILS ---"])
+	var names := {"other": "Other", "burn": "Burning", "toxin": "Toxin clouds", "shock": "Shock arcs", "static": "Static Dash", "explosive": "Explosive Rounds blasts", "stomp": "Shockwave Stomp", "dash": "Phase Dash", "thorns": "Reactive Plating", "evolution": "Evolution blasts", "revive": "Revive blasts", "nuke": "Nuke", "bombs": "Bombs"}
+	for id in Data.NAMES:
+		names[id] = Data.NAMES[id]
+	lines.append("Stage: %d of 5 calm/ramp waves, enemy tier %d of 3%s" % [mini(wave_n + 1, 5), max_tier, "" if boss_spawn_t < 0.0 else ", boss at %s" % _clock(boss_spawn_t)])
+	if boss_spawn_t >= 0.0:
+		var fight := (boss_dead_t if boss_dead_t >= 0.0 else t) - boss_spawn_t
+		lines.append("Boss: %s HP, %s, fight %s%s" % [_big(boss_max), "destroyed" if boss_dead_t >= 0.0 else "%d%% HP left" % roundi(100.0 * boss_hp / boss_max), _clock(fight), "" if final_clear_t < 0.0 else ", final push %s" % _clock(final_clear_t - boss_dead_t)])
+	lines.append("Damage dealt (to enemies):")
+	lines.append_array(_share_lines(dmg_by, names, 14))
+	if not boss_dmg_by.is_empty():
+		lines.append("Damage to the boss:")
+		lines.append_array(_share_lines(boss_dmg_by, names, 6))
+	var taken := {}
+	var hits := 0
+	for k in taken_by:
+		taken[k] = float(taken_by[k][1])
+		hits += int(taken_by[k][0])
+	lines.append("Damage taken: %s in %d hits; lowest HP %d%%, %ds below 25%% HP" % [_big(_sum(taken)), hits, roundi(maxf(hp_low, 0.0) * 100.0), roundi(low_hp_time)])
+	lines.append_array(_share_lines(taken, {}, 10))
+	lines.append("Blocked: dodged %d, shield %d, barrier %d hits; armor soaked %s, Fortify %s" % [int(blocks.get("dodge", 0.0)), int(blocks.get("shield", 0.0)), int(blocks.get("barrier", 0.0)), _big(float(blocks.get("armor", 0.0))), _big(float(blocks.get("fortify", 0.0)))])
+	if not wiped.is_empty():
+		lines.append("Enemy bullets destroyed: EMP %d, dome %d, Bulwark %d" % [int(wiped.get("emp", 0.0)), int(wiped.get("dome", 0.0)), int(wiped.get("bulwark", 0.0))])
+	if not healed_by.is_empty():
+		lines.append("Healing: %s" % _big(_sum(healed_by)))
+		lines.append_array(_share_lines(healed_by, {"regen": "Nanite Regeneration", "lifesteal": "Vampiric Rounds", "repair": "Repair Drone", "medkit": "Medkit pickups", "medkit card": "Medkit cards", "skip": "Skipped cards"}, 8))
+	if not deaths.is_empty():
+		lines.append("Downed: " + ", ".join(PackedStringArray(deaths)))
+	var kl := PackedStringArray()
+	for ty in kills_by.size():
+		if kills_by[ty] > 0:
+			kl.append("%s %d" % [Data.ENEMY_NAMES[ty], kills_by[ty]])
+	lines.append("Kills: " + ", ".join(kl))
+	var pk := PackedStringArray()
+	for k in pickups_got.size():
+		if pickups_got[k] > 0:
+			pk.append("%s %d" % [String(Data.PICKUP_LABELS[k]).trim_suffix("!").capitalize(), pickups_got[k]])
+	lines.append("Pickups: %s; chests %d" % [", ".join(pk) if not pk.is_empty() else "none", chests_opened])
+	lines.append("Cards: 3rd card %d/3, rerolls %d/1, banished %d/%d, skipped %d" % [3 - third_left, 1 - reroll_left, BANISHES - banish_left, BANISHES, skips])
+	lines.append("Timeline (minute: level, kills, enemies avg, lowest HP, damage taken, FPS, logic avg/worst ms):")
+	var rows := timeline.duplicate()
+	if not tl_row.is_empty():
+		rows.append(tl_row)
+	for r in rows:
+		var f := maxi(int(r["frames"]), 1)
+		lines.append("  %d: L%d, +%d kills, %d enemies, HP %d%%, -%s, %.0f FPS, %.1f/%.1f" % [int(r["min"]) + 1, int(r.get("level", level)), int(r.get("kills", kills)) - int(r["kills0"]), roundi(float(r["alive"]) / f), roundi(maxf(float(r["hp_low"]), 0.0) * 100.0), _big(float(r["taken"])), f * 1000.0 / maxf(float(r["ms"]), 0.001), float(r["logic"]) / f, float(r["logic_max"])])
+	lines.append("Picks (%d):" % picks.size())
+	for n in range(0, picks.size(), 3):
+		lines.append("  " + " | ".join(PackedStringArray(picks.slice(n, n + 3))))
+	return "\n".join(lines)
+
+
+func _sum(d: Dictionary) -> float:
+	var total := 0.0
+	for k in d:
+		total += float(d[k])
+	return total
 
 
 func _results_text(victory: bool) -> String:
@@ -3895,7 +4304,7 @@ func _run_smoke() -> void:
 		await get_tree().process_frame
 		frames += 1
 	print("SMOKE: stage run ended state=%d t=%.0f level=%d kills=%d boss_spawned=%s" % [state, t, level, kills, boss_spawned])
-	print(_results_text(boss_dead_t >= 0.0))
+	print(_report_text(boss_dead_t >= 0.0))
 	if not _check(t > 30.0 and kills > 0, "the bot played the stage"):
 		return
 	# Every weapon and power at once (more than the slots allow) for a few
