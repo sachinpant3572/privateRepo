@@ -1057,7 +1057,7 @@ func _hurt(amount: float) -> void:
 		hero.shield_hit()
 		hero.set_shield(shield_charges > 0)
 		_ring(player, 3.0)
-		sfx.play("zap", 1.6, -6.0)
+		sfx.play("shield")
 		return
 	if thorns > 0:
 		_blast(player, 90.0 + 10.0 * thorns, 15.0 * thorns + armor * 4.0, false)
@@ -1178,6 +1178,7 @@ func _flyby(n: int) -> void:
 		e_ang[i] = dir.angle()
 		e_timer[i] = 0.3 + 0.05 * k
 	sfx.play("alarm", 1.3, -6.0)
+	sfx.play("jet")
 
 
 ## After the Colossus falls, the Dominion throws everything left at you.
@@ -1357,6 +1358,7 @@ func _enemy_attack(ty: int, p: Vector2, dir: Vector2) -> void:
 				for k in 7:
 					_ebullet(p, dir.rotated(deg_to_rad(-30.0 + k * 10.0)) * 280.0, 6.0, 7.0)
 				_muzzle(p + dir * 40.0, dir, Color(1.0, 0.5, 0.2), 20.0)
+				sfx.play("gunship")
 			else:
 				# A cannon shell down a red aiming line, slightly off to each side.
 				for k in 2:
@@ -1368,6 +1370,7 @@ func _enemy_attack(ty: int, p: Vector2, dir: Vector2) -> void:
 				for k in 12:
 					_ebullet(p, Vector2.from_angle(TAU * k / 12.0) * 220.0, 6.0, 8.0)
 			_muzzle(p + dir * 70.0, dir, Color(1.0, 0.45, 0.2), 30.0)
+			sfx.play("siege")
 
 
 func _ebullet(p: Vector2, vel: Vector2, dmg: float, rad: float) -> void:
@@ -1757,12 +1760,13 @@ func _fire(id: String, st: Dictionary) -> bool:
 				var a := a0 + randf_range(-cone * 0.5, cone * 0.5)
 				_shot(Vector2.from_angle(a) * float(st["speed"]) * randf_range(0.85, 1.1), st["dmg"], st["pierce"], st["life"], SCATTER_COLOR, 1, Vector2.INF, SHOT_LEECH if st["leech"] else 0)
 			_muzzle(player + Vector2.from_angle(a0) * 20.0, Vector2.from_angle(a0), SCATTER_COLOR, 16.0)
-			sfx.play("boom", 1.8, -12.0)
+			sfx.play("scatter")
 		"rockets":
 			if not _has_target():
 				return false
 			for k in int(st["count"]):
 				_rocket(facing.rotated(randf_range(-1.4, 1.4)) * 260.0, st["dmg"], st["radius"], st["crit"])
+			sfx.play("rocket")
 		"rail":
 			if not _has_target():
 				return false
@@ -1772,7 +1776,7 @@ func _fire(id: String, st: Dictionary) -> bool:
 				var a: float = a0 + (k - (n - 1) * 0.5) * 0.12
 				_shot(Vector2.from_angle(a) * float(st["speed"]), st["dmg"], 999, st["life"], RAIL_COLOR, 0, Vector2.INF, SHOT_FREEZE if st["freeze"] else 0)
 			_muzzle(player + Vector2.from_angle(a0) * 22.0, Vector2.from_angle(a0), RAIL_COLOR, 18.0)
-			sfx.play("zap", 0.6, -6.0)
+			sfx.play("rail")
 		"grenade":
 			if not _has_target():
 				return false
@@ -1780,7 +1784,7 @@ func _fire(id: String, st: Dictionary) -> bool:
 				var at := _random_target_near(player)
 				_ring(at, 2.0)
 				bombs.append([at, 0.55 + 0.08 * k, st["radius"], st["dmg"], st["cluster"]])
-			sfx.play("shot", 0.6, -10.0)
+			sfx.play("grenade")
 		"flame":
 			return _flame(st)
 		"mines":
@@ -1792,6 +1796,7 @@ func _fire(id: String, st: Dictionary) -> bool:
 			spr.scale = Vector2.ONE * 0.6
 			_add_below_hero(spr)
 			mines.append([spr.position, 0.4, spr, float(st["life"])])
+			sfx.play("mine")
 		"sentry":
 			var alive := sentries.size()
 			if alive >= int(st["max"]):
@@ -2231,6 +2236,8 @@ func _flame(st: Dictionary) -> bool:
 		for k in 3:
 			var a := aim.angle() + randf_range(-cone * 0.5, cone * 0.5) if cone < TAU else randf() * TAU
 			_vfx(player + Vector2.from_angle(a) * 16.0, Vector2.from_angle(a) * reach * randf_range(2.2, 3.2), 0.32, 8.0, 26.0, FLAME_HOT, FLAME_COOL, true)
+	if any or cone >= TAU:
+		sfx.play("flame")
 	return any or cone >= TAU
 
 
@@ -2391,6 +2398,8 @@ func _update_drones(dt: float) -> void:
 		d.rotation = aim
 		if shoot:
 			_shot(Vector2.from_angle(aim) * 700.0 * vel_mult, st["dmg"], pierce_bonus, 0.9 * dur_mult, RIFLE_COLOR, 0, d.position)
+	if shoot:
+		sfx.play("drone")
 
 
 ## Mines arm, wait for an enemy to step close, then blow up.
@@ -2445,6 +2454,7 @@ func _update_sentries(dt: float) -> void:
 				se[2] = st["fire"]
 				_shot(Vector2.from_angle(aim) * 760.0 * vel_mult, st["dmg"], pierce_bonus, 0.7 * dur_mult, SHOT_COLOR, 0, se[0])
 				_muzzle(Vector2(se[0]) + Vector2.from_angle(aim) * 18.0, Vector2.from_angle(aim), SHOT_COLOR, 8.0)
+				sfx.play("shot", 0.8, -4.0)
 				if st["rockets"] and randf() < 0.25:
 					var saved := player
 					player = se[0]
@@ -2664,7 +2674,7 @@ func _evolve(id: String) -> void:
 	weapons[id] = MAX_LEVEL
 	_recalc()
 	hud.show_banner("EVOLUTION: " + String(Data.EVOLUTIONS[id]["name"]), Color(1.0, 0.8, 0.25))
-	sfx.play("powerup")
+	sfx.play("evolve")
 	# The biggest moment in a run: a gold blast that clears the area.
 	_power_moment(2.2, Color(1.0, 0.8, 0.25))
 	_damage_around(player, 420.0, 600.0)
@@ -2831,7 +2841,7 @@ func _announce_synergies(dt: float) -> void:
 	var id: String = syn_queue.pop_front()
 	syn_cd = 1.8
 	hud.show_banner("SYNERGY: " + String(Data.SYNERGIES[id]["name"]), Color(0.4, 1.0, 0.9))
-	sfx.play("powerup")
+	sfx.play("synergy")
 	_power_moment(1.6, Color(0.4, 1.0, 0.9))
 	_ring(player, 8.0)
 	trauma = minf(trauma + 0.3, 1.0)
@@ -3030,6 +3040,7 @@ func _on_card(index: int) -> void:
 		"heal":
 			hp = minf(max_hp, hp + max_hp * 0.4)
 			hero.heal()
+			sfx.play("heal")
 		"gold":
 			bonus_dmg += 0.03
 	if int(o["rarity"]) == 1 and (o["kind"] == "weapon" or o["kind"] == "power"):
@@ -3040,6 +3051,7 @@ func _on_card(index: int) -> void:
 		var lvl: int = (weapons if o["kind"] == "weapon" else powers).get(id, 0)
 		if o.get("limit", false):
 			hud.show_banner("%s  LIMIT BREAK %d" % [Data.NAMES[id], _lb(id)], Data.RARITY_COLORS[rarity])
+			sfx.play("limit_break")
 		elif not o["evolve"]:
 			hud.show_banner("%s  Lv %d" % [Data.NAMES[id], lvl], Data.RARITY_COLORS[rarity])
 		_power_moment([0.35, 0.6, 0.9, 1.3][rarity] + lvl * 0.05 + _lb(id) * 0.02, Data.RARITY_COLORS[rarity])
@@ -3547,7 +3559,7 @@ func _apply_pickup(kind: int) -> void:
 			sfx.play("powerup")
 		Data.MEDKIT:
 			hp = minf(max_hp, hp + max_hp * 0.3)
-			sfx.play("powerup")
+			sfx.play("heal")
 			hero.heal()
 
 
