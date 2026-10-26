@@ -175,6 +175,9 @@ device.
 | 5. Soft launch | 2-3 test countries | Retention near targets |
 | 6. Global launch | Android, then iOS | |
 
+**Status**: milestone 1 (prototype) is playable in `game/`, pending the
+fun and 30 fps checks on a real phone. See `game/README.md`.
+
 Timelines depend on team size; to be estimated once the team and the split
 between Claude, AI tools and people are decided.
 
