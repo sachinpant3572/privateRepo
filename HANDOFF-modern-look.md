@@ -63,9 +63,23 @@ camera, but with modern materials, surfaces and street furniture.
 11. Cost: cells average 2.7k triangles (was 2.1k), the densest 12k (was
     7.3k); build p50 6 ms. Within budget for ~20 loaded cells on a phone.
 
+12. Review (1 run, nothing blocking) fixed: glass below the horizon
+    reflects a grey street, not the facade colour; grass is mottled noise
+    instead of stripes; lit night panes only on walls above 3 m; gable and
+    slope normals; Aurum Tower crown (gold plinth, amber glass tiers,
+    spire, red beacon); lane arrows kept in the travel lanes; parking-lane
+    lines removed. Second review run not needed (run 1 had no serious
+    issues).
+
 ## Open questions
 - FPS on a real phone is unmeasured (the container has no GPU). The city
-  shader does more per pixel now; Settings > Detail low skips the patterns.
+  shader does more per pixel now and the cutaway discard adds overdraw;
+  Settings > Detail low skips the patterns. Measure on a mid-range
+  Mali/Adreno phone; if slow, default Detail to low on weak GPUs.
+- Not done yet: pattern anti-aliasing (fwidth) for shimmer at distance;
+  the Detail-low path is untested on a phone; people still wear the old
+  clothes; trees and palms are still blobs; small street props read dark;
+  big asphalt areas are plain.
 
 ## Traps
 - Glow codes used to be matched with +-0.08; the new codes are 1/16 apart,
