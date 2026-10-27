@@ -29,9 +29,28 @@ Follows HANDOFF-modern-look.md (surface codes, shader, traps live there).
    phones in hand) and work wear (delivery rider, hi-vis, scrubs). Still
    rigid parts on bones, one skinned mesh per person. Named cast keep
    their identity.
+4. Trees: foliage is `MeshBuilder.clump()`, a lumpy blob with shared
+   vertices and smooth normals, darker underneath. Code 7 (GRASS) above
+   0.7 m becomes leaf clusters in the city shader. Live oaks fork into
+   four limbs with eight clumps and moss. Palms have a ringed, leaning
+   trunk (the siding code) and nine folded fronds plus dead ones.
+   Crepe myrtles have three stems and bloom clumps. Downtown sidewalks
+   got street trees in grates, halfway between the street lights.
+5. Metal (code 15) read near black because there are no reflection
+   probes. The shader now fakes a sky-and-street reflection and metallic
+   is 0.3, so every steel prop reads as light steel.
+6. Props: three-stream bins (a solar compactor, recycling and compost),
+   a solar pay station, a detailed hydrant, slatted benches, a domed
+   litter bin and mailbox, and steel bollards. New props: a signal
+   cabinet at every mast arm, district banners on half the downtown
+   light runs, bike racks, and sidewalk works (downtown, the Quarter and
+   the Wards).
 
 ## Open questions
 
 ## Traps
+- Trees take more calls from the cell rng, so lots after them in a cell
+  lay out differently from before (the Wards lookdev view changed). No
+  test depends on it; landmarks and missions are fixed.
 - Missions use the kinds "scooter" and "sports" and the outfits in
   missions/cast.gd; those keys must stay.

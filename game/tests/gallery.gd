@@ -37,6 +37,7 @@ func _run() -> void:
 	await _shot(cars, Vector3(0, 0, 598), 22.0, "gallery_3_vehicles.png")
 	await _people()
 	await _shot(_props(), Vector3(0, 0, 897), 30.0, "gallery_5_props.png", true)
+	await _shot(_trees(), Vector3(0, 0, 962), 18.0, "gallery_6_trees.png", true)
 	get_tree().quit()
 
 
@@ -187,6 +188,35 @@ func _props() -> MeshBuilder:
 	Props.bins(mb, out, Vector3(6, 0, z - 6))
 	Props.wayfinding(mb, out, Vector3(9, 0, z - 6))
 	Props.pay_station(mb, out, Vector3(11.5, 0, z - 6))
+	return mb
+
+
+## Trees close up, and the newer street kit (signal cabinet, bike racks,
+## sidewalk works, banners).
+func _trees() -> MeshBuilder:
+	var mb := MeshBuilder.new()
+	var out: Array = []
+	var z := 960.0
+	Props.oak(mb, out, Vector3(-11, 0, z), rng)
+	Props.street_tree(mb, out, Vector3(-5, 0, z), rng)
+	Props.palm(mb, out, Vector3(0, 0, z), rng)
+	Props.palm(mb, out, Vector3(4, 0, z + 1), rng)
+	Props.crepe_myrtle(mb, out, Vector3(8.5, 0, z), rng)
+	Props.crepe_myrtle(mb, out, Vector3(11.5, 0, z + 1), rng)
+	Props.planter(mb, out, Vector3(-12, 0, z + 7))
+	Props.bike_rack(mb, out, Vector3(-8, 0, z + 7), rng)
+	Props.roadworks(mb, out, Vector3(-3, 0, z + 7))
+	Props.traffic_light(mb, out, Vector3(2, 0, z + 7), Vector3.FORWARD)
+	Props.street_light(mb, out, Vector3(6, 0, z + 7), Vector3.FORWARD, null, Color(0.12, 0.5, 0.58))
+	Props.hydrant(mb, out, Vector3(8.5, 0, z + 7))
+	Props.mailbox(mb, out, Vector3(10, 0, z + 7))
+	Props.bollard(mb, out, Vector3(11.5, 0, z + 7))
+	Props.bins(mb, out, Vector3(-11, 0, z + 11))
+	Props.bench(mb, out, Vector3(-7, 0, z + 11), PI)
+	Props.trash_can(mb, out, Vector3(-4.5, 0, z + 11))
+	Props.pay_station(mb, out, Vector3(-3, 0, z + 11))
+	Props.gas_lamp(mb, out, Vector3(-1, 0, z + 11))
+	mb.box(Vector3(4, -0.05, z + 11), Vector3(12, 0.1, 3), MeshBuilder.glow(Color(0.34, 0.56, 0.28), MeshBuilder.GRASS))
 	return mb
 
 

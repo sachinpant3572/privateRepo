@@ -76,7 +76,7 @@ float joints(vec2 p, vec2 cell, float w) {
 }
 
 // Patterns along the pattern coordinates uv (see MeshBuilder.uvs).
-vec3 pattern(int c, vec3 col, vec2 uv, vec3 wpos, inout float rough, inout float spec) {
+vec3 pattern(int c, vec3 col, vec2 uv, vec3 wpos, vec3 wnormal, inout float rough, inout float spec) {
 	if (c == 3) {
 		col *= 1.0 - 0.28 * joints(uv, vec2(1.5), 0.05);
 	} else if (c == 5) {
@@ -88,6 +88,14 @@ vec3 pattern(int c, vec3 col, vec2 uv, vec3 wpos, inout float rough, inout float
 		col *= 0.95 + 0.07 * hash(vec2(floor(uv.x / 1.0), 3.0));
 		col *= 1.0 - 0.18 * (1.0 - smoothstep(0.0, 0.04, abs(fract(uv.x) - 0.5) - 0.46));
 		col *= mix(0.88, 1.0, vnoise(uv * 0.7));
+	} else if (c == 7 && wpos.y > 0.7) {
+		// Foliage off the ground: leaf clusters with dark gaps and sunlit
+		// tips on the upper side.
+		float leaf = vnoise(wpos.xz * 2.6 + wpos.y * 2.1) * 0.55 + vnoise(wpos.xz * 6.5 - wpos.y * 4.3) * 0.45;
+		col *= 0.5 + 0.7 * leaf;
+		col += col * 0.4 * smoothstep(0.66, 0.86, leaf) * clamp(wnormal.y, 0.0, 1.0);
+		rough = 0.95;
+		spec = 0.12;
 	} else if (c == 7) {
 		col *= 0.93 + 0.12 * step(0.5, fract(uv.x / 4.0));
 		col *= 0.85 + 0.25 * vnoise(wpos.xz * 1.7);
@@ -122,7 +130,7 @@ void surface(vec3 base, float code, vec3 wpos, vec3 wnormal, vec3 view_dir, vec2
 	spec = 0.25;
 	metal = 0.0;
 	if (detail > 0.5) {
-		col = pattern(c, col, uv, wpos, rough, spec);
+		col = pattern(c, col, uv, wpos, wnormal, rough, spec);
 	} else if (c == 9) {
 		rough = 0.3;
 		spec = 0.5;
@@ -163,9 +171,14 @@ void surface(vec3 base, float code, vec3 wpos, vec3 wnormal, vec3 view_dir, vec2
 		rough = 0.28;
 		spec = 0.6;
 	} else if (c == 15) {
+		// Brushed steel: there are no reflection probes, so fake a soft
+		// sky-and-street reflection, or metal reads near black.
+		vec3 r = reflect(-view_dir, wnormal);
+		vec3 env = mix(vec3(0.42, 0.42, 0.44), mix(sky_tint.rgb, vec3(0.8, 0.84, 0.9), 0.4), smoothstep(-0.2, 0.5, r.y)) * mix(1.0, 0.25, night);
+		col = mix(col, env, 0.4);
 		rough = 0.4;
 		spec = 0.7;
-		metal = 0.7;
+		metal = 0.3;
 	}
 	if (wet > 0.01 && wnormal.y > 0.9 && wpos.y < 0.35 && detail < 0.5) {
 		col *= mix(1.0, 0.7, wet);
@@ -535,6 +548,50 @@ func ball(center: Vector3, radius: Vector3, color: Color, sides := 6, rings := 3
 				tri(p00, p01, p11, n, color)
 			if r < rings - 1:
 				tri(p00, p11, p10, n, color)
+
+
+## A lumpy, smooth-shaded blob for foliage: `sides` around and `rings` from
+## top to bottom, each vertex pushed in or out by up to `lump` of the radius
+## (from `seed`, so a cell rebuilds the same). Shared vertices with smooth
+## normals, shaded darker underneath so a crown of clumps reads as depth.
+func clump(center: Vector3, radius: Vector3, color: Color, seed: int, sides := 7, rings := 4, lump := 0.18) -> void:
+	var base := verts.size()
+	for r in rings + 1:
+		var t := PI * r / rings
+		var count := 1 if r == 0 or r == rings else sides
+		var shade := lerpf(1.0, 0.6, float(r) / rings)
+		for i in count:
+			var d := _sphere_pt(t, TAU * i / sides)
+			var k := 1.0 if count == 1 else 1.0 + lump * (_hash(seed * 131 + r * 17 + i) * 2.0 - 1.0)
+			var p := center + d * radius * k
+			var n := (d / radius).normalized()
+			verts.append(xform * p)
+			normals.append((xform.basis * n).normalized())
+			colors.append(Color(color.r * shade, color.g * shade, color.b * shade, color.a))
+			uvs.append(_uv(p, n))
+	var last := verts.size() - 1
+	for i in sides:
+		var j := (i + 1) % sides
+		_tri_idx(base, base + 1 + i, base + 1 + j)
+		_tri_idx(last, last - sides + j, last - sides + i)
+		for r in rings - 2:
+			var a := base + 1 + r * sides
+			var b := a + sides
+			_tri_idx(a + i, b + i, b + j)
+			_tri_idx(a + i, b + j, a + j)
+
+
+## One triangle over existing vertices, wound to face along their normals.
+func _tri_idx(a: int, b: int, c: int) -> void:
+	var n := normals[a] + normals[b] + normals[c]
+	if (verts[b] - verts[a]).cross(verts[c] - verts[a]).dot(n) > 0.0:
+		indices.append_array([a, c, b])
+	else:
+		indices.append_array([a, b, c])
+
+
+static func _hash(n: int) -> float:
+	return fposmod(sin(float(n) * 12.9898) * 43758.5453, 1.0)
 
 
 static func _sphere_pt(theta: float, phi: float) -> Vector3:

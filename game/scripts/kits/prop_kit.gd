@@ -4,10 +4,11 @@ extends RefCounted
 
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 
-const IRON := Color(0.1, 0.12, 0.11)
+const IRON := Color(0.13, 0.15, 0.14)
 const STEEL := Color(0.55, 0.57, 0.6)
 const LAMP_GLOW := Color(1.0, 0.86, 0.45)
-const LEAF := Color(0.25, 0.48, 0.24)
+const LEAF := Color(0.27, 0.38, 0.2)
+const LEAF_LIGHT := Color(0.36, 0.45, 0.23)
 const MOSS := Color(0.6, 0.65, 0.55)
 const BARK := Color(0.38, 0.27, 0.19)
 const CONTAINERS := [Color(0.78, 0.28, 0.2), Color(0.2, 0.45, 0.72), Color(0.28, 0.58, 0.35), Color(0.88, 0.62, 0.2), Color(0.55, 0.55, 0.6)]
@@ -23,16 +24,22 @@ const SCOOTERS := [Color(0.2, 0.75, 0.4), Color(0.95, 0.4, 0.2), Color(0.15, 0.1
 ## Black cast-iron gas lamp with a warm lantern (Lantern Quarter). With a
 ## `glow` builder, also the pool of light it throws at night.
 static func gas_lamp(mb, out: Array, p: Vector3, glow = null) -> void:
-	mb.cylinder(p + Vector3(0, 0.15, 0), 0.09, 3.1, IRON, 4)
+	var iron := MeshBuilder.glow(IRON, MeshBuilder.GLOSS)
+	mb.cylinder(p + Vector3(0, 0.15, 0), 0.16, 0.5, iron, 6)
+	mb.cylinder(p + Vector3(0, 0.15, 0), 0.09, 3.1, iron, 5)
+	mb.box(p + Vector3(0, 3.0, 0), Vector3(0.6, 0.06, 0.06), iron)
 	mb.box(p + Vector3(0, 3.45, 0), Vector3(0.42, 0.55, 0.42), MeshBuilder.glow(LAMP_GLOW, MeshBuilder.GLOW_LAMP))
 	_pool(mb, glow, p + Vector3(0, 0.2, 0), 5.0, POOL_WARM)
-	mb.box(p + Vector3(0, 3.8, 0), Vector3(0.55, 0.12, 0.55), IRON)
+	mb.box(p + Vector3(0, 3.8, 0), Vector3(0.55, 0.12, 0.55), iron)
+	mb.box(p + Vector3(0, 3.95, 0), Vector3(0.12, 0.2, 0.12), iron)
 	out.append([p + Vector3(0, 1.5, 0), Vector3(0.3, 3.0, 0.3)])
 
 
 ## LED street light: a slim steel pole with a tapered arm toward `dir`
 ## (over the road) and a flat cobra head.
-static func street_light(mb, out: Array, p: Vector3, dir: Vector3, glow = null) -> void:
+## With a `banner` colour, two district banners hang off the pole on short
+## arms across the curb line.
+static func street_light(mb, out: Array, p: Vector3, dir: Vector3, glow = null, banner = null) -> void:
 	var steel := MeshBuilder.glow(STEEL, MeshBuilder.METAL)
 	mb.box(p + Vector3(0, 0.35, 0), Vector3(0.3, 0.4, 0.3), steel)
 	mb.cylinder(p + Vector3(0, 0.15, 0), 0.09, 6.2, steel, 5)
@@ -40,6 +47,12 @@ static func street_light(mb, out: Array, p: Vector3, dir: Vector3, glow = null) 
 	mb.box(p + dir * 2.4 + Vector3(0, 6.08, 0), Vector3(absf(dir.x) * 0.5 + 0.32, 0.12, absf(dir.z) * 0.5 + 0.32), MeshBuilder.glow(Color(0.35, 0.37, 0.4), MeshBuilder.METAL))
 	mb.box(p + dir * 2.4 + Vector3(0, 6.0, 0), Vector3(absf(dir.x) * 0.4 + 0.24, 0.06, absf(dir.z) * 0.4 + 0.24), MeshBuilder.glow(LED, MeshBuilder.GLOW_LAMP))
 	_pool(mb, glow, p + dir * 2.4 + Vector3(0, 0.05, 0), 7.0, POOL_COOL)
+	if banner != null:
+		var along := Vector3(absf(dir.z), 0, absf(dir.x))
+		var flag: Color = banner
+		for side in [-1.0, 1.0]:
+			mb.box(p + along * side * 0.35 + Vector3(0, 4.7, 0), along * 0.6 + Vector3(0, 0.04, 0.04), steel)
+			mb.box(p + along * side * 0.38 + Vector3(0, 4.0, 0), along * 0.5 + Vector3(0, 1.3, 0) + dir.abs() * 0.03, flag if side < 0.0 else flag.lightened(0.15))
 	out.append([p + Vector3(0, 2.0, 0), Vector3(0.3, 4.0, 0.3)])
 
 
@@ -53,7 +66,8 @@ static func traffic_light(mb, out: Array, p: Vector3, dir: Vector3) -> void:
 	mb.box(p + dir * 2.6 + Vector3(0, 5.8, 0), Vector3(absf(dir.x) * 5.2 + 0.12, 0.12, absf(dir.z) * 5.2 + 0.12), paint)
 	for k in 2:
 		var head := p + dir * (2.4 + k * 2.2) + Vector3(0, 5.15, 0)
-		mb.box(head, Vector3(0.36, 1.1, 0.36), Color(0.1, 0.1, 0.1))
+		mb.box(head, Vector3(0.36, 1.1, 0.36), MeshBuilder.glow(Color(0.16, 0.17, 0.17), MeshBuilder.GLOSS))
+		mb.box(head + Vector3(0, 0.6, 0), Vector3(0.44, 0.05, 0.44), MeshBuilder.glow(Color(0.85, 0.75, 0.2), MeshBuilder.GLOSS))
 		var lit := k == 0
 		for side in [-1.0, 1.0]:
 			var face: Vector3 = head + along * side * 0.2
@@ -66,7 +80,13 @@ static func traffic_light(mb, out: Array, p: Vector3, dir: Vector3) -> void:
 	mb.box(p - dir * 0.25 + Vector3(0, 2.8, 0), Vector3(0.36, 0.36, 0.36), Color(0.1, 0.1, 0.1))
 	mb.box(p - dir * 0.25 + Vector3(0, 2.8, 0) + along * 0.19, along * 0.04 + (Vector3.ONE - along) * 0.26, MeshBuilder.glow(Color(1.0, 0.95, 0.85), MeshBuilder.GLOW_NEON))
 	mb.box(p - dir * 0.15 + Vector3(0, 1.1, 0), Vector3(0.14, 0.2, 0.14), Color(0.9, 0.75, 0.2))
+	# Signal controller cabinet behind the pole, toward the buildings.
+	var cab := p + along * 1.0 - dir * 1.3
+	mb.box(cab + Vector3(0, 0.12, 0), along * 0.95 + dir.abs() * 0.7 + Vector3(0, 0.1, 0), MeshBuilder.glow(Color(0.6, 0.6, 0.58), MeshBuilder.CONCRETE))
+	mb.box(cab + Vector3(0, 0.85, 0), along * 0.8 + dir.abs() * 0.5 + Vector3(0, 1.3, 0), MeshBuilder.glow(Color(0.62, 0.66, 0.62), MeshBuilder.GLOSS))
+	mb.box(cab + Vector3(0, 1.52, 0), along * 0.86 + dir.abs() * 0.56 + Vector3(0, 0.05, 0), MeshBuilder.glow(Color(0.7, 0.73, 0.7), MeshBuilder.METAL))
 	out.append([p + Vector3(0, 2.0, 0), Vector3(0.35, 4.0, 0.35)])
+	out.append([cab + Vector3(0, 0.75, 0), along * 0.8 + dir.abs() * 0.5 + Vector3(0, 1.5, 0)])
 
 
 ## Bus shelter facing -Z: glass back and ends, a steel roof, a bench and a
@@ -140,14 +160,22 @@ static func scooter(mb, p: Vector3, yaw: float, color: Color) -> void:
 	mb.xform = saved
 
 
-## Recycling and rubbish bins side by side (black and blue lids).
+## Three-stream bins side by side: a solar compacting bin for landfill
+## (the panel on top is what the camera sees), recycling (blue lid) and
+## compost (green lid).
 static func bins(mb, out: Array, p: Vector3) -> void:
+	var body := MeshBuilder.glow(Color(0.42, 0.44, 0.46), MeshBuilder.METAL)
+	mb.box(p + Vector3(-0.7, 0.62, 0), Vector3(0.66, 1.05, 0.62), body)
+	mb.box(p + Vector3(-0.7, 1.17, 0), Vector3(0.66, 0.05, 0.62), MeshBuilder.glow(Color(0.85, 0.86, 0.88), MeshBuilder.METAL))
+	mb.box(p + Vector3(-0.7, 1.2, 0.02), Vector3(0.56, 0.02, 0.5), MeshBuilder.glow(Color(0.1, 0.13, 0.22), MeshBuilder.SOLAR))
+	mb.box(p + Vector3(-0.7, 0.85, -0.32), Vector3(0.44, 0.22, 0.03), Color(0.15, 0.15, 0.16))
 	for k in 2:
-		var c := Color(0.2, 0.22, 0.24) if k == 0 else Color(0.15, 0.35, 0.65)
-		var q := p + Vector3(k * 0.7 - 0.35, 0, 0)
-		mb.box(q + Vector3(0, 0.55, 0), Vector3(0.6, 0.9, 0.6), MeshBuilder.glow(c, MeshBuilder.GLOSS))
-		mb.box(q + Vector3(0, 1.03, 0), Vector3(0.64, 0.06, 0.64), MeshBuilder.glow(c.darkened(0.25), MeshBuilder.GLOSS))
-	out.append([p + Vector3(0, 0.55, 0), Vector3(1.3, 1.1, 0.6)])
+		var lid := Color(0.15, 0.4, 0.78) if k == 0 else Color(0.25, 0.6, 0.3)
+		var q := p + Vector3(k * 0.62, 0, 0)
+		mb.box(q + Vector3(0, 0.55, 0), Vector3(0.56, 0.9, 0.56), body)
+		mb.box(q + Vector3(0, 1.03, 0), Vector3(0.6, 0.06, 0.6), MeshBuilder.glow(lid, MeshBuilder.GLOSS))
+		mb.box(q + Vector3(0, 0.75, -0.29), Vector3(0.3, 0.3, 0.02), MeshBuilder.glow(lid.lightened(0.2), MeshBuilder.GLOSS))
+	out.append([p + Vector3(-0.05, 0.6, 0), Vector3(1.95, 1.2, 0.65)])
 
 
 ## Wayfinding totem: a slim slab with a lit city map on its face (-Z).
@@ -162,66 +190,182 @@ static func wayfinding(mb, out: Array, p: Vector3) -> void:
 static func pay_station(mb, out: Array, p: Vector3) -> void:
 	mb.box(p + Vector3(0, 0.8, 0), Vector3(0.35, 1.3, 0.3), MeshBuilder.glow(Color(0.2, 0.3, 0.5), MeshBuilder.GLOSS))
 	mb.box(p + Vector3(0, 1.2, -0.16), Vector3(0.24, 0.2, 0.03), MeshBuilder.glow(Color(0.6, 0.85, 0.7), MeshBuilder.GLOW_NEON))
+	mb.box(p + Vector3(0, 1.62, 0.04), Vector3(0.5, 0.04, 0.42), MeshBuilder.glow(Color(0.1, 0.13, 0.22), MeshBuilder.SOLAR))
+	mb.box(p + Vector3(0, 1.52, 0.04), Vector3(0.06, 0.16, 0.06), MeshBuilder.glow(STEEL, MeshBuilder.METAL))
 	out.append([p + Vector3(0, 0.7, 0), Vector3(0.35, 1.4, 0.3)])
 
 
+## Fire hydrant: flanged base, barrel, side nozzles with caps and a
+## domed bonnet (gloss red, a yellow-capped top nut).
 static func hydrant(mb, out: Array, p: Vector3) -> void:
-	mb.cylinder(p + Vector3(0, 0.15, 0), 0.2, 0.7, Color(0.85, 0.18, 0.15), 6)
-	mb.box(p + Vector3(0, 0.6, 0), Vector3(0.55, 0.14, 0.14), Color(0.85, 0.18, 0.15))
-	mb.box(p + Vector3(0, 0.92, 0), Vector3(0.26, 0.12, 0.26), Color(0.95, 0.85, 0.3))
+	var red := MeshBuilder.glow(Color(0.82, 0.15, 0.12), MeshBuilder.GLOSS)
+	mb.cylinder(p + Vector3(0, 0.15, 0), 0.24, 0.08, red, 8)
+	mb.cylinder(p + Vector3(0, 0.15, 0), 0.17, 0.62, red, 8)
+	mb.box(p + Vector3(0, 0.55, 0), Vector3(0.52, 0.13, 0.13), red)
+	for side in [-1.0, 1.0]:
+		mb.box(p + Vector3(side * 0.28, 0.55, 0), Vector3(0.05, 0.16, 0.16), MeshBuilder.glow(STEEL, MeshBuilder.METAL))
+	mb.box(p + Vector3(0, 0.5, -0.2), Vector3(0.18, 0.18, 0.12), red)
+	mb.ball(p + Vector3(0, 0.78, 0), Vector3(0.2, 0.12, 0.2), red, 8, 2)
+	mb.box(p + Vector3(0, 0.92, 0), Vector3(0.1, 0.08, 0.1), Color(0.95, 0.85, 0.3))
 	out.append([p + Vector3(0, 0.5, 0), Vector3(0.45, 1.0, 0.45)])
 
 
-## Park bench facing -Z after turning by `yaw`.
+## Park bench facing -Z after turning by `yaw`: wooden slats (the siding
+## code draws them) on a steel frame with armrests.
 static func bench(mb, out: Array, p: Vector3, yaw: float) -> void:
 	var saved: Transform3D = mb.xform
 	mb.xform = saved * Transform3D(Basis(Vector3.UP, yaw), p)
-	mb.box(Vector3(0, 0.5, 0), Vector3(1.8, 0.1, 0.5), Color(0.45, 0.3, 0.18))
-	mb.box(Vector3(0, 0.85, 0.22), Vector3(1.8, 0.5, 0.08), Color(0.45, 0.3, 0.18))
-	for side in [-0.8, 0.8]:
-		mb.box(Vector3(side, 0.32, 0), Vector3(0.08, 0.35, 0.5), IRON)
+	var wood := MeshBuilder.glow(Color(0.66, 0.46, 0.28), MeshBuilder.SIDING)
+	var frame := MeshBuilder.glow(Color(0.32, 0.34, 0.36), MeshBuilder.METAL)
+	mb.box(Vector3(0, 0.47, 0), Vector3(1.8, 0.06, 0.48), wood)
+	mb.box(Vector3(0, 0.82, 0.24), Vector3(1.8, 0.42, 0.05), wood)
+	for side in [-0.82, 0.0, 0.82]:
+		mb.box(Vector3(side, 0.24, 0.02), Vector3(0.06, 0.42, 0.5), frame)
+	for side in [-0.88, 0.88]:
+		mb.box(Vector3(side, 0.64, 0.0), Vector3(0.06, 0.05, 0.42), frame)
 	mb.xform = saved
 	out.append([p + Vector3(0, 0.5, 0), Vector3(1.8, 1.0, 0.6), yaw])
 
 
+## Litter bin: perforated steel (dark green) under a domed steel lid.
 static func trash_can(mb, out: Array, p: Vector3) -> void:
-	mb.cylinder(p + Vector3(0, 0.15, 0), 0.3, 0.95, Color(0.22, 0.32, 0.26), 6)
-	mb.cylinder(p + Vector3(0, 1.1, 0), 0.33, 0.08, Color(0.15, 0.2, 0.17), 6)
+	var green := MeshBuilder.glow(Color(0.2, 0.32, 0.26), MeshBuilder.GLOSS)
+	mb.cylinder(p + Vector3(0, 0.15, 0), 0.3, 0.85, green, 8)
+	for y in [0.35, 0.6, 0.85]:
+		mb.cylinder(p + Vector3(0, y, 0), 0.31, 0.04, MeshBuilder.glow(Color(0.12, 0.18, 0.15), MeshBuilder.GLOSS), 8)
+	mb.ball(p + Vector3(0, 1.0, 0), Vector3(0.33, 0.14, 0.33), MeshBuilder.glow(Color(0.55, 0.58, 0.6), MeshBuilder.METAL), 8, 2)
 	out.append([p + Vector3(0, 0.5, 0), Vector3(0.6, 1.0, 0.6)])
 
 
+## Postal drop box: navy with a domed top and a white panel.
 static func mailbox(mb, out: Array, p: Vector3) -> void:
-	mb.box(p + Vector3(0, 0.65, 0), Vector3(0.5, 1.0, 0.45), Color(0.15, 0.3, 0.65))
-	mb.box(p + Vector3(0, 1.2, 0), Vector3(0.52, 0.12, 0.47), Color(0.12, 0.24, 0.55))
+	var navy := MeshBuilder.glow(Color(0.16, 0.3, 0.62), MeshBuilder.GLOSS)
+	mb.box(p + Vector3(0, 0.6, 0), Vector3(0.5, 0.9, 0.45), navy)
+	mb.limb(p + Vector3(-0.25, 1.05, 0), p + Vector3(0.25, 1.05, 0), 0.22, 0.22, navy, 8)
+	mb.box(p + Vector3(0, 0.75, -0.23), Vector3(0.3, 0.16, 0.02), Color(0.92, 0.92, 0.9))
+	mb.box(p + Vector3(0, 0.12, 0), Vector3(0.56, 0.08, 0.5), Color(0.15, 0.15, 0.16))
 	out.append([p + Vector3(0, 0.6, 0), Vector3(0.5, 1.2, 0.45)])
 
 
-## Live oak: a broad, layered crown with grey Spanish moss hanging off it.
+## A row of inverted-U steel bike racks along local X, with a bike or two
+## locked to them.
+static func bike_rack(mb, out: Array, p: Vector3, rng: RandomNumberGenerator) -> void:
+	var steel := MeshBuilder.glow(Color(0.6, 0.62, 0.65), MeshBuilder.METAL)
+	for i in 3:
+		var x := (i - 1) * 0.9
+		for z in [-0.3, 0.3]:
+			mb.box(p + Vector3(x, 0.45, z), Vector3(0.05, 0.8, 0.05), steel)
+		mb.box(p + Vector3(x, 0.86, 0), Vector3(0.05, 0.05, 0.65), steel)
+		if rng.randf() < 0.5:
+			bike(mb, p + Vector3(x + 0.18, 0, 0), [Color(0.15, 0.15, 0.17), Color(0.75, 0.2, 0.18), Color(0.85, 0.85, 0.82), Color(0.2, 0.45, 0.4)][rng.randi() % 4])
+	out.append([p + Vector3(0, 0.45, 0), Vector3(2.4, 0.9, 0.8)])
+
+
+## Sidewalk works fenced off along local X: water-filled barriers in orange
+## and white, cones, a plate over the trench and a sign.
+static func roadworks(mb, out: Array, p: Vector3) -> void:
+	var orange := MeshBuilder.glow(Color(0.95, 0.45, 0.1), MeshBuilder.GLOSS)
+	var white := MeshBuilder.glow(Color(0.93, 0.93, 0.9), MeshBuilder.GLOSS)
+	mb.box(p + Vector3(0, 0.02, 0.3), Vector3(2.4, 0.03, 1.0), MeshBuilder.glow(Color(0.35, 0.36, 0.38), MeshBuilder.METAL))
+	for k in 3:
+		mb.box(p + Vector3(-1.4 + k * 1.4, 0.45, -0.45), Vector3(1.3, 0.8, 0.4), orange if k % 2 == 0 else white)
+	for x in [-1.6, 1.6]:
+		mb.cylinder(p + Vector3(x, 0, 0.9), 0.14, 0.7, orange, 6)
+		mb.box(p + Vector3(x, 0.45, 0.9), Vector3(0.24, 0.1, 0.24), white)
+	mb.box(p + Vector3(0.9, 1.3, 0.9), Vector3(0.6, 0.6, 0.04), MeshBuilder.glow(Color(0.98, 0.6, 0.12), MeshBuilder.GLOSS))
+	mb.box(p + Vector3(0.9, 0.6, 0.92), Vector3(0.05, 1.0, 0.05), MeshBuilder.glow(STEEL, MeshBuilder.METAL))
+	out.append([p + Vector3(0, 0.5, 0.2), Vector3(4.0, 1.0, 1.4)])
+
+
+## Live oak: a short, thick trunk forking into low limbs that spread a
+## broad, lumpy crown, with grey Spanish moss hanging off the limbs.
 static func oak(mb, out: Array, p: Vector3, rng: RandomNumberGenerator) -> void:
 	var s := rng.randf_range(0.85, 1.2)
-	mb.cylinder(p + Vector3(0, 0.15, 0), 0.32 * s, 3.0 * s, BARK, 5)
-	var leaf := LEAF.lerp(Color(0.32, 0.55, 0.25), rng.randf())
-	mb.ball(p + Vector3(0, 3.6 * s, 0), Vector3(2.8, 1.5, 2.6) * s, leaf, 7, 3)
-	mb.ball(p + Vector3(1.3, 4.4, 0.6) * s, Vector3(1.8, 1.2, 1.7) * s, leaf.lightened(0.1), 6, 3)
-	mb.ball(p + Vector3(-1.2, 4.2, -0.8) * s, Vector3(1.6, 1.1, 1.5) * s, leaf.darkened(0.1), 6, 3)
-	for i in 3:
-		var a := TAU * i / 3.0 + rng.randf()
-		mb.box(p + Vector3(cos(a) * 2.2, 2.6, sin(a) * 2.2) * s, Vector3(0.25, 0.9, 0.12) * s, MOSS)
-	out.append([p + Vector3(0, 1.5, 0), Vector3(0.7, 3.0, 0.7)])
+	var seed := rng.randi()
+	var leaf := _leaf(LEAF.lerp(LEAF_LIGHT, rng.randf()))
+	var fork := p + Vector3(0, 2.0 * s, 0)
+	mb.limb(p, fork, 0.4 * s, 0.28 * s, BARK, 6)
+	var turn := rng.randf() * TAU
+	for i in 4:
+		var a := turn + TAU * i / 4.0 + rng.randf_range(-0.3, 0.3)
+		var d := Vector3(cos(a), 0, sin(a))
+		var tip := fork + d * rng.randf_range(1.7, 2.3) * s + Vector3(0, rng.randf_range(0.9, 1.5) * s, 0)
+		mb.limb(fork, tip, 0.2 * s, 0.09 * s, BARK, 5)
+		var tint := leaf.lightened(0.08) if i % 2 == 0 else leaf.darkened(0.06)
+		mb.clump(tip + Vector3(0, 0.5 * s, 0), Vector3(1.4, 0.95, 1.4) * s * rng.randf_range(0.9, 1.1), tint, seed + i, 9, 4, 0.28)
+		if i % 2 == 0:
+			mb.clump(fork.lerp(tip, 0.45) + Vector3(0, 1.3 * s, 0), Vector3(1.25, 0.9, 1.25) * s, tint.lightened(0.04), seed + 20 + i, 9, 4, 0.28)
+		if i % 2 == 0:
+			# Moss hangs off the limb's outer half (thin along Z so it faces
+			# the camera).
+			for m in 2:
+				var at := fork.lerp(tip, 0.6 + m * 0.25) + Vector3(0, -0.45 * s, 0)
+				mb.box(at, Vector3(0.16, 0.9, 0.05) * s, MOSS)
+	mb.clump(fork + Vector3(0.4, 2.3, 0.3) * s, Vector3(1.5, 1.0, 1.5) * s, leaf.lightened(0.07), seed + 9, 9, 4, 0.28)
+	mb.clump(fork + Vector3(-0.5, 2.0, -0.4) * s, Vector3(1.4, 0.9, 1.4) * s, leaf.lightened(0.02), seed + 10, 9, 4, 0.28)
+	out.append([p + Vector3(0, 1.5, 0), Vector3(0.8, 3.0, 0.8)])
 
 
-## Small flowering crepe myrtle (pink or white).
+## Street tree in a sidewalk pit (downtown): a cast-iron grate flush with
+## the paving, a slim trunk and an upright crown of clumps.
+static func street_tree(mb, out: Array, p: Vector3, rng: RandomNumberGenerator) -> void:
+	var s := rng.randf_range(0.9, 1.1)
+	var seed := rng.randi()
+	var leaf := _leaf(Color(0.3, 0.42, 0.2).lerp(Color(0.38, 0.48, 0.23), rng.randf()))
+	mb.box(p + Vector3(0, 0.01, 0), Vector3(1.6, 0.02, 1.6), MeshBuilder.glow(Color(0.55, 0.54, 0.5), MeshBuilder.CONCRETE))
+	mb.box(p + Vector3(0, 0.016, 0), Vector3(1.36, 0.02, 1.36), MeshBuilder.glow(Color(0.33, 0.31, 0.29), MeshBuilder.GLOSS))
+	mb.box(p + Vector3(0, 0.022, 0), Vector3(0.46, 0.02, 0.46), Color(0.22, 0.17, 0.12))
+	mb.limb(p, p + Vector3(0, 2.8, 0) * s, 0.13, 0.09, BARK.lightened(0.12), 5)
+	mb.clump(p + Vector3(0, 3.7, 0) * s, Vector3(1.5, 1.5, 1.5) * s, leaf, seed, 9, 4, 0.28)
+	mb.clump(p + Vector3(0.45, 4.8, 0.2) * s, Vector3(1.1, 1.0, 1.1) * s, leaf.lightened(0.08), seed + 1, 6)
+	mb.clump(p + Vector3(-0.5, 4.5, -0.3) * s, Vector3(1.0, 0.9, 1.0) * s, leaf.darkened(0.06), seed + 2, 6)
+	out.append([p + Vector3(0, 1.0, 0), Vector3(0.3, 2.0, 0.3)])
+
+
+## Crepe myrtle: three slim, pale, splaying stems carrying bloom clusters
+## (mostly pink, some white, lilac or watermelon red) over a little green.
 static func crepe_myrtle(mb, out: Array, p: Vector3, rng: RandomNumberGenerator) -> void:
-	var bloom := Color(0.95, 0.55, 0.75) if rng.randf() < 0.7 else Color(0.97, 0.95, 0.95)
-	mb.cylinder(p + Vector3(0, 0.15, 0), 0.15, 1.8, BARK.lightened(0.15), 4)
-	mb.ball(p + Vector3(0, 2.5, 0), Vector3(1.2, 1.0, 1.2), bloom, 6, 3)
+	var roll := rng.randf()
+	var bloom := Color(0.88, 0.5, 0.68) if roll < 0.55 else (Color(0.86, 0.84, 0.84) if roll < 0.75 else (Color(0.68, 0.55, 0.82) if roll < 0.9 else Color(0.84, 0.28, 0.38)))
+	bloom = _leaf(bloom)
+	var seed := rng.randi()
+	var turn := rng.randf() * TAU
+	mb.clump(p + Vector3(0, 2.2, 0), Vector3(1.1, 0.6, 1.1), _leaf(LEAF), seed + 7, 6)
+	for i in 3:
+		var a := turn + TAU * i / 3.0
+		var d := Vector3(cos(a), 0, sin(a))
+		var tip := p + d * 0.55 + Vector3(0, 2.3, 0)
+		mb.limb(p + d * 0.06, tip, 0.07, 0.045, Color(0.66, 0.55, 0.45), 4)
+		mb.clump(tip + d * 0.15 + Vector3(0, 0.4, 0), Vector3(0.72, 0.6, 0.72), bloom.darkened(0.04 * i), seed + i, 7, 4, 0.25)
+	mb.clump(p + Vector3(0, 3.05, 0), Vector3(0.78, 0.58, 0.78), bloom.lightened(0.06), seed + 5, 7, 4, 0.25)
 	out.append([p + Vector3(0, 1.0, 0), Vector3(0.4, 2.0, 0.4)])
 
 
+## Concrete planter with a clipped shrub and a fountain of ornamental grass.
 static func planter(mb, out: Array, p: Vector3) -> void:
-	mb.box(p + Vector3(0, 0.45, 0), Vector3(1.4, 0.6, 1.4), Color(0.6, 0.58, 0.55))
-	mb.ball(p + Vector3(0, 1.0, 0), Vector3(0.65, 0.45, 0.65), LEAF.lightened(0.1), 5, 2)
+	var seed := int(p.x * 13.0 + p.z * 7.0)
+	mb.box(p + Vector3(0, 0.4, 0), Vector3(1.4, 0.5, 1.4), MeshBuilder.glow(Color(0.68, 0.66, 0.62), MeshBuilder.CONCRETE))
+	mb.box(p + Vector3(0, 0.66, 0), Vector3(1.22, 0.02, 1.22), Color(0.22, 0.17, 0.13))
+	mb.clump(p + Vector3(-0.22, 0.95, 0.18), Vector3(0.48, 0.4, 0.48), _leaf(LEAF.lightened(0.06)), seed, 6)
+	grass(mb, p + Vector3(0.3, 0.66, -0.25), 0.75, seed)
 	out.append([p + Vector3(0, 0.5, 0), Vector3(1.4, 1.0, 1.4)])
+
+
+## A fountain of ornamental grass blades from `p`, about `h` tall.
+static func grass(mb, p: Vector3, h: float, seed: int) -> void:
+	var straw := Color(0.62, 0.62, 0.36)
+	for i in 7:
+		var a := TAU * i / 7.0 + MeshBuilder._hash(seed + i) * 0.6
+		var d := Vector3(cos(a), 0, sin(a))
+		var side := Vector3(-d.z, 0, d.x) * 0.06
+		var tip := p + d * h * 0.45 + Vector3(0, h * (0.75 + 0.3 * MeshBuilder._hash(seed * 3 + i)), 0)
+		mb.tri(p - side, p + side, tip, (d + Vector3(0, 0.6, 0)).normalized(), straw.lerp(LEAF_LIGHT, 0.4 * (i % 2)))
+
+
+## Foliage colour: the GRASS code, which the city shader breaks into leaf
+## clusters above the ground.
+static func _leaf(color: Color) -> Color:
+	return MeshBuilder.glow(color, MeshBuilder.GRASS)
 
 
 ## Picket or chain-link style fence between two points (posts plus rails),
@@ -373,21 +517,60 @@ static func cafe_table(mb, out: Array, p: Vector3, parasol: Color) -> void:
 
 ## A bollard (pedestrian lanes, plazas).
 static func bollard(mb, out: Array, p: Vector3) -> void:
-	mb.cylinder(p + Vector3(0, 0.15, 0), 0.14, 0.8, IRON, 5)
-	mb.box(p + Vector3(0, 0.75, 0), Vector3(0.3, 0.06, 0.3), Color(0.85, 0.7, 0.3))
+	mb.cylinder(p + Vector3(0, 0.15, 0), 0.13, 0.8, MeshBuilder.glow(Color(0.6, 0.62, 0.64), MeshBuilder.METAL), 8)
+	mb.cylinder(p + Vector3(0, 0.75, 0), 0.135, 0.06, Color(0.95, 0.85, 0.35), 8)
+	mb.ball(p + Vector3(0, 0.95, 0), Vector3(0.13, 0.06, 0.13), MeshBuilder.glow(Color(0.6, 0.62, 0.64), MeshBuilder.METAL), 8, 2)
 	out.append([p + Vector3(0, 0.45, 0), Vector3(0.3, 0.9, 0.3)])
 
 
-## A palm (Gilt District plazas and the boulevard).
+## A palm (Gilt District plazas and the boulevard): a gently leaning
+## trunk (the siding code draws its rings), a crown of arching feather
+## fronds folded along the rib, and a few dead fronds hanging under it.
 static func palm(mb, out: Array, p: Vector3, rng: RandomNumberGenerator) -> void:
-	var h := rng.randf_range(5.0, 7.0)
-	mb.cylinder(p + Vector3(0, 0.15, 0), 0.18, h, BARK.lightened(0.25), 5)
-	for i in 6:
-		var a := TAU * i / 6.0 + rng.randf()
-		var d := Vector3(cos(a), 0, sin(a))
-		mb.box(p + Vector3(0, h + 0.1, 0) + d * 1.1, Vector3(absf(d.x) * 2.0 + 0.5, 0.12, absf(d.z) * 2.0 + 0.5), LEAF.lightened(0.15))
-	mb.ball(p + Vector3(0, h + 0.2, 0), Vector3(0.5, 0.4, 0.5), LEAF, 5, 2)
-	out.append([p + Vector3(0, 1.5, 0), Vector3(0.4, 3.0, 0.4)])
+	var h := rng.randf_range(5.5, 8.0)
+	var a0 := rng.randf() * TAU
+	var lean := Vector3(cos(a0), 0, sin(a0)) * rng.randf_range(0.2, 0.8)
+	var trunk := MeshBuilder.glow(Color(0.58, 0.5, 0.4), MeshBuilder.SIDING)
+	var prev := p
+	for i in 3:
+		var t := (i + 1) / 3.0
+		var q := p + Vector3(0, h * t, 0) + lean * t * t
+		mb.limb(prev, q, lerpf(0.24, 0.16, i / 3.0), lerpf(0.24, 0.16, t), trunk, 6)
+		prev = q
+	var crown := prev + Vector3(0, 0.1, 0)
+	mb.clump(crown, Vector3(0.42, 0.4, 0.42), Color(0.45, 0.42, 0.25), rng.randi(), 6, 3)
+	var green := _leaf(Color(0.33, 0.46, 0.22).lerp(Color(0.42, 0.52, 0.25), rng.randf()))
+	var turn := rng.randf() * TAU
+	for i in 9:
+		var a := turn + TAU * i / 9.0 + rng.randf_range(-0.15, 0.15)
+		_frond(mb, crown, a, rng.randf_range(2.4, 3.1), rng.randf_range(0.5, 0.9), green if i % 2 == 0 else green.lightened(0.06))
+	for i in 3:
+		var a := turn + TAU * (i + 0.5) / 3.0
+		_frond(mb, crown - Vector3(0, 0.2, 0), a, 1.6, -0.9, Color(0.55, 0.44, 0.3))
+	out.append([p + Vector3(0, 1.5, 0), Vector3(0.45, 3.0, 0.45)])
+
+
+## One frond from `base` toward yaw `a`: three segments rising by `rise`
+## then drooping (a negative rise hangs it straight down), each a V folded
+## along the rib, widest a third of the way out.
+static func _frond(mb, base: Vector3, a: float, length: float, rise: float, color: Color) -> void:
+	var d := Vector3(cos(a), 0, sin(a))
+	var side := Vector3(-d.z, 0, d.x)
+	var widths := [0.06, 0.42, 0.34, 0.04]
+	var pts: Array[Vector3] = []
+	for k in 4:
+		var t := k / 3.0
+		var y := rise * sin(t * PI * 0.75) - 1.1 * t * t if rise > 0.0 else rise * t * 1.6
+		pts.append(base + d * length * t * (1.0 if rise > 0.0 else 0.45) + Vector3(0, y, 0))
+	for k in 3:
+		var tint := color.darkened(0.12) if k == 0 else (color if k == 1 else color.lightened(0.06))
+		for sgn in [-1.0, 1.0]:
+			var e0: Vector3 = pts[k] + side * sgn * widths[k] - Vector3(0, widths[k] * 0.35, 0)
+			var e1: Vector3 = pts[k + 1] + side * sgn * widths[k + 1] - Vector3(0, widths[k + 1] * 0.35, 0)
+			var n := (pts[k + 1] - pts[k]).cross(e0 - pts[k]).normalized()
+			if n.y < 0.0:
+				n = -n
+			mb.quad(pts[k], pts[k + 1], e1, e0, n, tint)
 
 
 ## Oil stain, crack or patch on the asphalt (pure decoration).

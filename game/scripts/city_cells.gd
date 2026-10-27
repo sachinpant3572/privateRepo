@@ -52,6 +52,8 @@ const RAIL_WHITE := Color(0.88, 0.88, 0.86)
 const MOREAU := Color(0.55, 0.2, 0.24)
 const CONCRETE := Color(0.62, 0.61, 0.58)
 const STEEL := Color(0.3, 0.36, 0.4)
+## District banners on downtown street lights.
+const BANNERS := [Color(0.85, 0.62, 0.18), Color(0.12, 0.5, 0.58), Color(0.7, 0.16, 0.22)]
 const ZEBRA_STYLES := ["downtown", "quarter", "station", "tower", "police", "hospital", "park", "club"]
 ## Biggest parcel (along the front, deep) per district style; bigger lots
 ## are split.
@@ -1344,12 +1346,20 @@ static func _furniture(ctx: Ctx, kind: String) -> void:
 		else:
 			match kind:
 				"downtown":
+					# Street lights every 18 m (some with district banners)
+					# and a street tree in a pit halfway between, clear of
+					# the bench, bins, shelter zone, pay station, hydrant
+					# and mailbox.
+					var banner = BANNERS[ctx.deco.randi() % BANNERS.size()] if ctx.deco.randf() < 0.5 else null
 					var t := -half
 					while t <= half:
-						Props.street_light(ctx.mb, local, Vector3(t, 0, 0), street, ctx.glow)
+						Props.street_light(ctx.mb, local, Vector3(t, 0, 0), street, ctx.glow, banner)
+						var tree := t + 9.0
+						if tree < half - 1.0 and absf(tree) > 6.2 and absf(tree + half * 0.7) > 1.4 and absf(tree - half + 3.0) > 1.4 and absf(tree + half - 3.0) > 1.4:
+							Props.street_tree(ctx.mb, local, Vector3(tree, 0, 0.3), ctx.deco)
 						t += 18.0
 					if rng.randf() < 0.5:
-						Props.bins(ctx.mb, local, Vector3(minf(4.0, half), 0, 0.2))
+						Props.bins(ctx.mb, local, Vector3(minf(4.4, half), 0, 0.2))
 					if rng.randf() < 0.35:
 						Props.bench(ctx.mb, local, Vector3(maxf(-4.0, -half), 0, 0.4), 0.0)
 					if rng.randf() < 0.6:
@@ -1370,6 +1380,8 @@ static func _furniture(ctx: Ctx, kind: String) -> void:
 						Props.bins(ctx.mb, local, Vector3(minf(7.0, half), 0, 0.3))
 					if ctx.deco.randf() < 0.15:
 						Props.scooter(ctx.mb, Vector3(ctx.deco.randf_range(-half, half), 0, 1.6), ctx.deco.randf() * TAU, Props.SCOOTERS[ctx.deco.randi() % Props.SCOOTERS.size()])
+					elif half > 3.0 and ctx.deco.randf() < 0.06:
+						Props.roadworks(ctx.mb, local, Vector3(0, 0, 1.0))
 				"docks":
 					var t := -half
 					while t <= half:
@@ -1403,10 +1415,11 @@ static func _furniture(ctx: Ctx, kind: String) -> void:
 
 
 ## Present-day kit along a curb (furniture frame, -Z to the street). Downtown,
-## in the gap between the bench (x -4.9..-3.1) and the bins (3.35..4.65): a
-## bus shelter, a bike-share dock, EV chargers or a wayfinding totem, and
-## sometimes a pay station past the bench. Everywhere: dockless scooters,
-## kept inside the sidewalk (its back edge is at z 2.55).
+## in the gap between the bench (x -4.9..-3.1) and the bins (3.37..5.3): a
+## bus shelter, a bike-share dock, EV chargers, a wayfinding totem, bike
+## racks or sidewalk works, and sometimes a pay station past the bench.
+## Elsewhere (the Quarter) bike racks sometimes; everywhere dockless
+## scooters, kept inside the sidewalk (its back edge is at z 2.55).
 static func _modern_street(ctx: Ctx, local: Array, half: float, downtown: bool) -> void:
 	var deco := ctx.deco
 	if downtown and half > 6.0:
@@ -1420,8 +1433,14 @@ static func _modern_street(ctx: Ctx, local: Array, half: float, downtown: bool) 
 				Props.ev_charger(ctx.mb, local, Vector3(x, 0, 0.15))
 		elif roll < 0.75:
 			Props.wayfinding(ctx.mb, local, Vector3(1.0, 0, 0.7))
+		elif roll < 0.9:
+			Props.bike_rack(ctx.mb, local, Vector3(0.2, 0, 1.3), deco)
+		elif roll < 0.95:
+			Props.roadworks(ctx.mb, local, Vector3(0.3, 0, 1.0))
 		if half >= 8.0 and deco.randf() < 0.25:
 			Props.pay_station(ctx.mb, local, Vector3(-half * 0.7, 0, 0.3))
+	elif not downtown and half > 4.0 and deco.randf() < 0.2:
+		Props.bike_rack(ctx.mb, local, Vector3(0, 0, 1.6), deco)
 	if deco.randf() < 0.3:
 		for k in deco.randi_range(1, 2):
 			Props.scooter(ctx.mb, Vector3(deco.randf_range(-half, half), 0, 1.7 + k * 0.3), deco.randf() * TAU, Props.SCOOTERS[deco.randi() % Props.SCOOTERS.size()])
