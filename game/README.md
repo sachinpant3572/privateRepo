@@ -103,12 +103,17 @@ phone.
 - **Streaming**: the map is split into cells (one block plus its roads;
   the bridge is a cell of its own). Cells whose block comes within ~105 m of
   the player are built on a worker thread and freed past ~150 m; each cell is one mesh (one draw call) and one static body.
-  Parked cars come and go with the player too. Every cell is about
-  0.1k-3.6k triangles and builds in under ~10 ms.
+  Parked cars come and go with the player too. A cell averages about 2.7k
+  triangles (90% under 5.9k, the densest 12k) and builds in about 6 ms
+  (90% under 16 ms, measured in the cloud container).
 - **Asset kits** (`scripts/kits/`): code-built, vertex-coloured low-poly
   buildings, props, vehicles (sedan, taxi, police, pickup, van, sports car,
   each with its own handling) and people (skin, hair and clothes mixed per
-  pedestrian). No textures; everything shares one toon material.
+  pedestrian). No textures: a surface code in each vertex colour's alpha
+  picks the material in the city shader (glass, metal, asphalt, concrete,
+  pavers, brick, siding, seam metal, roof membrane, solar, grass), with
+  Burley/GGX shading and ACES tonemapping. `tests/lookdev.tscn` renders a
+  few fixed spots for look reviews.
 - **On foot**: jog, sprint, punch; three quick hits make a punch-punch-kick
   combo that knocks people down. Scooters can be ridden (the rider stays in
   view).
@@ -202,7 +207,7 @@ cd game && godot --headless -s res://tests/plan_dump.gd -- /tmp/plan.json \
 | `scripts/kits/` | Asset kits: `building_kit`, `prop_kit`, `vehicle_kit`, `character_kit` |
 | `data/world_map.json` | The world map: regions, cities, districts, routes, landmarks |
 | `tools/render_map.py` | Renders the map data to `world_map.svg` and `bellerive_map.svg` |
-| `scripts/mesh_builder.gd` | Bakes coloured boxes into single meshes; shared toon and x-ray materials |
+| `scripts/mesh_builder.gd` | Bakes coloured boxes into single meshes; surface codes, city shader, shared and x-ray materials |
 | `scripts/humanoid.gd` | Shared body: health, punches, combo kick, knockdowns |
 | `scripts/rig.gd` | Code animation for the character skeleton |
 | `scripts/player.gd`, `pedestrian.gd`, `cop.gd`, `npc.gd` | Characters (`npc.gd`: mission people and enemies) |

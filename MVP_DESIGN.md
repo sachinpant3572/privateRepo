@@ -23,7 +23,7 @@ Everything not needed to prove that waits for later phases.
 |---|---|---|
 | Platforms | Android first, iOS right after | Larger audience in target markets; one codebase covers both. |
 | Engine | **Decision: Godot 4** | See "Engine decision" below. |
-| Look | Low-poly 3D, toon shading, classic top-down camera (see "Camera decision") | Reads as a 2D top-down cartoon, but one model works from every angle, so vehicles and clothing stay cheap. |
+| Look | Code-built 3D in a stylised but present-day look: real materials (glass, metal, asphalt, brick), modern roofs and street furniture, classic top-down camera (see "Camera decision" and "Look update, Oct 27") | One model works from every angle, so vehicles and clothing stay cheap; the detail sits in the shader, so it costs no textures or extra draw calls. |
 | Min device | ~4 GB RAM, mid-range 2021 Android chip | Covers most active devices in India and similar markets. |
 | Frame rate | 30 fps locked on min device, 60 fps option on high-end | Battery and heat matter on phones. |
 | Install size | Base under 150 MB, rest downloaded as content packs | Store limits and data costs. |
@@ -53,6 +53,23 @@ look that combines old and new game mechanics and effects, not realism,
 and clearly better than the classic games in every area.
 Every effect must look good at a glance on a phone screen and have a low-end
 setting that keeps 30 fps on the min-spec device.
+
+**Look update (Oct 27, 2026)**, after Sachin: "The graphics still seem
+primitive, I mean it is good to show a vintage style but the game is set in
+the current modern times, and we need to show more details." The toon,
+"readable cartoon" look is replaced by a stylised present-day one:
+- shading: Burley diffuse with GGX highlights instead of toon bands, ACES
+  tonemapping; glass mirrors the sky, paint and metal shine;
+- surfaces: a code per vertex picks a material in the city shader (asphalt
+  with cracks and patches, concrete slabs, pavers, brick, lap siding,
+  standing-seam metal, roof membrane, solar cells, grass), so detail costs
+  no textures; Settings > Detail low turns the patterns off;
+- roofs (most of what the camera sees): parapets, HVAC, solar rows,
+  skylights, stair huts, terraces, green roofs; towers get curtain walls;
+- streets: stop bars, lane arrows, bike boxes, parking lines; LED lights,
+  mast-arm signals, bus shelters, bike-share docks, EV chargers, e-scooters;
+- vehicles: present-day body shapes with glass.
+The decisions and their costs are in `HANDOFF-modern-look.md`.
 
 | From the classic games (Java Gangstar, GTA 2 era) | From modern games |
 |---|---|
@@ -85,8 +102,8 @@ Why:
 - **Works in cloud sessions**: the engine runs headless in the container, so
   Claude can build, test and export Android builds there, which fits working
   from a phone. Unity needs a desktop with the editor open.
-- **Quality is enough for the art style**: low-poly 3D, toon shading and a
-  fixed top-down camera don't need Unity's rendering lead.
+- **Quality is enough for the art style**: code-built 3D with shader
+  materials and a fixed top-down camera don't need Unity's rendering lead.
 - **Free, no royalties**, and smaller base downloads.
 
 Accepted risks and how to handle them:
