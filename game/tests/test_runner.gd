@@ -42,6 +42,7 @@ func _run() -> void:
 		"test_people_wear_modern_clothes",
 		"test_vehicle_roster_and_parking",
 		"test_vehicle_speed_ranks",
+		"test_player_driving_assists",
 		"test_heavy_vehicle_pushes_harder",
 		"test_vehicle_handling_differs",
 		"test_traffic_drives_every_kind",
@@ -373,14 +374,62 @@ func test_city_runs_with_population() -> void:
 	_place_player(_home(), Vector3.ZERO)
 	await _press("interact")
 	# Weave around for a while to exercise traffic, pedestrians and collisions.
+	# Nothing new may appear on screen (the driving camera sees ~60 m out).
+	var pop = game.population
+	var seen := {}
+	for p in pop.peds + pop.cars + pop._parked.values():
+		seen[p] = true
+	var counts := [0, 0] # spawned, of them in view
 	for i in 12:
 		Controls.override_vector = Vector2.from_angle(i * 1.3)
-		await _frames(60)
+		await _watch_spawns(60, seen, counts)
 	Controls.override_vector = null
+	# Then flat out along the straightest run of streets, where the camera
+	# is zoomed out and leads furthest.
+	var city = game.city
+	var at: int = city.nearest_node(car.global_position)
+	var heading: Vector3 = -car.global_basis.z
+	var path := PackedVector3Array()
+	for i in 14:
+		var best := -1
+		var best_dot := -2.0
+		for n in city.next_nodes(at):
+			var d: Vector3 = (city.node_pos(n) - city.node_pos(at)).normalized()
+			if d.dot(heading) > best_dot:
+				best_dot = d.dot(heading)
+				best = n
+		if best < 0:
+			break
+		path.append(city.lane_point(at, best))
+		heading = (city.node_pos(best) - city.node_pos(at)).normalized()
+		at = best
+	car.drive_path(path, 1.0)
+	var fastest := [0.0]
+	await _watch_spawns(480, seen, counts, car, fastest)
+	var spawned: int = counts[0]
+	var popped: int = counts[1]
 	await _frames(120) # let the bubble refill around wherever the drive ended
 	_check(game.population.peds.size() >= 10, "pedestrians spawned, got %d" % game.population.peds.size())
 	_check(game.population.cars.size() >= 5, "traffic spawned, got %d" % game.population.cars.size())
+	_check(fastest[0] > 15.0, "the run gets up to speed (%.1f m/s)" % fastest[0])
+	_check(spawned > 10 and popped == 0, "%d spawned while driving, %d of them in view" % [spawned, popped])
 	_check(is_instance_valid(car), "player car still exists")
+
+
+## Counts people and cars new to `seen` over `frames`, and how many of
+## them showed up on screen; tracks the fastest speed of `car`.
+func _watch_spawns(frames: int, seen: Dictionary, counts: Array, car = null, fastest := [0.0]) -> void:
+	var pop = game.population
+	for f in frames:
+		await _frames(1)
+		if car != null:
+			fastest[0] = maxf(fastest[0], absf(car.speed))
+		for p in pop.peds + pop.cars + pop._parked.values():
+			if not seen.has(p):
+				seen[p] = true
+				counts[0] += 1
+				if pop._in_view(p.global_position):
+					counts[1] += 1
 
 
 func test_camera_is_classic_top_down() -> void:
@@ -769,7 +818,7 @@ func test_vehicle_speed_ranks() -> void:
 		cars.append(car)
 	var last := []
 	var top := {}
-	var t20 := {}
+	var t15 := {}
 	for car in cars:
 		last.append(car.global_position)
 	for f in 600:
@@ -778,8 +827,8 @@ func test_vehicle_speed_ranks() -> void:
 			var v: float = cars[i].global_position.distance_to(last[i]) * 60.0
 			last[i] = cars[i].global_position
 			top[kinds[i]] = maxf(top.get(kinds[i], 0.0), v)
-			if v >= 15.0 and not t20.has(kinds[i]):
-				t20[kinds[i]] = (f + 1) / 60.0
+			if v >= 15.0 and not t15.has(kinds[i]):
+				t15[kinds[i]] = (f + 1) / 60.0
 	for car in cars:
 		car.queue_free()
 	for kind in kinds:
@@ -794,9 +843,80 @@ func test_vehicle_speed_ranks() -> void:
 	for i in by_launch.size() - 1:
 		var a: String = by_launch[i]
 		var b: String = by_launch[i + 1]
-		_check(t20.get(a, 99.0) < t20.get(b, 99.0), "0-15 m/s: %s %.2f s < %s %.2f s" % [a, t20.get(a, 99.0), b, t20.get(b, 99.0)])
-	_check(t20.ev < t20.sedan * 0.7, "electric torque: EV 0-15 %.2f s well under the sedan's %.2f s" % [t20.ev, t20.sedan])
-	_check(not t20.has("box_truck"), "the box truck never reaches 15 m/s")
+		_check(t15.get(a, 99.0) < t15.get(b, 99.0), "0-15 m/s: %s %.2f s < %s %.2f s" % [a, t15.get(a, 99.0), b, t15.get(b, 99.0)])
+	_check(t15.ev < t15.sedan * 0.7, "electric torque: EV 0-15 %.2f s well under the sedan's %.2f s" % [t15.ev, t15.sedan])
+	_check(not t15.has("box_truck"), "the box truck never reaches 15 m/s")
+
+
+## The player's car on the empty track: corner assist and wall hits (Sachin:
+## roads felt too small to drive "without hitting anything").
+func test_player_driving_assists() -> void:
+	await _free_game()
+	var cam = Controls.camera
+	Controls.camera = null # the stick maps straight onto the ground
+	# Easing the thumb off on a straight coasts; it does not brake.
+	var car = _player_car("sedan", Vector3(0, 0, 0), 20.0)
+	Controls.override_vector = Vector2(0, -0.7)
+	await _frames(30)
+	_check(car.speed > 15.5, "easing off to 0.7 stick on a straight coasts (20 -> %.1f m/s in 0.5 s)" % car.speed)
+	car.queue_free()
+	# A swerve (stick 30 degrees off for a moment) costs about 1 m/s.
+	car = _player_car("sedan", Vector3(0, 0, 0), 20.0)
+	Controls.override_vector = Vector2(0.5, -0.866)
+	await _frames(15)
+	_check(car.speed > 18.5, "a swerve at 20 m/s keeps %.1f m/s" % car.speed)
+	car.queue_free()
+	# A 90-degree snap at top speed: the car slows for the turn and runs on
+	# much less than the 13.5-19.5 m it did without the assist.
+	for kind in ["sedan", "suv", "super"]:
+		car = _player_car(kind, Vector3(0, 0, 0), VehicleKit.KINDS[kind].max_speed)
+		Controls.override_vector = Vector2(1, 0)
+		var run_on := 0.0
+		for f in 120:
+			await _frames(1)
+			run_on = maxf(run_on, -car.global_position.z)
+		_check(run_on < 11.0, "%s at top speed turning 90 degrees runs on %.1f m" % [kind, run_on])
+		car.queue_free()
+	# A wall along x = 3 for the scrape and the pin.
+	var L = preload("res://scripts/layers.gd")
+	var wall := StaticBody3D.new()
+	wall.collision_layer = L.WORLD
+	var shape := CollisionShape3D.new()
+	shape.shape = BoxShape3D.new()
+	shape.shape.size = Vector3(0.5, 4, 400)
+	wall.add_child(shape)
+	wall.position = Vector3(3.0, 2.0, -150.0)
+	add_child(wall)
+	# Scraping it at 15 degrees costs little speed and counts as one hit.
+	car = _player_car("sedan", Vector3(0, 0, 0), 20.0, -deg_to_rad(15.0))
+	Controls.override_vector = Vector2(sin(deg_to_rad(15.0)), -cos(deg_to_rad(15.0)))
+	await _frames(40)
+	_check(car.speed > 15.0, "a 15-degree wall scrape at 20 m/s keeps %.1f m/s" % car.speed)
+	_check(car.max_health - car.health < 10.0, "and costs %.1f health" % (car.max_health - car.health))
+	car.queue_free()
+	# Pinned nose-first against it, the car's speed does not wind up.
+	car = _player_car("sedan", Vector3(-1.0, 0, -20.0), 0.0, -PI / 2.0)
+	Controls.override_vector = Vector2(1, 0)
+	var top := 0.0
+	for f in 180:
+		await _frames(1)
+		if f > 60:
+			top = maxf(top, absf(car.speed))
+	_check(top < 4.0, "held against a wall for 2 s, speed stays low (%.1f m/s)" % top)
+	_check(car.max_health - car.health < 15.0, "and the crash counts once (%.1f health)" % (car.max_health - car.health))
+	car.queue_free()
+	wall.queue_free()
+	Controls.override_vector = null
+	Controls.camera = cam if is_instance_valid(cam) else null
+
+
+## A player-driven `kind` at `pos` heading -z turned by `yaw`, at `speed`.
+func _player_car(kind: String, pos: Vector3, speed: float, yaw := 0.0):
+	var car = _track_car(kind, pos, yaw)
+	car.driver = Vehicle.Driver.PLAYER
+	car.speed = speed
+	car.velocity = -car.global_basis.z * speed
+	return car
 
 
 ## A box truck rolling into a parked sedan shoves it much harder than the

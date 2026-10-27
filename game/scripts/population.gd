@@ -12,7 +12,7 @@ const PED_SPAWN := Vector2(30.0, 50.0)
 const CAR_SPAWN := Vector2(40.0, 70.0)
 const PED_DESPAWN := 70.0
 const CAR_DESPAWN := 95.0
-const PARK_SPAWN := Vector2(55.0, 90.0)
+const PARK_SPAWN := 90.0 # parked cars appear out of view within this range
 const PARK_DESPAWN := 120.0
 
 var game
@@ -41,7 +41,7 @@ func _physics_process(delta: float) -> void:
 			car.queue_free()
 	if peds.size() < PED_COUNT:
 		var spot: Array = game.city.random_sidewalk_between(center, PED_SPAWN.x, PED_SPAWN.y, rng)
-		if not spot.is_empty():
+		if not spot.is_empty() and not _in_view(game.city.sidewalk_loops[spot[0]][spot[1]]):
 			_add_ped(spot[0], spot[1])
 	if cars.size() < TRAFFIC_COUNT:
 		_spawn_traffic(center)
@@ -72,8 +72,11 @@ func _spawn_traffic(center: Vector3) -> void:
 	if options.is_empty():
 		return
 	var to: int = options[rng.randi() % options.size()]
+	var start: Vector3 = game.city.lane_start(n, to)
+	if _in_view(start):
+		return
 	var car = _new_car()
-	car.position = game.city.lane_start(n, to)
+	car.position = start
 	var heading: Vector3 = game.city.node_pos(to) - game.city.node_pos(n)
 	car.rotation.y = atan2(-heading.x, -heading.z)
 	car.rng.seed = rng.randi()
@@ -97,7 +100,7 @@ func _update_parked(center: Vector3) -> void:
 		if _parked.has(idx):
 			continue
 		var d: float = spots[idx][0].distance_to(center)
-		if d < PARK_SPAWN.y and (_first_pass or d > PARK_SPAWN.x):
+		if d < PARK_SPAWN and (_first_pass or not _in_view(spots[idx][0])):
 			var car = _new_car(true)
 			car.city = game.city
 			car.position = spots[idx][0]
@@ -105,6 +108,16 @@ func _update_parked(center: Vector3) -> void:
 			game.add_child(car)
 			_parked[idx] = car
 	_first_pass = false
+
+
+## Whether `pos` is on screen or within a margin of it. The driving camera
+## sees up to about 60 m ahead, inside the spawn bands.
+func _in_view(pos: Vector3) -> bool:
+	var cam = game.camera
+	if cam == null or not cam.is_inside_tree():
+		return false
+	var screen: Rect2 = cam.get_viewport().get_visible_rect()
+	return screen.grow(screen.size.x * 0.1).has_point(cam.unproject_position(pos))
 
 
 ## A civilian vehicle with a model from the traffic mix, or from the curb
