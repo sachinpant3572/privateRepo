@@ -46,7 +46,11 @@ phone.
   (standard bone names, so modelled characters can replace them later),
   animated in code: idle, walk, run, punch, kick, guard, flinch, knockdown,
   riding, and gestures for cutscenes (phone, talk, search, cower...).
-  Outfits: tee, jacket, hoodie, dress, tank, suit, uniform.
+  Present-day clothes: hoodies, puffers, bombers, joggers, jeans and
+  sneakers, caps and beanies, backpacks, crossbody bags, headphones and
+  phones in hand, plus work wear (delivery rider, hi-vis, scrubs).
+  Pedestrians step round street furniture in their way, building side
+  first, without leaving the curb.
 - **Demo map**: about 1.3 km x 1.5 km of Bellerive on both banks of the
   Morrow, from the world map (`data/world_map.json`, the city's
   `demo_window`). You start outside **Union Station** in the Gilt District.
@@ -103,12 +107,18 @@ phone.
 - **Streaming**: the map is split into cells (one block plus its roads;
   the bridge is a cell of its own). Cells whose block comes within ~105 m of
   the player are built on a worker thread and freed past ~150 m; each cell is one mesh (one draw call) and one static body.
-  Parked cars come and go with the player too. A cell averages about 2.7k
-  triangles (90% under 5.9k, the densest 12k) and builds in about 6 ms
-  (90% under 16 ms, measured in the cloud container).
+  Parked cars come and go with the player too. A cell averages about 3.5k
+  triangles (90% under 7.1k, the densest 17.1k) and builds in about 6 ms
+  (90% under 16 ms, measured in the cloud container before the trees and
+  props of the second detail pass).
 - **Asset kits** (`scripts/kits/`): code-built, vertex-coloured low-poly
-  buildings, props, vehicles (sedan, taxi, police, pickup, van, sports car,
-  each with its own handling) and people (skin, hair and clothes mixed per
+  buildings, props (live oaks, palms, crepe myrtles and street trees with
+  clumped canopies; bins, benches, hydrants, signal cabinets, banners, bike
+  racks, sidewalk works), 16 vehicles in 13 categories (compact, sedan,
+  EV, luxury, taxi, police, crossover, SUV, pickup, van, box truck,
+  sports, muscle, supercar, motorbike, scooter; fictional makes), each
+  with its own mass, grip, brakes, power curve, steering and durability,
+  body roll and bike lean, and people (skin, hair and clothes mixed per
   pedestrian). No textures: a surface code in each vertex colour's alpha
   picks the material in the city shader (glass, metal, asphalt, concrete,
   pavers, brick, siding, seam metal, roof membrane, solar, grass), with
