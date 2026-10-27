@@ -153,10 +153,12 @@ Smugglers' Cove, and the Sunken Casino offshore (secret dive).
   unpaved dirt tracks and 4x4 trails.
 - **Rail**: the **Solvera Line** (high-speed, being built during the story)
   and an old freight line from Ironwharf to Fort Granite.
-- **City transport** *(v3, condition follows the city)*: Bellerive streetcar
-  and people mover; Concordia metro and cable cars (excellent); Steelhaven's
+- **City transport** *(v3, condition follows the city)*: every city has an
+  airport, a train station and a bus station. Bellerive streetcar, people mover
+  and a one-line Gulfline Metro; Concordia metro, cable cars and the Wharfline
+  tram (excellent); Steelhaven's
   near-empty Loop and one new streetcar (decaying); Las Brasas monorail and
-  strip bus (tourist-only); taxis everywhere.
+  strip bus, no tram (tourist-only); taxis everywhere.
 - **Water**: ferry from Bellerive to Isla Serena; cruise ship from
   Ironwharf; Concordia's bay ferry; a rusty lake ferry to Port Ash; airboats
   in the bayou.
@@ -188,7 +190,7 @@ open (`WORLD_V3_PLAN.md` section 8).
 - dons: the Castellane Family;
 - corporates: Halberd Security, beside Aurum;
 - drug crews and gangs: the Tenmile Crew and Copper Kings;
-- unions: Local 12 and the Dockers' Brotherhood;
+- unions: Local 12, the Dockers' Brotherhood and Hospitality Workers Local 7 (casinos);
 - cults: the Skyward Fellowship and the Greenhold;
 - the military.
 

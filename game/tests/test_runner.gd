@@ -553,6 +553,11 @@ func test_state_map_shows_the_whole_state() -> void:
 	fm.close()
 	var mat: ShaderMaterial = game.hud.minimap._mat
 	_check(mat.get_shader_parameter("state_tex") == fm.state.texture, "the minimap shows the state past the city's edge")
+	var uv_rect: Vector4 = mat.get_shader_parameter("city_uv_rect")
+	var lo: Vector2 = (city.window.position - fm.map.origin) / fm.map.size
+	var hi: Vector2 = (city.window.end - fm.map.origin) / fm.map.size
+	_check(uv_rect.is_equal_approx(Vector4(lo.x, lo.y, hi.x, hi.y)) and lo.x > 0.0 and hi.x < 1.0,
+		"the minimap shows the city's bake only inside the playable window, got %s" % uv_rect)
 	game.waypoint = null
 
 

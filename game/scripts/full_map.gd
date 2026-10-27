@@ -275,7 +275,7 @@ func _draw_state_labels(font: Font) -> void:
 
 ## Zoomed right out, only the pins that matter on a state scale.
 static func _pin_shown(type: String, close: bool) -> bool:
-	return close or type in ["airport", "military", "gas", "camp"]
+	return close or type in ["airport", "station", "military", "gas", "camp"]
 
 
 static func state_pin(type: String) -> Array:

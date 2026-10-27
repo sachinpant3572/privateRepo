@@ -116,7 +116,7 @@
 <polyline points="2060.0,410.0 2100.0,1120.0" fill="none" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" stroke-dasharray="3 9" data-kind="route" data-id="air_corran_concordia" data-phase="6"/>
 <polyline points="1580.0,1390.0 2300.0,1700.0" fill="none" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" stroke-dasharray="3 9" data-kind="route" data-id="air_bellerive_serena" data-phase="4"/>
 <polyline points="490.0,600.0 700.0,400.0 960.0,200.0 1120.0,140.0 920.0,380.0 490.0,600.0" fill="none" stroke="#5dade2" stroke-width="2" stroke-linejoin="round" stroke-dasharray="6 6" data-kind="route" data-id="airship_tour" data-phase="4"/>
-<polyline points="1580.0,1390.0 1480.0,1410.0 1360.0,1450.0 1250.0,1520.0" fill="none" stroke="#7b4fa0" stroke-width="4" stroke-linejoin="round" stroke-dasharray="6 4" data-kind="route" data-id="bellerive_skyline" data-phase="2"/>
+<polyline points="1580.0,1390.0 1480.0,1390.0 1380.0,1370.0 1300.0,1360.0" fill="none" stroke="#7b4fa0" stroke-width="4" stroke-linejoin="round" stroke-dasharray="6 4" data-kind="route" data-id="bellerive_skyline" data-phase="2"/>
 <polyline points="1980.0,684.0 2080.0,680.0 2180.0,684.0" fill="none" stroke="#b5462f" stroke-width="4" stroke-linejoin="round" stroke-dasharray="6 4" data-kind="route" data-id="concordia_wharf_tram" data-phase="5"/>
 <polyline points="1140.0,300.0 1170.0,264.0 1130.0,236.0 1164.0,204.0 1128.0,176.0 1120.0,144.0" fill="none" stroke="#8a7a5a" stroke-width="4.1" stroke-linejoin="round"/>
 <polyline points="1140.0,300.0 1170.0,264.0 1130.0,236.0 1164.0,204.0 1128.0,176.0 1120.0,144.0" fill="none" stroke="#f3ead2" stroke-width="2.5" stroke-linejoin="round" data-kind="route" data-id="observatory_road" data-phase="3"/>
@@ -139,7 +139,7 @@
 <polyline points="840.0,840.0 920.0,860.0 920.0,980.0" fill="none" stroke="#f3ead2" stroke-width="2.5" stroke-linejoin="round" data-kind="route" data-id="county_road_12" data-phase="2"/>
 <polyline points="920.0,980.0 1040.0,980.0 1040.0,1120.0 980.0,1120.0" fill="none" stroke="#8a7a5a" stroke-width="4.1" stroke-linejoin="round"/>
 <polyline points="920.0,980.0 1040.0,980.0 1040.0,1120.0 980.0,1120.0" fill="none" stroke="#f3ead2" stroke-width="2.5" stroke-linejoin="round" data-kind="route" data-id="section_line_road" data-phase="2"/>
-<polyline points="720.0,1540.0 600.0,1460.0 480.0,1400.0 360.0,1430.0" fill="none" stroke="#8b5a2b" stroke-width="2" stroke-linejoin="round" stroke-dasharray="7 4" data-kind="route" data-id="bayou_track" data-phase="2"/>
+<polyline points="720.0,1540.0 600.0,1460.0 480.0,1400.0 352.0,1416.0" fill="none" stroke="#8b5a2b" stroke-width="2" stroke-linejoin="round" stroke-dasharray="7 4" data-kind="route" data-id="bayou_track" data-phase="2"/>
 <polyline points="940.0,1630.0 1000.0,1610.0 1050.0,1570.0 1040.0,1516.0" fill="none" stroke="#8b5a2b" stroke-width="2" stroke-linejoin="round" stroke-dasharray="7 4" data-kind="route" data-id="levee_road" data-phase="2"/>
 <polyline points="1700.0,1140.0 1620.0,1060.0 1560.0,960.0 1640.0,840.0 1800.0,920.0" fill="none" stroke="#8a7a5a" stroke-width="4.1" stroke-linejoin="round"/>
 <polyline points="1700.0,1140.0 1620.0,1060.0 1560.0,960.0 1640.0,840.0 1800.0,920.0" fill="none" stroke="#f3ead2" stroke-width="2.5" stroke-linejoin="round" data-kind="route" data-id="old_post_road" data-phase="2"/>
@@ -305,7 +305,6 @@
 <circle cx="1021.8000000000001" cy="316.8" r="3.5" fill="#b03a2e" stroke="#fff" stroke-width="1" data-kind="landmark" data-id="route_7_cinder_upper_bridge" data-phase="3"/>
 <circle cx="1171.6000000000001" cy="311.40000000000003" r="3.5" fill="#b03a2e" stroke="#fff" stroke-width="1" data-kind="landmark" data-id="route_7_silver_creek_bridge" data-phase="3"/>
 <circle cx="1301.0" cy="710.4000000000001" r="3.5" fill="#b03a2e" stroke="#fff" stroke-width="1" data-kind="landmark" data-id="dam_road_morrow_bridge" data-phase="3"/>
-<circle cx="858.4000000000001" cy="676.2" r="3.5" fill="#b03a2e" stroke="#fff" stroke-width="1" data-kind="landmark" data-id="dam_road_cinder_lower_bridge" data-phase="3"/>
 <circle cx="1267.6000000000001" cy="693.8000000000001" r="3.5" fill="#b03a2e" stroke="#fff" stroke-width="1" data-kind="landmark" data-id="dam_road_pine_creek_bridge" data-phase="3"/>
 <circle cx="1197.4" cy="885.2" r="3.5" fill="#b03a2e" stroke="#fff" stroke-width="1" data-kind="landmark" data-id="wheaton_road_morrow_bridge" data-phase="2"/>
 <circle cx="812.8000000000001" cy="1576.4" r="3.5" fill="#b03a2e" stroke="#fff" stroke-width="1" data-kind="landmark" data-id="glades_road_cinder_lower_bridge" data-phase="2"/>

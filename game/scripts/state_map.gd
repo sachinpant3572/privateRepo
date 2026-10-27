@@ -41,6 +41,7 @@ const PINS := {
 	"airport": ["AP", Color(0.2, 0.45, 0.75)],
 	"military": ["X", Color(0.35, 0.37, 0.35)],
 	"station": ["T", Color(0.35, 0.6, 0.4)],
+	"bus": ["BS", Color(0.85, 0.45, 0.15)],
 	"monument": ["M", Color(0.75, 0.6, 0.15)],
 	"dam": ["D", Color(0.2, 0.45, 0.65)],
 	"bridge": ["B", Color(0.75, 0.25, 0.2)],

@@ -75,7 +75,8 @@ Conditions drive everything below: transit, NPC density, police, prices, what is
   Museums row, Union Station, the Ferry Building, the Painted Row, the Slant (the one
   diagonal avenue, theatres), Commons Park reservoir, cable-car hill streets.
 - **Transit (excellent)**: Metro Red and Blue lines every 2 minutes (cheap fast travel,
-  transit police); cable cars you can ride on the outside; the bay ferry; Union Station for
+  transit police); cable cars you can ride on the outside; the Wharfline heritage tram; the Concordia Coach
+  Terminal; the bay ferry; Union Station for
   the Solvera Line and the Corran Commuter; Capital Downtown Airport (close, on the metro)
   and Sovereign International (far).
 - **NPCs**: dense in the core by day (office workers, tourists, school groups, guards,
@@ -110,8 +111,8 @@ Conditions drive everything below: transit, NPC density, police, prices, what is
   Toll Bridge to Northland, the Local 12 Union Hall, Heron Isle park, Port Ash (dying lake
   port).
 - **Transit (decaying)**: the Loop (an elevated people mover that runs nearly empty, good
-  for an ambush); one new streetcar on the avenue (the "comeback corridor"); buses late or
-  missing ("next bus: 40 min"); two Corran Commuter trains a day; a dead city airport (a
+  for an ambush); one new streetcar on the avenue (the "comeback corridor"); buses from the
+  Steelhaven Bus Depot late or missing ("next bus: 40 min"); two Corran Commuter trains a day; a dead city airport (a
   smuggling strip) and the working Corran County Airport outside town; a rusty lake ferry.
 - **NPCs**: very few in the prairie, medium downtown, low at night: plant workers,
   scrappers, artists, students, the homeless, union men. Few police (slow response, low
@@ -141,7 +142,7 @@ Conditions drive everything below: transit, NPC density, police, prices, what is
   Granite Gorge Dam, Ember Canyon drive, Mesa Arch, the ghost towns of Bottle Flats and
   Dust Hollow.
 - **Transit (tourist-only)**: the Blaze Monorail (twice bankrupt, behind the resorts); the
-  Doubler, a 24-hour strip bus with night surge prices; Brasas International; the Skyhook
+  Doubler, a 24-hour strip bus with night surge prices, and the Old Town Bus Depot; no tram; Brasas International; the Skyhook
   airship tour over Cinder Ridge; no train until the Solvera Line opens (a story beat).
 - **NPCs**: very dense on the Blaze at night, empty by day in the heat; tourists, gamblers,
   showgirls, card sharps, casino workers, bikers; a hidden community in the tunnels.
@@ -172,7 +173,8 @@ adding what Florida has and it lacked:
   condo towers (Gilt District), shotgun houses in the storm-scarred wards, stilt houses in
   the Keys.
 - **Transit (car-centric with showpieces)**: the Lantern Line streetcar (restored, slow),
-  the free Downtown People Mover, Union Station, Bellerive International, the Serena ferry
+  the free Downtown People Mover, the Gulfline Metro (one elevated line, airport to Union
+  Station; phase 2), the Bellerive Bus Terminal (phase 2), Union Station, Bellerive International, the Serena ferry
   and the cruise route, airboats.
 - **NPCs**: medium by day, high at night in the Quarter and on the beach: tourists, club
   crowds, dockers, retirees.
@@ -192,7 +194,7 @@ have a town (Fort Granite, a fenced base, has none).
 | Fort Granite Reservation | Military | none | **The biggest base**: airfield, jets, dry-lake test range, the Vault (secret); instant high wanted level |
 | Cinder County | Mountains | Silverbell (ghost), Pinecrest | Cinder Peak (2,140 m) with the observatory switchbacks, Granite Dome, Widow's Tooth, Cinder Pass, Silverbell Mine, the Silver Train (secret), Cinder Peak Radar |
 | Miravel Shores | Lake and dam | Harlow | Lakeshore Drive, Granite Gorge Dam, Miravel Pines campground, the drowned village (secret), boat rentals |
-| Red Pine County | Forest | Dellwood, Fernmoor | Logging roads and fords, the sawmill ruin, Red Pine fire lookout and campground, the Greenhold commune (cult) |
+| Red Pine County | Forest | Dellwood, Fernmoor | Logging roads and a ford on Pine Creek, the sawmill ruin, Red Pine fire lookout and campground, the Greenhold commune (cult) |
 | Golden Flats County | Farmland | Wheaton, Ridley Crossing (truck stop) | Section-line lanes, Hollis Farm, grain elevators, crop-duster strip (rent planes), Solvera Line building sites |
 | Saltgrass Parish | Swamp | Cypress Bend, Gator Point | Black Bayou, Turtle Slough, levee road, the moonshine still, airboat tours, gator farm |
 | Verdant Hills | Hills and vineyards | Larkspur | Old Post Road, Larkspur Estate vineyard, Bluegill Lake |
@@ -227,7 +229,7 @@ low over Route 40.
 | Gang | Marrow Krewe, High Water, Os Corvos | Bellerive | Turf (Act 1 already) |
 | Gang | Dust Riders | Hollow Mesa | Bikers, guns on Route 40 |
 | Gang | Copper Kings | Steelhaven | Scrap theft and arson |
-| Union | Local 12, Dockers' Brotherhood | Steelhaven, Bellerive and Concordia | Strikes close a port, ferry or plant: a ready-made gate |
+| Union | Local 12, Dockers' Brotherhood, Hospitality Workers Local 7 | Steelhaven, Bellerive, Concordia and Las Brasas | Strikes close a port, ferry, plant or casino: a ready-made gate |
 | Cult | Skyward Fellowship | Hollow Mesa | Escalating money sinks ending in a payout heist |
 | Cult | The Greenhold | Red Pine | Commune fed by hitchhikers |
 | Law | City PDs, State Police, Capitol Guard | everywhere | Strength by city condition |
@@ -245,7 +247,7 @@ Already planned in `INTERIORS_SERVICES_PLAN.md`; v3 sets where and how well:
 | Service | Concordia | Steelhaven | Las Brasas | Bellerive | Countryside |
 |---|---|---|---|---|---|
 | Police stations | many, fast | one, understaffed | strip-heavy | city PD | State Police posts |
-| Hospitals | two, best (Concordia General, Bayview Medical Center) | one, overrun (Steelhaven Municipal) | one (Sagebrush General) | Floodline Clinic now; Bellerive General planned | Golden Flats County Hospital near Wheaton |
+| Hospitals | two, best (Concordia General, Sovereign Bay Medical Center) | one, overrun (Steelhaven Municipal) | one (Sagebrush General) | Floodline Clinic now; Bellerive General planned | Golden Flats County Hospital near Wheaton |
 | Eateries | bistros, food trucks | diners, coney stands | buffets, 24-hour diners | Creole, Cuban, seafood | truck stops, gas-station food |
 | Vending machines | everywhere, work | rare, half broken | in every casino | common | at gas stations |
 | Torque & Tone (upgrades) | luxury | muscle and restorations | lowriders and neon | tuners | none; fuel and repair at gas stations |
@@ -255,7 +257,7 @@ Already planned in `INTERIORS_SERVICES_PLAN.md`; v3 sets where and how well:
 | | Concordia | Steelhaven | Las Brasas | Bellerive |
 |---|---|---|---|---|
 | Condition | excellent | decaying | tourist-only | car-centric with showpieces |
-| Metro | Red and Blue lines | the Loop (elevated, nearly empty) | the Blaze Monorail | Skyline Metro, one elevated line to the airport (phase 2) |
+| Metro | Red and Blue lines | the Loop (elevated, nearly empty) | the Blaze Monorail | Gulfline Metro, one elevated line from the airport to Union Station (phase 2) |
 | Tram | Wharfline heritage tram | one new streetcar ("comeback corridor") | none: a car city | Lantern Line streetcar |
 | Bus | Concordia Coach Terminal | Steelhaven Bus Depot ("next bus: 40 min") | Old Town Bus Depot, the Doubler strip bus | Bellerive Bus Terminal (phase 2) |
 | Train | Concordia Union Station | a platform beside the ruined Central | Las Brasas Union, a shell until the Solvera Line opens | Union Station |

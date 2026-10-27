@@ -36,7 +36,16 @@ Started 2026-10-27. Sachin's asks (verbatim in the session):
   All are fixed: data by scratchpad `fix_v3.py` then `add_detail.py`; the code in state_map.gd,
   full_map.gd and minimap.gd (city texture clipped to the playable window, `label_pos`,
   far-zoom pin filter); the crews' names are an open question.
-- The plan dump still equals the baseline. Next: suite, APK 0.9-world, commit, PR.
+- The plan dump still equals the baseline. Suite 420/420 (commit 4950a90).
+- Second review: nothing blocking. Its low findings are fixed by scratchpad `fix_v3b.py`:
+  - the bus depot on the Sign Yard;
+  - a bridge pin on the dam crest;
+  - two names of real places (Bayview Medical Center, Skyline);
+  - the metro ending short of downtown;
+  - the bayou track ending in the creek;
+  - bus pins missing; stations hidden at far zoom;
+  - docs missing Local 7 and the new transit;
+  - a test for the minimap clip.
 
 ## Decisions (Sachin can overrule any of these)
 
@@ -87,7 +96,7 @@ Started 2026-10-27. Sachin's asks (verbatim in the session):
   `minor: true`: drawn as small dots, no label, hidden in the game's pin list.
 - **W-9 Every city has a bus station, a train station and an airport; metro and tram follow the
   condition.** Las Brasas has no tram (a car city); Steelhaven's metro is the near-empty Loop;
-  Bellerive gains a one-line Skyline Metro and a bus terminal (phase 2). Table in
+  Bellerive gains a one-line Gulfline Metro and a bus terminal (phase 2). Table in
   WORLD_V3_PLAN.md section 5.
 
 ## Traps and lessons
