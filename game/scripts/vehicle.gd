@@ -62,6 +62,8 @@ var _deployed := false
 var _light_time := 0.0
 var _lights: Array[MeshInstance3D] = []
 var _model: MeshInstance3D
+## Glass and paint shell, a child of _model drawn with the glossy material.
+var _gloss: MeshInstance3D
 var _ahead: RayCast3D
 var _beams: MeshInstance3D
 var _size := Vector3.ONE
@@ -192,14 +194,14 @@ func take_player(p) -> void:
 	occupant = p
 	driver = Driver.PLAYER
 	if not wrecked:
-		_model.material_override = MeshBuilder.xray_material()
+		_skin(MeshBuilder.xray_material(), _gloss_xray(Color(1.0, 0.85, 0.25, 0.6)))
 
 
 func release_player() -> void:
 	occupant = null
 	driver = Driver.NONE
 	if not wrecked:
-		_model.material_override = MeshBuilder.material()
+		_skin(MeshBuilder.material(), MeshBuilder.gloss_material())
 
 
 ## Drives as traffic, setting off from junction `from` towards `to`.
@@ -357,7 +359,7 @@ func _damage(amount: float) -> void:
 	unload_all()
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(0.12, 0.11, 0.1)
-	_model.material_override = mat
+	_skin(mat, mat)
 	if driver == Driver.PLAYER and occupant != null:
 		occupant.exit_vehicle(true)
 	driver = Driver.NONE
@@ -409,10 +411,14 @@ func _effects(delta: float) -> void:
 
 func _build_model() -> void:
 	var mb := MeshBuilder.new()
-	VehicleKit.build(mb, kind, body_color)
+	var gloss := MeshBuilder.new()
+	VehicleKit.build(mb, kind, body_color, gloss)
 	_model = mb.make_instance()
+	_gloss = gloss.make_instance()
+	_model.add_child(_gloss)
+	_skin(MeshBuilder.material(), MeshBuilder.gloss_material())
 	if is_police:
-		_model.material_override = MeshBuilder.xray_material(POLICE_XRAY)
+		_skin(MeshBuilder.xray_material(POLICE_XRAY), _gloss_xray(POLICE_XRAY))
 	add_child(_model)
 	var glow := MeshBuilder.new()
 	var head := Color(0.6, 0.55, 0.38)
@@ -430,12 +436,32 @@ func _build_model() -> void:
 		for i in 2:
 			var light := MeshInstance3D.new()
 			var bar := BoxMesh.new()
-			bar.size = Vector3(0.5, 0.15, 0.3)
+			bar.size = Vector3(0.52, 0.12, 0.26)
 			light.mesh = bar
 			var mat := StandardMaterial3D.new()
 			mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 			mat.albedo_color = Color(0.9, 0.1, 0.1) if i == 0 else Color(0.1, 0.3, 1.0)
 			light.material_override = mat
-			light.position = Vector3(-0.3 if i == 0 else 0.3, 1.49, 0.35)
+			light.position = Vector3(-0.31 if i == 0 else 0.31, 1.465, 0.35)
 			add_child(light)
 			_lights.append(light)
+
+
+## Materials for the matte body and its glossy glass/paint shell (both get
+## stencil x-ray together, so the whole car shows through buildings).
+func _skin(body: Material, shell: Material) -> void:
+	_model.material_override = body
+	_gloss.material_override = shell
+
+
+static var _gloss_xrays := {}
+
+
+## The glossy material with the same stencil x-ray as MeshBuilder.xray_material.
+static func _gloss_xray(color: Color) -> StandardMaterial3D:
+	if not _gloss_xrays.has(color):
+		var mat: StandardMaterial3D = MeshBuilder.gloss_material().duplicate()
+		mat.stencil_mode = BaseMaterial3D.STENCIL_MODE_XRAY
+		mat.stencil_color = color
+		_gloss_xrays[color] = mat
+	return _gloss_xrays[color]
