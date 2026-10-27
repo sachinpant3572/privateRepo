@@ -45,6 +45,7 @@ func _run() -> void:
 		"test_heavy_vehicle_pushes_harder",
 		"test_vehicle_handling_differs",
 		"test_traffic_drives_every_kind",
+		"test_people_walk_past_sidewalk_props",
 	]
 	for name in tests:
 		var before := failed
@@ -934,3 +935,73 @@ func _track_car(kind: String, pos: Vector3, yaw: float):
 	car.rotation.y = yaw
 	add_child(car)
 	return car
+
+
+# --- Sidewalk props -----------------------------------------------------------
+
+## People walk their sidewalk loops straight from corner to corner, at
+## furniture-frame z 0.75 (city.gd WALK_INSET less the frame's 0.45 inset),
+## and before this pass about 140 spots in the city had a prop square
+## across that line. A pedestrian walks past each downtown sidewalk prop,
+## built at its place in city_cells.gd `_modern_street`, and must get by.
+func test_people_walk_past_sidewalk_props() -> void:
+	await _free_game()
+	var Props = preload("res://scripts/kits/prop_kit.gd")
+	var Pedestrian = preload("res://scripts/pedestrian.gd")
+	var L = preload("res://scripts/layers.gd")
+	var mb = preload("res://scripts/mesh_builder.gd").new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3
+	var fake_city := GDScript.new()
+	fake_city.source_code = "extends RefCounted\nvar sidewalk_loops: Array = []\n"
+	fake_city.reload()
+	var city = fake_city.new()
+	var names := ["roadworks", "bike rack", "bus shelter", "bike dock", "wayfinding"]
+	var nodes := []
+	var peds := []
+	for i in names.size():
+		var origin := Vector3(i * 40.0, 0, 500.0)
+		var out := []
+		match i:
+			0: Props.roadworks(mb, out, Vector3(0.3, 0, 1.7))
+			1: Props.bike_rack(mb, out, Vector3(0.2, 0, 1.3), rng)
+			2: Props.bus_shelter(mb, out, Vector3(0.2, 0, 1.55), rng)
+			3: Props.bike_dock(mb, out, Vector3(0.4, 0, 1.6), 4.0, rng)
+			4: Props.wayfinding(mb, out, Vector3(1.0, 0, 0.7))
+		for box in out:
+			var body := StaticBody3D.new()
+			body.collision_layer = L.PROPS
+			var shape := CollisionShape3D.new()
+			shape.shape = BoxShape3D.new()
+			shape.shape.size = box[1]
+			body.add_child(shape)
+			body.position = origin + box[0]
+			add_child(body)
+			nodes.append(body)
+		# The building front at the lot line.
+		var front := StaticBody3D.new()
+		front.collision_layer = L.WORLD
+		var wall := CollisionShape3D.new()
+		wall.shape = BoxShape3D.new()
+		wall.shape.size = Vector3(40, 4, 0.5)
+		front.add_child(wall)
+		front.position = origin + Vector3(12, 2, 2.8)
+		add_child(front)
+		nodes.append(front)
+		city.sidewalk_loops.append(PackedVector3Array([origin + Vector3(-6, 0, 0.75), origin + Vector3(30, 0, 0.75), origin + Vector3(30, 0, -20)]))
+		for side in 2:
+			var ped = Pedestrian.new()
+			ped.setup(city, rng, i, 1)
+			ped.step = 1
+			ped._detour_side = 1.0 if side == 0 else -1.0
+			ped.position = city.sidewalk_loops[i][0] - Vector3(side * 1.5, 0, 0)
+			add_child(ped)
+			nodes.append(ped)
+			peds.append(ped)
+	await _frames(900)
+	for i in names.size():
+		for side in 2:
+			var x: float = peds[i * 2 + side].position.x - i * 40.0
+			_check(x > 4.0, "a pedestrian gets past the %s, trying side %d first (x %.1f)" % [names[i], side, x])
+	for n in nodes:
+		n.queue_free()

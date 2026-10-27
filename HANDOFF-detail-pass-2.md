@@ -38,12 +38,6 @@ Follows HANDOFF-modern-look.md (surface codes, shader, traps live there).
    got street trees in grates, halfway between the street lights.
    Live oaks have six clumps; clumps are open underneath and branches
    have no end caps, since the camera never sees them.
-7. Triangle cost, measured over all 655 cells:
-   - mean 2.7k -> 3.5k per cell; p90 5.7k -> 7.1k; max 12k -> 17.1k (one
-     120 x 205 m downtown block);
-   - oaks were the biggest cost, then gas lamps and hydrants, which I
-     slimmed;
-   - about 70k triangles for a ~20-cell view.
 5. Metal (code 15) read near black because there are no reflection
    probes. The shader now fakes a sky-and-street reflection and metallic
    is 0.3, so every steel prop reads as light steel.
@@ -51,9 +45,26 @@ Follows HANDOFF-modern-look.md (surface codes, shader, traps live there).
    a solar pay station, a detailed hydrant, slatted benches, a domed
    litter bin and mailbox, and steel bollards. New props: a signal
    cabinet at every mast arm, district banners on half the downtown
-   light runs, bike racks, and sidewalk works (downtown, the Quarter and
-   the Wards).
-
+   light runs, bike racks (downtown and the Quarter) and sidewalk works
+   (downtown and the Wards). Works sit at the back of the sidewalk
+   (frame z 1.7) and the bus shelter moved back to z 1.55.
+   - People walk their loops in straight lines at frame z 0.75. A prop
+     across that line held them there for good: the review found it at
+     the works, and a sweep of every sidewalk segment found about 140
+     such spots from earlier passes too.
+   - Fix: pedestrians held up for 0.3 s step sideways (and a little back)
+     for 0.8 s, and try the other side when that side is blocked too
+     (pedestrian.gd). `test_people_walk_past_sidewalk_props` walks
+     pedestrians past each downtown sidewalk prop, both sides first, in
+     front of a building wall; 7 of its 10 checks fail without the detour.
+     In the live city, wandering pedestrians standing still for 6 s fell
+     from 79 of 213 to 10 of 212.
+7. Triangle cost, measured over all 655 cells:
+   - mean 2.7k -> 3.5k per cell; p90 5.7k -> 7.1k; max 12k -> 17.1k (one
+     120 x 205 m downtown block);
+   - oaks were the biggest cost, then gas lamps and hydrants, which I
+     slimmed;
+   - about 70k triangles for a ~20-cell view.
 8. Vehicles (agent, merged): 16 models, 224-408 triangles each.
    `VehicleKit.spec(kind)` lays a model's entry over the HANDLING
    defaults; `vehicle.gd` reads everything from it:
@@ -69,6 +80,11 @@ Follows HANDOFF-modern-look.md (surface codes, shader, traps live there).
    models up to 5.5 m. Traffic AI had to change for the big models: aim
    9 m ahead on the lane, slow near junctions, choose the turn on the
    approach, take sharp turns forward, back off after wall hits.
+
+9. Review fixes: body roll, pitch and bike lean follow the real velocity,
+   so a vehicle pinned against a wall stays level. Green (sedum) roofs
+   also get the leaf shading, since they are code 7 above 0.7 m; they read
+   as planted roofs, so it stays.
 
 ## Open questions
 - Player wall crashes still count over several frames (about 30 hp at

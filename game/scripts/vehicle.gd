@@ -93,6 +93,8 @@ var _game
 var _spec: Dictionary
 ## Body roll (x) and pitch (y) shown on the model, smoothed.
 var _tilt := Vector2.ZERO
+## Real forward speed last frame (m/s), for the pitch.
+var _moved := 0.0
 ## Riders leaned with a two-wheeler last frame (straightened when they leave).
 var _leaning: Array = []
 
@@ -413,7 +415,6 @@ func _drive(delta: float) -> void:
 		_hard_brake = pace > 9.0
 	elif absf(target) < pace:
 		rate = COAST * 2.0
-	var was := speed
 	speed = move_toward(speed, target, rate * delta)
 	if braking or handbrake:
 		speed = move_toward(speed, 0.0, (_spec.brake if braking else 10.0) * delta)
@@ -425,7 +426,11 @@ func _drive(delta: float) -> void:
 	var before := velocity
 	move_and_slide()
 	global_position.y = 0.0
-	_body_tilt(delta, speed * yaw / delta, (speed - was) / delta)
+	# Tilt follows how the body really moves, so a car pinned against a
+	# wall with the throttle down stays level.
+	var moved := velocity.dot(-global_basis.z)
+	_body_tilt(delta, moved * yaw / delta, (moved - _moved) / delta)
+	_moved = moved
 	_handle_collisions(before)
 
 

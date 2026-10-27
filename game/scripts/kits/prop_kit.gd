@@ -262,19 +262,21 @@ static func bike_rack(mb, out: Array, p: Vector3, rng: RandomNumberGenerator) ->
 
 
 ## Sidewalk works fenced off along local X: water-filled barriers in orange
-## and white, cones, a plate over the trench and a sign.
+## and white, cones, a plate over the trench and a sign. It spans local Z
+## -0.5..0.75; place it at the back of the sidewalk (z about 1.7) so the
+## people's walking line (z about 0.75) stays clear.
 static func roadworks(mb, out: Array, p: Vector3) -> void:
 	var orange := MeshBuilder.glow(Color(0.95, 0.45, 0.1), MeshBuilder.GLOSS)
 	var white := MeshBuilder.glow(Color(0.93, 0.93, 0.9), MeshBuilder.GLOSS)
-	mb.box(p + Vector3(0, 0.02, 0.3), Vector3(2.4, 0.03, 1.0), MeshBuilder.glow(Color(0.35, 0.36, 0.38), MeshBuilder.METAL))
+	mb.box(p + Vector3(0, 0.02, 0.15), Vector3(2.4, 0.03, 0.9), MeshBuilder.glow(Color(0.35, 0.36, 0.38), MeshBuilder.METAL))
 	for k in 3:
-		mb.box(p + Vector3(-1.4 + k * 1.4, 0.45, -0.45), Vector3(1.3, 0.8, 0.4), orange if k % 2 == 0 else white)
+		mb.box(p + Vector3(-1.4 + k * 1.4, 0.45, -0.3), Vector3(1.3, 0.8, 0.4), orange if k % 2 == 0 else white)
 	for x in [-1.6, 1.6]:
-		mb.cylinder(p + Vector3(x, 0, 0.9), 0.14, 0.7, orange, 6)
-		mb.box(p + Vector3(x, 0.45, 0.9), Vector3(0.24, 0.1, 0.24), white)
-	mb.box(p + Vector3(0.9, 1.3, 0.9), Vector3(0.6, 0.6, 0.04), MeshBuilder.glow(Color(0.98, 0.6, 0.12), MeshBuilder.GLOSS))
-	mb.box(p + Vector3(0.9, 0.6, 0.92), Vector3(0.05, 1.0, 0.05), MeshBuilder.glow(STEEL, MeshBuilder.METAL))
-	out.append([p + Vector3(0, 0.5, 0.2), Vector3(4.0, 1.0, 1.4)])
+		mb.cylinder(p + Vector3(x, 0, 0.55), 0.14, 0.7, orange, 6)
+		mb.box(p + Vector3(x, 0.45, 0.55), Vector3(0.24, 0.1, 0.24), white)
+	mb.box(p + Vector3(0.9, 1.3, 0.55), Vector3(0.6, 0.6, 0.04), MeshBuilder.glow(Color(0.98, 0.6, 0.12), MeshBuilder.GLOSS))
+	mb.box(p + Vector3(0.9, 0.6, 0.57), Vector3(0.05, 1.0, 0.05), MeshBuilder.glow(STEEL, MeshBuilder.METAL))
+	out.append([p + Vector3(0, 0.5, 0.125), Vector3(4.0, 1.0, 1.25)])
 
 
 ## Live oak: a short, thick trunk forking into four low limbs, a clump at

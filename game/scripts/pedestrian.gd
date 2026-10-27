@@ -12,6 +12,11 @@ var brave := false
 var loop_index := 0
 var point_index := 0
 var step := 1
+## Stepping round something on the sidewalk: seconds left, which side
+## (flips when that side is blocked too) and how long they have been held up.
+var _detour := 0.0
+var _detour_side := 1.0
+var _stuck := 0.0
 
 
 func setup(c, rand: RandomNumberGenerator, loop: int, point: int) -> void:
@@ -19,6 +24,7 @@ func setup(c, rand: RandomNumberGenerator, loop: int, point: int) -> void:
 	loop_index = loop
 	point_index = point
 	step = 1 if rand.randf() < 0.5 else -1
+	_detour_side = 1.0 if rand.randf() < 0.5 else -1.0
 	brave = rand.randf() < 0.2
 	look = CharacterKit.random_look(rand)
 	max_health = 40.0
@@ -55,7 +61,28 @@ func _think(delta: float) -> void:
 			var target := loop[point_index]
 			if global_position.distance_to(target) < 0.8:
 				point_index = posmod(point_index + step, loop.size())
-			walk((target - global_position).normalized(), walk_speed, delta)
+			var dir := target - global_position
+			dir.y = 0.0
+			dir = dir.normalized()
+			# Walking straight at street furniture they would stand against it
+			# for good: when held up, step sideways (and a little back, out of
+			# pockets) round it, and if that side is blocked too, try the other.
+			var sideways := dir.cross(Vector3.UP) * _detour_side
+			var pushing := is_on_wall() and get_real_velocity().length() < walk_speed * 0.3
+			if _detour > 0.0:
+				_detour -= delta
+				if _detour < 0.6 and is_on_wall() and get_real_velocity().dot(sideways) < walk_speed * 0.3:
+					_detour_side = -_detour_side
+					_detour = 0.8
+				dir = (dir.cross(Vector3.UP) * _detour_side * 1.5 - dir * 0.5).normalized()
+			elif pushing:
+				_stuck += delta
+				if _stuck > 0.3:
+					_stuck = 0.0
+					_detour = 0.8
+			else:
+				_stuck = 0.0
+			walk(dir, walk_speed, delta)
 		State.FLEE:
 			walk((global_position - threat.global_position).normalized(), run_speed, delta)
 		State.FIGHT:

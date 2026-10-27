@@ -1381,7 +1381,7 @@ static func _furniture(ctx: Ctx, kind: String) -> void:
 					if ctx.deco.randf() < 0.15:
 						Props.scooter(ctx.mb, Vector3(ctx.deco.randf_range(-half, half), 0, 1.6), ctx.deco.randf() * TAU, Props.SCOOTERS[ctx.deco.randi() % Props.SCOOTERS.size()])
 					elif half > 3.0 and ctx.deco.randf() < 0.06:
-						Props.roadworks(ctx.mb, local, Vector3(0, 0, 1.0))
+						Props.roadworks(ctx.mb, local, Vector3(0, 0, 1.7))
 				"docks":
 					var t := -half
 					while t <= half:
@@ -1425,7 +1425,7 @@ static func _modern_street(ctx: Ctx, local: Array, half: float, downtown: bool) 
 	if downtown and half > 6.0:
 		var roll := deco.randf()
 		if roll < 0.25:
-			Props.bus_shelter(ctx.mb, local, Vector3(0.2, 0, 1.2), deco)
+			Props.bus_shelter(ctx.mb, local, Vector3(0.2, 0, 1.55), deco)
 		elif roll < 0.45:
 			Props.bike_dock(ctx.mb, local, Vector3(0.4, 0, 1.6), 4.0, deco)
 		elif roll < 0.6:
@@ -1436,7 +1436,7 @@ static func _modern_street(ctx: Ctx, local: Array, half: float, downtown: bool) 
 		elif roll < 0.9:
 			Props.bike_rack(ctx.mb, local, Vector3(0.2, 0, 1.3), deco)
 		elif roll < 0.95:
-			Props.roadworks(ctx.mb, local, Vector3(0.3, 0, 1.0))
+			Props.roadworks(ctx.mb, local, Vector3(0.3, 0, 1.7))
 		if half >= 8.0 and deco.randf() < 0.25:
 			Props.pay_station(ctx.mb, local, Vector3(-half * 0.7, 0, 0.3))
 	elif not downtown and half > 4.0 and deco.randf() < 0.2:
