@@ -284,8 +284,9 @@ static func _street(ctx: Ctx, e: int, cls: String) -> void:
 			var t1 := 1.5 if s1 > 0.0 else 0.0
 			var ng := run - t0 - t1
 			var ng_mid := s0 + t0 + ng * 0.5
-			mb.box(Vector3(ng_mid, 0.12, 0), Vector3(ng, 0.24, 6.4), PAVEMENT.darkened(0.1))
-			mb.box(Vector3(ng_mid, 0.25, 0), Vector3(maxf(ng - 0.4, 0.5), 0.02, 5.6), GRASS)
+			if ng >= 1.0:
+				mb.box(Vector3(ng_mid, 0.12, 0), Vector3(ng, 0.24, 6.4), PAVEMENT.darkened(0.1))
+				mb.box(Vector3(ng_mid, 0.25, 0), Vector3(maxf(ng - 0.4, 0.5), 0.02, 5.6), GRASS)
 			for side in [-1.0, 1.0]:
 				_dashes(mb, s0, run, side * (3.2 + (w * 0.5 - 3.2) * 0.5), WHITE_LINE)
 			if line >= 0:
@@ -302,7 +303,8 @@ static func _street(ctx: Ctx, e: int, cls: String) -> void:
 					else:
 						Props.oak(mb, local, Vector3(t, 0.25, side * off), ctx.deco)
 				t += 14.0
-			local.append([Vector3(ng_mid, 0.4, 0), Vector3(ng, 0.8, 6.0)])
+			if ng >= 1.0:
+				local.append([Vector3(ng_mid, 0.4, 0), Vector3(ng, 0.8, 6.0)])
 			_done(ctx, local, false, ctx.props)
 			mb.xform = frame
 		"avenue", "river":

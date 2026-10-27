@@ -214,9 +214,18 @@ func start_traffic(c, from: int, to: int) -> void:
 func join_traffic_here() -> void:
 	var fwd := -global_basis.z
 	var ahead: int = city.nearest_node(global_position + fwd * 25.0)
-	var behind: int = city.nearest_node(global_position - fwd * 15.0)
+	# Came from: the street out of `ahead` that points back past the car
+	# (the junction nearest behind may not share a street with it).
+	var behind := -1
+	var best := 0.3
+	if ahead >= 0:
+		for m in city.next_nodes(ahead):
+			var back: Vector3 = (city.node_pos(m) - city.node_pos(ahead)).normalized()
+			if back.dot(-fwd) > best:
+				best = back.dot(-fwd)
+				behind = m
 	driver = Driver.TRAFFIC
-	_prev_node = behind if behind != ahead else -1
+	_prev_node = behind
 	_next_node = ahead
 
 

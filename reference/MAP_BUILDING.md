@@ -142,7 +142,11 @@ nodes and blocks have int ids, and blocks have any number of sides.
   - its own angle and spacing;
   - a **bend** (the long streets curve with the river);
   - a **fan** (the cross streets splay like spokes round the crescent);
-  - a **cross-bend** (the cross streets curve too).
+  - a **cross-bend** (the cross streets curve too);
+  - **jogs**: a cross street between two long streets often steps
+    sideways by a third of a block, so it meets them at offset
+    T-junctions instead of crossing (old towns and New Orleans' faubourg
+    seams do this).
 
   | Patch | Angle | Blocks |
   |---|---|---|
@@ -152,7 +156,7 @@ nodes and blocks have int ids, and blocks have any number of sides.
   | Lantern Quarter West / East | -12° / -6° | Tight blocks, strongly fanned and curved |
   | Floodline Wards | -25° | Long shotgun blocks, curved |
   | Ironwharf | +9° | Big yards on the wharves |
-  | Morrow Point West / East | -10° / -4° | Far bank, fanned |
+  | Morrow Point West / East | +16° / -20° | Far bank, fanned; the halves meet at a chevron on Point Avenue |
 
 - **Seams and long roads:**
   - Crescent Boulevard (Gilt | Quarter), Rampart Avenue (west | east) and
@@ -167,8 +171,9 @@ nodes and blocks have int ids, and blocks have any number of sides.
   block is a face of the graph, found by walking half-edges.
 - **Thinning.** Minor streets are dropped at random per patch, so streets
   stop at T-junctions and sightlines break. A drop is kept only if:
-  - every junction can still be driven to;
-  - no dead end appears;
+  - the two ends of the dropped street are still joined by drivable
+    streets (so every junction can still be driven to);
+  - no dead end appears, and it is not the short step of a jogged street;
   - the joined block stays under the patch's size cap.
 - **Liberty Green** is designed, not left over: a 120 x 80 m park on the
   north side of Liberty Avenue, with a street round its other three sides.
@@ -195,19 +200,22 @@ Measured in the game's own build (seed 1234), inside the playable window.
 
 | Measure | Map 0.3 | Map v2 |
 |---|---|---|
-| Blocks that are not plain rectangles | none | 37% (193 of 510): not four-cornered, a corner more than 12° off square, or bent sides |
-| Junctions | all crossroads | 240 T-junctions, 355 crossroads, 10 with five or more streets |
-| Drivable street length within 10° of the compass | most | 39% |
-| Block area (10th / 50th / 90th percentile) | one size | 1,600 / 3,300 / 6,050 m² |
+| Blocks that are not plain rectangles | none | 42% (226 of 530): not four-cornered, a corner more than 12° off square, or bent sides |
+| Junctions | all crossroads | 498 T-junctions, 242 crossroads, 13 with five or more streets |
+| Drivable street length within 10° of the compass | most | 30% |
+| Block area (10th / 50th / 90th percentile) | one size | 1,530 / 3,050 / 5,900 m² |
 
 - **Streets in the window:**
-  - 683 ordinary street segments and 309 Quarter street segments;
-  - 102 avenue, 53 boulevard and 44 river road segments;
-  - 48 pedestrian lanes, 6 quay walls and the bridge.
+  - 816 ordinary street segments and 342 Quarter street segments;
+  - 108 avenue, 51 boulevard and 50 river road segments;
+  - 57 pedestrian lanes, 7 quay walls and the bridge.
 - **No holes:** every street has a block on at least one side, except the
-  bridge.
-- **Build time:** about 0.8 s on a desktop CPU; it may be slower on a
-  phone.
+  bridge, and every point of land in the window is in a block (the river
+  banks run on to the map's edge).
+- **Other seeds:** seeds 1, 2, 3, 7, 42, 99 and 2024 also place all 13
+  landmarks on their streets, with no holes.
+- **Build time:** 0.6-0.8 s on a desktop CPU (blocks about 0.2 s, the
+  rest under 0.1 s each); it may be 2-4x slower on a phone.
 - **Both of Sachin's asks:**
   - Morrow Bridge reaches Morrow Point, a new district on the far bank;
   - Liberty Avenue is the diagonal avenue.

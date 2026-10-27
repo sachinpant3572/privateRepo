@@ -20,9 +20,9 @@ diagonal avenue. Research goes into reference/MAP_BUILDING.md section 6.
    overlaid. This is how New Orleans grew (faubourgs, each with its own
    grid, meeting along seams like Canal and Esplanade), and how Ubisoft
    reshaped Chicago (curves, broken sightlines).
-   - Patches: Gilt (big blocks, turned +6°), Lantern Quarter (tight,
+   - Patches: Gilt (big blocks, west half -9°, east +6°), Lantern Quarter (tight,
      follows the river, slight curve), Floodline Wards (long shotgun
-     blocks, turned -20°), Ironwharf (yards on wharves), Morrow Point (new,
+     blocks, turned -25°), Ironwharf (yards on wharves), Morrow Point (new,
      far bank).
    - Seams: Crescent Blvd (Gilt|Quarter), Rampart Ave (west|east),
      Wharf St (Wards|docks).
@@ -31,8 +31,9 @@ diagonal avenue. Research goes into reference/MAP_BUILDING.md section 6.
      Crescent/Rampart junction to Ironwharf), and the river road, curved
      along the bank.
 3. Morrow Bridge carries Lantern Blvd's line over the river to Morrow
-   Point. Morrow Point is a new far-bank district: wards style, a levee
-   road, and a ferry landing. demo_window grows to 25 x 28 blocks.
+   Point. Morrow Point is a new far-bank district: wards style and a
+   levee road (a ferry landing is not built). demo_window grows to
+   25 x 28 blocks.
 4. Blocks are faces of the graph, found by half-edge traversal.
    - inner = the face minus a strip for each road (Clipper).
    - lot = inner offset in by the sidewalk.
@@ -78,9 +79,11 @@ diagonal avenue. Research goes into reference/MAP_BUILDING.md section 6.
     block's largest rect is a strip). Grow tries options best-first, then
     pairs of neighbours (fanned blocks lean, so an L only fits once the
     fourth block fills it).
-16. Connectivity check counts stranded junctions, not reachable nodes:
-    the old count fell whenever a curved street went (its bend points went
-    with it), so curved streets could never be thinned or merged.
+16. Connectivity: dropping a link is refused when its two ends are no
+    longer joined by drivable streets (_joined, breadth first, stops in a
+    few blocks). A count of reachable nodes fell whenever a curved street
+    went (its bend points went too); a whole-map count per candidate was
+    the slowest part of the build.
 17. _drop_overlaps after _simplify: a patch line almost in line with the
     frame street, straightened, overlapped it and a block went missing.
 18. Parked cars face the way traffic runs in the near lane (curb_yaw was
@@ -92,36 +95,39 @@ diagonal avenue. Research goes into reference/MAP_BUILDING.md section 6.
     the block's front. Before, a fanned block's rect could sit 40-80 m
     along from its front side, so the door, landmark_front and the curb
     spot landed mid-block (Drowned Streetcar shot in backyards).
+20. Jogged cross streets (`jog` per patch, review 1 said Wards and Morrow
+    Point still read as turned grids): a v-street piece between two
+    u-streets steps 28-42% of the spacing sideways (a 9 m step let thinning join two blocks by a neck), so crossroads become
+    offset T-junctions (T:X went 240:355 -> about 440:240). Jogs only
+    between u-streets that survived the hug filter, with both ends inside
+    the district; otherwise the piece dead-ends, is pruned, and a 280 m
+    strip block appears (seen in the first try).
+21. Bank chains run on to where the river band leaves the box. The band's
+    vertices are 100 m+ apart; stopping at the last vertex inside left
+    land east of Ironwharf and Morrow Point with no closing edge, so no
+    block (water showed through).
+22. Review 1 fixes: grow claims the faces it joins (stale faces within a
+    pass); _landmark_rect falls back when no side fits; a boulevard
+    median is skipped when shorter than 1 m (negative box on seed 99);
+    _drop_overlaps only replaces a drivable street by a drivable path;
+    join_traffic_here takes "came from" as the neighbour of the junction
+    ahead that points back past the car.
+23. Morrow Point halves turned +16 / -20 deg (were -10 / -4): every patch
+    sat within about 25 deg of the compass (review 1). Within 10 deg of the
+    compass: 38% -> 30%. No landmark is there. Rejected for now: turning
+    the Wards or Quarter (landmarks and seams would move).
+24. _drop_links finds all links before killing any (a shared T-junction
+    looked like a bend once one link went, so the next ran through it),
+    drops a stub the merge leaves, then checks dead ends and _joined
+    (kept inside the window when an end is in it: a lane cut once left a
+    junction reachable only through the margin).
+    Thinning skips links under 24 m (jog steps). _drop_orphans removes
+    streets with no block either side (seed 2024: a straightened frame
+    street a metre from a district street). Bridge bends are always
+    straightened (a merge nudged its end; 16 deg kink).
 
-## Port of the game (city, cells, traffic, maps)
-- Cells: one per land/sliver face, plus an edge cell for each edge with no
-  face either side (Morrow Bridge). Each edge is owned by the face on its
-  first side, else its second, else its edge cell. Cell ids are ints into
-  city.cells; a spatial hash (50 m) of cell centres finds cells near.
-- Block layouts keep their rectangle frame: plan.lot_rect(f) in the front
-  frame gives ctx.frame/hx/hz. Leftover lot (lot minus rect) gets trees,
-  planters or barrels by style. Rect sides on water or quay are closed.
-- Streets: one per edge, markings start at plan.clearance(). A side with
-  no face (water) gets the road's outer half, a railing and a wall.
-- Bridge: deck strip, parapets with colliders, piers, lamps.
-- Bounds: walls along the window rect; barricades where a drivable edge
-  crosses it. Playable block = face bbox touches the window.
-- Traffic: (prev, next) node ids; lane_point(from, to); pick_turn by angle.
-- Rail lines: {nodes, rusty}. Lantern Line follows the "lantern" edges from
-  Union Station to the River Road; the drowned line is the A* path from the
-  drowned streetcar to the depot (rusty).
-- mesh_builder.flat triangulates (concave blocks); map_image fills
-  polygons with an even-odd scanline.
-
-## API mapping (old -> new)
-- block Vector2i -> int face id; node Vector2i -> int node id.
-- plan.corners(b) -> plan.face_poly(f).
-- plan.side_class(b,k) -> plan.inner_sides(f)[k] {cls, edge}.
-- edge_class(n,d) -> edge_class(e).
-- in_grid(n) -> drive_node(n).
-- lane_point(n,dir) -> lane_point(from,to).
-- pick_turn(n,dir,rng) -> pick_turn(prev,cur,rng) -> next node.
-- rail_lines -> [{nodes: PackedInt32Array, rusty}].
+## Port of the game and API mapping
+Done; notes in `HANDOFF-map-v2-archive.md`.
 
 ## Open questions
 - (none yet)
@@ -137,5 +143,5 @@ diagonal avenue. Research goes into reference/MAP_BUILDING.md section 6.
   landmark points, so its plan differs a little. Check the game's plan.
 - Tests that teleport along "x" assumed east-west streets; place things
   along the route or street instead.
-- Build time: about 0.8 s on desktop (thin and blocks are the big steps).
-  Watch this on phones.
+- Build time: 0.6-0.8 s on desktop (blocks ~0.2 s is the big step; thin
+  was 0.25 s before _joined). Watch this on phones.

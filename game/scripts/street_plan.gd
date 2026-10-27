@@ -61,28 +61,30 @@ const ROAD_NAMES := {
 ## and sit `su` apart; lines of constant v run along U and sit `sv` apart.
 ## `bend` curves the v-lines (v grows by bend * u^2), so the streets follow
 ## the crescent. `cut` is the chance of dropping a u- or v-street between
-## two junctions, `lane` the chance of making it a pedestrian lane. `max`
+## two junctions, `lane` the chance of making it a pedestrian lane. `jog`
+## is the chance that a v-street, between two u-streets, steps sideways
+## (offset T-junctions instead of crossroads, as in old towns). `max`
 ## caps the blocks that dropping streets makes: length along U, along V,
 ## and area.
 const PATCHES := [
 	{"id": "gilt_w", "bank": "north", "seed": Vector2(150, 200), "origin": Vector2(246, 170), "angle": -9.0, "bend": 0.0003, "fan": 0.00035, "bend_u": 0.0002,
-		"su": [64.0, 80.0], "sv": [54.0, 66.0], "fam": "uv", "cls": "street", "cut": [0.1, 0.1], "lane": 0.04, "max": [160.0, 140.0, 9000.0]},
+		"su": [64.0, 80.0], "sv": [54.0, 66.0], "fam": "uv", "cls": "street", "jog": 0.3, "cut": [0.1, 0.1], "lane": 0.04, "max": [160.0, 140.0, 9000.0]},
 	{"id": "gilt_e", "bank": "north", "seed": Vector2(500, 150), "origin": Vector2(397, 200), "angle": 6.0, "bend": -0.0004, "fan": -0.0007, "bend_u": 0.00025,
-		"su": [66.0, 78.0], "sv": [54.0, 64.0], "fam": "uv", "cls": "street", "cut": [0.1, 0.1], "lane": 0.04, "max": [160.0, 140.0, 9000.0]},
+		"su": [66.0, 78.0], "sv": [54.0, 64.0], "fam": "uv", "cls": "street", "jog": 0.3, "cut": [0.1, 0.1], "lane": 0.04, "max": [160.0, 140.0, 9000.0]},
 	{"id": "gilt_s", "bank": "north", "seed": Vector2(400, 470), "origin": Vector2(500, 400), "angle": 29.0, "bend": 0.0,
 		"su": [62.0, 76.0], "sv": [60.0, 60.0], "fam": "u", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
 	{"id": "quarter_w", "bank": "north", "seed": Vector2(150, 800), "origin": Vector2(200, 760), "angle": -12.0, "bend": 0.0005, "fan": 0.0005,
-		"su": [44.0, 52.0], "sv": [40.0, 48.0], "fam": "uv", "cls": "quarter", "cut": [0.1, 0.08], "lane": 0.1, "max": [105.0, 100.0, 4500.0]},
+		"su": [44.0, 52.0], "sv": [40.0, 48.0], "fam": "uv", "cls": "quarter", "jog": 0.25, "cut": [0.1, 0.08], "lane": 0.1, "max": [105.0, 100.0, 4500.0]},
 	{"id": "quarter_e", "bank": "north", "seed": Vector2(520, 750), "origin": Vector2(480, 830), "angle": -6.0, "bend": 0.0006, "fan": -0.0008, "bend_u": 0.0003,
-		"su": [46.0, 54.0], "sv": [42.0, 50.0], "fam": "uv", "cls": "quarter", "cut": [0.1, 0.08], "lane": 0.1, "max": [105.0, 100.0, 4500.0]},
+		"su": [46.0, 54.0], "sv": [42.0, 50.0], "fam": "uv", "cls": "quarter", "jog": 0.25, "cut": [0.1, 0.08], "lane": 0.1, "max": [105.0, 100.0, 4500.0]},
 	{"id": "wards", "bank": "north", "seed": Vector2(1000, 400), "origin": Vector2(940, 225), "angle": -25.0, "bend": 0.0003, "fan": -0.00025,
-		"su": [84.0, 104.0], "sv": [38.0, 46.0], "fam": "uv", "cls": "street", "cut": [0.3, 0.04], "lane": 0.0, "max": [215.0, 60.0, 9000.0]},
+		"su": [84.0, 104.0], "sv": [38.0, 46.0], "fam": "uv", "cls": "street", "jog": 0.45, "cut": [0.3, 0.04], "lane": 0.0, "max": [215.0, 60.0, 9000.0]},
 	{"id": "docks", "bank": "north", "seed": Vector2(1000, 960), "origin": Vector2(1050, 960), "angle": 9.0, "bend": 0.0,
 		"su": [100.0, 125.0], "sv": [80.0, 95.0], "fam": "uv", "cls": "street", "cut": [0.25, 0.25], "lane": 0.0, "max": [260.0, 200.0, 40000.0]},
-	{"id": "point_w", "bank": "south", "seed": Vector2(150, 1420), "origin": Vector2(200, 1420), "angle": -10.0, "bend": 0.0004, "fan": 0.0004,
-		"su": [56.0, 70.0], "sv": [44.0, 52.0], "fam": "uv", "cls": "street", "cut": [0.18, 0.1], "lane": 0.0, "max": [140.0, 110.0, 7000.0]},
-	{"id": "point_e", "bank": "south", "seed": Vector2(800, 1400), "origin": Vector2(700, 1330), "angle": -4.0, "bend": 0.00035, "fan": -0.0003, "bend_u": 0.00015,
-		"su": [58.0, 72.0], "sv": [44.0, 52.0], "fam": "uv", "cls": "street", "cut": [0.18, 0.1], "lane": 0.0, "max": [140.0, 110.0, 7000.0]},
+	{"id": "point_w", "bank": "south", "seed": Vector2(150, 1420), "origin": Vector2(200, 1420), "angle": 16.0, "bend": 0.0004, "fan": 0.0004,
+		"su": [56.0, 70.0], "sv": [44.0, 52.0], "fam": "uv", "cls": "street", "jog": 0.4, "cut": [0.18, 0.1], "lane": 0.0, "max": [140.0, 110.0, 7000.0]},
+	{"id": "point_e", "bank": "south", "seed": Vector2(800, 1400), "origin": Vector2(700, 1330), "angle": -20.0, "bend": 0.00035, "fan": -0.0003, "bend_u": 0.00015,
+		"su": [58.0, 72.0], "sv": [44.0, 52.0], "fam": "uv", "cls": "street", "jog": 0.4, "cut": [0.18, 0.1], "lane": 0.0, "max": [140.0, 110.0, 7000.0]},
 ]
 
 var window := Rect2()
@@ -153,6 +155,10 @@ func build(win: Rect2, margin: float, seed_v: int, river_line: PackedVector2Arra
 	for pass_ in 6:
 		if not _grow_blocks(wants):
 			break
+		_simplify()
+		_compact()
+		_find_faces()
+	if _drop_orphans():
 		_simplify()
 		_compact()
 		_find_faces()
@@ -433,7 +439,8 @@ func _patch_lines(src: Array, k: int, region: PackedVector2Array) -> void:
 	var bend_u: float = p.get("bend_u", 0.0)
 	var mid := (lo + hi) * 0.5
 	var spare := absf(fan) * (hi.x - lo.x) * (hi.y - lo.y) * 0.25 + absf(bend_u) * pow((hi.y - lo.y) * 0.5, 2)
-	var lines: Array = [] # [polyline, family]
+	var gap: float = minf(p.su[0], p.sv[0]) * 0.55
+	var u_lines: Array = [] # [u, tilt] of the u-streets that made it
 	if "u" in p.fam:
 		for u in _positions(rng, lo.x - spare, hi.x + spare, p.su):
 			var tilt: float = rng.randf_range(-0.012, 0.012) + fan * (u - mid.x)
@@ -445,39 +452,77 @@ func _patch_lines(src: Array, k: int, region: PackedVector2Array) -> void:
 				if v >= hi.y:
 					break
 				v = minf(v + STEP, hi.y)
-			lines.append([pts, 0])
+			if _add_pieces(src, pts, region, gap, k, 0):
+				u_lines.append([u, tilt])
 	if "v" in p.fam:
+		var jog: float = p.get("jog", 0.0)
+		u_lines.sort_custom(func(x, y): return x[0] < y[0])
+		var u_at := func(l: Array, vv: float) -> float:
+			return l[0] + l[1] * (vv - mid.y) + bend_u * pow(vv - mid.y, 2)
 		for v in _positions(rng, lo.y, hi.y, p.sv):
 			var tilt := rng.randf_range(-0.012, 0.012)
-			var pts := PackedVector2Array()
-			var u := lo.x - spare
-			while true:
-				var vv: float = v + tilt * u
-				pts.append(o + u_dir * u + v_dir * (vv + bend * u * u))
-				if u >= hi.x + spare:
-					break
-				u = minf(u + STEP, hi.x + spare)
-			lines.append([pts, 1])
-	var gap: float = minf(p.su[0], p.sv[0]) * 0.55
-	for l in lines:
-		var pieces := Geometry2D.intersect_polyline_with_polygon(l[0], region)
-		if not _park_poly.is_empty():
-			var outside: Array[PackedVector2Array] = []
-			for piece in pieces:
-				outside.append_array(Geometry2D.clip_polyline_with_polygon(piece, _park_poly))
-			pieces = outside
+			# A stepped piece spans one gap between two u-streets, both
+			# ends inside the district; the run before it stops just past
+			# its first u-street and the next starts just short of its
+			# second (the stubs are pruned).
+			var start := lo.x - spare
+			for i in u_lines.size() - 1:
+				if jog <= 0.0 or rng.randf() >= jog:
+					continue
+				var vj: float = v + rng.randf_range(0.28, 0.42) * p.sv[0] * (1.0 if rng.randf() < 0.5 else -1.0)
+				var e0: float = u_at.call(u_lines[i], vj)
+				var e1: float = u_at.call(u_lines[i + 1], vj)
+				var inside := true
+				for e in [e0, e1]:
+					var q: Vector2 = o + u_dir * e + v_dir * (vj + tilt * e + bend * e * e)
+					if not Geometry2D.is_point_in_polygon(q, region) or (not _park_poly.is_empty() and Geometry2D.is_point_in_polygon(q, _park_poly)):
+						inside = false
+				if not inside:
+					continue
+				_add_pieces(src, _v_line(o, u_dir, v_dir, bend, v, tilt, start, u_at.call(u_lines[i], v) + 3.0), region, gap, k, 1)
+				_add_pieces(src, _v_line(o, u_dir, v_dir, bend, vj, tilt, e0 - 3.0, e1 + 3.0), region, gap, k, 1)
+				start = u_at.call(u_lines[i + 1], v) - 3.0
+			_add_pieces(src, _v_line(o, u_dir, v_dir, bend, v, tilt, start, hi.x + spare), region, gap, k, 1)
+
+
+## Adds the parts of street line `pts` inside `region` (and outside the
+## park) to src; false if none was kept.
+func _add_pieces(src: Array, pts: PackedVector2Array, region: PackedVector2Array, gap: float, k: int, fam: int) -> bool:
+	if pts.size() < 2:
+		return false
+	var pieces := Geometry2D.intersect_polyline_with_polygon(pts, region)
+	if not _park_poly.is_empty():
+		var outside: Array[PackedVector2Array] = []
 		for piece in pieces:
-			if piece.size() < 2 or _length(piece) < 12.0:
-				continue
-			# A street running alongside the district's edge, too close to
-			# it, would leave a sliver of a block: leave it out.
-			if _hugs(piece, region, gap) or (not _park_poly.is_empty() and _hugs(piece, _park_poly, gap)):
-				continue
-			# Reach over the seam so the crossing is found.
-			var n := piece.size()
-			piece[0] += (piece[0] - piece[1]).normalized() * 1.5
-			piece[n - 1] += (piece[n - 1] - piece[n - 2]).normalized() * 1.5
-			src.append({"pts": piece, "cls": p.cls, "road": "", "patch": k, "fam": l[1]})
+			outside.append_array(Geometry2D.clip_polyline_with_polygon(piece, _park_poly))
+		pieces = outside
+	var kept := false
+	for piece in pieces:
+		if piece.size() < 2 or _length(piece) < 12.0:
+			continue
+		# A street running alongside the district's edge, too close to
+		# it, would leave a sliver of a block: leave it out.
+		if _hugs(piece, region, gap) or (not _park_poly.is_empty() and _hugs(piece, _park_poly, gap)):
+			continue
+		# Reach over the seam so the crossing is found.
+		var n := piece.size()
+		piece[0] += (piece[0] - piece[1]).normalized() * 1.5
+		piece[n - 1] += (piece[n - 1] - piece[n - 2]).normalized() * 1.5
+		src.append({"pts": piece, "cls": PATCHES[k].cls, "road": "", "patch": k, "fam": fam})
+		kept = true
+	return kept
+
+
+## A v-street (v = v0 + tilt * u, bent with the patch) from u0 to u1.
+static func _v_line(o: Vector2, u_dir: Vector2, v_dir: Vector2, bend: float, v0: float, tilt: float, u0: float, u1: float) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	var u := u0
+	while true:
+		pts.append(o + u_dir * u + v_dir * (v0 + tilt * u + bend * u * u))
+		if u >= u1:
+			break
+		u = minf(u + STEP, u1)
+	return pts
 
 
 ## True when the middle and both quarter points of a line lie within
@@ -538,13 +583,22 @@ func _chain(band: PackedVector2Array, box: PackedVector2Array, north: bool) -> P
 		if inside[k] == 0:
 			start = k
 			break
+	# Each run of vertices inside runs on to where the band crosses the
+	# box (the band's vertices can be 100 m or more apart).
+	var rect := _rect_poly(r)
 	var chains: Array = []
 	var cur := PackedVector2Array()
 	for i in n + 1:
 		var k := (start + i) % n
+		var prev := band[(k + n - 1) % n]
 		if inside[k] == 1:
+			if cur.is_empty() and i > 0:
+				for piece in Geometry2D.intersect_polyline_with_polygon(PackedVector2Array([prev, band[k]]), rect):
+					cur.append(piece[0])
 			cur.append(band[k])
 		elif cur.size() > 0:
+			for piece in Geometry2D.intersect_polyline_with_polygon(PackedVector2Array([prev, band[k]]), rect):
+				cur.append(piece[piece.size() - 1])
 			chains.append(cur)
 			cur = PackedVector2Array()
 	if cur.size() > 0:
@@ -887,7 +941,8 @@ func _simplify() -> void:
 			var w := other(e2, v)
 			if u == w or edge_between(u, w) >= 0:
 				continue
-			if Geometry2D.get_closest_point_to_segment(node_pos[v], node_pos[u], node_pos[w]).distance_to(node_pos[v]) > 0.5:
+			# (A bridge is one straight span even when a merge nudged an end.)
+			if edge_cls[e1] != "bridge" and Geometry2D.get_closest_point_to_segment(node_pos[v], node_pos[u], node_pos[w]).distance_to(node_pos[v]) > 0.5:
 				continue
 			# e1 now runs u -> w; e2 goes.
 			_adj[v].clear()
@@ -914,14 +969,16 @@ func _drop_overlaps() -> void:
 		if length < 1.0:
 			continue
 		var dir := (b - a) / length
-		# Walk from one end to the other along streets that stay on e.
+		var drive: bool = CLASSES[edge_cls[e]].drive
+		# Walk from one end to the other along streets that stay on e
+		# (drivable ones, if e is).
 		var cur := edge_a[e]
 		var prev := e
 		var steps := 0
 		while cur != edge_b[e] and steps < 8:
 			var nxt := -1
 			for f in _adj[cur]:
-				if f == e or f == prev:
+				if f == e or f == prev or (drive and not CLASSES[edge_cls[f]].drive):
 					continue
 				var q := node_pos[other(f, cur)]
 				var t := (q - a).dot(dir)
@@ -1044,7 +1101,6 @@ func _thin() -> void:
 		group.append(f)
 		pts.append(faces[f].poly)
 		areas.append(faces[f].area)
-	var stranded := _stranded()
 	for l in links:
 		var e0: int = l[0][0]
 		var p: Dictionary = PATCHES[edge_patch[e0]]
@@ -1052,6 +1108,10 @@ func _thin() -> void:
 		var cut: float = p.cut[_fam[e0]] if _fam[e0] >= 0 else 0.0
 		if roll < cut:
 			if _adj[l[1]].size() < 3 or _adj[l[2]].size() < 3:
+				continue
+			# A short link (the step of a jogged street) would join two
+			# blocks by a neck the streets eat away.
+			if node_pos[l[1]].distance_to(node_pos[l[2]]) < 24.0:
 				continue
 			var slots := edge_face[e0]
 			if slots.x < 0 or slots.y < 0 or faces[slots.x].kind != "land" or faces[slots.y].kind != "land":
@@ -1066,7 +1126,7 @@ func _thin() -> void:
 				continue
 			for e in l[0]:
 				_kill(e)
-			if _stranded() > stranded:
+			if not _joined(l[1], l[2]):
 				for e in l[0]:
 					_revive(e)
 				continue
@@ -1076,7 +1136,7 @@ func _thin() -> void:
 		elif roll < cut + p.lane:
 			for e in l[0]:
 				edge_cls[e] = "lane"
-			if _stranded() > stranded:
+			if not _joined(l[1], l[2]):
 				for e in l[0]:
 					edge_cls[e] = p.cls
 
@@ -1141,36 +1201,34 @@ func _revive(e: int) -> void:
 	_adj[edge_b[e]].append(e)
 
 
-## Junctions with a drivable street that can't be driven to from the first
-## one. (A count of the reachable ones would drop whenever a curved street
-## goes, taking its bend points with it.)
-func _stranded() -> int:
-	var start := -1
-	for k in node_pos.size():
-		if _drives(k):
-			start = k
-			break
-	if start < 0:
-		return 0
-	var seen := PackedByteArray()
-	seen.resize(node_pos.size())
-	seen[start] = 1
-	var todo := PackedInt32Array([start])
-	while not todo.is_empty():
-		var k := todo[todo.size() - 1]
-		todo.remove_at(todo.size() - 1)
+## True when junctions a and b are still joined by drivable streets
+## (breadth first, so it stops after a few blocks when they are). Taking
+## a link out strands part of the map exactly when its two ends part.
+## If either end is in the playable window the path must stay in it
+## (traffic and the player can't use the margin).
+func _joined(a: int, b: int) -> bool:
+	if a == b:
+		return true
+	var play := window.grow(2.0)
+	var inside := play.has_point(node_pos[a]) or play.has_point(node_pos[b])
+	var seen := {a: true}
+	var todo := PackedInt32Array([a])
+	var i := 0
+	while i < todo.size():
+		var k := todo[i]
+		i += 1
 		for e in _adj[k]:
 			if not CLASSES[edge_cls[e]].drive:
 				continue
 			var m := edge_b[e] if edge_a[e] == k else edge_a[e]
-			if seen[m] == 0:
-				seen[m] = 1
+			if m == b:
+				return true
+			if inside and not play.has_point(node_pos[m]):
+				continue
+			if not seen.has(m):
+				seen[m] = true
 				todo.append(m)
-	var count := 0
-	for k in node_pos.size():
-		if seen[k] == 0 and not _adj[k].is_empty() and _drives(k):
-			count += 1
-	return count
+	return false
 
 
 func _drives(k: int) -> bool:
@@ -1276,7 +1334,7 @@ func _grow_blocks(wants: Array) -> bool:
 		if f < 0 or faces[f].kind != "land":
 			continue
 		_block_geom(f)
-		if faces[f].kind != "land":
+		if faces[f].kind != "land" or faces[f].lot.size() < 3:
 			continue
 		var need: Vector2 = w[1]
 		var to_frame := front_frame2d(f).affine_inverse()
@@ -1291,8 +1349,8 @@ func _grow_blocks(wants: Array) -> bool:
 		for o in singles:
 			var gfit := _merged_fit(o[2], to_frame, need)
 			if gfit > fit + 0.02:
-				options.append([gfit, [o[1]]])
-		if _drop_best(options):
+				options.append([gfit, [o[1]], [o[0]]])
+		if _drop_best(options, claimed):
 			changed = true
 			continue
 		options = []
@@ -1300,17 +1358,34 @@ func _grow_blocks(wants: Array) -> bool:
 			for o2 in _merge_options(f, o[2], [f, o[0]], claimed):
 				var gfit := _merged_fit(o2[2], to_frame, need)
 				if gfit > fit + 0.02:
-					options.append([gfit, [o[1], o2[1]]])
-		if _drop_best(options):
+					options.append([gfit, [o[1], o2[1]], [o[0], o2[0]]])
+		if _drop_best(options, claimed):
 			changed = true
 	return changed
 
 
-## Drops the streets of the best option that can go ([fit, edges] each).
-func _drop_best(options: Array) -> bool:
+## Drops streets with no block on either side (one straightened to run a
+## metre or two from another leaves only a sliver between them), unless
+## that leaves a dead end or cuts the map.
+func _drop_orphans() -> bool:
+	var dropped := false
+	for e in edge_a.size():
+		if _dead[e] == 1 or edge_cls[e] == "bridge" or edge_face[e].x >= 0 or edge_face[e].y >= 0:
+			continue
+		if _drop_links([e]):
+			dropped = true
+	return dropped
+
+
+## Drops the streets of the best option that can go ([fit, edges, faces]
+## each) and claims the faces it joins, so a later landmark in the same
+## pass (faces aren't rebuilt until the pass ends) can't take them too.
+func _drop_best(options: Array, claimed: Dictionary) -> bool:
 	options.sort_custom(func(x, y): return x[0] > y[0])
 	for o in options:
 		if _drop_links(o[1]):
+			for g in o[2]:
+				claimed[g] = true
 			return true
 	return false
 
@@ -1347,20 +1422,39 @@ func _merged_fit(merged: PackedVector2Array, to_frame: Transform2D, need: Vector
 ## Drops the streets through `edges` (each with the bends either side), or
 ## none of them if that would strand a junction.
 func _drop_links(edges: Array) -> bool:
-	var stranded := _stranded()
-	var killed: Array = []
+	# Find every link first: once one goes, a T-junction it shared looks
+	# like a bend, and the next link would run on through it.
+	var links: Array = []
 	for e in edges:
-		if _dead[e] == 1:
-			continue
-		var l := _full_link(e)
-		if _adj[l[1]].size() < 3 or _adj[l[2]].size() < 3:
-			for k in killed:
-				_revive(k)
-			return false
+		if _dead[e] == 0:
+			links.append(_full_link(e))
+	var killed: Array = []
+	for l in links:
 		for k in l[0]:
-			_kill(k)
-			killed.append(k)
-	if _stranded() > stranded:
+			if _dead[k] == 0:
+				_kill(k)
+				killed.append(k)
+	# A stub left sticking into the joined block (two links met at a
+	# T-junction) goes too.
+	var i := 0
+	while i < links.size() and i < 8:
+		for n in [links[i][1], links[i][2]]:
+			if _adj[n].size() == 1:
+				var stub := _full_link(_adj[n][0])
+				for k in stub[0]:
+					_kill(k)
+					killed.append(k)
+				links.append(stub)
+		i += 1
+	# No dead ends, and each drivable link's ends still joined.
+	var cut := false
+	for l in links:
+		var a: int = l[1]
+		var b: int = l[2]
+		cut = cut or _adj[a].size() == 1 or _adj[b].size() == 1
+		if CLASSES[edge_cls[l[0][0]]].drive and _adj[a].size() > 0 and _adj[b].size() > 0:
+			cut = cut or not _joined(a, b)
+	if cut:
 		for k in killed:
 			_revive(k)
 		return false
@@ -1396,7 +1490,7 @@ func _landmark_rect(f: int, need: Vector2) -> Array:
 		if better:
 			best = [k, r, fit]
 			best_a = a
-	if best[2] < 0.0:
+	if best[2] <= 0.0 or (best[1] as Rect2).get_area() <= 0.0:
 		best = [face.front, largest_rect(front_frame2d(f).affine_inverse() * face.lot, need), 0.0]
 		best[2] = minf(1.0, _fit(best[1], need))
 	return best

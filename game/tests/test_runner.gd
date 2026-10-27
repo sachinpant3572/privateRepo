@@ -135,7 +135,7 @@ func test_street_plan_is_not_a_grid() -> void:
 		var d: int = plan.edges_of(n).size()
 		tees += 1 if d == 3 else 0
 		crosses += 1 if d == 4 else 0
-	_check(tees > crosses * 0.5, "T-junctions are common (%d T, %d crossroads)" % [tees, crosses])
+	_check(tees > crosses * 1.5, "T-junctions outnumber crossroads (%d T, %d crossroads)" % [tees, crosses])
 	# Blocks: many are not plain rectangles (not four-cornered, a corner well
 	# off square, or bent sides), and sizes vary.
 	var odd := 0
@@ -195,6 +195,19 @@ func test_street_plan_is_not_a_grid() -> void:
 		if sides.x < 0 and sides.y < 0 and plan.edge_class(e) != "bridge":
 			orphans += 1
 	_check(orphans == 0, "no holes in the map (%d streets with no block either side)" % orphans)
+	# And all land in the window is in some block (a missing street can
+	# leave an open area that isn't next to any street).
+	var bare: Array = []
+	var y := 4.0
+	while y < city.window.end.y:
+		var x := 4.0
+		while x < city.window.end.x:
+			var p := Vector2(x, y)
+			if plan.face_of(p) < 0 and plan.river_distance(p) > plan._river_half + 25.0:
+				bare.append(p)
+			x += 10.0
+		y += 10.0
+	_check(bare.is_empty(), "all land in the window is in a block (%d bare points, first %s)" % [bare.size(), bare.slice(0, 3)])
 	for id in ["union_station", "aurum_tower", "lantern_square", "blue_lantern", "bpd_lantern", "floodline_clinic", "wharfside_courts", "moreau_house", "teo_apartment", "warehouse_9", "the_pit", "streetcar_depot", "drowned_streetcar"]:
 		var f: int = city.landmark_block(id)
 		_check(f >= 0, "landmark %s is placed" % id)
