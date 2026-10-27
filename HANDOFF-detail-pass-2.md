@@ -54,7 +54,27 @@ Follows HANDOFF-modern-look.md (surface codes, shader, traps live there).
    light runs, bike racks, and sidewalk works (downtown, the Quarter and
    the Wards).
 
+8. Vehicles (agent, merged): 16 models, 224-408 triangles each.
+   `VehicleKit.spec(kind)` lays a model's entry over the HANDLING
+   defaults; `vehicle.gd` reads everything from it:
+   - steering needs rolling wheels (`steer_low`) and fades at speed
+     (`steer_fade`), so heavy models understeer;
+   - power fades with speed (`power_fade`; the EV stays nearly flat);
+   - own brake rate, reverse speed, grip, handbrake drift grip and
+     throttle `slide` (the muscle car steps out);
+   - vehicle-to-vehicle hits share speed loss, damage and shove by mass;
+   - visual only: cars roll and pitch, bikes lean and the rider leans
+     with them.
+   Traffic list has no two-wheelers (no AI riders yet); curb spots take
+   models up to 5.5 m. Traffic AI had to change for the big models: aim
+   9 m ahead on the lane, slow near junctions, choose the turn on the
+   approach, take sharp turns forward, back off after wall hits.
+
 ## Open questions
+- Player wall crashes still count over several frames (about 30 hp at
+  10 m/s), as before; traffic counts each crash once.
+- The traffic test needs 3 junctions in 30 s; the box truck sits right at
+  3 on seed 11. A distance-based check would be sturdier if it flakes.
 - Clothes, left as is for now: a tote bag swings with the arm when punching,
   the phone stays in the hand while riding, and no one wears a hood up.
 
