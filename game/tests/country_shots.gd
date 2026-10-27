@@ -7,24 +7,34 @@ extends Node
 
 const MainScene = preload("res://main.tscn")
 
-## [file, local x, local z, view size (metres tall), hour].
+## [file, local x (or a country landmark id), local z, view size (metres
+## tall), hour].
 const VIEWS := [
 	["c01_west_edge", -150.0, 116.0, 60.0, 12.5],
 	["c02_heights", -380.0, 300.0, 70.0, 12.5],
 	["c03_brisa_deco_row", 1634.0, 1660.0, 70.0, 12.5],
-	["c04_cruise_terminal", 800.0, 1925.0, 90.0, 12.5],
-	["c05_bellerive_general", 808.0, -280.0, 80.0, 12.5],
+	["c04_cruise_terminal", "cruise_terminal", 0.0, 110.0, 12.5],
+	["c05_bellerive_general", "bellerive_general", 0.0, 90.0, 12.5],
 	["c06_wheaton", -1550.0, -1750.0, 90.0, 12.5],
-	["c07_hollis_farm", -1676.0, -1970.0, 90.0, 12.5],
-	["c08_larkspur_vineyard", 2057.0, -1207.0, 90.0, 12.5],
-	["c09_gator_farm", -1319.0, 1584.0, 80.0, 12.5],
+	["c07_hollis_farm", "hollis_farm", 0.0, 110.0, 12.5],
+	["c08_larkspur_vineyard", "larkspur_vineyard", 0.0, 110.0, 12.5],
+	["c09_gator_farm", "gator_farm", 0.0, 90.0, 12.5],
 	["c10_route1_bridge", -3480.0, 820.0, 80.0, 12.5],
 	["c11_storm_barricade", 2795.0, -1811.0, 50.0, 12.5],
 	["c12_fence", -434.0, -2210.0, 60.0, 12.5],
-	["c13_grain_elevators", -927.0, -1700.0, 80.0, 12.5],
+	["c13_grain_elevators", "grain_elevators", 0.0, 90.0, 12.5],
 	["c14_bank", -3630.0, 707.0, 60.0, 12.5],
 	["c15_brisa_night", 1634.0, 1660.0, 70.0, 21.5],
 	["c16_wheaton_night", -1550.0, -1750.0, 90.0, 21.5],
+	# Plots (HANDOFF-plots.md): estates, clusters, farmyards, fields.
+	["c17_hale_estate", "hale_estate", 0.0, 120.0, 12.5],
+	["c18_heights_estate", -160.0, -1.0, 110.0, 12.5],
+	["c19_villa_turned", 2221.0, -497.0, 110.0, 12.5],
+	["c20_bayou_town", -200.0, 600.0, 110.0, 12.5],
+	["c21_larkspur", 2350.0, -900.0, 130.0, 12.5],
+	["c22_cypress_bend", -2620.0, 980.0, 120.0, 12.5],
+	["c23_farmyard", -1870.0, -1300.0, 130.0, 12.5],
+	["c24_fields", -1250.0, -2000.0, 170.0, 12.5],
 ]
 
 var out_dir := "user://"
@@ -49,7 +59,8 @@ func _run() -> void:
 	for v in VIEWS:
 		if only != "" and not (v[0] as String) in only.split(","):
 			continue
-		var at := Vector3(v[1], 0.0, v[2])
+		# A view on a country landmark follows its lot.
+		var at: Vector3 = game.city.country.landmark(v[1]).pos if v[1] is String else Vector3(v[1], 0.0, v[2])
 		game.atmosphere.hour = v[4]
 		game.player.global_position = at + Vector3(0, 0.5, 0)
 		game.city.stream_now(at)

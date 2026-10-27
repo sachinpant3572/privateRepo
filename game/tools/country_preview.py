@@ -24,6 +24,14 @@ ZONE_COLORS = {
     "far_lakeside": (140, 170, 120), "far_parkland": (140, 175, 125), "far_military": (150, 150, 135),
     "far_land": (165, 170, 140),
 }
+PART_COLORS = {
+    "lawn": (110, 170, 80), "yard": (160, 150, 100), "gravel": (200, 195, 180), "drive": (215, 210, 195),
+    "track": (150, 120, 85), "wall": (240, 235, 220), "hedge": (40, 90, 40), "fence": (120, 100, 80),
+    "gate": (255, 60, 60), "trees": (30, 110, 40), "court": (225, 220, 205), "parterre": (60, 140, 70),
+    "tennis": (70, 140, 170), "orchard": (90, 150, 70), "crop": (220, 200, 100), "vines": (100, 130, 60),
+    "boat": (240, 240, 240), "woodpile": (120, 80, 50), "garden": (130, 100, 60),
+}
+LINE_PARTS = ("wall", "hedge", "fence", "gate", "trees")
 ROAD_COLORS = {"highway": (250, 240, 200), "avenue": (240, 240, 240), "road": (235, 225, 200), "street": (225, 225, 225),
                "lane": (215, 205, 180), "track": (150, 110, 70), "trail": (120, 80, 50)}
 
@@ -80,8 +88,39 @@ def main() -> None:
         col = (60, 120, 230) if bridge else ROAD_COLORS[classes[cls]]
         d.line([P(c["nodes"][a]), P(c["nodes"][b])], fill=col, width=max(1, int(w / m_px)))
     import math
+
+    def corners(x, y, yaw, w, dd):
+        cs, sn = math.cos(yaw), math.sin(yaw)
+        return [(x + lx * cs + lz * sn, y - lx * sn + lz * cs)
+                for lx, lz in ((-w / 2, -dd / 2), (w / 2, -dd / 2), (w / 2, dd / 2), (-w / 2, dd / 2))]
+
+    kinds = c.get("part_kinds", [])
+    for x, y, yaw, w, dd, ptype, parts in c.get("plots", []):
+        cs, sn = math.cos(yaw), math.sin(yaw)
+
+        def W(lx, lz):
+            return P((x + lx * cs + lz * sn, y - lx * sn + lz * cs))
+
+        for k, px, pz, pw, pd, rot, var in parts:
+            kind = kinds[k]
+            col = PART_COLORS.get(kind, (255, 0, 255))
+            if kind in LINE_PARTS:
+                a = (px - math.cos(rot) * pw / 2, pz + math.sin(rot) * pw / 2)
+                b = (px + math.cos(rot) * pw / 2, pz - math.sin(rot) * pw / 2)
+                if pw < 0.1:
+                    q = W(px, pz)
+                    d.ellipse([q[0] - 2, q[1] - 2, q[0] + 2, q[1] + 2], fill=col)
+                else:
+                    d.line([W(*a), W(*b)], fill=col, width=max(1, int(1.2 / m_px) + 1))
+            elif kind in ("court",):
+                pts = [W(px + math.cos(t / 12 * math.tau) * pw / 2, pz + math.sin(t / 12 * math.tau) * pw / 2) for t in range(12)]
+                d.polygon(pts, fill=col)
+            else:
+                pts = [W(*q) for q in corners(px, pz, rot, pw, pd)]
+                d.polygon(pts, fill=col)
+        d.polygon([P(q) for q in corners(x, y, yaw, w, dd)], outline=(255, 255, 255))
     for lot in c["lots"]:
-        x, y, yaw, w, dd, kind, ident, zone = lot
+        x, y, yaw, w, dd, kind, ident, zone = lot[:8]
         cs, sn = math.cos(yaw), math.sin(yaw)
         pts = []
         for lx, lz in ((-w / 2, -dd / 2), (w / 2, -dd / 2), (w / 2, dd / 2), (-w / 2, dd / 2)):

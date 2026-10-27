@@ -94,6 +94,12 @@ phone.
   the water. Built offline by `tools/build_country.py` into
   `data/country.json` and streamed in 100 m tiles (load at 130 m, about
   5 ms and 2k triangles each before the buildings).
+  Every lot and plot is a rectangle square to its road (`../HANDOFF-plots.md`).
+  Only estate houses may turn, 45 degrees toward water or the sun, inside
+  walled or hedged grounds with a gate, drive, parterres, a tennis court and
+  orchards. Villages, bayou camps and trailer parks put uneven homes inside a
+  square yard. Farmyards have a windbreak, and the fields are cells along
+  their road. `kits/grounds_kit.gd` draws the parts of each plot.
 - **Taxis** (`scripts/taxi.gd`): hail a cab (TAXI / T) or call one from the
   phone's Cab app, pick a landmark or town, then ride along or pay 1.5x to
   skip there. $4 plus $3 a km.
@@ -251,7 +257,7 @@ Detail to LOW (flat colours, lighter rain) or turn shadows off.
 
 ```bash
 game/tools/setup_cloud.sh   # Godot, Android templates, signing tools (once per container)
-game/tests/run.sh           # headless tests, ~10 s
+game/tests/run.sh           # headless tests, ~10 s (VERBOSE=1 lists every check)
 game/tools/build_apk.sh     # debug APK into game/build/
 ```
 
@@ -272,7 +278,8 @@ each driving layout, and with `res://tests/map_shots.tscn` the full map
 zoomed out to the state and on the countryside, a tap on a closed place,
 and the minimap past the city's edge, with `res://tests/country_shots.tscn`
 the country (suburbs, Brisa Beach, towns, farms, bridges, barricades, the
-fence, by day and night) and with `res://tests/taxi_shots.tscn` hailing,
+fence, estates, villages, a farmyard and fields, by day and night; `ONLY=c17_hale_estate,...`
+shoots just those views) and with `res://tests/taxi_shots.tscn` hailing,
 the fare panel, a ride and a skip.
 
 The country is generated, not hand-made. After changing `data/world_map.json`
@@ -305,7 +312,7 @@ cd game && godot --headless -s res://tests/plan_dump.gd -- /tmp/plan.json \
 | `scripts/city.gd` | Map data, road graph, sidewalks, landmark frames, cell streaming |
 | `scripts/street_plan.gd` | The street plan: district patches, seam and long roads, the street graph, blocks |
 | `scripts/city_cells.gd` | Builds one cell: streets by class, block layouts fitted to each block, landmarks, parks, street furniture |
-| `scripts/kits/` | Asset kits: `building_kit`, `prop_kit`, `vehicle_kit`, `character_kit`, `interior_kit`, `country_kit` |
+| `scripts/kits/` | Asset kits: `building_kit`, `prop_kit`, `vehicle_kit`, `character_kit`, `interior_kit`, `country_kit`, `grounds_kit` |
 | `data/world_map.json` | The world map: regions, cities, districts, routes, landmarks |
 | `scripts/country.gd`, `country_tiles.gd` | The country past the plan: data, road graph, tile streaming; one tile's build |
 | `data/country.json`, `tools/build_country.py` | The generated country (play area, roads, lots, walls) and its generator |

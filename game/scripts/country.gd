@@ -44,8 +44,15 @@ var roads: Array = []
 ## Country junction -> plan junction, and back (plan -> [country]).
 var links := {}
 var plan_links := {}
-## [x, y, yaw, w, d, kind index, landmark id, zone].
+## [x, y, yaw, w, d, kind index, landmark id, zone, plot (-1: none)].
 var lots: Array = []
+## Road-square plots that hold grounds and lots (HANDOFF-plots.md):
+## [x, y, yaw, w, d, type index, parts]; parts are [kind index, x, z, w, d,
+## rot, variant] in the plot frame (kits/grounds_kit.gd draws them).
+var plots: Array = []
+var plot_types: Array = []
+var part_kinds: Array = []
+var tree_kinds: Array = []
 ## [ax, ay, bx, by, kind]: 0 bank, 1 coast, 2 the play area's edge.
 var walls: Array = []
 ## [x, y, dir x, dir y, width].
@@ -125,6 +132,10 @@ func load_data(seed_v := 1234) -> void:
 			plan_links[int(pair[1])] = []
 		plan_links[int(pair[1])].append(int(pair[0]))
 	lots = d.lots
+	plots = d.get("plots", [])
+	plot_types = d.get("plot_types", [])
+	part_kinds = d.get("part_kinds", [])
+	tree_kinds = d.get("tree_kinds", [])
 	for i in lots.size():
 		if lots[i][6] != "":
 			_lot_by_id[lots[i][6]] = i

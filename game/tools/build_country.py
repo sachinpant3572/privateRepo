@@ -86,6 +86,34 @@ LANDMARK_KIND = {
     "state_police_flats": "police_station", "deco_row": "deco_hotel",
 }
 
+# Plots: road-square rectangles that hold grounds and lots (see HANDOFF-plots.md).
+# Their parts are [kind, x, z, w, d, rot, variant] in the plot frame (x along
+# the road, -z towards it); kits/grounds_kit.gd draws them. A rect part spans
+# w across and d along its own z, turned by rot like a lot's yaw; a line part
+# (wall, hedge, fence, trees) runs w along its own x.
+PLOT_TYPES = ["estate", "cluster", "farmyard", "field"]
+PART_KINDS = ["lawn", "yard", "gravel", "drive", "track", "wall", "hedge", "fence", "gate", "trees",
+              "court", "parterre", "tennis", "orchard", "crop", "vines", "boat", "woodpile", "garden"]
+# Tree kinds for "trees" and "orchard" parts.
+TREE_KINDS = ["oak", "palm", "cypress", "fruit"]
+# Dwellings that go into clusters rather than lots of their own.
+DWELLINGS = ("house", "shack", "stilt_house", "trailer_home")
+# Turn of cluster dwellings off the plot's axis (degrees) by style: small
+# towns a little, the bayou edge of the city more, bayou camps most.
+CLUSTER_JITTER = {"village": 8.0, "bayou_town": 16.0, "bayou_village": 26.0, "camp": 28.0, "trailers": 4.0}
+# Homes in a cluster share its yard, so their lots are tighter than a street lot.
+CLUSTER_LOT = {"house": (11, 12), "stilt_house": (10, 10), "shack": (8, 9)}
+# Estate house lot (the mansion kit draws house, forecourt and pool in it).
+ESTATE_HOUSE = 40.0
+# Field cells: 44 m wide on a 50 m pitch (the gaps are the field edges).
+FIELD_CELL = 44.0
+FIELD_PITCH = 50.0
+# Line parts: their w runs along their own x.
+LINE_PARTS = ("wall", "hedge", "fence", "gate", "trees")
+# Dwellings of the styles whose homes stand in clusters.
+CLUSTER_HOMES = {"village": ["house", "house", "shack"], "bayou_village": ["stilt_house", "shack"],
+                 "bayou_town": ["stilt_house", "shack", "house"]}
+
 # Suburb zones round the street plan (local metres) and what they hold.
 SUBURB_STYLE = {
     "heights": {"house": 2, "mansion": 3},
@@ -118,6 +146,7 @@ def main() -> None:
           % (OUT.stat().st_size // 1024, len(data["nodes"]), len(data["edges"]), len(data["roads"]),
              len(data["lots"]), len(data["tiles"]), len(data["walls"]), len(data["barricades"]),
              len(data["links"])))
+    gen.report()
 
 
 # --- Geometry helpers ------------------------------------------------------------
@@ -214,6 +243,53 @@ def yaw_facing(nx, ny):
     """Yaw of a lot whose street lies in direction -(nx, ny) from it... i.e.
     whose front (-Z) points along (-nx, -ny)."""
     return math.atan2(nx, ny)
+
+
+def frame_point(c, yaw, lx, lz):
+    """A point of a lot or plot frame in local metres."""
+    cs, sn = math.cos(yaw), math.sin(yaw)
+    return (c[0] + lx * cs + lz * sn, c[1] - lx * sn + lz * cs)
+
+
+def part(kind, x, z, w, d, rot=0.0, variant=0):
+    return [kind, x, z, w, d, rot, variant]
+
+
+def seg_part(kind, a, b, thick, variant=0):
+    """A line part from a to b (plot frame)."""
+    dx, dz = b[0] - a[0], b[1] - a[1]
+    # Its own x runs along a -> b: Basis(UP, rot) takes x to (cos, -sin).
+    return part(kind, (a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5, math.hypot(dx, dz), thick, math.atan2(-dz, dx), variant)
+
+
+def rect_part_poly(p):
+    """The footprint of a rect part in the plot frame."""
+    return lot_poly(p[1], p[2], p[5], p[3], p[4])
+
+
+class PolyGrid:
+    """Polygons binned by every 50 m cell their bounds touch."""
+
+    def __init__(self, cell=50.0):
+        self.cell = cell
+        self.cells = {}
+
+    def _keys(self, poly):
+        x0, y0, x1, y1 = poly.bounds
+        c = self.cell
+        return [(gx, gy) for gx in range(math.floor(x0 / c), math.floor(x1 / c) + 1)
+                for gy in range(math.floor(y0 / c), math.floor(y1 / c) + 1)]
+
+    def hits(self, poly):
+        for k in self._keys(poly):
+            for o in self.cells.get(k, ()):
+                if o.intersects(poly):
+                    return True
+        return False
+
+    def add(self, poly):
+        for k in self._keys(poly):
+            self.cells.setdefault(k, []).append(poly)
 
 
 class Country:
@@ -789,25 +865,97 @@ class Country:
             polys.append(rl[0].buffer(4.0))
         self.road_area = unary_union(polys)
         self.road_prep = prep(self.road_area)
-        self.lot_grid = {}
+        self.lot_grid = PolyGrid()
+        self.plot_grid = PolyGrid()
+        self.plots = []
+        # The road pieces lots and plots front onto.
+        self.front_lines = [LineString(pc["pts"]) for pc in self.pieces]
+        self.front_half = [CLASSES[pc["cls"]]["w"] * 0.5 for pc in self.pieces]
+        self.front_tree = STRtree(self.front_lines)
 
-    def try_lot(self, x, y, yaw, kind, landmark="", zone="", size=None):
-        w, d = size if size else LOT[kind]
-        poly = lot_poly(x, y, yaw, w, d)
+    def _frontage(self, q):
+        """The road piece nearest q: (point on its centreline, unit tangent,
+        unit normal towards q, half width, piece index, distance along it)."""
+        i = int(self.front_tree.nearest(Point(q)))
+        line = self.front_lines[i]
+        s = line.project(Point(q))
+        p, t = _along(line, s)
+        n = (-t[1], t[0])
+        if (q[0] - p[0]) * n[0] + (q[1] - p[1]) * n[1] < 0:
+            n = (-n[0], -n[1])
+        return p, t, n, self.front_half[i], i, s
+
+    def _front_spot(self, q, w, d, setback=3.5):
+        """A w x d rect square to the road nearest q, its front edge `setback`
+        metres off the road's edge: (centre, yaw, normal, polygon) or None
+        when it would not run alongside that road (past a road's end, or
+        on a bend too tight for its width)."""
+        p, t, n, hw, i, s = self._frontage(q)
+        line = self.front_lines[i]
+        if s < 2.0 or s > line.length - 2.0:
+            return None
+        off = hw + setback + d * 0.5
+        c = (p[0] + n[0] * off, p[1] + n[1] * off)
+        yaw = yaw_facing(n[0], n[1])
+        poly = lot_poly(c[0], c[1], yaw, w, d)
+        a, b = poly.exterior.coords[0], poly.exterior.coords[1]
+        if abs(line.distance(Point(a)) - line.distance(Point(b))) > 1.5:
+            return None
+        return c, yaw, n, poly
+
+    def _free(self, poly, yaw):
         if not self.play_land_prep.contains(poly.buffer(1.0)):
             return False
         if self.road_prep.intersects(poly):
             return False
-        x0, y0, x1, y1 = poly.bounds
-        cells = [(gx, gy) for gx in range(int(x0 // 50) - 1, int(x1 // 50) + 2) for gy in range(int(y0 // 50) - 1, int(y1 // 50) + 2)]
-        for c in cells:
-            for other in self.lot_grid.get(c, []):
-                if other.intersects(poly):
-                    return False
-        key = (int(x // 50), int(y // 50))
-        self.lot_grid.setdefault(key, []).append(poly.buffer(1.5))
-        self.lots.append({"x": x, "y": y, "yaw": yaw, "w": w, "d": d, "kind": kind, "id": landmark, "zone": zone})
+        if self.lot_grid.hits(poly) or self.plot_grid.hits(poly):
+            return False
+        return self._square_to_roads(poly, yaw)
+
+    def _square_to_roads(self, poly, yaw):
+        """Whether every road within 10 m of poly runs along or across it
+        (within 6 degrees): no lot ends up askew beside a second road."""
+        ax = (math.cos(yaw), -math.sin(yaw))
+        cen = poly.centroid
+        for j in self.front_tree.query(poly.buffer(20.0)):
+            line = self.front_lines[int(j)]
+            if line.distance(poly) > self.front_half[int(j)] + 10.0:
+                continue
+            _, t = _along(line, line.project(cen))
+            ang = math.degrees(math.asin(min(1.0, abs(ax[0] * t[1] - ax[1] * t[0]))))
+            if 6.0 < ang < 84.0:
+                return False
         return True
+
+    def try_lot(self, x, y, yaw, kind, landmark="", zone="", size=None, plot=-1):
+        """Adds a lot when it is free; a lot inside a plot (plot >= 0) was
+        laid out with the plot and goes in as it is."""
+        w, d = size if size else LOT[kind]
+        if plot < 0:
+            poly = lot_poly(x, y, yaw, w, d)
+            if not self._free(poly, yaw):
+                return False
+            self.lot_grid.add(poly.buffer(1.5))
+        self.lots.append({"x": x, "y": y, "yaw": yaw, "w": w, "d": d, "kind": kind, "id": landmark, "zone": zone,
+                          "plot": plot})
+        return True
+
+    def add_plot(self, c, yaw, w, d, ptype, parts):
+        self.plot_grid.add(lot_poly(c[0], c[1], yaw, w, d).buffer(1.5))
+        self.plots.append({"x": c[0], "y": c[1], "yaw": yaw, "w": w, "d": d, "type": ptype, "parts": parts})
+        return len(self.plots) - 1
+
+    def _drive_to_road(self, f, n, gap):
+        """A gravel drive from f straight back to the road's edge."""
+        r = (f[0] - n[0] * gap, f[1] - n[1] * gap)
+        self.paths.append([[round(f[0], 2), round(f[1], 2)], [round(r[0], 2), round(r[1], 2)]])
+
+    def _spiral(self, p, reach, step=6.0):
+        for r in _steps(0.0, reach, step):
+            m = max(1, int(r / 4))
+            for k in range(m):
+                ang = k / m * math.tau
+                yield (p[0] + math.cos(ang) * r, p[1] + math.sin(ang) * r)
 
     def landmark_lots(self):
         for lm in self.world["landmarks"]:
@@ -818,43 +966,139 @@ class Country:
             if self.P.contains(Point(p)) or not self.A.contains(Point(p)):
                 print("skip landmark", lm["id"], "at", p)
                 continue
+            if kind == "mansion" and self._estate_near(p, lm["id"]):
+                continue
             if not self._place_near(p, kind, lm["id"]):
                 print("WARNING: no room for landmark", lm["id"])
 
     def _place_near(self, p, kind, ident, zone="", reach=160.0):
+        """A lot as near p as there is room for, square to the road it fronts."""
         w, d = LOT[kind]
-        for r in _steps(0.0, reach, 6.0):
-            for k in range(max(1, int(r / 4))):
-                ang = k / max(1, int(r / 4)) * math.tau
-                q = (p[0] + math.cos(ang) * r, p[1] + math.sin(ang) * r)
-                # Face the nearest road.
-                near = nearest_points(Point(q), self.road_area.boundary)[1].coords[0]
-                nx, ny = q[0] - near[0], q[1] - near[1]
-                n = math.hypot(nx, ny)
-                if n < 1e-3:
+        tried = set()
+        for q in self._spiral(p, reach):
+            spot = self._front_spot(q, w, d)
+            if spot is None:
+                continue
+            c, yaw, n, poly = spot
+            key = (round(c[0] / 2.0), round(c[1] / 2.0))
+            if key in tried or dist(c, p) > reach + 40.0:
+                continue
+            tried.add(key)
+            if self.try_lot(c[0], c[1], yaw, kind, ident, zone):
+                self._drive_to_road(frame_point(c, yaw, 0.0, -d * 0.5), n, 3.5)
+                return True
+        return False
+
+    # --- Plots ----------------------------------------------------------------------
+
+    def _estate_near(self, p, ident):
+        tried = set()
+        for q in self._spiral(p, 220.0, 8.0):
+            for size in ((100.0, 100.0), (90.0, 90.0), (84.0, 84.0)):
+                key = (round(q[0] / 4.0), round(q[1] / 4.0), size)
+                if key in tried:
                     continue
-                yaw = yaw_facing(nx / n, ny / n)
-                # Pull it up to the road.
-                gap = n - d * 0.5 - 2.0
-                if gap > 40.0:
-                    continue
-                if gap > 1.0:
-                    q = (q[0] - nx / n * gap, q[1] - ny / n * gap)
-                if self.try_lot(q[0], q[1], yaw, kind, ident, zone):
-                    # A drive from the front door to the road.
-                    f = (q[0] - nx / n * (d * 0.5), q[1] - ny / n * (d * 0.5))
-                    r = nearest_points(Point(f), self.road_area.boundary)[1].coords[0]
-                    if dist(f, r) > 2.0:
-                        self.paths.append([[round(f[0], 2), round(f[1], 2)], [round(r[0], 2), round(r[1], 2)]])
+                tried.add(key)
+                if self.estate_at(q, size, ident, "", 0, grand=True):
                     return True
         return False
+
+    def estate_at(self, q, size, ident="", zone="", style=0, grand=False, sun=False):
+        """Walled (style 0) or hedged (1) grounds round a mansion, on a plot
+        square to the road nearest q."""
+        W, D = size
+        spot = self._front_spot(q, W, D)
+        if spot is None:
+            return False
+        c, yaw, n, poly = spot
+        if not self._free(poly, yaw):
+            return False
+        turn = self._view_turn(c, yaw, W, D, sun)
+        parts, house, gate = estate_layout(W, D, turn, style, self.rng, grand)
+        k = self.add_plot(c, yaw, W, D, "estate", parts)
+        h = frame_point(c, yaw, house[0], house[1])
+        self.try_lot(h[0], h[1], yaw + turn, "mansion", ident, zone, (house[2], house[2]), plot=k)
+        self._drive_to_road(frame_point(c, yaw, gate[0], gate[1]), n, gate[1] + D * 0.5 + 3.5)
+        return True
+
+    def _view_turn(self, c, yaw, W, D, sun=False):
+        """The turn of an estate's house off its plot: 0, or 45 degrees either
+        way on a square plot whose view (the nearest water, or with `sun` the
+        south and the west) lies off to the back or side, so the garden side
+        turns to it. A view straight behind keeps the house on the axis."""
+        if min(W, D) < 80.0 or abs(W - D) > 8.0:
+            return 0.0
+        views = []
+        if self.water.distance(Point(c)) < 350.0:
+            w = nearest_points(Point(c), self.water)[1].coords[0]
+            views.append((w[0] - c[0], w[1] - c[1]))
+        if sun:
+            views += [(0.0, 1.0), (-1.0, 0.0)]  # the midday and the evening sun
+        cs, sn = math.cos(yaw), math.sin(yaw)
+        for dx, dy in views:
+            lx, lz = dx * cs - dy * sn, dx * sn + dy * cs
+            a = math.atan2(lx, lz)
+            if abs(a) < math.pi / 8:
+                return 0.0
+            if abs(a) < math.pi * 5 / 8:
+                return math.copysign(math.pi / 4, lx)
+        return 0.0
+
+    def cluster_at(self, q, W, D, kinds, style, zone):
+        """Dwellings scattered over a fenced yard on a plot square to the road
+        nearest q (small towns, the bayou, trailer parks)."""
+        spot = self._front_spot(q, W, D)
+        if spot is None:
+            return False
+        c, yaw, n, poly = spot
+        if not self._free(poly, yaw):
+            return False
+        parts, homes, gx = cluster_layout(W, D, kinds, style, self.rng)
+        if len(homes) < 2:
+            return False
+        k = self.add_plot(c, yaw, W, D, "cluster", parts)
+        for kind, x, z, rot in homes:
+            h = frame_point(c, yaw, x, z)
+            self.try_lot(h[0], h[1], yaw + rot, kind, "", zone, CLUSTER_LOT.get(kind), plot=k)
+        self._drive_to_road(frame_point(c, yaw, gx, -D * 0.5), n, 3.5)
+        return True
+
+    def farmyard_at(self, q, template, zone):
+        """A farmstead on a fenced yard: house nearest the road, barn, silos
+        and sheds behind, a windbreak on the north and west sides."""
+        lots, parts, (W, D) = farmyard_layout(template, self.rng)
+        spot = self._front_spot(q, W, D, 6.0)
+        if spot is None:
+            return False
+        c, yaw, n, poly = spot
+        if not self._free(poly, yaw):
+            return False
+        # Windbreak rows along the sides (not the front) that face north (-y) or west (-x).
+        x0, z0, x1, z1 = -W * 0.5, -D * 0.5, W * 0.5, D * 0.5
+        sides = []
+        for lx, lz, a, b in ((0, 1, (x0 + 3, z1 - 3), (x1 - 3, z1 - 3)), (-1, 0, (x0 + 3, z0 + 8), (x0 + 3, z1 - 3)),
+                             (1, 0, (x1 - 3, z0 + 8), (x1 - 3, z1 - 3))):
+            cs, sn = math.cos(yaw), math.sin(yaw)
+            wx, wy = lx * cs + lz * sn, -lx * sn + lz * cs
+            sides.append((max(-wy, -wx), a, b))
+        sides.sort(key=lambda s: -s[0])
+        for score, a, b in sides[:2]:
+            if score > 0.3:
+                parts.append(seg_part("trees", a, b, 8.0, TREE_KINDS.index("oak")))
+        k = self.add_plot(c, yaw, W, D, "farmyard", parts)
+        for kind, x, z in lots:
+            h = frame_point(c, yaw, x, z)
+            self.try_lot(h[0], h[1], yaw, kind, "", zone, plot=k)
+        gate = next(p for p in parts if p[0] == "drive")
+        self._drive_to_road(frame_point(c, yaw, gate[1], -D * 0.5), n, 6.0)
+        return True
 
     def street_lots(self):
         zone_of = {}
         for name, poly in self.zones:
             zone_of[name] = prep(poly)
         towns = [(t, prep(t["zone"])) for t in self.town_zones]
-        for pc in self.pieces:
+        for pi, pc in enumerate(self.pieces):
             cls = pc["cls"]
             if cls not in ("street", "avenue", "road", "highway", "lane"):
                 continue
@@ -877,10 +1121,33 @@ class Country:
             table = SUBURB_STYLE[style]
             kinds = list(table)
             weights = [table[k] for k in kinds]
+            homes = CLUSTER_HOMES.get(style)
             for sgn in (1.0, -1.0):
                 s = 14.0
                 while s < line.length - 14.0:
                     kind = self.rng.choices(kinds, weights)[0]
+                    if style == "heights" and kind == "mansion":
+                        width = float(round(self.rng.uniform(64.0, 84.0)))
+                        if s + width > line.length - 14.0:
+                            break
+                        if any(self.estate_at(self._side_point(line, s + width * 0.5, sgn, w * 0.5 + 3.5 + depth * 0.5),
+                                              (width, depth), "", zname, 0)
+                               for depth in ((width,) if width >= 80.0 else ()) + (88.0, 76.0, 64.0)):
+                            s += width + self.rng.uniform(2.0, 6.0)
+                            continue
+                        kind = "house"
+                    elif homes and kind in DWELLINGS:
+                        sub = "trailers" if kind == "trailer_home" else style
+                        width = self.rng.uniform(62.0, 78.0) if sub == "trailers" else self.rng.uniform(48.0, 64.0)
+                        depth = 46.0 if sub == "trailers" else self.rng.uniform(34.0, 44.0)
+                        if s + width > line.length - 14.0:
+                            break
+                        q = self._side_point(line, s + width * 0.5, sgn, w * 0.5 + 3.5 + depth * 0.5)
+                        if self.cluster_at(q, width, depth, ["trailer_home"] if sub == "trailers" else homes, sub, zname):
+                            s += width + self.rng.uniform(3.0, 9.0)
+                        else:
+                            s += 4.0
+                        continue
                     lw, ld = LOT[kind]
                     s += lw * 0.5
                     if s > line.length - 14.0:
@@ -913,6 +1180,12 @@ class Country:
                 if self.try_lot(q[0], q[1], yaw_facing(-nx, -ny), "lifeguard_tower", "", "sand"):
                     break
 
+    @staticmethod
+    def _side_point(line, s, sgn, off):
+        """The point `off` metres to one side (sgn) of line at s."""
+        p, t = _along(line, s)
+        return (p[0] - t[1] * sgn * off, p[1] + t[0] * sgn * off)
+
     def town_lots(self):
         for t in self.town_zones:
             m, u, v = t["center"], t["u"], t["v"]
@@ -926,15 +1199,15 @@ class Country:
                 self._place_near((m[0] + v[0] * 30, m[1] + v[1] * 30), kind, "", t["id"], reach=150.0)
 
     def farm_lots(self):
-        """Farmsteads along the country roads, shacks along the bayou tracks,
-        villas among the vines."""
+        """Farmsteads along the country roads, camps along the bayou tracks,
+        villas and farms among the vines."""
         regions = {r["id"]: prep(Polygon(self.L(r["polygon"]))) for r in self.world["regions"] if r.get("phase") == 2}
         town_prep = [prep(t["zone"].buffer(60)) for t in self.town_zones]
         suburb = prep(unary_union([z[1] for z in self.zones]).buffer(60))
-        for pc in self.pieces:
+        for i, pc in enumerate(self.pieces):
             if pc["cls"] not in ("road", "lane", "track", "highway"):
                 continue
-            line = LineString(pc["pts"])
+            line = self.front_lines[i]
             s = self.rng.uniform(60, 300)
             while s < line.length - 40:
                 p = line.interpolate(s)
@@ -942,37 +1215,68 @@ class Country:
                     s += 200
                     continue
                 reg = next((rid for rid, rp in regions.items() if rp.contains(p)), None)
-                a = line.interpolate(max(0, s - 2)).coords[0]
-                b = line.interpolate(min(line.length, s + 2)).coords[0]
-                tx, ty = b[0] - a[0], b[1] - a[1]
-                tn = math.hypot(tx, ty) or 1.0
                 sgn = 1.0 if self.rng.random() < 0.5 else -1.0
-                nx, ny = -ty / tn * sgn, tx / tn * sgn
-                w = CLASSES[pc["cls"]]["w"]
+                q = self._side_point(line, s, sgn, self.front_half[i] + 30.0)
                 if reg == "golden_flats":
-                    group = [("farmhouse", 0, 18), ("barn", 30, 34), ("silos", 52, 30)]
+                    placed = self.farmyard_at(q, "flats", reg)
                     gap = self.rng.uniform(380, 700)
                 elif reg == "saltgrass":
-                    group = [(self.rng.choice(["shack", "stilt_house", "trailer_home"]), 0, 14)]
+                    placed = self.cluster_at(q, self.rng.uniform(40.0, 56.0), self.rng.uniform(34.0, 42.0),
+                                             ["shack", "stilt_house", "trailer_home"], "camp", reg)
                     gap = self.rng.uniform(220, 450)
                 elif reg == "verdant_hills":
-                    group = [(self.rng.choice(["farmhouse", "mansion"]), 0, 22), ("machine_shed", 34, 26)]
+                    if self.rng.random() < 0.5:
+                        placed = self.estate_at(q, (84.0, 84.0), "", reg, 1, sun=True) or \
+                            self.estate_at(q, (72.0, 80.0), "", reg, 1)
+                    else:
+                        placed = self.farmyard_at(q, "hills", reg)
                     gap = self.rng.uniform(450, 800)
                 else:
                     s += 200
                     continue
-                placed = False
-                for kind, along, back in group:
-                    lw, ld = LOT[kind]
-                    off = w * 0.5 + back + ld * 0.5
-                    q = (p.x + tx / tn * along + nx * off, p.y + ty / tn * along + ny * off)
-                    if self.try_lot(q[0], q[1], yaw_facing(nx, ny), kind, "", reg):
-                        placed = True
-                        if kind == group[0][0]:
-                            d0 = (p.x + nx * (w * 0.5), p.y + ny * (w * 0.5))
-                            d1 = (p.x + nx * (w * 0.5 + back), p.y + ny * (w * 0.5 + back))
-                            self.paths.append([[round(d0[0], 2), round(d0[1], 2)], [round(d1[0], 2), round(d1[1], 2)]])
                 s += gap if placed else 60
+
+    def field_plots(self):
+        """Crop fields on the flats and vineyard blocks and orchards in the
+        hills: cells square to the road they front, several deep, one crop
+        to a run of cells."""
+        regions = {r["id"]: Polygon(self.L(r["polygon"])) for r in self.world["regions"] if r.get("phase") == 2}
+        block = unary_union([z[1] for z in self.zones] + [t["zone"] for t in self.town_zones]).buffer(20.0)
+        areas = []
+        for rid in ("golden_flats", "verdant_hills"):
+            if rid in regions:
+                areas.append((rid, prep(regions[rid].intersection(self.play_land).difference(block))))
+        choice = {}
+        for i, line in enumerate(self.front_lines):
+            hw = self.front_half[i]
+            for sgn in (1.0, -1.0):
+                for s0 in _steps(4.0, line.length - FIELD_PITCH + 4.0, FIELD_PITCH):
+                    s = s0 + FIELD_PITCH * 0.5
+                    p, t = _along(line, s)
+                    nx, ny = -t[1] * sgn, t[0] * sgn
+                    yaw = yaw_facing(nx, ny)
+                    for k in range(7):
+                        off = hw + 6.0 + FIELD_PITCH * k + FIELD_CELL * 0.5
+                        c = (p[0] + nx * off, p[1] + ny * off)
+                        poly = lot_poly(c[0], c[1], yaw, FIELD_CELL, FIELD_CELL)
+                        rid = next((r for r, ap in areas if ap.contains(poly)), None)
+                        if rid is None or not self._free(poly, yaw):
+                            continue
+                        key = (i, sgn, int(s0 // 150.0), k // 3)
+                        if key not in choice:
+                            roll = self.rng.random()
+                            rot = 0.0 if self.rng.random() < 0.5 else math.pi / 2
+                            if rid == "golden_flats":
+                                pick = None if roll < 0.08 else ("crop", rot, self.rng.randrange(4))
+                            else:
+                                pick = ("vines", rot, 0) if roll < 0.6 else (
+                                    ("orchard", 0.0, TREE_KINDS.index("fruit")) if roll < 0.75 else None)
+                            choice[key] = pick
+                        pick = choice[key]
+                        if pick is None:
+                            continue
+                        self.add_plot(c, yaw, FIELD_CELL, FIELD_CELL, "field",
+                                      [part(pick[0], 0.0, 0.0, FIELD_CELL - 2.0, FIELD_CELL - 2.0, pick[1], pick[2])])
 
     # --- Ground -------------------------------------------------------------------
 
@@ -1034,7 +1338,7 @@ class Country:
                         if flat:
                             parts.append([zi, flat])
                 if parts:
-                    tiles[(gx, gy)] = {"g": parts, "r": [], "l": [], "w": [], "b": [], "p": [], "t": [], "x": [], "f": []}
+                    tiles[(gx, gy)] = {"g": parts, "r": [], "l": [], "w": [], "b": [], "p": [], "t": [], "x": [], "f": [], "q": []}
 
         def tile_of(p):
             return (math.floor(p[0] / TILE), math.floor(p[1] / TILE))
@@ -1042,7 +1346,7 @@ class Country:
         def put(key, field, value):
             t = tiles.get(key)
             if t is None:
-                t = tiles[key] = {"g": [], "r": [], "l": [], "w": [], "b": [], "p": [], "t": [], "x": [], "f": []}
+                t = tiles[key] = {"g": [], "r": [], "l": [], "w": [], "b": [], "p": [], "t": [], "x": [], "f": [], "q": []}
             t[field].append(value)
 
         for ei, e in enumerate(self.edges):
@@ -1054,6 +1358,8 @@ class Country:
             put(tile_of(((w[0] + w[2]) / 2, (w[1] + w[3]) / 2)), "w", wi)
         for bi, b in enumerate(self.barricades):
             put(tile_of(b), "b", bi)
+        for qi, pl in enumerate(self.plots):
+            put(tile_of((pl["x"], pl["y"])), "q", qi)
         for pi, path in enumerate(self.paths):
             put(tile_of(path[0]), "p", pi)
         for ti, tr in enumerate(self.trail_out):
@@ -1102,9 +1408,30 @@ class Country:
         self.town_lots()
         self.street_lots()
         self.farm_lots()
+        self.field_plots()
         self.ground_zones()
         self.polyline_outputs()
         self.tiles()
+
+    def report(self):
+        """Plot counts, and the worst turn of a lot or plot off the road it fronts."""
+        counts = {}
+        for p in self.plots:
+            counts[p["type"]] = counts.get(p["type"], 0) + 1
+        turned = sum(1 for l in self.lots if l["plot"] >= 0 and l["kind"] == "mansion"
+                     and abs(l["yaw"] - self.plots[l["plot"]]["yaw"]) > 0.1)
+        worst = (0.0, None)
+        for item in [l for l in self.lots if l["plot"] < 0 and l["zone"] != "sand"] + self.plots:
+            f = frame_point((item["x"], item["y"]), item["yaw"], 0.0, -item["d"] * 0.5)
+            p, t, n, hw, i, sa = self._frontage(f)
+            if dist(f, p) > hw + 8.0:
+                continue  # a back field: it fronts the field before it
+            yaw = item["yaw"]
+            ax = (math.cos(yaw), -math.sin(yaw))
+            off = math.degrees(math.asin(min(1.0, abs(ax[0] * t[1] - ax[1] * t[0]))))
+            if off > worst[0]:
+                worst = (off, item.get("kind", item.get("type")), round(item["x"]), round(item["y"]))
+        print("plots:", counts, "turned estate houses:", turned, "worst turn off the fronting road (deg):", worst)
 
     def export(self):
         def ring(poly):
@@ -1124,7 +1451,11 @@ class Country:
             t["k"] = [gx, gy]
             tiles.append(t)
         lots = [[round(l["x"], 2), round(l["y"], 2), round(l["yaw"], 4), l["w"], l["d"], KINDS.index(l["kind"]),
-                 l["id"], l["zone"]] for l in self.lots]
+                 l["id"], l["zone"], l["plot"]] for l in self.lots]
+        plots = [[round(p["x"], 2), round(p["y"], 2), round(p["yaw"], 4), round(p["w"], 2), round(p["d"], 2),
+                  PLOT_TYPES.index(p["type"]),
+                  [[PART_KINDS.index(q[0]), round(q[1], 2), round(q[2], 2), round(q[3], 2), round(q[4], 2),
+                    round(q[5], 4), q[6]] for q in p["parts"]]] for p in self.plots]
         return {
             "version": 1,
             "tile": TILE,
@@ -1144,12 +1475,236 @@ class Country:
             "walls": self.wall_list,
             "barricades": self.barricades,
             "lots": lots,
+            "plot_types": PLOT_TYPES,
+            "part_kinds": PART_KINDS,
+            "tree_kinds": TREE_KINDS,
+            "plots": plots,
             "paths": self.paths,
             "trails": self.trail_out,
             "rails": self.rail_out,
             "far_roads": self.far_out,
             "tiles": tiles,
         }
+
+
+def _along(line, s):
+    """The point of line at s and its unit tangent there."""
+    a = line.interpolate(max(0.0, s - 2.0)).coords[0]
+    b = line.interpolate(min(line.length, s + 2.0)).coords[0]
+    tx, ty = b[0] - a[0], b[1] - a[1]
+    tn = math.hypot(tx, ty) or 1.0
+    return line.interpolate(s).coords[0], (tx / tn, ty / tn)
+
+
+def _boundary(kind, W, D, gap_at=None, gap=7.0, splay=None):
+    """The four sides of a W x D plot as line parts, 0.5 m in, with a gate
+    gap in the front centred on x = gap_at, or a gate across the front-left
+    corner when splay is given (mirror the result for the right)."""
+    e = 0.5
+    x0, z0, x1, z1 = -W * 0.5 + e, -D * 0.5 + e, W * 0.5 - e, D * 0.5 - e
+    out = [seg_part(kind, (x1, z0), (x1, z1), 0.6), seg_part(kind, (x0, z1), (x1, z1), 0.6)]
+    if splay:
+        out += [seg_part(kind, (x0 + splay, z0), (x1, z0), 0.6), seg_part(kind, (x0, z0 + splay), (x0, z1), 0.6),
+                seg_part("gate", (x0, z0 + splay), (x0 + splay, z0), 0.6)]
+    else:
+        out.append(seg_part(kind, (x0, z0), (x0, z1), 0.6))
+        if gap_at is None:
+            out.append(seg_part(kind, (x0, z0), (x1, z0), 0.6))
+        else:
+            out += [seg_part(kind, (x0, z0), (gap_at - gap * 0.5, z0), 0.6),
+                    seg_part(kind, (gap_at + gap * 0.5, z0), (x1, z0), 0.6),
+                    seg_part("gate", (gap_at - gap * 0.5, z0), (gap_at + gap * 0.5, z0), 0.6)]
+    return out
+
+
+def _mirror(parts):
+    """Parts mirrored across the plot's x = 0 axis."""
+    out = []
+    for p in parts:
+        q = list(p)
+        q[1] = -p[1]
+        q[5] = math.pi - p[5] if p[0] in LINE_PARTS else -p[5]
+        out.append(q)
+    return out
+
+
+def estate_layout(W, D, turn, style, rng, grand=False):
+    """The grounds of an estate (research: HANDOFF-plots.md). Axial: gate,
+    tree-lined drive and mirrored parterres in front, the house on the axis,
+    a tennis court and an orchard of the same size either side behind, a
+    parterre and a row of trees at the back. Turned (square plots, house at
+    45 degrees): the gate across a front corner, the drive up the diagonal,
+    square parterres either side of it and a round garden behind the house.
+    Returns (parts, house (x, z, size), gate (x, z))."""
+    m = 2.0
+    bound = "wall" if style == 0 else "hedge"
+    tree = TREE_KINDS.index("palm" if style == 0 and rng.random() < 0.6 else "oak")
+    hs = ESTATE_HOUSE + (6.0 if grand else 0.0)
+    x0, z0, x1, z1 = -W * 0.5, -D * 0.5, W * 0.5, D * 0.5
+    parts = [part("lawn", 0.0, 0.0, W, D)]
+    if turn == 0.0:
+        hs = min(hs, D - m - 16.0)
+        front = min(max((D - hs) * 0.45, 12.0), 30.0)
+        zf = z0 + front
+        parts += _boundary(bound, W, D, 0.0)
+        parts.append(part("drive", 0.0, (z0 + zf) * 0.5, 6.0, front))
+        for s in (-1.0, 1.0):
+            parts.append(seg_part("trees", (s * 6.5, z0 + 5.0), (s * 6.5, zf - 3.0), 9.0, tree))
+        pw, pd = W * 0.5 - 10.0 - m, front - m - 4.0
+        if pw >= 10.0 and pd >= 8.0:
+            for s in (-1.0, 1.0):
+                parts.append(part("parterre", s * (9.5 + pw * 0.5), z0 + m + 2.0 + pd * 0.5, pw, pd))
+        side = W * 0.5 - m - hs * 0.5 - 2.0
+        run = z1 - m - zf
+        sx = hs * 0.5 + 2.0 + side * 0.5
+        if side >= 18.5 and run >= 37.0:
+            t = 1.0 if rng.random() < 0.5 else -1.0
+            parts.append(part("tennis", t * sx, z1 - m - 18.5, 18.3, 36.6))
+            parts.append(part("orchard", -t * sx, z1 - m - 18.5, 18.3, 36.6, 0.0, TREE_KINDS.index("fruit")))
+        elif side >= 8.0:
+            ol = min(run - 2.0, 40.0)
+            for s in (-1.0, 1.0):
+                parts.append(part("orchard", s * sx, z1 - m - 1.0 - ol * 0.5, side - 1.0, ol, 0.0, TREE_KINDS.index("fruit")))
+        back = z1 - m - (zf + hs)
+        if back >= 16.0:
+            parts.append(part("parterre", 0.0, zf + hs + back * 0.5, min(W - 2 * m - 12.0, 40.0), back - 6.0))
+        if back >= 6.0:
+            parts.append(seg_part("trees", (x0 + 5.0, z1 - 3.5), (x1 - 5.0, z1 - 3.5), 10.0, tree))
+        return parts, (0.0, zf + hs * 0.5, hs), (0.0, z0 + 0.5)
+    # Turned: laid out for +45 degrees (house front to the front-left corner),
+    # mirrored for -45.
+    S = min(W, D)
+    h = hs / math.sqrt(2.0)
+    splay = 12.0
+    own = _boundary(bound, W, D, splay=splay)
+    g = (x0 + 0.5 + splay * 0.5, z0 + 0.5 + splay * 0.5)
+    f = (-hs * 0.5 / math.sqrt(2.0), -hs * 0.5 / math.sqrt(2.0))
+    u = (f[0] - g[0], f[1] - g[1])
+    ln = math.hypot(*u)
+    u = (u[0] / ln, u[1] / ln)
+    own.append(part("drive", (g[0] + f[0]) * 0.5, (g[1] + f[1]) * 0.5, 6.0, ln, math.atan2(u[0], u[1])))
+    for s in (-1.0, 1.0):
+        o = (u[1] * s * 6.5, -u[0] * s * 6.5)
+        own.append(seg_part("trees", (g[0] + u[0] * 4 + o[0], g[1] + u[1] * 4 + o[1]),
+                            (f[0] - u[0] * 3 + o[0], f[1] - u[1] * 3 + o[1]), 9.0, tree))
+    a = min(24.0, (S - 2 * m - h - 3.0) * 0.5)
+    if a >= 10.0:
+        own.append(part("parterre", x1 - m - a * 0.5, z0 + m + a * 0.5, a, a))
+        own.append(part("parterre", x0 + m + a * 0.5, z1 - m - a * 0.5, a, a))
+    r = min(10.0, (S * 0.5 - m - (h + 2.0) * 0.7071) / 1.7071)
+    if r >= 5.0:
+        k = (h + 2.0 + r) * 0.7071
+        own.append(part("court", k, k, r * 2.0, r * 2.0))
+    # Tree rows along the two back walls, between the parterres and the round garden.
+    ends = (m + max(a, 0.0) + 3.0, 2.0 * r + 8.0)
+    own.append(seg_part("trees", (x0 + ends[0], z1 - 3.5), (x1 - ends[1], z1 - 3.5), 10.0, tree))
+    own.append(seg_part("trees", (x1 - 3.5, z0 + ends[0]), (x1 - 3.5, z1 - ends[1]), 10.0, tree))
+    if turn < 0:
+        own = _mirror(own)
+        g = (-g[0], g[1])
+    return parts + own, (0.0, 0.0, hs), g
+
+
+def cluster_layout(W, D, kinds, style, rng):
+    """Dwellings scattered over a yard (trailers in loose rows either side
+    of a track): (parts, [(kind, x, z, rot)], gate x)."""
+    jit = math.radians(CLUSTER_JITTER[style])
+    wet = style in ("bayou_village", "camp", "bayou_town")
+    parts = [part("yard", 0.0, 0.0, W, D, 0.0, 1 if wet else 0)]
+    homes = []
+    taken = []
+    inner = box(-W * 0.5 + 2.0, -D * 0.5 + 2.0, W * 0.5 - 2.0, D * 0.5 - 2.0)
+    if style == "trailers":
+        gx = 0.0
+        parts.append(part("track", 0.0, 0.0, 5.0, D))
+        taken.append(box(-3.5, -D * 0.5, 3.5, D * 0.5))
+        for side in (-1.0, 1.0):
+            z = -D * 0.5 + 8.0
+            while z < D * 0.5 - 6.0:
+                if rng.random() < 0.85:
+                    homes.append(("trailer_home", side * (13.0 + rng.uniform(-1.0, 1.0)), z + rng.uniform(-0.8, 0.8),
+                                  -side * math.pi * 0.5 + rng.uniform(-jit, jit)))
+                    taken.append(lot_poly(homes[-1][1], homes[-1][2], homes[-1][3], *LOT["trailer_home"]))
+                z += 12.0
+    else:
+        gx = rng.uniform(-W * 0.22, W * 0.22)
+        tl = D * rng.uniform(0.45, 0.7)
+        parts.append(part("track", gx, -D * 0.5 + tl * 0.5, 3.5, tl))
+        taken.append(box(gx - 3.0, -D * 0.5, gx + 3.0, -D * 0.5 + tl + 1.0))
+        gap = {"village": 4.0, "bayou_town": 2.5, "bayou_village": 4.0, "camp": 7.0}[style]
+        want = rng.randint(2, 4) if style == "camp" else rng.randint(3, 6)
+        # Spots on a loose grid, each nudged and turned, tried in random order.
+        cols, rows = max(2, int(W / 17.0)), max(1, int(D / 17.0))
+        spots = [(-W * 0.5 + (i + 0.5) * W / cols, -D * 0.5 + (k + 0.5) * D / rows) for i in range(cols) for k in range(rows)]
+        rng.shuffle(spots)
+        for n in range(len(spots) * 4):
+            if len(homes) >= want:
+                break
+            kind = rng.choice(kinds)
+            w, d = CLUSTER_LOT.get(kind, LOT[kind])
+            rot = rng.uniform(-jit, jit)
+            if kind == "trailer_home" and rng.random() < 0.4:
+                rot += math.pi * 0.5
+            sx, sz = spots[n % len(spots)]
+            x, z = sx + rng.uniform(-4.0, 4.0), sz + rng.uniform(-3.0, 3.0)
+            poly = lot_poly(x, z, rot, w, d)
+            if not inner.contains(poly) or any(poly.distance(t) < gap for t in taken):
+                continue
+            taken.append(poly)
+            homes.append((kind, x, z, rot))
+    if style != "camp" or rng.random() < 0.5:
+        parts += _boundary("fence", W, D, gx, 6.0)
+    # Trees, boats, woodpiles and garden patches in the spaces left.
+    extras = [("trees", 1.5, TREE_KINDS.index("cypress" if wet else "oak"))] * rng.randint(2, 5)
+    if wet:
+        extras += [("boat", 3.0, 0)] * rng.randint(1, 2)
+    extras += [("woodpile", 2.0, 0)] * rng.randint(0, 1)
+    if not wet and style != "trailers":
+        extras += [("garden", 4.0, 0)]
+    for kind, room, variant in extras:
+        for _ in range(30):
+            x, z = rng.uniform(-W * 0.5 + 4.0, W * 0.5 - 4.0), rng.uniform(-D * 0.5 + 4.0, D * 0.5 - 4.0)
+            spot = Point(x, z).buffer(room)
+            if any(spot.distance(t) < 1.0 for t in taken):
+                continue
+            taken.append(spot)
+            if kind == "trees":
+                parts.append(part("trees", x, z, 0.0, 8.0, 0.0, variant))
+            elif kind == "garden":
+                parts.append(part("garden", x, z, 6.0, 5.0, rng.uniform(-jit, jit)))
+            else:
+                parts.append(part(kind, x, z, 2.0 if kind == "boat" else 3.0, 5.0 if kind == "boat" else 1.6,
+                                  rng.uniform(-math.pi, math.pi)))
+            break
+    return parts, homes, gx
+
+
+def farmyard_layout(template, rng):
+    """A farmstead square to its road: ([(kind, x, z)], parts, (W, D)).
+    House nearest the road beside the drive, the yard and its sheds behind;
+    farmyard_at adds the windbreak."""
+    if template == "flats":
+        W, D = 90.0, 76.0
+        lots = [("farmhouse", -28.0, -24.0), ("barn", 4.0, 8.0), ("silos", 28.0, 4.0)]
+        if rng.random() < 0.6:
+            lots.append(("machine_shed", -24.0, 22.0))
+        dx, yard = -10.0, (10.0, 6.0, 52.0, 44.0)
+    else:
+        W, D = 64.0, 56.0
+        lots = [("farmhouse", -14.0, -12.0), ("machine_shed", 16.0, 12.0)]
+        dx, yard = 0.0, (13.0, 9.0, 34.0, 30.0)
+    z0 = -D * 0.5
+    yf = yard[1] - yard[3] * 0.5
+    parts = [part("gravel", *yard), part("drive", dx, (z0 + yf) * 0.5, 5.0, yf - z0)]
+    e = 0.5
+    parts += [seg_part("fence", (-W * 0.5 + e, z0 + e), (dx - 3.0, z0 + e), 0.2, 1),
+              seg_part("fence", (dx + 3.0, z0 + e), (W * 0.5 - e, z0 + e), 0.2, 1),
+              seg_part("fence", (-W * 0.5 + e, z0 + e), (-W * 0.5 + e, D * 0.5 - e), 0.2, 1),
+              seg_part("fence", (W * 0.5 - e, z0 + e), (W * 0.5 - e, D * 0.5 - e), 0.2, 1)]
+    if rng.random() < 0.5:
+        lots = [(k, -x, z) for k, x, z in lots]
+        parts = _mirror(parts)
+    return lots, parts, (W, D)
 
 
 def _steps(a, b, step):

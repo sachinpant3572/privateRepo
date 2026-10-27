@@ -66,6 +66,7 @@ func _run() -> void:
 		"test_country_walls_stop_cars",
 		"test_traffic_drives_into_the_country", "test_traffic_turns_round_at_barricades",
 		"test_country_kit_builds_every_kind",
+		"test_country_plots_square_to_their_roads", "test_estates_and_clusters", "test_grounds_kit_builds_every_part",
 	]
 	# ONLY=name1,name2 runs just those (handy while working on one test).
 	var only := OS.get_environment("ONLY")
@@ -790,6 +791,7 @@ func _same_color(a: Color, b: Color) -> bool:
 func _check(condition: bool, message: String) -> void:
 	if condition:
 		passed += 1
+		if OS.get_environment("VERBOSE") != "": print("  ok: " + message)
 	else:
 		failed += 1
 		print("  FAILED: " + message)
@@ -2361,3 +2363,197 @@ func test_country_kit_builds_every_kind() -> void:
 	rng.seed = 5
 	Kit.build("hollis_farm", b, [], Kit.footprint("hollis_farm"), rng)
 	_check(a.verts == b.verts, "country kinds are deterministic from the rng")
+
+
+## The nearest country road edge to p: [distance past its kerb line, unit
+## direction of the road there], or [] with none within a tile. The
+## direction blends into the next edge's across a bend (not a corner), so a
+## lot on a curve compares with the curve, not the chord.
+func _nearest_road_edge(c, p: Vector2) -> Array:
+	var key := Vector2i(floori(p.x / c.tile_size), floori(p.y / c.tile_size))
+	var best := INF
+	var pick := -1
+	for gx in range(key.x - 1, key.x + 2):
+		for gy in range(key.y - 1, key.y + 2):
+			var t: Dictionary = c.tiles.get(Vector2i(gx, gy), {})
+			for e in t.get("r", []):
+				var a: Vector2 = c.node_pos[c.edge_a[int(e)]]
+				var b: Vector2 = c.node_pos[c.edge_b[int(e)]]
+				var dd := p.distance_to(Geometry2D.get_closest_point_to_segment(p, a, b)) - float(c.classes[c.edge_cls[int(e)]].w) * 0.5
+				if dd < best and a.distance_to(b) > 0.1:
+					best = dd
+					pick = int(e)
+	if pick < 0:
+		return []
+	var a: Vector2 = c.node_pos[c.edge_a[pick]]
+	var b: Vector2 = c.node_pos[c.edge_b[pick]]
+	var u := clampf((p - a).dot(b - a) / (b - a).length_squared(), 0.0, 1.0)
+	var dir := _node_tangent(c, c.edge_a[pick], pick).lerp(_node_tangent(c, c.edge_b[pick], pick), u).normalized()
+	return [best, dir]
+
+
+func _node_tangent(c, n: int, e: int) -> Vector2:
+	var t: Vector2 = (c.node_pos[c.edge_b[e]] - c.node_pos[c.edge_a[e]]).normalized()
+	var around: PackedInt32Array = c.edges_of(n)
+	if around.size() != 2:
+		return t
+	var o: int = around[0] if around[1] == e else around[1]
+	var u: Vector2 = (c.node_pos[c.edge_b[o]] - c.node_pos[c.edge_a[o]]).normalized()
+	if u.dot(t) < 0.0:
+		u = -u
+	return t if u.dot(t) < 0.87 else (t + u).normalized()
+
+
+## How far (degrees) a lot or plot [x, y, yaw, w, d, ...] is turned off the
+## road its front edge stands on, or -1 when no road runs along its front.
+func _turn_off_road(c, l: Array) -> float:
+	var yaw := float(l[2])
+	var front := Vector2(l[0], l[1]) + Vector2(-sin(yaw), -cos(yaw)) * float(l[4]) * 0.5
+	var near := _nearest_road_edge(c, front)
+	if near.is_empty() or near[0] > 8.0:
+		return -1.0
+	var ax := Vector2(cos(yaw), -sin(yaw))
+	return rad_to_deg(asin(minf(1.0, absf(ax.cross(near[1])))))
+
+
+## Every lot and plot on a road runs square to it (Sachin, 2026-10-27: "all
+## plots are sold parallely"); buildings turned off their plot stand only in
+## estates and clusters; a plot's lots stay inside it.
+func test_country_plots_square_to_their_roads() -> void:
+	await _new_game(false)
+	var c = game.city.country
+	var counts := {}
+	for p: Array in c.plots:
+		var ty: String = c.plot_types[int(p[5])]
+		counts[ty] = counts.get(ty, 0) + 1
+	_check(counts.get("estate", 0) >= 10 and counts.get("cluster", 0) >= 40 and counts.get("farmyard", 0) >= 10 and counts.get("field", 0) >= 500,
+			"the country has estates, clusters, farmyards and fields, got %s" % counts)
+	var worst_lot := 0.0
+	var fronting := 0
+	for l: Array in c.lots:
+		if int(l[8]) >= 0 or l[7] == "sand":
+			continue
+		var off := _turn_off_road(c, l)
+		if off >= 0.0:
+			fronting += 1
+			worst_lot = maxf(worst_lot, off)
+	_check(fronting > 1000 and worst_lot < 4.0, "%d lots on a road are square to it, worst %.1f deg" % [fronting, worst_lot])
+	var hollis: Dictionary = c.landmark("hollis_farm")
+	_check(not hollis.is_empty() and _turn_off_road(c, c.lots[c._lot_by_id["hollis_farm"]]) < 4.0, "the Hollis farm faces its road square on")
+	var worst_plot := 0.0
+	for p: Array in c.plots:
+		var off := _turn_off_road(c, p)
+		worst_plot = maxf(worst_plot, off)
+	_check(worst_plot < 5.0, "plots on a road are square to it, worst %.1f deg" % worst_plot)
+	var turned_outside := 0
+	var outside := 0
+	for l: Array in c.lots:
+		var k := int(l[8])
+		if k < 0:
+			continue
+		var p: Array = c.plots[k]
+		var ty: String = c.plot_types[int(p[5])]
+		var turn := absf(wrapf(float(l[2]) - float(p[2]), -PI, PI))
+		if turn > 0.02 and not ty in ["estate", "cluster"]:
+			turned_outside += 1
+		# Its centre inside the plot, its corners within a metre of it.
+		var r := Vector2(l[0], l[1]) - Vector2(p[0], p[1])
+		var cs := cos(float(p[2]))
+		var sn := sin(float(p[2]))
+		var lx := r.x * cs - r.y * sn
+		var lz := r.x * sn + r.y * cs
+		var reach := Vector2(l[3], l[4]).length() * 0.5 * (1.0 if turn > 0.02 else 0.0)
+		var hx := float(p[3]) * 0.5 - (0.0 if turn > 0.02 else float(l[3]) * 0.5) + 1.0
+		var hz := float(p[4]) * 0.5 - (0.0 if turn > 0.02 else float(l[4]) * 0.5) + 1.0
+		if absf(lx) > hx or absf(lz) > hz or reach > Vector2(p[3], p[4]).length() * 0.5:
+			outside += 1
+	_check(turned_outside == 0, "only estates and clusters hold turned buildings, %d others" % turned_outside)
+	_check(outside == 0, "every plot's lots stand inside it, %d do not" % outside)
+
+
+## Estates have walls or hedges, a gate and gardens, courts or orchards round
+## the house, and some houses turn to a view; clusters hold several homes at
+## uneven turns; a tile with an estate builds with its walls solid.
+func test_estates_and_clusters() -> void:
+	await _new_game(false)
+	var c = game.city.country
+	var Tiles = preload("res://scripts/country_tiles.gd")
+	var bare := 0
+	var estates := 0
+	var turned := 0
+	var hale := -1
+	for i in c.plots.size():
+		var p: Array = c.plots[i]
+		var ty: String = c.plot_types[int(p[5])]
+		var kinds := {}
+		for part: Array in p[6]:
+			kinds[c.part_kinds[int(part[0])]] = true
+		var homes: Array = []
+		for l: Array in c.lots:
+			if int(l[8]) == i:
+				homes.append(l)
+		if ty == "estate":
+			estates += 1
+			var grounds := kinds.has("parterre") or kinds.has("tennis") or kinds.has("court") or kinds.has("orchard")
+			if not ((kinds.has("wall") or kinds.has("hedge")) and kinds.has("gate") and kinds.has("drive") and grounds and homes.size() == 1):
+				bare += 1
+			for l: Array in homes:
+				if absf(wrapf(float(l[2]) - float(p[2]), -PI, PI)) > 0.5:
+					turned += 1
+				if l[6] == "hale_estate":
+					hale = i
+		elif ty == "cluster":
+			if homes.size() < 2 or not kinds.has("yard"):
+				bare += 1
+	_check(estates >= 10 and bare == 0, "%d estates and every cluster are laid out, %d bare" % [estates, bare])
+	_check(turned >= 1, "an estate house turns to its view, got %d" % turned)
+	_check(hale >= 0, "the Hale Estate stands in grounds of its own")
+	var spread := 0.0
+	for l: Array in c.lots:
+		var k := int(l[8])
+		if k >= 0 and c.plot_types[int(c.plots[k][5])] == "cluster":
+			spread = maxf(spread, absf(wrapf(float(l[2]) - float(c.plots[k][2]), -PI * 0.25, PI * 0.25)))
+	_check(spread > deg_to_rad(10.0), "cluster homes stand at uneven turns, widest %.0f deg" % rad_to_deg(spread))
+	if hale >= 0:
+		var p: Array = c.plots[hale]
+		var key := Vector2i(floori(float(p[0]) / c.tile_size), floori(float(p[1]) / c.tile_size))
+		var built: Dictionary = Tiles.build(c, key)
+		var cols: Array = built.colliders
+		var bad := cols.filter(func(col): return not (col[0].is_finite() and col[1].is_finite() and is_finite(col[2])))
+		_check(bad.is_empty() and cols.size() > 20, "the Hale Estate's tile builds with %d sound colliders" % cols.size())
+		# The boundary wall: a long collider along the plot's edge.
+		var wall := cols.filter(func(col): return col[1].x > 20.0 and col[1].y > 1.5 and col[1].y < 2.0)
+		_check(wall.size() >= 4, "its boundary walls are solid, got %d" % wall.size())
+
+
+## Every grounds part builds with triangles and sound colliders inside its
+## own extent.
+func test_grounds_kit_builds_every_part() -> void:
+	var Grounds = preload("res://scripts/kits/grounds_kit.gd")
+	var MB = preload("res://scripts/mesh_builder.gd")
+	var trees := ["oak", "palm", "cypress", "fruit"]
+	var sizes := {"lawn": [60.0, 70.0], "yard": [40.0, 30.0], "gravel": [30.0, 20.0], "drive": [6.0, 24.0], "track": [3.5, 20.0],
+		"wall": [40.0, 0.6], "hedge": [40.0, 0.6], "fence": [30.0, 0.2], "gate": [7.0, 0.6], "trees": [30.0, 9.0],
+		"court": [20.0, 20.0], "parterre": [20.0, 14.0], "tennis": [18.3, 36.6], "orchard": [18.3, 36.6], "crop": [42.0, 42.0],
+		"vines": [42.0, 42.0], "boat": [2.0, 5.0], "woodpile": [3.0, 1.6], "garden": [6.0, 5.0]}
+	var problems: Array[String] = []
+	for kind: String in sizes:
+		for v in 4:
+			var mb = MB.new()
+			var out: Array = []
+			var rng := RandomNumberGenerator.new()
+			rng.seed = 7 + v
+			var size: Array = sizes[kind]
+			var p := [0, 3.0, -2.0, size[0], size[1], 0.5, v]
+			Grounds.draw(kind, p, trees, mb, out, rng)
+			var tag := "%s v%d" % [kind, v]
+			if mb.triangle_count() <= 0:
+				problems.append("%s: no triangles" % tag)
+			var reach := Vector2(size[0], size[1]).length() * 0.5 + 6.0
+			for col in out:
+				var cc: Vector3 = col[0]
+				if not (cc.is_finite() and col[1].is_finite() and is_finite(col[2])):
+					problems.append("%s: NaN collider" % tag)
+				elif Vector2(cc.x - 3.0, cc.z + 2.0).length() > reach:
+					problems.append("%s: collider at %s off the part" % [tag, cc])
+	_check(problems.is_empty(), "every grounds part builds soundly: %s" % ", ".join(problems.slice(0, 6)))

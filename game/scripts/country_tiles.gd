@@ -12,6 +12,7 @@ extends RefCounted
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const Props = preload("res://scripts/kits/prop_kit.gd")
 const Kit = preload("res://scripts/kits/country_kit.gd")
+const Grounds = preload("res://scripts/kits/grounds_kit.gd")
 
 const GROUND_Y := -0.04
 const ROAD_Y := 0.0
@@ -66,7 +67,7 @@ const TREES := {
 }
 const TREE_GRID := 10.0
 const MAX_TREES := 120
-const FIELD := 25.0
+const POND_GRID := 25.0
 const LIGHT_CLASSES := ["street", "avenue"]
 const POLE_CLASSES := ["road", "lane", "track"]
 
@@ -83,9 +84,10 @@ class Ctx:
 	var rng := RandomNumberGenerator.new()
 	## Ground triangles of this tile: [a, b, c (Vector2), zone name].
 	var tris: Array = []
-	## Lots (index) and wall/rail segments ([a, b]) near the tile, for
-	## keeping scenery off them.
+	## Lots and plots (index) and wall/rail segments ([a, b]) near the
+	## tile, for keeping scenery off them.
 	var lots_near: Array = []
+	var plots_near: Array = []
 	var segs_near: Array = []
 
 
@@ -104,6 +106,8 @@ static func build(country, key: Vector2i) -> Dictionary:
 		for e in t.r:
 			_road(ctx, int(e))
 		_junctions(ctx)
+		for i in t.get("q", []):
+			_plot(ctx, int(i))
 		for i in t.l:
 			_lot(ctx, int(i))
 		for i in t.p:
@@ -118,7 +122,7 @@ static func build(country, key: Vector2i) -> Dictionary:
 			_far_road(ctx, int(pair[0]), int(pair[1]))
 		for pair in t.t:
 			_trail(ctx, int(pair[0]), int(pair[1]))
-		_fields(ctx)
+		_ponds(ctx)
 		_trees(ctx)
 	return {"mesh": ctx.mb, "glow": ctx.glow, "colliders": ctx.out, "props": ctx.props, "buildings": ctx.buildings}
 
@@ -261,6 +265,8 @@ static func _gather(ctx: Ctx) -> void:
 				continue
 			for i in t.l:
 				ctx.lots_near.append(int(i))
+			for i in t.get("q", []):
+				ctx.plots_near.append(int(i))
 			for i in t.w:
 				var w: Array = c.walls[int(i)]
 				ctx.segs_near.append([Vector2(w[0], w[1]), Vector2(w[2], w[3]), 3.0])
@@ -288,18 +294,25 @@ static func _clear(ctx: Ctx, p: Vector2, room: float) -> bool:
 	if c.road_distance(p, 40.0 + room) < room:
 		return false
 	for i in ctx.lots_near:
-		var l: Array = c.lots[i]
-		var r := p - Vector2(l[0], l[1])
-		var cs := cos(float(l[2]))
-		var sn := sin(float(l[2]))
-		var lx := r.x * cs - r.y * sn
-		var lz := r.x * sn + r.y * cs
-		if absf(lx) < float(l[3]) * 0.5 + room and absf(lz) < float(l[4]) * 0.5 + room:
+		if _in_rect(p, c.lots[i], room):
+			return false
+	for i in ctx.plots_near:
+		if _in_rect(p, c.plots[i], room):
 			return false
 	for s in ctx.segs_near:
 		if _seg_distance(p, s[0], s[1]) < s[2] + room * 0.5:
 			return false
 	return true
+
+
+## Whether p is within `room` of a lot or plot [x, y, yaw, w, d, ...].
+static func _in_rect(p: Vector2, l: Array, room: float) -> bool:
+	var r := p - Vector2(l[0], l[1])
+	var cs := cos(float(l[2]))
+	var sn := sin(float(l[2]))
+	var lx := r.x * cs - r.y * sn
+	var lz := r.x * sn + r.y * cs
+	return absf(lx) < float(l[3]) * 0.5 + room and absf(lz) < float(l[4]) * 0.5 + room
 
 
 # --- Roads -------------------------------------------------------------------------
@@ -476,6 +489,22 @@ static func _lot(ctx: Ctx, i: int) -> void:
 	ctx.buildings += 1
 
 
+## The grounds of a plot: estate gardens, a cluster's yard, a farmyard or
+## a field (its houses and sheds are lots of their own).
+static func _plot(ctx: Ctx, i: int) -> void:
+	var c = ctx.country
+	var p: Array = c.plots[i]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([c.seed_value, "plot", i])
+	var base := Transform3D(Basis(Vector3.UP, float(p[2])), Vector3(p[0], 0.0, p[1]))
+	var local: Array = []
+	for part: Array in p[6]:
+		ctx.mb.xform = base
+		Grounds.draw(c.part_kinds[int(part[0])], part, c.tree_kinds, ctx.mb, local, rng)
+	ctx.mb.xform = base
+	_done(ctx, local, ctx.out)
+
+
 # --- Walls and barricades --------------------------------------------------------------
 
 ## A bank (0), the coast (1) or the play area's edge (2): banks and the
@@ -581,74 +610,18 @@ static func _rail(ctx: Ctx, i: int, k: int) -> void:
 
 # --- Fields, ponds and trees ------------------------------------------------------------
 
-## Crop fields in the flats, vine rows in the hills, ponds and reeds in the
-## bayou, on a FIELD grid where the ground is clear.
-static func _fields(ctx: Ctx) -> void:
-	var n := int(ctx.rect.size.x / FIELD)
+## Ponds and reeds in the bayou, on a POND_GRID grid where the ground is
+## clear. Fields and vines are plots (build_country.py field_plots).
+static func _ponds(ctx: Ctx) -> void:
+	var n := int(ctx.rect.size.x / POND_GRID)
 	for gx in n:
 		for gy in n:
-			var cpt := ctx.rect.position + Vector2(gx + 0.5, gy + 0.5) * FIELD
+			var cpt := ctx.rect.position + Vector2(gx + 0.5, gy + 0.5) * POND_GRID
 			var zone := _zone_at(ctx, cpt)
 			var roll := ctx.rng.randf()
-			match zone:
-				"farmland":
-					if roll < 0.8 and _field_clear(ctx, cpt, FIELD * 0.5):
-						_crop(ctx, cpt)
-				"hills":
-					if roll < 0.45 and _field_clear(ctx, cpt, FIELD * 0.5):
-						_vines(ctx, cpt)
-				"bayou", "bayou_town":
-					if roll < (0.35 if zone == "bayou" else 0.12):
-						_pond(ctx, cpt + Vector2(ctx.rng.randf_range(-5, 5), ctx.rng.randf_range(-5, 5)))
-
-
-static func _field_clear(ctx: Ctx, cpt: Vector2, half: float) -> bool:
-	for off in [Vector2.ZERO, Vector2(-half, -half), Vector2(half, -half), Vector2(half, half), Vector2(-half, half)]:
-		var p: Vector2 = cpt + off * 0.92
-		if _zone_at(ctx, p) == "" and ctx.rect.grow(-0.01).has_point(p):
-			return false
-		if not _clear(ctx, p, 2.0):
-			return false
-	return true
-
-
-static func _crop(ctx: Ctx, cpt: Vector2) -> void:
-	var mb = ctx.mb
-	var size := FIELD - 3.0
-	var crops := [
-		[Color(0.8, 0.68, 0.34), Color(0.86, 0.74, 0.38), 0.5, false], # wheat
-		[Color(0.36, 0.5, 0.22), Color(0.42, 0.58, 0.26), 0.7, true], # soy, cane
-		[Color(0.44, 0.34, 0.24), Color(0.38, 0.29, 0.2), 0.12, false], # ploughed
-		[Color(0.66, 0.62, 0.38), Color(0.6, 0.55, 0.3), 0.0, false], # stubble and bales
-	]
-	var crop: Array = crops[ctx.rng.randi() % crops.size()]
-	var along_x := ctx.rng.randf() < 0.5
-	mb.xform = Transform3D(Basis(Vector3.UP, 0.0 if along_x else PI * 0.5), _v3(cpt, GROUND_Y))
-	mb.box(Vector3(0, 0.01, 0), Vector3(size, 0.02, size), crop[0])
-	if float(crop[2]) > 0.0:
-		var rows := 9
-		for r in rows:
-			var z := -size * 0.5 + (r + 0.5) * size / rows
-			var col: Color = MeshBuilder.glow(crop[1], MeshBuilder.GRASS) if crop[3] else crop[1]
-			mb.box(Vector3(0, float(crop[2]) * 0.5, z), Vector3(size - 0.6, float(crop[2]), 1.0), col)
-	else:
-		for b in ctx.rng.randi_range(3, 7):
-			var p := Vector3(ctx.rng.randf_range(-9, 9), 0.0, ctx.rng.randf_range(-9, 9))
-			mb.limb(p + Vector3(-0.6, 0.7, 0), p + Vector3(0.6, 0.7, 0), 0.7, 0.7, Color(0.78, 0.68, 0.4), 8)
-	mb.xform = Transform3D.IDENTITY
-
-
-static func _vines(ctx: Ctx, cpt: Vector2) -> void:
-	var mb = ctx.mb
-	var size := FIELD - 4.0
-	mb.xform = Transform3D(Basis(Vector3.UP, 0.0 if ctx.rng.randf() < 0.5 else PI * 0.5), _v3(cpt, GROUND_Y))
-	mb.box(Vector3(0, 0.01, 0), Vector3(size, 0.02, size), Color(0.5, 0.44, 0.32))
-	for r in 7:
-		var z := -size * 0.5 + (r + 0.5) * size / 7.0
-		mb.box(Vector3(0, 0.7, z), Vector3(size - 1.0, 1.1, 0.8), MeshBuilder.glow(Color(0.3, 0.45, 0.2), MeshBuilder.GRASS))
-		for x in [-size * 0.5 + 0.3, size * 0.5 - 0.3]:
-			mb.box(Vector3(x, 0.75, z), Vector3(0.1, 1.5, 0.1), BARK)
-	mb.xform = Transform3D.IDENTITY
+			if zone == "bayou" or zone == "bayou_town":
+				if roll < (0.35 if zone == "bayou" else 0.12):
+					_pond(ctx, cpt + Vector2(ctx.rng.randf_range(-5, 5), ctx.rng.randf_range(-5, 5)))
 
 
 static func _pond(ctx: Ctx, cpt: Vector2) -> void:
