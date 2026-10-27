@@ -342,7 +342,7 @@ static func gloss_material() -> StandardMaterial3D:
 		_gloss_material.vertex_color_use_as_albedo = true
 		_gloss_material.vertex_color_is_srgb = true
 		_gloss_material.roughness = 0.16
-		_gloss_material.metallic = 0.35
+		_gloss_material.metallic = 0.15
 		_gloss_material.metallic_specular = 0.8
 	return _gloss_material
 

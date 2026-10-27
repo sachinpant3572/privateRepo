@@ -14,6 +14,8 @@ const Player = preload("res://scripts/player.gd")
 var out_dir := "user://"
 var rng := RandomNumberGenerator.new()
 var camera := Camera3D.new()
+## Paint and glass of the gallery cars (drawn glossy, as in the game).
+var vehicle_gloss := MeshBuilder.new()
 
 
 func _ready() -> void:
@@ -28,7 +30,11 @@ func _ready() -> void:
 func _run() -> void:
 	await _shot(_buildings(), Vector3(0, 0, 0), 62.0, "gallery_1_buildings.png", true)
 	await _shot(_landmarks(), Vector3(0, 0, 300), 108.0, "gallery_2_landmarks.png", true)
-	await _shot(_vehicles(), Vector3(0, 0, 598), 22.0, "gallery_3_vehicles.png")
+	var cars := _vehicles()
+	var shell := vehicle_gloss.make_instance()
+	shell.material_override = MeshBuilder.gloss_material()
+	add_child(shell)
+	await _shot(cars, Vector3(0, 0, 598), 22.0, "gallery_3_vehicles.png")
 	await _people()
 	await _shot(_props(), Vector3(0, 0, 897), 30.0, "gallery_5_props.png", true)
 	get_tree().quit()
@@ -89,7 +95,8 @@ func _vehicles() -> MeshBuilder:
 	for i in kinds.size():
 		var row := i / 5
 		mb.xform = Transform3D(Basis(Vector3.UP, PI * 0.15), Vector3(-12.0 + (i % 5) * 6.0, 0, 594 + row * 8.0))
-		VehicleKit.build(mb, kinds[i], VehicleKit.PAINTS[i % VehicleKit.PAINTS.size()])
+		vehicle_gloss.xform = mb.xform
+		VehicleKit.build(mb, kinds[i], VehicleKit.PAINTS[i % VehicleKit.PAINTS.size()], vehicle_gloss)
 	mb.xform = Transform3D.IDENTITY
 	return mb
 
