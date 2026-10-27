@@ -112,6 +112,7 @@ func _run() -> void:
 		["39_wards_from_above", Vector3(1080, 0, 620), 130.0],
 		["40_ironwharf_from_above", Vector3(1000, 0, 930), 130.0],
 		["41_esplanade_arch", Vector3(esplanade.x - 50.0, 0, esplanade.y), 110.0],
+		["44_ironwharf_quay", Vector3(1060, 0, 1060), 90.0],
 	]
 	for stop in aerials:
 		var pos: Vector3 = stop[1]

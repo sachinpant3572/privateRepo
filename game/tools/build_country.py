@@ -676,7 +676,7 @@ class Country:
         if self.gulf.contains(drive.interpolate(0.5, normalized=True)):
             drive = coast.offset_curve(-90.0, join_style="round")
         drive = LineString(fillet(list(drive.coords), 80.0, 8.0))
-        drive = drive.intersection(box(west - 200, -1000, east + 300, 2100)).difference(self.P.buffer(60.0))
+        drive = drive.intersection(box(west - 0.5, -1000, east + 300, 2100)).difference(self.P.buffer(60.0))
         for piece in lines_of(drive):
             if piece.length > 60:
                 self.add(list(piece.coords), "avenue", "Seabreeze Drive", "seabreeze")
