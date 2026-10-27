@@ -20,6 +20,7 @@ const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const Cells = preload("res://scripts/city_cells.gd")
 const StreetPlan = preload("res://scripts/street_plan.gd")
 const L = preload("res://scripts/layers.gd")
+const Places = preload("res://scripts/places.gd")
 
 const MAP_PATH := "res://data/world_map.json"
 const CITY_ID := "bellerive"
@@ -74,12 +75,15 @@ var rail_lines: Array = []
 ## Cells: {kind ("face" or "edge"), id (face or edge), box (Rect2, local
 ## metres), edges (PackedInt32Array, the streets it builds)}.
 var cells: Array = []
+## Shops and diners the player can walk into (places.gd).
+var places: Array = []
 ## Node the streaming follows; the spawn point when unset.
 var focus_node: Node3D
 ## Night light pools are drawn only after dark (see set_glow_visible).
 var glow_visible := false
 
 var _landmarks := {} # face -> {id, type, name}
+var _place_by_parcel := {} # Vector2i(face, parcel) -> place
 var _map_landmarks: Array = [] # [{id, type, name, local}]
 var _district_by_id := {}
 var _river: PackedVector2Array
@@ -112,6 +116,9 @@ func build(seed_v: int) -> void:
 		var f: int = plan.face_of(lm.local)
 		if plan.is_land(f) and not _landmarks.has(f) and not plan.is_park(f):
 			_landmarks[f] = {"id": lm.id, "type": lm.type, "name": lm.name, "local": lm.local}
+	places = Places.build(self)
+	for p in places:
+		_place_by_parcel[Vector2i(p.face, p.parcel)] = p
 	_make_cells()
 	_make_rails()
 	for f in plan.faces.size():
@@ -203,6 +210,12 @@ func district_at(pos: Vector3) -> Dictionary:
 			best_d = dist
 			best = d
 	return best
+
+
+## The place on front-row parcel k of block f (see Places.front_parcels),
+## or {}. Read by the cell builder's worker thread.
+func place_at(f: int, k: int) -> Dictionary:
+	return _place_by_parcel.get(Vector2i(f, k), {})
 
 
 func landmark_at(f: int) -> Dictionary:

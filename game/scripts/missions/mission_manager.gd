@@ -28,6 +28,9 @@ void fragment() {
 
 signal changed
 
+## Save format: 1 had progress, cash, phone and settings; 2 adds the bag.
+const SAVE_VERSION := 2
+
 var game
 var hud
 var save_path := "user://solvera_save.json"
@@ -294,7 +297,8 @@ func _make_ring(pos: Vector3, color: Color) -> Node3D:
 func save_game() -> void:
 	if not save_enabled:
 		return
-	var data := {"done": done, "cash": game.cash, "phone": phone_unlocked, "settings": game.settings}
+	var data := {"version": SAVE_VERSION, "done": done, "cash": game.cash, "phone": phone_unlocked,
+		"settings": game.settings, "inventory": game.inventory.to_save()}
 	var f := FileAccess.open(save_path, FileAccess.WRITE)
 	if f:
 		f.store_string(JSON.stringify(data))
@@ -310,6 +314,9 @@ func load_game() -> void:
 	game.cash = int(data.get("cash", 0))
 	phone_unlocked = data.get("phone", false)
 	game.settings.merge(data.get("settings", {}), true)
+	# Version 1 saves (no "version") had no bag: it starts empty.
+	var inv = data.get("inventory") if int(data.get("version", 1)) >= 2 else null
+	game.inventory.load_save(inv if typeof(inv) == TYPE_DICTIONARY else {})
 
 
 ## Wipes progress (phone > Settings > New game).
@@ -318,5 +325,6 @@ func reset_progress() -> void:
 	done.clear()
 	phone_unlocked = false
 	game.cash = 0
+	game.inventory.bag.clear()
 	save_game()
 	changed.emit()

@@ -111,6 +111,90 @@ static func _shopfront(mb, w: float, front: float, rng: RandomNumberGenerator) -
 	mb.box(Vector3(w * 0.42, 2.5, front - 1.05), Vector3(0.16, 0.6, 0.75), MeshBuilder.glow(neon, MeshBuilder.GLOW_NEON))
 
 
+## A place's storefront (places.gd): `type` is "corner_store" (two
+## storeys, display windows, a lit sign band and a striped awning) or
+## "diner" (one storey, cream and red with a chrome band, ribbon windows, a
+## glass porch and a neon sign on the roof). The door is at x = 0.
+static func storefront(mb, out: Array, w: float, d: float, type: String, rng: RandomNumberGenerator) -> void:
+	var front := -d * 0.5 - 0.04
+	var glass := MeshBuilder.glow(SHOP_GLASS, MeshBuilder.GLOW_WINDOW)
+	var frame := MeshBuilder.glow(DARK.lightened(0.1), MeshBuilder.GLOSS)
+	if type == "diner":
+		var cream := Color(0.95, 0.91, 0.82)
+		var red := Color(0.72, 0.12, 0.14)
+		var chrome := MeshBuilder.glow(CHROME, MeshBuilder.METAL)
+		var h := 4.4
+		_solid(mb, out, Vector3(0, h * 0.5, 0), Vector3(w, h, d), cream)
+		mb.box(Vector3(0, 0.55, front), Vector3(w, 1.1, 0.1), red)
+		mb.box(Vector3(0, 1.12, front - 0.04), Vector3(w, 0.1, 0.12), chrome)
+		mb.box(Vector3(0, 3.0, front - 0.04), Vector3(w, 0.14, 0.12), chrome)
+		mb.box(Vector3(0, h - 0.2, front - 0.02), Vector3(w + 0.1, 0.4, 0.14), red)
+		for side in [-1.0, 1.0]:
+			var x0 := 1.4
+			var x1 := w * 0.5 - 0.5
+			mb.box(Vector3(side * (x0 + x1) * 0.5, 2.05, front), Vector3(x1 - x0, 1.6, 0.08), glass)
+			for k in int((x1 - x0) / 1.6):
+				mb.box(Vector3(side * (x0 + 1.6 * (k + 1)), 2.05, front - 0.04), Vector3(0.08, 1.6, 0.06), chrome)
+		# Glass porch round the door.
+		# (Shallow: the doorstep in front of it stays clear.)
+		mb.box(Vector3(0, 1.4, front - 0.35), Vector3(2.4, 2.8, 0.7), glass)
+		mb.box(Vector3(0, 2.86, front - 0.35), Vector3(2.6, 0.14, 0.8), chrome)
+		mb.box(Vector3(0, 1.25, front - 0.72), Vector3(1.2, 2.3, 0.06), frame)
+		mb.box(Vector3(0, 1.3, front - 0.75), Vector3(0.9, 2.0, 0.04), glass)
+		_solid_only(out, Vector3(0, 1.4, front - 0.35), Vector3(2.4, 2.8, 0.7))
+		# Roof sign: a red board edged in neon, lit lettering bars.
+		var top := h + 0.1
+		mb.box(Vector3(0, top + 0.9, front + 0.6), Vector3(minf(w * 0.6, 7.0), 1.6, 0.25), red.darkened(0.3))
+		mb.box(Vector3(0, top + 0.9, front + 0.45), Vector3(minf(w * 0.6, 7.0) - 0.3, 1.3, 0.06), MeshBuilder.glow(Color(1.0, 0.35, 0.3), MeshBuilder.GLOW_NEON))
+		for k in 5:
+			mb.box(Vector3((k - 2) * 1.1, top + 0.9, front + 0.4), Vector3(0.7, 0.9, 0.05), MeshBuilder.glow(Color(1.0, 0.95, 0.8), MeshBuilder.GLOW_NEON))
+		for side in [-1.0, 1.0]:
+			mb.box(Vector3(side * 1.6, top + 0.05, front + 0.7), Vector3(0.1, 0.3, 0.1), chrome)
+		mb.box(Vector3(w * 0.3, 2.4, front - 0.06), Vector3(1.0, 0.4, 0.04), MeshBuilder.glow(Color(0.3, 0.75, 1.0), MeshBuilder.GLOW_NEON))
+		_flat_roof(mb, w, d, h, rng, cream.darkened(0.15), true)
+		return
+	var body: Color = CREOLE[rng.randi() % CREOLE.size()]
+	var trim := TRIM.darkened(0.1)
+	if rng.randf() < 0.4:
+		body = MeshBuilder.glow(BRICKS[rng.randi() % BRICKS.size()], MeshBuilder.BRICK)
+	var h := 2.0 * FLOOR + 0.6
+	_solid(mb, out, Vector3(0, h * 0.5, 0), Vector3(w, h, d), body)
+	mb.box(Vector3(0, h + 0.12, 0), Vector3(w + 0.3, 0.25, d + 0.3), trim)
+	# Shop floor: two display windows round a glazed door, a kick plate and
+	# a lit sign band.
+	mb.box(Vector3(0, 1.6, front + 0.02), Vector3(w - 0.4, 3.2, 0.06), frame)
+	for side in [-1.0, 1.0]:
+		var x0 := 1.0
+		var x1 := w * 0.5 - 0.5
+		mb.box(Vector3(side * (x0 + x1) * 0.5, 1.6, front - 0.02), Vector3(x1 - x0, 1.9, 0.06), glass)
+	mb.box(Vector3(0, 1.25, front - 0.02), Vector3(1.4, 2.5, 0.06), MeshBuilder.glow(PANE, MeshBuilder.GLASS))
+	mb.box(Vector3(0, 1.3, front - 0.05), Vector3(0.06, 2.3, 0.04), frame)
+	var sign_color := Color(0.1, 0.55, 0.5)
+	mb.box(Vector3(0, 3.0, front - 0.08), Vector3(w - 0.6, 0.55, 0.12), sign_color.darkened(0.4))
+	for k in int((w - 1.6) / 0.8):
+		mb.box(Vector3(-w * 0.5 + 1.2 + k * 0.8, 3.0, front - 0.15), Vector3(0.55, 0.32, 0.04), MeshBuilder.glow(Color(0.95, 1.0, 0.9), MeshBuilder.GLOW_NEON))
+	var awning: Color = AWNINGS[rng.randi() % AWNINGS.size()]
+	var stripes := int(w / 0.6)
+	for i in stripes:
+		var x := -w * 0.5 + (i + 0.5) * w / stripes
+		mb.box(Vector3(x, 2.6, front - 0.5), Vector3(w / stripes, 0.1, 1.0), awning if i % 2 == 0 else Color(0.95, 0.93, 0.88))
+	# Produce crates by the door.
+	for side in [-1.0, 1.0]:
+		var c := Vector3(side * 2.2, 0.35, front - 0.45)
+		mb.box(c, Vector3(1.2, 0.7, 0.7), WOOD)
+		for k in 3:
+			var fruit: Color = [Color(0.85, 0.2, 0.15), Color(0.95, 0.7, 0.15), Color(0.4, 0.7, 0.2)][(k + int(side > 0)) % 3]
+			mb.ball(c + Vector3((k - 1) * 0.36, 0.42, 0), Vector3(0.17, 0.12, 0.25), fruit, 5, 2)
+	# Upper floor.
+	var bays := maxi(1, int(w / 2.6))
+	for b in bays:
+		var x := -w * 0.5 + w / bays * (b + 0.5)
+		mb.box(Vector3(x, FLOOR + 1.5, front), Vector3(w / bays * 0.45, 1.8, 0.08), _window(rng))
+		mb.box(Vector3(x, FLOOR + 0.55, front - 0.1), Vector3(w / bays * 0.52, 0.06, 0.2), trim)
+	mb.box(Vector3(0, FLOOR - 0.05, front), Vector3(w, 0.14, 0.1), trim)
+	_flat_roof(mb, w, d, h + 0.25, rng, body.darkened(0.2) if body.a == 1.0 else trim)
+
+
 ## Cast-iron gallery: one balcony per upper floor on posts down to the street,
 ## with fern baskets now and then.
 static func _gallery(mb, w: float, d: float, floors: int, rng: RandomNumberGenerator) -> void:

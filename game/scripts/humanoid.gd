@@ -35,11 +35,13 @@ var xray_color := Color(0, 0, 0, 0)
 
 ## Third hit of a quick combo is a kick that knocks down.
 var can_kick := false
-## Cutscene and mission poses: phone, talk, wave, hands_up, cower, point,
-## search. Empty for normal movement.
+## Cutscene, mission and indoor poses: phone, talk, wave, hands_up, cower,
+## point, search, eat, browse, work, pay. Empty for normal movement.
 var gesture := ""
 ## Sitting on a scooter or bike (set by the vehicle).
 var riding := false
+## Sitting on a chair, stool or bench (indoors).
+var sitting := false
 
 var dead := false
 var dead_time := 0.0
@@ -262,6 +264,7 @@ func _process(delta: float) -> void:
 	anim.guard = combat_time > 0.0
 	anim.down = dead or knocked_time > 0.0
 	anim.ride = riding
+	anim.sit = sitting
 	anim.gesture = gesture
 	anim.texting = look.has("phone") and combat_time <= 0.0
 	rig.pose(anim, delta)

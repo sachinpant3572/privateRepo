@@ -151,6 +151,14 @@ func _draw() -> void:
 		if zoom > 0.6:
 			draw_string_outline(font, at + Vector2(16, 6), lm.name, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, 5, Color.BLACK)
 			draw_string(font, at + Vector2(16, 6), lm.name, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.WHITE)
+	# Shops and diners.
+	for p in city.places:
+		var at := _to_screen(p.door)
+		var ic: Array = MapImage.icon(p.type)
+		MapImage.draw_icon(self, at, ic[0], ic[1], 9.0)
+		if zoom > 1.2:
+			draw_string_outline(font, at + Vector2(13, 5), p.name, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, 5, Color.BLACK)
+			draw_string(font, at + Vector2(13, 5), p.name, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.9, 0.9, 0.9))
 	# Markers and the player.
 	for m in game.map_markers():
 		var at := _to_screen(m.pos)

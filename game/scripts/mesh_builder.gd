@@ -332,6 +332,20 @@ var xform := Transform3D.IDENTITY
 var _bone_marks: Array = []
 
 
+## Where the arrays end now; rollback() cuts them back to it (undoing
+## everything added since).
+func mark() -> Array:
+	return [verts.size(), indices.size()]
+
+
+func rollback(m: Array) -> void:
+	verts.resize(m[0])
+	normals.resize(m[0])
+	colors.resize(m[0])
+	uvs.resize(m[0])
+	indices.resize(m[1])
+
+
 ## Binds everything added from now on to skeleton bone `bone`.
 func set_bone(bone: int) -> void:
 	_bone_marks.append([verts.size(), bone])

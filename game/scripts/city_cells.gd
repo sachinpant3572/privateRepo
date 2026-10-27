@@ -31,6 +31,8 @@ const StreetPlan = preload("res://scripts/street_plan.gd")
 
 ## Road and block slabs reach down into the water so quays have walls.
 const SLAB := 1.2
+## Half width of the walk kept clear in front of a place's door.
+const DOOR_CLEAR := 1.5
 const KERB := 0.15
 
 const ASPHALT := Color(0.27, 0.27, 0.29)
@@ -632,7 +634,7 @@ static func _boat(ctx: Ctx, p: Vector3, yaw: float) -> void:
 ## Splits rect `r` (front frame) into parcels no bigger than `size`: columns
 ## along the front, and a back row facing the back street when deep.
 ## Returns [[Rect2, flipped]].
-static func _split(r: Rect2, size: Vector2) -> Array:
+static func split(r: Rect2, size: Vector2) -> Array:
 	var out: Array = []
 	if r.size.x < 1.0 or r.size.y < 1.0:
 		return out
@@ -669,18 +671,24 @@ static func _land_block(ctx: Ctx, style: String) -> void:
 		rest = [Rect2(r.position.x, r.position.y, parcel.position.x - r.position.x, r.size.y),
 			Rect2(parcel.end.x, r.position.y, r.end.x - parcel.end.x, r.size.y),
 			Rect2(parcel.position.x, r.position.y, lw, parcel.position.y - r.position.y)]
-	var docks_ff = _docks_frame(ctx) if district == "docks" and lm.is_empty() else null
+	var docks_ff = docks_frame(ctx.plan, ctx.face) if district == "docks" and lm.is_empty() else null
 	if docks_ff != null:
 		# Yards turn their backs to the quay, so cranes reach over the water.
 		var r: Rect2 = StreetPlan.largest_rect(docks_ff.affine_inverse() * ctx.lot)
-		for p in _split(r, Vector2(PARCEL_MAX.docks.x, INF)):
+		for p in split(r, Vector2(PARCEL_MAX.docks.x, INF)):
 			_use_parcel(ctx, p[0], p[1], docks_ff)
 			_docks(ctx, -1)
 	else:
+		var k := -1
 		for r in rest:
 			if r.size.x < 9.0 or r.size.y < 9.0:
 				continue
-			for p in _split(r, PARCEL_MAX.get(district, PARCEL_DEFAULT)):
+			for p in split(r, PARCEL_MAX.get(district, PARCEL_DEFAULT)):
+				k += 1
+				var place: Dictionary = city.place_at(ctx.face, k) if lm.is_empty() else {}
+				if not place.is_empty():
+					_shop_parcel(ctx, p[0], place, district)
+					continue
 				_use_parcel(ctx, p[0], p[1])
 				if ctx.hx < 4.0 or ctx.hz < 4.0:
 					continue
@@ -689,15 +697,34 @@ static func _land_block(ctx: Ctx, style: String) -> void:
 	_furniture(ctx, district)
 
 
+## A place (places.gd) on parcel `r`: its storefront at the front, and
+## the district's usual buildings on the strips beside and behind it.
+static func _shop_parcel(ctx: Ctx, r: Rect2, place: Dictionary, district: String) -> void:
+	var shop: Rect2 = place.rect
+	_use_parcel(ctx, shop)
+	var local := _at(ctx, Vector3(0, KERB, 0), PI)
+	Buildings.storefront(ctx.mb, local, ctx.hx * 2.0, ctx.hz * 2.0, place.type, ctx.rng)
+	_done(ctx, local)
+	var gap := 0.6
+	for rest in [Rect2(r.position.x, r.position.y, shop.position.x - gap - r.position.x, r.size.y),
+			Rect2(shop.end.x + gap, r.position.y, r.end.x - shop.end.x - gap, r.size.y),
+			Rect2(shop.position.x, r.position.y, shop.size.x, shop.position.y - gap - r.position.y)]:
+		if rest.size.x < 9.0 or rest.size.y < 9.0:
+			continue
+		_use_parcel(ctx, rest)
+		if ctx.hx >= 4.0 and ctx.hz >= 4.0:
+			_district_parcel(ctx, district)
+
+
 ## A frame for a docks block with the quay behind it (+y away from the
 ## water), or null when it has no quay.
-static func _docks_frame(ctx: Ctx):
-	var inner: PackedVector2Array = ctx.plan.inner(ctx.face)
+static func docks_frame(plan, face: int):
+	var inner: PackedVector2Array = plan.inner(face)
 	var n := inner.size()
 	var best := -1
 	var best_len := 0.0
 	for k in n:
-		if ctx.plan.side_class(ctx.face, k) != "quay":
+		if plan.side_class(face, k) != "quay":
 			continue
 		var l := inner[k].distance_to(inner[(k + 1) % n])
 		if l > best_len:
@@ -1339,10 +1366,11 @@ static func _furniture(ctx: Ctx, kind: String) -> void:
 		ctx.mb.xform = Transform3D(Basis(Vector3.UP, atan2(dir.y * -1.0, dir.x)), _v3(origin, KERB))
 		var local: Array = []
 		var half := length * 0.5 - 2.5
+		var clear := _door_zones(ctx, half)
 		var street := Vector3(0, 0, -1)
 		if cls == "lane":
 			for t in [-half * 0.5, half * 0.5]:
-				Props.planter(ctx.mb, local, Vector3(t, 0, 1.2))
+				_put(ctx, local, clear, func(): Props.planter(ctx.mb, local, Vector3(t, 0, 1.2)))
 		else:
 			match kind:
 				"downtown":
@@ -1353,65 +1381,104 @@ static func _furniture(ctx: Ctx, kind: String) -> void:
 					var banner = BANNERS[ctx.deco.randi() % BANNERS.size()] if ctx.deco.randf() < 0.5 else null
 					var t := -half
 					while t <= half:
-						Props.street_light(ctx.mb, local, Vector3(t, 0, 0), street, ctx.glow, banner)
+						_put(ctx, local, clear, func(): Props.street_light(ctx.mb, local, Vector3(t, 0, 0), street, ctx.glow, banner))
 						var tree := t + 9.0
 						if tree < half - 1.0 and absf(tree) > 6.2 and absf(tree + half * 0.7) > 1.4 and absf(tree - half + 3.0) > 1.4 and absf(tree + half - 3.0) > 1.4:
-							Props.street_tree(ctx.mb, local, Vector3(tree, 0, 0.3), ctx.deco)
+							_put(ctx, local, clear, func(): Props.street_tree(ctx.mb, local, Vector3(tree, 0, 0.3), ctx.deco))
 						t += 18.0
 					if rng.randf() < 0.5:
-						Props.bins(ctx.mb, local, Vector3(minf(4.4, half), 0, 0.2))
+						_put(ctx, local, clear, func(): Props.bins(ctx.mb, local, Vector3(minf(4.4, half), 0, 0.2)))
 					if rng.randf() < 0.35:
-						Props.bench(ctx.mb, local, Vector3(maxf(-4.0, -half), 0, 0.4), 0.0)
+						_put(ctx, local, clear, func(): Props.bench(ctx.mb, local, Vector3(maxf(-4.0, -half), 0, 0.4), 0.0))
 					if rng.randf() < 0.6:
-						Props.traffic_light(ctx.mb, local, Vector3(-half - 1.5, 0, 0), street)
-					_modern_street(ctx, local, half, true)
+						_put(ctx, local, clear, func(): Props.traffic_light(ctx.mb, local, Vector3(-half - 1.5, 0, 0), street))
+					_modern_street(ctx, local, clear, half, true)
 				"wards":
 					# Power lines on the south-facing sides.
 					if out.y > 0.4:
 						var t := -half
 						while t <= half + 0.1:
 							var nxt = Vector3(t + 13.0, 0, 0) if t + 13.0 <= half + 0.1 else null
-							Props.power_pole(ctx.mb, local, Vector3(t, 0, 0), nxt)
+							_put(ctx, local, clear, func(): Props.power_pole(ctx.mb, local, Vector3(t, 0, 0), nxt))
 							t += 13.0
 					for i in int(length / 40.0) + 1:
 						if rng.randf() < 0.4:
-							Props.crepe_myrtle(ctx.mb, local, Vector3(rng.randf_range(-half, half), 0, 0), rng)
+							_put(ctx, local, clear, func(): Props.crepe_myrtle(ctx.mb, local, Vector3(rng.randf_range(-half, half), 0, 0), rng))
 					if rng.randf() < 0.25:
-						Props.bins(ctx.mb, local, Vector3(minf(7.0, half), 0, 0.3))
+						_put(ctx, local, clear, func(): Props.bins(ctx.mb, local, Vector3(minf(7.0, half), 0, 0.3)))
 					if ctx.deco.randf() < 0.15:
-						Props.scooter(ctx.mb, Vector3(ctx.deco.randf_range(-half, half), 0, 1.6), ctx.deco.randf() * TAU, Props.SCOOTERS[ctx.deco.randi() % Props.SCOOTERS.size()])
+						_put(ctx, local, clear, func(): Props.scooter(ctx.mb, Vector3(ctx.deco.randf_range(-half, half), 0, 1.6), ctx.deco.randf() * TAU, Props.SCOOTERS[ctx.deco.randi() % Props.SCOOTERS.size()]))
 					elif half > 3.0 and ctx.deco.randf() < 0.06:
-						Props.roadworks(ctx.mb, local, Vector3(0, 0, 1.7))
+						_put(ctx, local, clear, func(): Props.roadworks(ctx.mb, local, Vector3(0, 0, 1.7)))
 				"docks":
 					var t := -half
 					while t <= half:
-						Props.street_light(ctx.mb, local, Vector3(t, 0, 0), street, ctx.glow)
+						_put(ctx, local, clear, func(): Props.street_light(ctx.mb, local, Vector3(t, 0, 0), street, ctx.glow))
 						t += 30.0
 					if rng.randf() < 0.5:
-						Props.barrel(ctx.mb, local, Vector3(rng.randf_range(-half, half), 0, 0), Color(0.75, 0.3, 0.2))
+						_put(ctx, local, clear, func(): Props.barrel(ctx.mb, local, Vector3(rng.randf_range(-half, half), 0, 0), Color(0.75, 0.3, 0.2)))
 				_:
 					var t := -half
 					while t <= half:
-						Props.gas_lamp(ctx.mb, local, Vector3(t, 0, 0), ctx.glow)
+						_put(ctx, local, clear, func(): Props.gas_lamp(ctx.mb, local, Vector3(t, 0, 0), ctx.glow))
 						t += 12.0
 					if rng.randf() < 0.5:
-						Props.crepe_myrtle(ctx.mb, local, Vector3(minf(6.0, half) if rng.randf() < 0.5 else maxf(-6.0, -half), 0, 0), rng)
+						_put(ctx, local, clear, func(): Props.crepe_myrtle(ctx.mb, local, Vector3(minf(6.0, half) if rng.randf() < 0.5 else maxf(-6.0, -half), 0, 0), rng))
 					elif kind == "quarter" and ctx.deco.randf() < 0.6:
 						var parasol: Color = Buildings.AWNINGS[ctx.deco.randi() % Buildings.AWNINGS.size()]
-						Props.cafe_table(ctx.mb, local, Vector3(minf(6.0, half) if ctx.deco.randf() < 0.5 else maxf(-6.0, -half), 0, 1.3), parasol)
+						_put(ctx, local, clear, func(): Props.cafe_table(ctx.mb, local, Vector3(minf(6.0, half) if ctx.deco.randf() < 0.5 else maxf(-6.0, -half), 0, 1.3), parasol))
 					if rng.randf() < 0.3:
-						Props.trash_can(ctx.mb, local, Vector3(half - 1.0, 0, 0))
+						_put(ctx, local, clear, func(): Props.trash_can(ctx.mb, local, Vector3(half - 1.0, 0, 0)))
 					if kind == "quarter":
-						_modern_street(ctx, local, half, false)
+						_modern_street(ctx, local, clear, half, false)
 					# Festoon lights across narrow Quarter streets.
 					if kind == "quarter" and cls == "quarter" and out.y > -0.3 and ctx.deco.randf() < 0.45:
 						var t0 := ctx.deco.randf_range(-half * 0.6, half * 0.6)
-						Props.festoon(ctx.mb, Vector3(t0, 4.6, 0), Vector3(t0, 4.6, -(StreetPlan.CLASSES[cls].width + 0.9)), ctx.deco)
+						_put(ctx, local, clear, func(): Props.festoon(ctx.mb, Vector3(t0, 4.6, 0), Vector3(t0, 4.6, -(StreetPlan.CLASSES[cls].width + 0.9)), ctx.deco))
 		if rng.randf() < 0.35 and half > 4.0:
-			Props.hydrant(ctx.mb, local, Vector3(half - 3.0, 0, 0))
+			_put(ctx, local, clear, func(): Props.hydrant(ctx.mb, local, Vector3(half - 3.0, 0, 0)))
 		if rng.randf() < 0.15 and half > 4.0:
-			Props.mailbox(ctx.mb, local, Vector3(3.0 - half, 0, 0))
+			_put(ctx, local, clear, func(): Props.mailbox(ctx.mb, local, Vector3(3.0 - half, 0, 0)))
 		_done(ctx, local, false, ctx.props)
+
+
+## Doorsteps of places on this side of the block, as keep-clear rects in
+## the furniture frame (ctx.mb.xform): the walk from the curb to the door
+## stays free of benches, planters and racks.
+static func _door_zones(ctx: Ctx, half: float) -> Array:
+	var zones: Array = []
+	if ctx.city == null:
+		return zones
+	var inv: Transform3D = ctx.mb.xform.affine_inverse()
+	for place in ctx.city.places:
+		if place.face != ctx.face:
+			continue
+		var d: Vector3 = inv * place.door
+		if absf(d.x) < half + 4.0 and d.z > -0.5 and d.z < 4.0:
+			zones.append(Rect2(d.x - DOOR_CLEAR, 0.3, DOOR_CLEAR * 2.0, d.z + 0.9))
+	return zones
+
+
+## Builds one prop (`build` adds its mesh and colliders) and takes it out
+## again if it stands on a doorstep.
+static func _put(ctx: Ctx, local: Array, clear: Array, build: Callable) -> void:
+	var mark: Array = ctx.mb.mark()
+	var glow_mark: Array = ctx.glow.mark() if ctx.glow else []
+	var n := local.size()
+	build.call()
+	for i in range(n, local.size()):
+		var col: Array = local[i]
+		var yaw: float = col[2] if col.size() > 2 else 0.0
+		var size: Vector3 = col[1]
+		var ext := Vector2(absf(cos(yaw)) * size.x + absf(sin(yaw)) * size.z, absf(sin(yaw)) * size.x + absf(cos(yaw)) * size.z) * 0.5
+		var box := Rect2(Vector2(col[0].x, col[0].z) - ext, ext * 2.0)
+		for z in clear:
+			if box.intersects(z):
+				ctx.mb.rollback(mark)
+				if ctx.glow:
+					ctx.glow.rollback(glow_mark)
+				local.resize(n)
+				return
 
 
 ## Present-day kit along a curb (furniture frame, -Z to the street). Downtown,
@@ -1420,30 +1487,30 @@ static func _furniture(ctx: Ctx, kind: String) -> void:
 ## racks or sidewalk works, and sometimes a pay station past the bench.
 ## Elsewhere (the Quarter) bike racks sometimes; everywhere dockless
 ## scooters, kept inside the sidewalk (its back edge is at z 2.55).
-static func _modern_street(ctx: Ctx, local: Array, half: float, downtown: bool) -> void:
+static func _modern_street(ctx: Ctx, local: Array, clear: Array, half: float, downtown: bool) -> void:
 	var deco := ctx.deco
 	if downtown and half > 6.0:
 		var roll := deco.randf()
 		if roll < 0.25:
-			Props.bus_shelter(ctx.mb, local, Vector3(0.2, 0, 1.55), deco)
+			_put(ctx, local, clear, func(): Props.bus_shelter(ctx.mb, local, Vector3(0.2, 0, 1.55), deco))
 		elif roll < 0.45:
-			Props.bike_dock(ctx.mb, local, Vector3(0.4, 0, 1.6), 4.0, deco)
+			_put(ctx, local, clear, func(): Props.bike_dock(ctx.mb, local, Vector3(0.4, 0, 1.6), 4.0, deco))
 		elif roll < 0.6:
 			for x in [-1.5, 1.5]:
-				Props.ev_charger(ctx.mb, local, Vector3(x, 0, 0.15))
+				_put(ctx, local, clear, func(): Props.ev_charger(ctx.mb, local, Vector3(x, 0, 0.15)))
 		elif roll < 0.75:
-			Props.wayfinding(ctx.mb, local, Vector3(1.0, 0, 0.7))
+			_put(ctx, local, clear, func(): Props.wayfinding(ctx.mb, local, Vector3(1.0, 0, 0.7)))
 		elif roll < 0.9:
-			Props.bike_rack(ctx.mb, local, Vector3(0.2, 0, 1.3), deco)
+			_put(ctx, local, clear, func(): Props.bike_rack(ctx.mb, local, Vector3(0.2, 0, 1.3), deco))
 		elif roll < 0.95:
-			Props.roadworks(ctx.mb, local, Vector3(0.3, 0, 1.7))
+			_put(ctx, local, clear, func(): Props.roadworks(ctx.mb, local, Vector3(0.3, 0, 1.7)))
 		if half >= 8.0 and deco.randf() < 0.25:
-			Props.pay_station(ctx.mb, local, Vector3(-half * 0.7, 0, 0.3))
+			_put(ctx, local, clear, func(): Props.pay_station(ctx.mb, local, Vector3(-half * 0.7, 0, 0.3)))
 	elif not downtown and half > 4.0 and deco.randf() < 0.2:
-		Props.bike_rack(ctx.mb, local, Vector3(0, 0, 1.6), deco)
+		_put(ctx, local, clear, func(): Props.bike_rack(ctx.mb, local, Vector3(0, 0, 1.6), deco))
 	if deco.randf() < 0.3:
 		for k in deco.randi_range(1, 2):
-			Props.scooter(ctx.mb, Vector3(deco.randf_range(-half, half), 0, 1.7 + k * 0.3), deco.randf() * TAU, Props.SCOOTERS[deco.randi() % Props.SCOOTERS.size()])
+			_put(ctx, local, clear, func(): Props.scooter(ctx.mb, Vector3(deco.randf_range(-half, half), 0, 1.7 + k * 0.3), deco.randf() * TAU, Props.SCOOTERS[deco.randi() % Props.SCOOTERS.size()]))
 
 
 # --- Outside the window ----------------------------------------------------------
@@ -1453,7 +1520,7 @@ static func _modern_street(ctx: Ctx, local: Array, half: float, downtown: bool) 
 static func _outer_block(ctx: Ctx) -> void:
 	var kind: String = ctx.city.district_style(ctx.face)
 	_flat_in_front(ctx, ctx.ff, ctx.lot, KERB + 0.01, _paved(LOT_GROUND.get(kind, PAVEMENT)))
-	for p in _split(ctx.rect, PARCEL_MAX.get(kind, PARCEL_DEFAULT)):
+	for p in split(ctx.rect, PARCEL_MAX.get(kind, PARCEL_DEFAULT)):
 		_use_parcel(ctx, p[0], p[1])
 		if ctx.hx < 4.0 or ctx.hz < 4.0:
 			continue

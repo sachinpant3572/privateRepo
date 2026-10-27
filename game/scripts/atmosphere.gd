@@ -28,6 +28,10 @@ const WEATHERS := {
 	"storm": {"clouds": 1.0, "rain": 1.0},
 }
 
+## Inside a place (interiors.gd): fixed warm room light from above, no
+## rain, dry floors and no night glow; the clock keeps running.
+var indoors := false
+
 ## Hour of the day, 0..24.
 var hour := 17.0
 ## Game minutes per real second.
@@ -122,6 +126,9 @@ func _pick_weather() -> void:
 
 
 func _apply(delta: float) -> void:
+	if indoors:
+		_apply_indoors()
+		return
 	var target: Dictionary = WEATHERS[weather]
 	var k := 1.0 - exp(-0.08 * delta)
 	clouds = lerpf(clouds, target.clouds, k)
@@ -152,6 +159,21 @@ func _apply(delta: float) -> void:
 	RenderingServer.global_shader_parameter_set("wet", wetness)
 	RenderingServer.global_shader_parameter_set("sky_tint", sky.lerp(Color(0.6, 0.7, 0.85), 0.4))
 	_update_rain(delta)
+
+
+func _apply_indoors() -> void:
+	env.background_color = Color(0.04, 0.04, 0.05)
+	env.ambient_light_color = Color(1.0, 0.95, 0.88)
+	env.ambient_light_energy = 0.55
+	sun.light_color = Color(1.0, 0.96, 0.9)
+	sun.light_energy = 0.75
+	sun.shadow_opacity = 0.45
+	sun.rotation_degrees = Vector3(-72.0, 25.0, 0.0)
+	RenderingServer.global_shader_parameter_set("night", 0.0)
+	RenderingServer.global_shader_parameter_set("wet", 0.0)
+	RenderingServer.global_shader_parameter_set("sky_tint", Color(0.75, 0.75, 0.72))
+	_rain.emitting = false
+	_splash.emitting = false
 
 
 func _sample(h: float) -> Array:

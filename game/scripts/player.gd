@@ -50,7 +50,9 @@ func _think(delta: float) -> void:
 	if Controls.just_pressed("attack"):
 		punch()
 	if Controls.just_pressed("interact"):
-		try_enter_vehicle()
+		var game = get_tree().get_first_node_in_group("game")
+		if game == null or game.interiors == null or not game.interiors.try_interact():
+			try_enter_vehicle()
 
 
 ## The node the camera and police should track.

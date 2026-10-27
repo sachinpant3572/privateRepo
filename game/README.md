@@ -23,8 +23,25 @@ phone.
   - Objectives, dialogue (tap to skip), title cards, glowing markers, a GPS
     line, mission failed and retry, cash rewards. Progress, cash and settings
     are saved; the next mission's yellow marker waits on the map.
+- **Places you can walk into** (phase 0 of `INTERIORS_SERVICES_PLAN.md`):
+  corner stores in every district and diners in the Gilt District,
+  Ironwharf and Morrow Point, each with its own storefront, name, map icon
+  and opening hours.
+  - Walk onto the glowing ring at the door and press ENTER. The screen
+    fades and you're inside, with the street frozen exactly as you left it.
+  - Inside: a shopkeeper (or a cashier, cook and server), and customers
+    who browse, pay, sit down to eat and leave.
+  - At the counter: corner-store snacks (eat now or take; the bag holds
+    three, the SNACK button or H eats the best one) and diner meals
+    (Jules sits down and health comes up while eating).
+  - Doors lock while the police are after you or a mission is running,
+    and shut outside opening hours. Hitting someone inside calls the
+    police (one star).
+  - The bag is saved with your progress (save version 2; older saves
+    load with an empty bag).
 - **Phone** (unlocked in Empty Rooms; PHONE button or P): Messages and
-  Contacts that fill in with the story, the Map, Missions (progress and
+  Contacts that fill in with the story, the Map, Places (nearest first,
+  open or closed, GO sets a waypoint), Missions (progress and
   replays) and Settings (detail high/low, shadows, FPS counter, weather,
   skip time, new game).
 - **Minimap and full map**: round north-up minimap with landmark icons,
@@ -160,7 +177,8 @@ phone.
 | Move / steer | Left half of screen (floating stick) | WASD / arrows | Left stick |
 | Punch | PUNCH | Space / J | X |
 | Run / handbrake | RUN / BRAKE | Shift | A |
-| Get in / out, search | ENTER / EXIT / SEARCH | E / F | Y |
+| Get in / out, search, go into a place, shop | ENTER / EXIT / SEARCH / BUY / ORDER | E / F | Y |
+| Eat a snack from the bag | SNACK | H | |
 | Map | Tap the minimap | M | Back |
 | Phone | PHONE | P | |
 | Skip a line of dialogue | Tap it | Enter | |
@@ -193,7 +211,10 @@ cd game && xvfb-run -a -s "-screen 0 1280x720x24" godot --rendering-driver openg
 The same command with `res://tests/gallery.tscn` renders the asset gallery
 (every building, landmark, vehicle and prop, and posed people), and with
 `res://tests/mission_shots.tscn` shots of the missions, the phone and the
-dialogue.
+dialogue, and with `res://tests/place_shots.tscn` the storefronts by day
+and night, the rooms, the shop menu, a diner meal and the Places app.
+
+`ONLY=test_a,test_b` before the test command runs just those tests.
 
 FPS in screenshots is meaningless: the container renders without a GPU.
 
@@ -214,7 +235,7 @@ cd game && godot --headless -s res://tests/plan_dump.gd -- /tmp/plan.json \
 | `scripts/city.gd` | Map data, road graph, sidewalks, landmark frames, cell streaming |
 | `scripts/street_plan.gd` | The street plan: district patches, seam and long roads, the street graph, blocks |
 | `scripts/city_cells.gd` | Builds one cell: streets by class, block layouts fitted to each block, landmarks, parks, street furniture |
-| `scripts/kits/` | Asset kits: `building_kit`, `prop_kit`, `vehicle_kit`, `character_kit` |
+| `scripts/kits/` | Asset kits: `building_kit`, `prop_kit`, `vehicle_kit`, `character_kit`, `interior_kit` |
 | `data/world_map.json` | The world map: regions, cities, districts, routes, landmarks |
 | `tools/render_map.py` | Renders the map data to `world_map.svg` and `bellerive_map.svg` |
 | `scripts/mesh_builder.gd` | Bakes coloured boxes into single meshes; surface codes, city shader, shared and x-ray materials |
@@ -226,6 +247,9 @@ cd game && godot --headless -s res://tests/plan_dump.gd -- /tmp/plan.json \
 | `scripts/fx.gd` | Hit-stop, shake, sparks, smoke, splashes, skid marks (autoload) |
 | `scripts/minimap.gd`, `full_map.gd`, `map_image.gd` | Minimap, full map and the baked map texture |
 | `scripts/phone.gd` | The phone and its apps |
+| `scripts/places.gd` | Which blocks hold a corner store or diner: names, doors, hours |
+| `scripts/interiors.gd`, `kits/interior_kit.gd` | Doors, the fade, building rooms far from the city, people inside, buying and eating |
+| `scripts/patron.gd`, `shop_menu.gd`, `inventory.gd` | People inside places, the counter menu, the snack bag and item list |
 | `scripts/vehicle.gd` | Car physics; traffic, police, scripted and chaser drivers; riders; lights and effects |
 | `scripts/police_manager.gd` | Police spawning and line of sight |
 | `scripts/wanted.gd` | Wanted level (autoload) |
@@ -237,7 +261,8 @@ cd game && godot --headless -s res://tests/plan_dump.gd -- /tmp/plan.json \
 
 ## Not yet (later milestones)
 
-Missions 4-13, weapons, shops, businesses, interiors, audio, wanted levels
+Missions 4-13, weapons, the rest of the places and services in
+`INTERIORS_SERVICES_PLAN.md` (phases 1-6), businesses, audio, wanted levels
 3-5, drivable boats and streetcars, more bridges, Magnolia
 Heights and Blackwater Bayou, modelled characters (AI-generated models with a
 standard animation set, which the skeleton is ready for) and final-quality

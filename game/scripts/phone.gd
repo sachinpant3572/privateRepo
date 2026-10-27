@@ -1,9 +1,10 @@
 extends Control
 ## Jules's phone (unlocked by "Empty Rooms"). Opening it pauses the game.
 ## Apps: Messages and Contacts (filled in as the story goes), Map (the full
-## map), Missions (progress and replays) and Settings (graphics, weather,
-## time, new game).
+## map), Places (shops and diners, with a waypoint to each), Missions
+## (progress and replays) and Settings (graphics, weather, time, new game).
 
+const Places = preload("res://scripts/places.gd")
 const BG := Color(0.07, 0.08, 0.11)
 const ACCENT := Color(1.0, 0.78, 0.25)
 
@@ -107,7 +108,7 @@ func _home() -> void:
 	grid.add_theme_constant_override("h_separation", 14)
 	grid.add_theme_constant_override("v_separation", 14)
 	_body.add_child(grid)
-	for app in [["Messages", _messages], ["Contacts", _contacts], ["Map", _map], ["Missions", _missions], ["Settings", _settings]]:
+	for app in [["Messages", _messages], ["Contacts", _contacts], ["Map", _map], ["Places", _places], ["Missions", _missions], ["Settings", _settings]]:
 		var b := _button(app[0], app[1])
 		b.custom_minimum_size = Vector2(170, 110)
 		grid.add_child(b)
@@ -167,6 +168,30 @@ func _contacts() -> void:
 func _map() -> void:
 	close()
 	game.hud.full_map.open()
+
+
+## Shops and diners, nearest first; GO sets a waypoint to the door.
+func _places() -> void:
+	_clear("Places")
+	var from: Vector3 = game.player.focus_node().global_position
+	if not game.interiors.place.is_empty():
+		from = game.interiors.place.door
+	var list: Array = game.city.places.duplicate()
+	list.sort_custom(func(a, b): return from.distance_to(a.door) < from.distance_to(b.door))
+	for p in list:
+		_body.add_child(_text(p.name, 22, Color.WHITE))
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		var open := Places.is_open(p, game.atmosphere.hour)
+		var info := _text("%s · %s · %d m · %s" % [Places.TYPES[p.type].label, p.district_name, int(from.distance_to(p.door)), "Open" if open else "Closed"], 16, Color(0.7, 0.72, 0.78))
+		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(info)
+		var go := _button("GO", func():
+			game.waypoint = game.city.node_pos(game.city.nearest_node(p.door))
+			close())
+		go.custom_minimum_size = Vector2(80, 48)
+		row.add_child(go)
+		_body.add_child(row)
 
 
 func _missions() -> void:

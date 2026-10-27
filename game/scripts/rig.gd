@@ -1,7 +1,7 @@
 extends RefCounted
 ## Animates a CharacterKit skeleton in code: idle, walk and run cycles,
-## punches, kicks, flinches, knockdowns, riding and a few gestures for
-## cutscenes. Each frame the owner fills a Rig.State; pose() turns it into
+## punches, kicks, flinches, knockdowns, riding, sitting, gestures for
+## cutscenes and things people do indoors (eat, browse, work, pay). Each frame the owner fills a Rig.State; pose() turns it into
 ## target bone rotations and eases the skeleton toward them, so every move
 ## blends into the next.
 
@@ -18,8 +18,12 @@ class State:
 	var guard := false # fists up between punches
 	var down := false # knocked down or dead, lying on the back
 	var ride := false # sitting astride a scooter or bike
-	var gesture := "" # phone, talk, wave, hands_up, cower, point
+	var sit := false # on a chair, stool or bench (gestures still apply)
+	var gesture := "" # phone, talk, wave, hands_up, cower, point, eat, browse, work, pay
 	var texting := false # looking at a phone in the right hand while strolling
+
+## Hip drop for sitting on a seat at InteriorKit.SEAT_Y.
+const SIT_LIFT := -0.42
 
 var skeleton: Skeleton3D
 var phase := 0.0
@@ -72,6 +76,11 @@ func pose(s: State, delta: float) -> void:
 	elif s.ride:
 		_ride()
 		lift = -0.28
+	elif s.sit:
+		_sit()
+		lift = SIT_LIFT
+		if s.gesture != "":
+			_gesture(s.gesture)
 	else:
 		lift = _locomotion(s, delta)
 		if s.texting and s.speed < 2.5:
@@ -213,6 +222,20 @@ func _ride() -> void:
 	_target[R_FORE].x = 0.35
 
 
+## Thighs level, shins down, hands resting on the table or knees.
+func _sit() -> void:
+	_target[L_LEG] = Vector3(1.5, 0.0, -0.06)
+	_target[R_LEG] = Vector3(1.5, 0.0, 0.06)
+	_target[L_SHIN].x = -1.5
+	_target[R_SHIN].x = -1.5
+	_target[SPINE].x = 0.05
+	_target[L_ARM] = Vector3(0.45, 0.0, -0.1)
+	_target[R_ARM] = Vector3(0.45, 0.0, 0.1)
+	_target[L_FORE].x = 1.0
+	_target[R_FORE].x = 1.0
+	_target[CHEST].x = sin(_time * 2.0) * 0.02
+
+
 func _gesture(g: String) -> void:
 	var wave := sin(_time * 9.0)
 	match g:
@@ -248,6 +271,35 @@ func _gesture(g: String) -> void:
 		"point":
 			_target[R_ARM] = Vector3(1.5, 0.0, 0.1)
 			_target[R_FORE].x = 0.05
+		"eat":
+			# Fork to mouth every couple of seconds, the other hand on the table.
+			var bite := smoothstep(0.55, 0.85, absf(sin(_time * 1.4)))
+			_target[R_ARM] = Vector3(0.45 + 0.35 * bite, 0.0, 0.15)
+			_target[R_FORE].x = 1.1 + 1.2 * bite
+			_target[L_ARM] = Vector3(0.6, 0.0, -0.1)
+			_target[L_FORE].x = 1.1
+			_target[HEAD].x = -0.15 + 0.1 * bite
+		"browse":
+			# Looking along a shelf, now and then reaching for something.
+			var reach := smoothstep(0.6, 0.9, sin(_time * 0.9))
+			_target[HEAD].y = sin(_time * 0.6) * 0.35
+			_target[HEAD].x = 0.05 - 0.1 * reach
+			_target[R_ARM] = Vector3(0.3 + 1.0 * reach, 0.0, 0.1)
+			_target[R_FORE].x = 0.9 - 0.6 * reach
+			_target[L_ARM].x = 0.25
+			_target[L_FORE].x = 1.4
+		"work":
+			# Hands busy at counter height: ringing up, wiping, cooking.
+			_target[L_ARM] = Vector3(0.55 + sin(_time * 2.3) * 0.12, 0.0, -0.1)
+			_target[R_ARM] = Vector3(0.6 + sin(_time * 3.1 + 1.0) * 0.15, 0.0, 0.1)
+			_target[L_FORE].x = 0.9
+			_target[R_FORE].x = 0.8 + sin(_time * 4.0) * 0.2
+			_target[HEAD].x = -0.2
+			_target[SPINE].x = -0.08
+		"pay":
+			_target[R_ARM] = Vector3(0.95, 0.0, 0.05)
+			_target[R_FORE].x = 0.55
+			_target[HEAD].x = -0.1
 		"search":
 			_target[SPINE].x = -0.6
 			_target[HEAD].x = -0.3

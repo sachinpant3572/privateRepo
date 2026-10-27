@@ -139,6 +139,11 @@ func _draw_overlay() -> void:
 		if at.distance_to(mid) < r * 0.85:
 			var ic: Array = MapImage.icon(lm.type)
 			MapImage.draw_icon(_overlay, at, ic[0], ic[1], 7.0)
+	for p in game.city.places:
+		var at := _to_screen(p.door, center)
+		if at.distance_to(mid) < r * 0.85:
+			var ic: Array = MapImage.icon(p.type)
+			MapImage.draw_icon(_overlay, at, ic[0], ic[1], 6.0)
 	if Wanted.level > 0:
 		var flash := int(_blink * 4.0) % 2 == 0
 		for unit in game.police.cops + game.police.cars:

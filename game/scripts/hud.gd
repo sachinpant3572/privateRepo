@@ -1,8 +1,9 @@
 extends CanvasLayer
 ## HUD: minimap (tap for the full map), health, wanted stars, cash and clock,
 ## the phone button, mission objective, dialogue box, title cards ("MISSION
-## PASSED"), retry prompt, context prompts, BUSTED/WASTED messages, an FPS
-## and draw-call readout for the performance check, and touch controls.
+## PASSED"), retry prompt, context prompts (missions, then doors and
+## counters), the snack button, BUSTED/WASTED messages, an FPS and
+## draw-call readout for the performance check, and touch controls.
 
 const TouchControls = preload("res://scripts/touch_controls.gd")
 const Minimap = preload("res://scripts/minimap.gd")
@@ -49,6 +50,7 @@ var _card_tween: Tween
 var _retry: PanelContainer
 var _phone_button: Button
 var _phone_pulse := false
+var _snack: Button
 ## The vehicle the player last sat in (instance id) and how long its model
 ## name still shows beside the speed.
 var _ride_id := 0
@@ -100,6 +102,15 @@ func _ready() -> void:
 	_phone_button.focus_mode = Control.FOCUS_NONE
 	root.add_child(_phone_button)
 
+	# Eat a snack from the bag (H).
+	_snack = Button.new()
+	_snack.add_theme_font_size_override("font_size", 18)
+	_snack.position = Vector2(26, 284)
+	_snack.size = Vector2(140, 48)
+	_snack.focus_mode = Control.FOCUS_NONE
+	_snack.pressed.connect(func(): game.eat_snack())
+	root.add_child(_snack)
+
 	_objective = _label(root, 24)
 	_anchor(_objective, Vector2(0.5, 0), Rect2(-330, 14, 660, 64))
 	_objective.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -125,7 +136,9 @@ func _ready() -> void:
 	_build_retry()
 
 	touch = TouchControls.new()
-	touch.exclusions = [minimap, _dialogue, _phone_button, _retry]
+	touch.exclusions = [minimap, _dialogue, _phone_button, _retry, _snack]
+	if game.interiors:
+		touch.exclusions.append(game.interiors.menu.frame)
 	root.add_child(touch)
 	touch.visible = DisplayServer.is_touchscreen_available() or OS.has_feature("mobile")
 
@@ -148,7 +161,13 @@ func _process(delta: float) -> void:
 	_perf.visible = game.settings.get("show_fps", true)
 	_perf.text = "FPS %d  draws %d" % [Engine.get_frames_per_second(), Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)]
 	_blink += delta
-	_update_district(player.focus_node().global_position)
+	var indoors: bool = game.interiors != null and game.interiors.state != game.interiors.State.OUTSIDE
+	minimap.visible = not indoors
+	if not indoors:
+		_update_district(player.focus_node().global_position)
+	var snacks: int = game.inventory.bag.size()
+	_snack.visible = snacks > 0
+	_snack.text = "SNACK x%d" % snacks
 	_stars.queue_redraw()
 	_shown_cash = move_toward(_shown_cash, game.cash, maxf(absf(game.cash - _shown_cash) * 3.0, 50.0) * delta)
 	_cash.text = "$%d" % int(_shown_cash)
@@ -171,6 +190,11 @@ func _process(delta: float) -> void:
 		_prompt.text = context_prompt[0]
 		touch.set_label("interact", context_prompt[1])
 		touch.set_label("sprint", "RUN")
+	elif game.interiors != null and not game.interiors.prompt().is_empty():
+		var place_prompt: Array = game.interiors.prompt()
+		_prompt.text = place_prompt[0]
+		touch.set_label("interact", place_prompt[1])
+		touch.set_label("sprint", "RUN")
 	else:
 		var near = player.nearest_vehicle()
 		var verb := "Ride" if near != null and near.shows_rider else "Get in"
@@ -187,6 +211,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_P:
 				if _phone_button.visible:
 					phone.open()
+			KEY_H:
+				game.eat_snack()
 			KEY_ENTER, KEY_KP_ENTER:
 				if _dialogue.visible:
 					_advance_dialogue()
@@ -367,7 +393,12 @@ func _update_district(pos: Vector3) -> void:
 	if d.is_empty() or d.id == _district_id:
 		return
 	_district_id = d.id
-	_district.text = d.name
+	show_banner(d.name)
+
+
+## A name across the top of the screen for a moment (districts, places).
+func show_banner(text: String) -> void:
+	_district.text = text
 	if _district_tween:
 		_district_tween.kill()
 	_district.modulate.a = 1.0

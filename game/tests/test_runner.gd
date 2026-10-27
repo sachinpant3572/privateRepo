@@ -47,7 +47,16 @@ func _run() -> void:
 		"test_vehicle_handling_differs",
 		"test_traffic_drives_every_kind",
 		"test_people_walk_past_sidewalk_props",
+		"test_places_line_the_streets",
+		"test_shop_visit_restores_the_street",
+		"test_doors_lock_and_close",
+		"test_diner_meal_and_people_inside",
+		"test_bag_and_save_v2",
 	]
+	# ONLY=name1,name2 runs just those (handy while working on one test).
+	var only := OS.get_environment("ONLY")
+	if only != "":
+		tests = tests.filter(func(t): return t in only.split(","))
 	for name in tests:
 		var before := failed
 		await call(name)
@@ -1179,3 +1188,269 @@ func test_people_walk_past_sidewalk_props() -> void:
 			_check(x > 4.0 and lowest[k] > -0.45, "pedestrian %d gets past the %s on the sidewalk (x %.1f, nearest the street z %.2f)" % [k % 2 + 1, names[i], x, lowest[k]])
 	for n in nodes:
 		n.queue_free()
+
+
+# --- Places and interiors -------------------------------------------------------
+
+func _nearest_place(type: String) -> Dictionary:
+	var best := {}
+	for p in game.city.places:
+		if p.type == type and (best.is_empty() or p.door.distance_to(game.city.spawn_point) < best.door.distance_to(game.city.spawn_point)):
+			best = p
+	return best
+
+
+## Streams the street round a place's door and stands the player on it.
+func _at_door(p: Dictionary) -> void:
+	game.city.stream_now(p.door)
+	_place_player_at(p.door)
+	game.player.rotation.y = p.yaw
+	await _frames(3)
+
+
+func _enter(p: Dictionary) -> void:
+	await _at_door(p)
+	while game.interiors._cooldown > 0.0:
+		await _frames(1)
+	await _press("interact")
+	for i in 120:
+		if game.interiors.is_inside() and game.player.controllable:
+			break
+		await _frames(1)
+
+
+func _leave() -> void:
+	var ii = game.interiors
+	_place_player_at(ii.ORIGIN + ii.room.hub)
+	await _frames(2)
+	# The menu's short cooldown (no reopening it with the same press).
+	while ii._cooldown > 0.0:
+		await _frames(1)
+	await _press("interact")
+	for i in 120:
+		if ii.state == ii.State.OUTSIDE and game.player.controllable:
+			break
+		await _frames(1)
+
+
+## Every district gets the place types the mix gives it, on any seed; each
+## door is on open sidewalk with its storefront right behind it.
+func test_places_line_the_streets() -> void:
+	const City = preload("res://scripts/city.gd")
+	const Places = preload("res://scripts/places.gd")
+	for seed_v in [1, 2, 3, 7, 42, 99, 1234]:
+		var city = City.new()
+		add_child(city)
+		city.build(seed_v)
+		var have := {}
+		for p in city.places:
+			have[p.district + ":" + p.type] = true
+		var missing: Array = []
+		for d in Places.MIX:
+			for t in Places.MIX[d]:
+				if not have.has(d + ":" + t):
+					missing.append(d + ":" + t)
+		_check(missing.is_empty(), "seed %d: every district has its place types, missing %s" % [seed_v, missing])
+		city.queue_free()
+		await get_tree().process_frame
+	await _new_game(false)
+	var city = game.city
+	_check(city.places.size() >= 14, "places are listed, got %d" % city.places.size())
+	var again = preload("res://scripts/places.gd").build(city)
+	_check(again.size() == city.places.size() and again.all(func(p): return p.door == city.places[again.find(p)].door), "places are the same on every build")
+	var space: PhysicsDirectSpaceState3D = game.get_world_3d().direct_space_state
+	var blocked: Array = []
+	var no_front: Array = []
+	for p in city.places:
+		_place_player_at(p.door + Vector3(0, 0, 0.01))
+		city.stream_now(p.door)
+		await _frames(1)
+		var query := PhysicsShapeQueryParameters3D.new()
+		var sphere := SphereShape3D.new()
+		sphere.radius = 0.4
+		query.shape = sphere
+		query.collision_mask = 1 | 16
+		query.transform = Transform3D(Basis(), p.door + Vector3(0, 0.9, 0))
+		if not space.intersect_shape(query, 1).is_empty():
+			blocked.append(p.name)
+		var inward := Vector3(-sin(p.yaw), 0, -cos(p.yaw))
+		var ray := PhysicsRayQueryParameters3D.create(p.door + Vector3(0, 1.0, 0), p.door + Vector3(0, 1.0, 0) + inward * 3.0, 1)
+		if space.intersect_ray(ray).is_empty():
+			no_front.append(p.name)
+	_check(blocked.is_empty(), "every doorstep is clear, blocked: %s" % [blocked])
+	_check(no_front.is_empty(), "a storefront stands behind every door, missing: %s" % [no_front])
+
+
+## Going into a shop freezes the street exactly as it was and gives it
+## back on the way out; buying takes cash and fills the bag.
+func test_shop_visit_restores_the_street() -> void:
+	await _new_game(true)
+	var ii = game.interiors
+	var store := _nearest_place("corner_store")
+	game.atmosphere.hour = 12.0
+	await _at_door(store)
+	await _frames(60)
+	var car = _spawn_car(game.city.nearest_node(store.door), Vector3(0, 0, 0), 0.0)
+	await _frames(10)
+	_check(ii.prompt().size() == 2 and ii.prompt()[1] == "ENTER", "the door offers ENTER, got %s" % [ii.prompt()])
+	var peds: Array = game.population.peds.duplicate()
+	var ped_at: Array = peds.map(func(p): return p.global_position)
+	var car_at: Vector3 = car.global_position
+	var hour: float = game.atmosphere.hour
+	await _enter(store)
+	_check(ii.is_inside(), "pressing ENTER at the door goes in")
+	_check(game.player.global_position.distance_to(ii.ORIGIN) < 12.0, "the player is in the room")
+	_check(not game.city.visible and game.population.process_mode == Node.PROCESS_MODE_DISABLED, "the street is hidden and frozen")
+	_check(game.atmosphere.indoors and game.camera.fixed_focus != null, "indoor light and room camera")
+	_check(get_tree().get_nodes_in_group("patrons").size() >= 2, "a shopkeeper and customers are inside")
+	await _frames(120)
+	_check(car.global_position == car_at, "parked traffic waits where it was")
+	_check(game.atmosphere.hour > hour, "the clock keeps running inside")
+	# Buy at the counter.
+	game.cash = 100
+	game.player.health = 50.0
+	_place_player_at(ii.ORIGIN + ii.room.counter.pos)
+	await _frames(2)
+	_check(ii.prompt()[1] == "BUY", "the counter offers BUY, got %s" % [ii.prompt()])
+	await _press("interact")
+	_check(ii.menu.visible and not game.player.controllable, "the counter opens the shop menu")
+	_check(ii.buy("chips", "take") and game.cash == 96 and game.inventory.bag == ["chips"], "buying chips to take: $4 and into the bag")
+	_check(ii.buy("sandwich", "eat") and game.cash == 87 and is_equal_approx(game.player.health, 80.0), "eating a sandwich now heals 30")
+	_check(not ii.buy("burger", "order"), "diner meals aren't sold here")
+	game.cash = 1
+	_check(not ii.buy("energy", "eat") and game.cash == 1, "can't buy without the cash")
+	ii.menu.close()
+	_check(game.player.controllable, "closing the menu gives control back")
+	await _leave()
+	_check(ii.state == ii.State.OUTSIDE, "EXIT at the door goes back out")
+	_check(game.player.global_position.distance_to(store.door) < 0.5, "back on the doorstep")
+	_check(game.city.visible and game.population.process_mode != Node.PROCESS_MODE_DISABLED, "the street is back and running")
+	_check(car.global_position.distance_to(car_at) < 0.05 and car.visible, "the car is where it was")
+	var moved: Array = []
+	for i in peds.size():
+		if not is_instance_valid(peds[i]) or peds[i].global_position.distance_to(ped_at[i]) > 3.0:
+			moved.append(i)
+	_check(peds.size() > 0 and moved.is_empty(), "the same people are about where they were (%d of %d moved off)" % [moved.size(), peds.size()])
+	_check(not game.atmosphere.indoors and game.camera.fixed_focus == null, "street light and camera are back")
+	_check(get_tree().get_nodes_in_group("patrons").is_empty(), "the room and its people are gone")
+
+
+func test_doors_lock_and_close() -> void:
+	await _new_game(false)
+	var ii = game.interiors
+	var diner := _nearest_place("diner")
+	game.atmosphere.hour = 3.0
+	await _at_door(diner)
+	_check(ii.prompt()[1] == "CLOSED", "the diner is shut at 3 am, got %s" % [ii.prompt()])
+	await _press("interact")
+	_check(ii.state == ii.State.OUTSIDE, "a shut door stays shut")
+	game.atmosphere.hour = 12.0
+	await _frames(2)
+	Wanted.report_crime(1)
+	await _frames(2)
+	_check(ii.prompt()[1] == "LOCKED" and ii.prompt()[0].contains("cops"), "no hiding in shops from the police, got %s" % [ii.prompt()])
+	await _press("interact")
+	_check(ii.state == ii.State.OUTSIDE, "locked with stars")
+	Wanted.clear()
+	game.police.clear_all()
+	await _frames(2)
+	_check(ii.prompt()[1] == "ENTER", "open at noon with no stars")
+	var car = _spawn_car(game.city.nearest_node(diner.door), Vector3.ZERO, 0.0)
+	game.player.enter_vehicle(car)
+	await _frames(2)
+	_check(ii.prompt().is_empty(), "no doors from behind the wheel")
+	game.player.exit_vehicle()
+
+
+func test_diner_meal_and_people_inside() -> void:
+	await _new_game(false)
+	var ii = game.interiors
+	game.atmosphere.hour = 12.0
+	await _enter(_nearest_place("diner"))
+	_check(ii.is_inside(), "into the diner")
+	game.cash = 50
+	game.player.health = 30.0
+	_place_player_at(ii.ORIGIN + ii.room.counter.pos)
+	await _frames(2)
+	_check(ii.prompt()[1] == "ORDER", "the register takes orders")
+	_check(ii.buy("burger", "order"), "ordering a burger")
+	_check(game.cash == 35 and game.player.sitting and not game.player.controllable, "Jules sits down to eat it")
+	await _frames(int(ii.MEAL_TIME * 60) + 10)
+	_check(is_equal_approx(game.player.health, 90.0) and not game.player.sitting and game.player.controllable, "the meal heals 60 and Jules gets up (health %.1f)" % game.player.health)
+	# Let the place run for a minute: customers come, eat and go.
+	var left := [0]
+	var arrived := {}
+	var worst := 0.0
+	for i in 3600:
+		for n in get_tree().get_nodes_in_group("patrons"):
+			if not n.staff:
+				if not arrived.has(n):
+					arrived[n] = true
+					n.left.connect(func(_w): left[0] += 1)
+				worst = maxf(worst, n.stuck_time)
+		await _frames(1)
+	_check(left[0] >= 2, "diners finish and leave, %d left" % left[0])
+	_check(arrived.size() >= left[0] + 1, "new customers arrive (%d seen)" % arrived.size())
+	_check(worst < 3.0, "nobody gets stuck (worst %.1f s)" % worst)
+	await _leave()
+	_check(ii.state == ii.State.OUTSIDE, "out of the diner")
+	# The corner store: shoppers browse, pay and leave.
+	await _enter(_nearest_place("corner_store"))
+	_check(ii.is_inside(), "into the corner store")
+	left[0] = 0
+	arrived.clear()
+	worst = 0.0
+	var paid := [0]
+	for i in 3600:
+		for n in get_tree().get_nodes_in_group("patrons"):
+			if not n.staff:
+				if not arrived.has(n):
+					arrived[n] = true
+					n.left.connect(func(_w): left[0] += 1)
+				worst = maxf(worst, n.stuck_time)
+				if n.gesture == "pay":
+					paid[0] += 1
+		await _frames(1)
+	_check(left[0] >= 2 and paid[0] > 0, "shoppers pay and leave, %d left" % left[0])
+	_check(worst < 3.0, "nobody gets stuck in the aisles (worst %.1f s)" % worst)
+	# Hitting someone inside sends them running and calls the police.
+	var victim = null
+	for n in get_tree().get_nodes_in_group("patrons"):
+		if not n.staff:
+			victim = n
+	if victim != null:
+		victim.take_hit(game.player, 5.0, Vector3.ZERO)
+		_check(Wanted.level == 1, "the shopkeeper calls the police")
+	await _leave()
+	Wanted.clear()
+
+
+func test_bag_and_save_v2() -> void:
+	await _new_game(false)
+	var mm = game.missions
+	var inv = game.inventory
+	_check(inv.add("chips") and inv.add("candy") and inv.add("sandwich") and not inv.add("soda"), "the bag holds three snacks")
+	_check(not inv.add("burger"), "diner meals don't go in the bag")
+	game.player.health = 40.0
+	_check(game.eat_snack() and inv.bag.size() == 2 and is_equal_approx(game.player.health, 70.0), "SNACK eats the best one first (sandwich +30)")
+	game.player.health = game.player.max_health
+	_check(not game.eat_snack() and inv.bag.size() == 2, "no snacking at full health")
+	# Save v2 round trip, through a throwaway file.
+	mm.save_enabled = true
+	mm.save_path = "user://test_save_v2.json"
+	game.cash = 77
+	mm.save_game()
+	inv.bag.clear()
+	game.cash = 0
+	mm.load_game()
+	_check(game.cash == 77 and inv.bag == ["chips", "candy"], "the bag and cash survive save and load, got %s" % [inv.bag])
+	var saved = JSON.parse_string(FileAccess.get_file_as_string(mm.save_path))
+	_check(int(saved.get("version", 0)) == 2, "saves are version 2")
+	# A version 1 save (before the bag) still loads.
+	var f := FileAccess.open(mm.save_path, FileAccess.WRITE)
+	f.store_string(JSON.stringify({"done": ["m01_homecoming"], "cash": 500, "phone": false, "settings": {}}))
+	f.close()
+	mm.load_game()
+	_check(game.cash == 500 and mm.done == ["m01_homecoming"] and inv.bag.is_empty(), "a v1 save loads with an empty bag")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(mm.save_path))
+

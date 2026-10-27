@@ -1,7 +1,7 @@
 extends Node3D
 ## Entry point: builds the Bellerive demo map and wires the player, camera,
-## police, population, story missions and HUD together. Handles BUSTED and
-## WASTED, cash and settings.
+## police, population, story missions, places and HUD together. Handles
+## BUSTED and WASTED, cash, the bag and settings.
 
 const City = preload("res://scripts/city.gd")
 const Player = preload("res://scripts/player.gd")
@@ -12,6 +12,8 @@ const Population = preload("res://scripts/population.gd")
 const Hud = preload("res://scripts/hud.gd")
 const Atmosphere = preload("res://scripts/atmosphere.gd")
 const MissionManager = preload("res://scripts/missions/mission_manager.gd")
+const Interiors = preload("res://scripts/interiors.gd")
+const Inventory = preload("res://scripts/inventory.gd")
 
 const RESPAWN_DELAY := 2.5
 
@@ -27,6 +29,8 @@ var population
 var hud
 var atmosphere
 var missions
+var interiors
+var inventory = Inventory.new()
 var respawning := false
 var cash := 0
 var settings := {"shadows": true, "show_fps": true, "weather": "auto", "detail": "high"}
@@ -93,6 +97,10 @@ func _ready() -> void:
 	population.enabled = population_enabled
 	add_child(population)
 
+	interiors = Interiors.new()
+	interiors.game = self
+	add_child(interiors)
+
 	hud = Hud.new()
 	hud.game = self
 	add_child(hud)
@@ -137,6 +145,24 @@ func map_markers() -> Array:
 	if missions:
 		list.append_array(missions.markers)
 	return list
+
+
+## Eats the best snack in the bag (HUD SNACK button or H). False when the
+## bag is empty or health is full.
+func eat_snack() -> bool:
+	if player.dead or player.health >= player.max_health:
+		return false
+	var id: String = inventory.take_best()
+	if id == "":
+		return false
+	player.health = minf(player.max_health, player.health + Inventory.ITEMS[id].heal)
+	if player.vehicle == null and player.gesture == "":
+		player.gesture = "eat"
+		get_tree().create_timer(1.5).timeout.connect(func():
+			if player.gesture == "eat" and not player.sitting:
+				player.gesture = "")
+	missions.save_game()
+	return true
 
 
 func on_busted() -> void:

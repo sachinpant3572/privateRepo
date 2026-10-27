@@ -17,6 +17,10 @@ const PITCH := 60.0
 const CUT_RADIUS := 6.0
 
 var target: Node3D
+## Inside a place: the room's centre (a Vector3) and the zoom that frames
+## it; null and 0 on the street.
+var fixed_focus = null
+var room_size := 0.0
 var _focus := Vector3.ZERO
 var _cut := 0.0
 var _trauma := 0.0
@@ -43,7 +47,11 @@ func _process(delta: float) -> void:
 		var v: Vector3 = node.velocity
 		lead = v * 0.55
 		want_size = lerpf(FOOT_SIZE, DRIVE_SIZE, clampf(v.length() / 20.0, 0.0, 1.0))
-	_focus = _focus.lerp(pos + lead, 1.0 - exp(-6.0 * delta))
+	var look := pos
+	if fixed_focus != null:
+		look = fixed_focus
+		want_size = room_size
+	_focus = _focus.lerp(look + lead, 1.0 - exp(-6.0 * delta))
 	size = lerpf(size, want_size, 1.0 - exp(-2.0 * delta))
 	global_position = _focus + global_basis.z * DISTANCE
 	_update_cutaway(pos, delta)
@@ -69,7 +77,9 @@ func ground_axes() -> Array[Vector3]:
 
 
 func snap() -> void:
-	_focus = target.focus_node().global_position
+	_focus = fixed_focus if fixed_focus != null else target.focus_node().global_position
+	if fixed_focus != null:
+		size = room_size
 	global_position = _focus + global_basis.z * DISTANCE
 
 
