@@ -5,7 +5,9 @@ with the interiors and services plan". This note tracks the build.
 
 ## Status
 
-- Phase 0 (foundation, corner store, diner): in progress.
+- Phase 0 (foundation, corner store, diner): done. Tests pass (374 checks), place shots reviewed,
+  two independent reviews handled, APK 0.8-interiors built.
+- Next: phase 1 of the plan (on Sachin's word).
 
 ## Phase 0 approach (decided before editing)
 
@@ -95,4 +97,5 @@ with the interiors and services plan". This note tracks the build.
 
 ## Open questions
 
-- None yet.
+- Rooms are lit flat (no lamps or shadows of their own) and read a little
+  bright; revisit with phase 1's room kit.
