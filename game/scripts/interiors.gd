@@ -277,8 +277,10 @@ func force_out() -> void:
 	if state == State.OUTSIDE:
 		return
 	_visit += 1
-	if _tween:
-		_tween.kill()
+	if _tween and _tween.is_valid():
+		# Finish the fade rather than kill it, so enter() or leave()
+		# waking from it sees the new _visit and stops.
+		_tween.custom_step(FADE_TIME * 2.0)
 	_fade.color.a = 0.0
 	menu.visible = false
 	_clear_room()
@@ -466,9 +468,9 @@ func _on_died(who) -> void:
 	_on_left(who)
 	who.remove_from_group("patrons")
 	who.add_to_group("patrons_out")
-	get_tree().create_timer(8.0).timeout.connect(func():
-		if is_instance_valid(who):
-			who.queue_free())
+	# (Connected to the body itself: if the room is cleared first, the
+	# connection goes with it.)
+	get_tree().create_timer(8.0).timeout.connect(who.queue_free)
 
 
 func _spots_of(kinds: Array) -> Array:
