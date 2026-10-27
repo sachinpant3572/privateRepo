@@ -364,17 +364,20 @@ static func union_station(mb, out: Array) -> void:
 	var body := Color(0.86, 0.8, 0.68)
 	_solid(mb, out, Vector3(0, 5.0, 2.0), Vector3(34.0, 10.0, 22.0), body)
 	mb.box(Vector3(0, 10.3, 2.0), Vector3(35.0, 0.6, 23.0), body.darkened(0.2))
+	mb.box(Vector3(0, 10.62, 2.0), Vector3(33.4, 0.04, 21.4), MeshBuilder.glow(MEMBRANES[0], MeshBuilder.ROOF))
+	_hvac(mb, Vector3(-8.0, 10.6, 9.0), Vector3(5.0, 1.2, 2.0))
+	_solar(mb, -15.0, 6.0, -2.0, 7.0, 10.6)
 	for i in 8:
 		var x := -14.0 + i * 4.0
 		mb.cylinder(Vector3(x, 0.15, -9.6), 0.45, 8.5, TRIM, 6)
 	mb.box(Vector3(0, 8.9, -9.6), Vector3(31.0, 1.0, 1.2), body.lightened(0.1))
 	mb.box(Vector3(0, 3.0, -9.05), Vector3(6.0, 5.6, 0.1), MeshBuilder.glow(DARK, MeshBuilder.GLOW_WINDOW))
 	mb.box(Vector3(13.0, 15.5, 5.4), Vector3(2.4, 2.4, 0.05), MeshBuilder.glow(Color(1.0, 0.95, 0.8), MeshBuilder.GLOW_LAMP))
-	mb.gable(Vector3(0, 11.6, -7.0), Vector3(12.0, 2.0, 6.0), body.darkened(0.25), body)
+	mb.gable(Vector3(0, 11.6, -7.0), Vector3(12.0, 2.0, 6.0), MeshBuilder.glow(body.darkened(0.25), MeshBuilder.SEAM_ROOF), body)
 	_solid(mb, out, Vector3(13.0, 9.0, 8.0), Vector3(5.0, 18.0, 5.0), body.darkened(0.08))
 	mb.box(Vector3(13.0, 15.5, 5.38), Vector3(0.12, 1.0, 0.06), DARK)
 	mb.box(Vector3(13.3, 15.5, 5.38), Vector3(0.7, 0.12, 0.06), DARK)
-	mb.gable(Vector3(13.0, 19.0, 8.0), Vector3(5.6, 2.0, 5.6), Color(0.35, 0.48, 0.42), body)
+	mb.gable(Vector3(13.0, 19.0, 8.0), Vector3(5.6, 2.0, 5.6), MeshBuilder.glow(Color(0.35, 0.48, 0.42), MeshBuilder.SEAM_ROOF), body)
 
 
 ## Aurum Tower: the tallest building in the city, gold-trimmed crown.
@@ -436,7 +439,7 @@ static func precinct(mb, out: Array) -> void:
 static func clinic(mb, out: Array) -> void:
 	var body := Color(0.95, 0.95, 0.96)
 	_solid(mb, out, Vector3(0, 3.8, 2.0), Vector3(26.0, 7.6, 20.0), body)
-	mb.box(Vector3(0, 7.75, 2.0), Vector3(26.4, 0.3, 20.4), Color(0.75, 0.78, 0.8))
+	mb.box(Vector3(0, 7.75, 2.0), Vector3(26.4, 0.3, 20.4), MeshBuilder.glow(Color(0.75, 0.78, 0.8), MeshBuilder.ROOF))
 	mb.box(Vector3(0, 7.95, 2.0), Vector3(8.0, 0.1, 2.4), MeshBuilder.glow(Color(0.85, 0.15, 0.15), MeshBuilder.GLOW_NEON))
 	mb.box(Vector3(0, 7.95, 2.0), Vector3(2.4, 0.1, 8.0), MeshBuilder.glow(Color(0.85, 0.15, 0.15), MeshBuilder.GLOW_NEON))
 	mb.box(Vector3(0, 3.4, -9.6), Vector3(8.0, 0.25, 3.0), Color(0.85, 0.15, 0.15))
@@ -449,11 +452,11 @@ static func clinic(mb, out: Array) -> void:
 ## Old Streetcar Depot: open-fronted shed where the drowned line ends, with
 ## an abandoned green streetcar inside.
 static func streetcar_depot(mb, out: Array) -> void:
-	var brick := Color(0.6, 0.32, 0.26)
+	var brick := MeshBuilder.glow(Color(0.6, 0.32, 0.26), MeshBuilder.BRICK)
 	_solid(mb, out, Vector3(-15.0, 4.0, 2.0), Vector3(2.0, 8.0, 26.0), brick)
 	_solid(mb, out, Vector3(15.0, 4.0, 2.0), Vector3(2.0, 8.0, 26.0), brick)
 	_solid(mb, out, Vector3(0, 4.0, 14.5), Vector3(32.0, 8.0, 1.0), brick)
-	mb.gable(Vector3(0, 9.0, 2.0), Vector3(33.0, 2.0, 27.0), Color(0.3, 0.33, 0.32), brick)
+	mb.gable(Vector3(0, 9.0, 2.0), Vector3(33.0, 2.0, 27.0), MeshBuilder.glow(Color(0.3, 0.33, 0.32), MeshBuilder.SEAM_ROOF), brick)
 	mb.box(Vector3(0, 7.2, -11.0), Vector3(30.0, 1.2, 0.4), brick.darkened(0.2))
 
 

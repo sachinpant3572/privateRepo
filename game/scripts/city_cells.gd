@@ -1406,8 +1406,8 @@ static func _furniture(ctx: Ctx, kind: String) -> void:
 
 
 ## Present-day kit along a curb (furniture frame, -Z to the street): a bus
-## shelter, a bike-share dock, EV chargers or a wayfinding totem (the
-## first two downtown only), and dockless scooters left about.
+## shelter, a bike-share dock, EV chargers or a wayfinding totem (all but
+## the dock downtown only), parking pay stations and dockless scooters.
 static func _modern_street(ctx: Ctx, local: Array, half: float, downtown: bool) -> void:
 	var deco := ctx.deco
 	var roll := deco.randf()
@@ -1420,6 +1420,8 @@ static func _modern_street(ctx: Ctx, local: Array, half: float, downtown: bool) 
 			Props.ev_charger(ctx.mb, local, Vector3(half * 0.5 + k * 3.0 - 1.5, 0, 0.15))
 	elif downtown and roll < 0.75:
 		Props.wayfinding(ctx.mb, local, Vector3(half * 0.5, 0, 0.7))
+	if downtown and half >= 8.0 and deco.randf() < 0.25:
+		Props.pay_station(ctx.mb, local, Vector3(-half * 0.7, 0, 0.3))
 	if deco.randf() < 0.3:
 		for k in deco.randi_range(1, 2):
 			Props.scooter(ctx.mb, Vector3(deco.randf_range(-half, half), 0, 2.0 + k * 0.4), deco.randf() * TAU, Props.SCOOTERS[deco.randi() % Props.SCOOTERS.size()])

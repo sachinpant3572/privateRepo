@@ -26,11 +26,11 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	await _shot(_buildings(), Vector3(0, 0, 0), 62.0, "gallery_1_buildings.png")
-	await _shot(_landmarks(), Vector3(0, 0, 300), 108.0, "gallery_2_landmarks.png")
+	await _shot(_buildings(), Vector3(0, 0, 0), 62.0, "gallery_1_buildings.png", true)
+	await _shot(_landmarks(), Vector3(0, 0, 300), 108.0, "gallery_2_landmarks.png", true)
 	await _shot(_vehicles(), Vector3(0, 0, 598), 22.0, "gallery_3_vehicles.png")
 	await _people()
-	await _shot(_props(), Vector3(0, 0, 900), 24.0, "gallery_5_props.png")
+	await _shot(_props(), Vector3(0, 0, 897), 30.0, "gallery_5_props.png", true)
 	get_tree().quit()
 
 
@@ -172,6 +172,14 @@ func _props() -> MeshBuilder:
 	mb.xform = Transform3D(Basis(Vector3.UP, PI / 2), Vector3(-4, 0, z + 12))
 	Props.streetcar(mb, out, Vector3.ZERO)
 	mb.xform = Transform3D.IDENTITY
+	# Present-day street kit.
+	Props.bus_shelter(mb, out, Vector3(-14, 0, z - 6), rng)
+	Props.ev_charger(mb, out, Vector3(-9, 0, z - 6))
+	Props.bike_dock(mb, out, Vector3(-3, 0, z - 6), 4.8, rng)
+	Props.scooter(mb, Vector3(3, 0, z - 6), 0.4, Props.SCOOTERS[0])
+	Props.bins(mb, out, Vector3(6, 0, z - 6))
+	Props.wayfinding(mb, out, Vector3(9, 0, z - 6))
+	Props.pay_station(mb, out, Vector3(11.5, 0, z - 6))
 	return mb
 
 
@@ -188,7 +196,8 @@ func _setup_world() -> void:
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.78, 0.8, 0.88)
 	env.ambient_light_energy = 0.35
-	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES
+	env.tonemap_exposure = 0.85
 	var world_env := WorldEnvironment.new()
 	world_env.environment = env
 	add_child(world_env)
@@ -202,8 +211,13 @@ func _setup_world() -> void:
 	add_child(camera)
 
 
-func _shot(mb: MeshBuilder, center: Vector3, view: float, file: String) -> void:
+## `city` draws with the city shader (surface patterns, glass) as streamed
+## cells do; vehicles and people keep their own material.
+func _shot(mb: MeshBuilder, center: Vector3, view: float, file: String, city := false) -> void:
 	var inst := mb.make_instance()
+	if city:
+		inst.material_override = MeshBuilder.cutaway_material()
+		inst.material_override.set_shader_parameter("cut_radius", 0.0) # no player to see
 	add_child(inst)
 	camera.size = view
 	camera.global_position = center + camera.global_basis.z * 150.0
