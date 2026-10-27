@@ -149,7 +149,7 @@
     {"id": "wharfside_courts", "name": "Wharfside Courts", "type": "court", "pos": [6830, 7620], "city": "bellerive"},
     {"id": "aurum_tower", "name": "Aurum Tower", "type": "tower", "pos": [6570, 6865], "city": "bellerive"},
     {"id": "city_hall", "name": "Bellerive City Hall", "type": "government", "pos": [6230, 6946], "city": "bellerive"},
-    {"id": "county_courthouse", "name": "Parish Courthouse", "type": "government", "pos": [6375, 6875], "city": "bellerive"},
+    {"id": "county_courthouse", "name": "Parish Courthouse", "type": "government", "pos": [6425, 6870], "city": "bellerive"},
     {"id": "federal_building", "name": "Federal Building", "type": "government", "pos": [6230, 6850], "city": "bellerive"},
     {"id": "public_library", "name": "Bellerive Public Library", "type": "government", "pos": [6325, 7010], "city": "bellerive"},
     {"id": "police_headquarters", "name": "Police Headquarters", "type": "police", "pos": [6435, 7020], "city": "bellerive"},

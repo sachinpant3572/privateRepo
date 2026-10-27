@@ -226,7 +226,7 @@ func test_street_plan_is_a_california_grid() -> void:
 	bearing.resize(9) # street length by bearing (mod 90 degrees), 10-degree bins
 	var total := 0.0
 	var square := 0.0 # length within 5 degrees of the compass
-	var diagonal := 0.0 # length more than 15 degrees off it
+	var gridded := 0.0 # ... or of the old town's grid, turned 30 degrees
 	for e in plan.edge_count():
 		var a: Vector2 = plan.pos(plan.edge_a[e])
 		var b: Vector2 = plan.pos(plan.edge_b[e])
@@ -239,11 +239,37 @@ func test_street_plan_is_a_california_grid() -> void:
 			var off := minf(deg, 90.0 - deg)
 			total += a.distance_to(b)
 			square += a.distance_to(b) if off < 5.0 else 0.0
-			diagonal += a.distance_to(b) if off > 15.0 else 0.0
+			var old := absf(fposmod(deg - 30.0 + 45.0, 90.0) - 45.0)
+			gridded += a.distance_to(b) if off < 5.0 or old < 5.0 else 0.0
 	for cls in ["boulevard", "avenue", "river", "street", "quarter", "lane", "bridge", "quay"]:
 		_check(counts.get(cls, 0) > 0, "street class '%s' is used" % cls)
 	_check(square > total * 0.8, "streets run north-south and east-west (%.0f%% within 5 degrees)" % (square / total * 100.0))
-	_check(diagonal < total * 0.1, "only a few diagonals (%.0f%% more than 15 degrees off)" % (diagonal / total * 100.0))
+	_check(gridded > total * 0.9, "two grids at most, the city's and the old town's (%.0f%% on them; the rest is Liberty Avenue, Magnolia and the river)" % (gridded / total * 100.0))
+	# District streets run right through their district, from boulevard to
+	# boulevard (Sachin: "most of them do cover the district end to end, and
+	# are joined to major highways at the end"). One may stop short (a
+	# junction of three streets of its district alone) only where something
+	# stops it: a landmark's lot, a park or set piece, the river, or a road
+	# crossing the grid at an angle (Liberty Avenue, the old town's edge),
+	# as Broadway does in Manhattan. The docks drop some on purpose, for
+	# yards.
+	var junctions := 0
+	var stops := 0
+	var abrupt: Array = []
+	for n in plan.node_count():
+		var es: Array = plan.edges_of(n)
+		if es.size() < 3 or not city.window.has_point(plan.pos(n)):
+			continue
+		var k: int = plan.edge_patch[es[0]]
+		if k < 0 or plan.PATCHES[k].id == "docks" or not es.all(func(e): return plan.edge_road[e] == "" and plan.edge_patch[e] == k):
+			continue
+		junctions += 1
+		if es.size() == 3:
+			stops += 1
+			if not es.any(func(e): return _stops_streets(city, plan, e, k)):
+				abrupt.append(plan.pos(n).round())
+	_check(junctions > 100 and stops < junctions * 0.12 and abrupt.size() <= junctions * 0.02,
+		"district streets run through (%d of %d junctions are streets stopping short, %d with nothing stopping them: %s)" % [stops, junctions, abrupt.size(), abrupt])
 	# The boulevards run straight through, district to district.
 	for road in ["lantern", "crescent", "aurum", "rampart", "cypress"]:
 		var lo := Vector2(INF, INF)
@@ -370,6 +396,22 @@ func test_street_plan_is_a_california_grid() -> void:
 			var half: float = inner[k].distance_to(inner[(k + 1) % inner.size()]) * 0.5
 			_check(absf(r.get_center().x) <= half and r.end.y > -plan.SIDEWALK - 1.6 and r.end.y < 0.0,
 				"%s fronts its street (rect middle %.1f, side half %.1f, top %.1f)" % [id, r.get_center().x, half, r.end.y])
+
+
+## True when a block beside street e (of patch k) stops streets: it is
+## water, a park, a set piece or a landmark's lot, or a side of it runs off
+## the patch grid's axes (a diagonal road, the river bank).
+func _stops_streets(city, plan, e: int, k: int) -> bool:
+	var grid_angle: float = plan.PATCHES[k].angle
+	for f in [plan.edge_face[e].x, plan.edge_face[e].y]:
+		if f < 0 or not plan.is_land(f) or plan.is_park(f) or plan.set_piece(f) != "" or city._landmarks.has(f):
+			return true
+		var poly: PackedVector2Array = plan.face_poly(f)
+		for i in poly.size():
+			var d: Vector2 = poly[(i + 1) % poly.size()] - poly[i]
+			if d.length() > 4.0 and absf(fposmod(rad_to_deg(d.angle()) - grid_angle + 45.0, 90.0) - 45.0) > 5.0:
+				return true
+	return false
 
 
 func _road_node(plan, road: String) -> int:
@@ -517,6 +559,7 @@ func test_city_runs_with_population() -> void:
 	var at: int = city.nearest_node(car.global_position)
 	var heading: Vector3 = -car.global_basis.z
 	var path := PackedVector3Array()
+	var start := Vector3.INF
 	for i in 14:
 		var best := -1
 		var best_dot := -2.0
@@ -527,9 +570,19 @@ func test_city_runs_with_population() -> void:
 				best = n
 		if best < 0:
 			break
+		if start == Vector3.INF:
+			start = city.lane_start(at, best)
 		path.append(city.lane_point(at, best))
 		heading = (city.node_pos(best) - city.node_pos(at)).normalized()
 		at = best
+	# The weave can leave the car on a kerb; set off from the lane, so the
+	# run isn't cut short by a lamp post.
+	var first: Vector3 = path[0] - start
+	car.global_position = start
+	car.rotation.y = atan2(-first.x, -first.z)
+	car.velocity = Vector3.ZERO
+	car.speed = 0.0
+	car.reset_physics_interpolation()
 	car.drive_path(path, 1.0)
 	var fastest := [0.0]
 	await _watch_spawns(480, seen, counts, car, fastest)
@@ -1442,17 +1495,26 @@ func test_traffic_drives_every_kind() -> void:
 		cars.append(car)
 	var passed := {}
 	var prev := {}
+	var went := {}
 	for car in cars:
 		prev[car] = car._next_node
 		passed[car] = 0
+		went[car] = 0.0
 	for f in 1800:
+		var was := {}
+		for car in cars:
+			was[car] = car.global_position
 		await _frames(1)
 		for car in cars:
+			went[car] += car.global_position.distance_to(was[car])
 			if car._next_node != prev[car]:
 				prev[car] = car._next_node
 				passed[car] += 1
+	# Three junctions, or a fair distance where the blocks are long (Midtown's
+	# are 120 m between avenues).
 	for car in cars:
-		_check(passed[car] >= 3 and not car.wrecked, "traffic %s passed %d junctions in 30 s (wrecked: %s)" % [car.kind, passed[car], car.wrecked])
+		_check((passed[car] >= 3 or (passed[car] >= 2 and went[car] > 200.0)) and not car.wrecked,
+			"traffic %s passed %d junctions, %.0f m in 30 s (wrecked: %s)" % [car.kind, passed[car], went[car], car.wrecked])
 
 
 ## A vehicle on the empty test track (no game loaded).
@@ -2643,14 +2705,17 @@ func test_estates_and_clusters() -> void:
 func test_grounds_kit_builds_every_part() -> void:
 	var Grounds = preload("res://scripts/kits/grounds_kit.gd")
 	var MB = preload("res://scripts/mesh_builder.gd")
-	var trees := ["oak", "palm", "cypress", "fruit"]
+	var trees := ["oak", "palm", "cypress", "fruit", "magnolia", "jacaranda", "crepe_myrtle", "plane"]
 	var sizes := {"lawn": [60.0, 70.0], "yard": [40.0, 30.0], "gravel": [30.0, 20.0], "drive": [6.0, 24.0], "track": [3.5, 20.0],
 		"wall": [40.0, 0.6], "hedge": [40.0, 0.6], "fence": [30.0, 0.2], "gate": [7.0, 0.6], "trees": [30.0, 9.0],
 		"court": [20.0, 20.0], "parterre": [20.0, 14.0], "tennis": [18.3, 36.6], "orchard": [18.3, 36.6], "crop": [42.0, 42.0],
-		"vines": [42.0, 42.0], "boat": [2.0, 5.0], "woodpile": [3.0, 1.6], "garden": [6.0, 5.0]}
+		"vines": [42.0, 42.0], "boat": [2.0, 5.0], "woodpile": [3.0, 1.6], "garden": [6.0, 5.0],
+		"parking": [40.0, 36.0], "alley": [9.0, 60.0], "paving": [20.0, 30.0], "pool": [34.0, 22.0],
+		"playground": [32.0, 26.0], "field": [67.0, 70.0], "course": [100.0, 36.0]}
 	var problems: Array[String] = []
 	for kind: String in sizes:
-		for v in 4:
+		# Every tree kind for the tree rows, four variants of the rest.
+		for v in (trees.size() if kind == "trees" else 4):
 			var mb = MB.new()
 			var out: Array = []
 			var rng := RandomNumberGenerator.new()

@@ -460,6 +460,27 @@ func _nodes_near(p: Vector2, r: float) -> Array:
 	return out
 
 
+## The next junction along a heading: the nearest one in front of pos and
+## near the line ahead (the end of the street a car is on), else the one
+## nearest a point 20 m ahead. A point ahead alone can be nearer the
+## junction just passed.
+func node_ahead(pos: Vector3, fwd: Vector3) -> int:
+	var p := Vector2(pos.x, pos.z)
+	var f := Vector2(fwd.x, fwd.z).normalized()
+	for r in [100.0, 250.0, 700.0]:
+		var best := -1
+		var best_along := INF
+		for n in _nodes_near(p, r):
+			var d: Vector2 = _pos2(n) - p
+			var along := d.dot(f)
+			if along > 2.0 and absf(d.cross(f)) < maxf(8.0, along * 0.3) and along < best_along:
+				best_along = along
+				best = n
+		if best >= 0:
+			return best
+	return nearest_node(pos + fwd * 20.0)
+
+
 func nearest_node(pos: Vector3) -> int:
 	var p := Vector2(pos.x, pos.z)
 	for r in [40.0, 100.0, 250.0, 700.0, 2000.0]:

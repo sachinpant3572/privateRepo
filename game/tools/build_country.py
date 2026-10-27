@@ -26,7 +26,7 @@ from pathlib import Path
 
 from shapely import constrained_delaunay_triangles
 from shapely.geometry import LineString, MultiLineString, Point, Polygon, box
-from shapely.ops import nearest_points, unary_union
+from shapely.ops import linemerge, nearest_points, unary_union
 from shapely.prepared import prep
 from shapely.strtree import STRtree
 
@@ -70,6 +70,10 @@ LOT = {
     "bus_terminal": (60, 40), "seaplane_base": (34, 40), "cruise_terminal": (90, 40),
     "torque_tone": (34, 26), "aurum_hangar": (50, 40), "police_station": (22, 16),
     "county_hospital": (36, 26), "airboat_dock": (18, 24), "airstrip_hangar": (26, 22),
+    # Bellerive v3 (HANDOFF-bellerive-v3.md B-4, B-5): kits/civic_kit.gd builds these.
+    "fire_station": (26, 22), "post_office": (30, 24), "dmv_office": (40, 30), "sheriff_station": (30, 24),
+    "public_school": (60, 40), "rowhouse_row": (36, 12), "cape_house": (11, 9), "pier_rides": (60, 140),
+    "brownstone_row": (36, 14), "painted_lady_row": (36, 14),
 }
 KINDS = list(LOT)
 
@@ -91,11 +95,21 @@ LANDMARK_KIND = {
 # the road, -z towards it); kits/grounds_kit.gd draws them. A rect part spans
 # w across and d along its own z, turned by rot like a lot's yaw; a line part
 # (wall, hedge, fence, trees) runs w along its own x.
-PLOT_TYPES = ["estate", "cluster", "farmyard", "field"]
+PLOT_TYPES = ["estate", "cluster", "farmyard", "field",
+              # Bellerive v3 outskirts: street trees along a kerb, a rowhouse
+              # block's yards and H-alley, a tract house's parcel, and civic
+              # grounds (village green, school, DMV, mini-mall forecourt).
+              "verge", "block", "parcel", "civic"]
 PART_KINDS = ["lawn", "yard", "gravel", "drive", "track", "wall", "hedge", "fence", "gate", "trees",
-              "court", "parterre", "tennis", "orchard", "crop", "vines", "boat", "woodpile", "garden"]
+              "court", "parterre", "tennis", "orchard", "crop", "vines", "boat", "woodpile", "garden",
+              # Bellerive v3: asphalt parking with stalls (variant: rows along x
+              # 0, along z 1), a paved rear alley, concrete paving (drives,
+              # walks, a shop row's forecourt), a public pool, a playground, a
+              # sports field (0 football, 1 baseball, 2 field in a running
+              # track), a DMV drive-test course.
+              "parking", "alley", "paving", "pool", "playground", "field", "course"]
 # Tree kinds for "trees" and "orchard" parts.
-TREE_KINDS = ["oak", "palm", "cypress", "fruit"]
+TREE_KINDS = ["oak", "palm", "cypress", "fruit", "magnolia", "jacaranda", "crepe_myrtle", "plane"]
 # Dwellings that go into clusters rather than lots of their own.
 DWELLINGS = ("house", "shack", "stilt_house", "trailer_home")
 # Turn of cluster dwellings off the plot's axis (degrees) by style: small
@@ -119,7 +133,7 @@ CLUSTER_HOMES = {"village": ["house", "house", "shack"], "bayou_village": ["stil
 SUBURB_STYLE = {
     "heights": {"house": 2, "mansion": 3},
     "bayou_town": {"stilt_house": 4, "shack": 2, "house": 2, "bar": 1},
-    "fringe": {"garden_apartments": 2, "strip_mall": 1, "gas_station": 1, "garage": 1, "house": 2},
+    "fringe": {"rowhouse_row": 5, "garden_apartments": 1, "strip_mall": 1, "gas_station": 1},
     "eastside": {"house": 5, "garden_apartments": 2, "strip_mall": 1, "gas_station": 1, "diner": 1},
     "beach_town": {"deco_hotel": 5, "condo_tower": 2, "beach_bar": 1, "shopfront": 1},
     "shore": {"house": 5, "garden_apartments": 2, "beach_bar": 1, "diner": 1},
@@ -127,6 +141,71 @@ SUBURB_STYLE = {
     "village": {"house": 5, "general_store": 1, "bar": 1, "trailer_home": 2},
     "bayou_village": {"stilt_house": 4, "shack": 3, "bar": 1, "general_store": 1},
 }
+
+# Generic styles the outskirts patterns use for frontage they do not lay
+# out themselves: estates along the Heights' winding roads, shops and
+# apartments along the east side's arterials, beach trade on the shore.
+SUBURB_STYLE.update({
+    "estates": {"mansion": 1},
+    "arterial": {"garden_apartments": 3, "strip_mall": 2, "diner": 1, "gas_station": 1},
+    "beach": {"beach_bar": 3, "diner": 2, "garden_apartments": 2, "shopfront": 2},
+})
+
+# --- Bellerive v3 outskirts patterns (HANDOFF-bellerive-v3.md B-4; the
+# numbers are reference/world/bellerive_patterns.md "Game use"). Every
+# street, lot and plot is derived from the plan's frame junctions and the
+# zone bounds, so the patterns follow the plan when its junctions move.
+# Magnolia Heights: the Beverly Hills flats near the city (north-south
+# streets, 15 x 37 m lots, one kind of street tree to a street, palms on the
+# cross streets), then winding estate roads further out.
+FLATS_FIRST = 50.0          # the first flats street, out from the plan's edge
+FLATS_PITCH = 93.0          # two 37 m lots back to back, their setbacks and a street
+FLATS_STREETS = 2
+FLATS_LOT = (15.0, 37.0)
+FLATS_NAMES = ["Camellia Drive", "Verbena Drive", "Oleander Drive"]
+FLATS_TREES = ["magnolia", "jacaranda", "crepe_myrtle", "plane"]
+PALM_STEP = 11.0            # palms 10-12 m apart on the showcase streets
+VERGE_STEP = 13.0
+ESTATE_PITCH = 197.0        # estate roads: a 90 m estate either side, setbacks, the road
+ESTATE_WIND = 22.0          # how far an estate road winds off its line
+ESTATE_NAMES = ["Palisade Drive", "Corniche Way", "Ombrage Lane", "Belvedere Crest"]
+# North fringe: Capitol Hill rowhouse blocks round an H-shaped rear alley.
+FRINGE_PITCH = 120.0
+FRINGE_ROW_NAME = "Courtland Row"
+ROW_DEPTH = 12.0
+ROW_TARGET = 36.0
+ROW_GAP = 1.6
+ALLEY = 9.0
+ALLEY_NECK = 4.5
+ALLEY_IN = 30.5             # an H alley's legs, in from the block's short ends
+# East side: LA arterial superblocks.
+ARTERIAL_PITCH = 450.0
+ARTERIAL_NAMES = ["Mesquite Avenue", "Verdello Avenue", "Sandpiper Avenue", "Tierra Linda Avenue"]
+SPINE_NAME = "Sunvale Boulevard"
+ARTERIAL_DEPTH = 77.0       # first street off an arterial: shops 26 m deep, then houses
+TRACT_LOT = (15.0, 30.0)
+TRACT_PITCH = 79.0          # two 30 m lots back to back, their setbacks and a street
+TRACT_BOW = 16.0
+BULB_R = 13.0               # a cul-de-sac's turning circle (centreline radius)
+MALL_LEG = (32.0, 24.0)     # each leg of a corner mini-mall's L
+MALL_YARD = 24.0            # the corner square of its parking (all within the 77 m before the first street)
+SCHOOL_PLOT = (150.0, 120.0)
+DMV_PLOT = (110.0, 85.0)
+# South shore: Levittown loops of identical capes, and a village green.
+COLLECTOR_PITCH = 400.0
+LOOP_PITCH = 80.0
+LOOP_STAGGER = 40.0         # lanes either side of a collector are offset: T junctions only
+LOOP_BOW = 8.0
+LOOP_BEND = 40.0            # a loop's U bend (radius)
+LOOP_NAMES = ["Dogwood Lane", "Hollyhock Lane", "Bayberry Lane", "Sweetgum Lane", "Primrose Lane", "Juniper Lane",
+              "Foxglove Lane", "Thimble Lane", "Wren Lane", "Clover Lane", "Briar Lane", "Teasel Lane", "Aster Lane",
+              "Linnet Lane", "Hazel Lane", "Quince Lane"]
+CAPE_PARCEL = (18.0, 30.0)
+CAPE_SETBACK = 8.0
+GREEN_PLOT = (150.0, 100.0)
+# Pattern tags a road carries from its source into the graph (pc["tag"]).
+PATTERN_WALKS = {"heights": ("flats",), "eastside": ("tract", "bulb"),
+                 "shore": ("loop", "stub", "bulb", "collector", "beltway")}
 
 # Ground zones, in drawing order; the game colours them (country_tiles.gd).
 ZONES = ["land", "farmland", "bayou", "hills", "heights", "bayou_town", "fringe", "eastside",
@@ -191,6 +270,67 @@ def fillet(pts, radius, step):
 def resample(line: LineString, step: float):
     n = max(1, math.ceil(line.length / step))
     return [line.interpolate(line.length * k / n).coords[0] for k in range(n + 1)]
+
+
+def min_radius(line: LineString):
+    """The tightest bend of a line (m), its ends left out; inf when straight."""
+    if line.length < 20.0:
+        return math.inf
+    pts = resample(line, 4.0)
+    best = math.inf
+    for i in range(3, len(pts) - 3):
+        a, b, c = pts[i - 1], pts[i], pts[i + 1]
+        t0 = math.atan2(b[1] - a[1], b[0] - a[0])
+        t1 = math.atan2(c[1] - b[1], c[0] - b[0])
+        turn = abs((t1 - t0 + math.pi) % math.tau - math.pi)
+        if turn > 1e-4:
+            best = min(best, dist(a, c) * 0.5 / turn)
+    return best
+
+
+def wavy(a, b, amp, halves=1, step=6.0):
+    """Points from a to b bowed (halves 1) or snaking (2) off the straight
+    line by up to amp metres; offset and slope are zero at both ends, so it
+    meets the roads there square on."""
+    L = dist(a, b)
+    if L < 1e-6:
+        return [a, b]
+    u = ((b[0] - a[0]) / L, (b[1] - a[1]) / L)
+    v = (-u[1], u[0])
+    n = max(2, math.ceil(L / step))
+    pts = []
+    for k in range(n + 1):
+        t = k / n
+        f = math.sin(math.pi * t) ** 2 if halves == 1 else math.sin(halves * math.pi * t) * math.sin(math.pi * t)
+        pts.append((a[0] + u[0] * L * t + v[0] * amp * f, a[1] + u[1] * L * t + v[1] * amp * f))
+    return pts
+
+
+def bow_y(x, y, amp, xa, xb):
+    """y bowed by amp sin^2 over [xa, xb] (zero slope at both ends)."""
+    t = min(1.0, max(0.0, (x - xa) / (xb - xa)))
+    return y + amp * math.sin(math.pi * t) ** 2
+
+
+def bowed(x0, x1, y, amp, xa, xb, step=6.0):
+    n = max(2, math.ceil(abs(x1 - x0) / step))
+    return [(x0 + (x1 - x0) * k / n, bow_y(x0 + (x1 - x0) * k / n, y, amp, xa, xb)) for k in range(n + 1)]
+
+
+def ring_arcs(c, r, a0, parts=3, step=4.0):
+    """A circle round c as `parts` arcs from angle a0 on; the graph drops a
+    closed piece (a loop on one junction), so it goes in as arcs."""
+    out = []
+    n = max(3, math.ceil(r * math.tau / parts / step))
+    for k in range(parts):
+        out.append([(c[0] + r * math.cos(a0 + math.tau * (k + i / n) / parts),
+                     c[1] + r * math.sin(a0 + math.tau * (k + i / n) / parts)) for i in range(n + 1)])
+    return out
+
+
+def arc(c, r, a0, a1, step=4.0):
+    n = max(3, math.ceil(r * abs(a1 - a0) / step))
+    return [(c[0] + r * math.cos(a0 + (a1 - a0) * i / n), c[1] + r * math.sin(a0 + (a1 - a0) * i / n)) for i in range(n + 1)]
 
 
 def lines_of(geom):
@@ -316,6 +456,11 @@ class Country:
         self.zones = []  # (name, polygon)
         self.town_zones = []
         self.links = []
+        self.bulbs = []  # cul-de-sac centres
+        self.reserved = []  # civic plots kept clear of streets: dicts (school, DMV, green)
+        self.pier = None
+        self.arterials = []  # east side: [LineString, "h" or "v"]
+        self.flats_xs = []
 
     def L(self, pts):
         return [(x - self.origin[0], y - self.origin[1]) for x, y in pts]
@@ -506,47 +651,15 @@ class Country:
             poly = poly.difference(taken).intersection(land)
             taken = taken.union(poly)
             self.zones.append((name, poly))
-        zone = dict(self.zones)
-        # Streets carrying on from the frame junctions, kept 70 m apart.
-        for side, zname, depth in (("w", ["heights", "bayou_town"], bx0 - west), ("n", ["fringe"], ring),
-                                   ("e", ["eastside"], east - bx1), ("s", ["shore"], 520.0)):
-            area = unary_union([zone[z] for z in zname]).difference(self.coast.buffer(60.0))
-            last = -1e9
-            o = self._outward(side)
-            for along, n, w in self.frame_junctions(side):
-                if along - last < 70.0 and w < 15:
-                    continue
-                last = along
-                e = self._edge_point(n, side)
-                end = (e[0] + o[0] * depth, e[1] + o[1] * depth)
-                cls = "avenue" if w >= 15 else "street"
-                for piece in lines_of(LineString([e, end]).intersection(area.buffer(1.0))):
-                    if piece.length < 30.0:
-                        continue
-                    starts_at_frame = dist(piece.coords[0], e) < 2.0
-                    self.add(list(piece.coords), cls, "", "suburb")
-                    if starts_at_frame:
-                        self.links.append({"pos": e, "plan_node": n})
-        # Cross streets parallel to the plan's sides.
-        for name, poly in self.zones:
-            if name == "beach_town":
-                continue
-            x0, y0, x1, y1 = poly.bounds
-            if name in ("heights", "bayou_town"):
-                for x in _steps(bx0 - 105.0, west - 1.0, -105.0):
-                    self._clip_add([(x, y0 - 5), (x, y1 + 5)], poly, "street")
-            elif name == "fringe":
-                self._clip_add([(x0 - 5, by0 - 110.0), (x1 + 5, by0 - 110.0)], poly, "street")
-            elif name == "shore":
-                for y in (by1 + 120.0, by1 + 240.0):
-                    self._clip_add([(x0 - 5, y), (x1 + 5, y)], poly.difference(self.coast.buffer(60.0)), "street")
-            elif name == "eastside":
-                for x in _steps(bx1 + 105.0, x1, 105.0):
-                    self._clip_add([(x, y0 - 5), (x, y1 + 5)], poly, "street")
-        # The Beltway round the suburbs.
-        belt = [(west, by1 + 30.0), (west, north), (east, north), (east, 700.0)]
-        for piece in lines_of(LineString(fillet(belt, 60.0, 8.0)).intersection(self.A.difference(self.P))):
-            self.add(list(piece.coords), "avenue", "Bellerive Beltway", "suburb")
+        self.zone_poly = dict(self.zones)
+        self.ring = (west, north, east)
+        # Map landmarks out here: civic grounds keep clear of them.
+        self.lm_pts = []
+        for lm in self.world["landmarks"]:
+            if lm["id"] in LANDMARK_KIND and lm.get("phase", 1) <= 2:
+                q = self.L([lm["pos"]])[0]
+                if not self.P.contains(Point(q)):
+                    self.lm_pts.append(q)
         # Gulf Shore Drive and Seabreeze Drive: the coast 90 m inland, from the
         # western edge of the city to Brisa Beach's north end, over the
         # river mouth.
@@ -559,27 +672,508 @@ class Country:
         drive = drive.intersection(box(west - 200, -1000, east + 300, 2100)).difference(self.P.buffer(60.0))
         for piece in lines_of(drive):
             if piece.length > 60:
-                self.add(list(piece.coords), "avenue", "Seabreeze Drive", "suburb")
+                self.add(list(piece.coords), "avenue", "Seabreeze Drive", "seabreeze")
         self.ocean_drive = unary_union(lines_of(drive))
         # Brisa Beach cross streets: square to the coast, every 95 m.
         d = (800 / 1031.0, -650 / 1031.0)
         inland = (-d[1], d[0]) if (-d[1]) < 0 else (d[1], -d[0])
         start = self.L([[7600, 8650]])[0]
+        bt = self.zone_poly["beach_town"].buffer(2.0)
+        self.brisa_feet = []
         for k in range(0, 12):
             base = (start[0] + d[0] * (40 + 95 * k), start[1] + d[1] * (40 + 95 * k))
             a = (base[0] + inland[0] * 40, base[1] + inland[1] * 40)
             b = (base[0] + inland[0] * 420, base[1] + inland[1] * 420)
-            self._clip_add([a, b], zone["beach_town"].buffer(2.0), "street")
+            for piece in self._clip_add([a, b], bt, "street", "", "brisa"):
+                if dist(piece.coords[0], a) < 2.0:
+                    self.brisa_feet.append((a, base))
         back = [(start[0] + inland[0] * 300, start[1] + inland[1] * 300),
                 (start[0] + inland[0] * 300 + d[0] * 1200, start[1] + inland[1] * 300 + d[1] * 1200)]
-        self._clip_add(back, zone["beach_town"].buffer(2.0), "street", "Palmetto Row")
-        # South shore streets: north-south from the frame to the drive.
+        self.palmetto = unary_union(self._clip_add(back, bt, "street", "Palmetto Row", "brisa"))
         self.brisa_dirs = (d, inland)
+        # The Beltway round the suburbs, from Seabreeze Drive in the west to
+        # Palmetto Row in the east.
+        shore_line = unary_union([self.ocean_drive, self.palmetto])
+        w_end = self._first_hit((west, north), (west, by1 + 600.0), self.ocean_drive) or (west, by1 + 30.0)
+        e_end = self._first_hit((east, north), (east, by1 + 600.0), shore_line) or (east, 700.0)
+        belt = [w_end, (west, north), (east, north), e_end]
+        for piece in lines_of(LineString(fillet(belt, 60.0, 8.0)).intersection(self.A.difference(self.P))):
+            self.add(list(piece.coords), "avenue", "Bellerive Beltway", "beltway")
+        self.routes_geom = unary_union([s[0] for s in self.sources if s[3] == "route"])
+        self._heights_roads()
+        self._fringe_roads()
+        self._eastside_roads()
+        self._shore_roads()
+        self._pier_site()
 
-    def _clip_add(self, pts, poly, cls, name=""):
+    # --- Outskirts patterns: roads ------------------------------------------------
+
+    def _open_juncs(self, side):
+        """A side's frame junctions that no route already links to."""
+        taken = {l["plan_node"] for l in self.links}
+        return [j for j in self.frame_junctions(side) if j[1] not in taken]
+
+    @staticmethod
+    def _spaced(juncs, gap):
+        """Junctions at least `gap` apart, avenues (and wider) first."""
+        chosen = []
+        for j in sorted(juncs, key=lambda j: (-j[2], j[0])):
+            near = min((abs(j[0] - c[0]) for c in chosen), default=1e9)
+            if near >= (12.0 if j[2] >= 15 else gap):
+                chosen.append(j)
+        return sorted(chosen)
+
+    @staticmethod
+    def _pick_run(options, start, pitch, lo, hi, stop, bonus, fallback=0.0):
+        """Junctions about `pitch` apart from `start` on: each pick lies lo..hi
+        past the last one, nearest pitch (an avenue counts `bonus` m nearer);
+        with none there, the first within `fallback` m past hi."""
+        out, last = [], start
+        while True:
+            win = [o for o in options if lo <= o[0] - last <= hi and o[0] <= stop]
+            if win:
+                o = min(win, key=lambda o: abs(o[0] - last - pitch) - (bonus if o[2] >= 15 else 0.0))
+            else:
+                win = [o for o in options if hi < o[0] - last <= hi + fallback and o[0] <= stop]
+                if not win:
+                    return out
+                o = win[0]
+            out.append(o)
+            last = o[0]
+
+    @staticmethod
+    def _first_hit(a, b, geom):
+        """The first point of segment a-b on geom, or None."""
+        seg = LineString([a, b])
+        hits = Country._points(seg.intersection(geom))
+        if not hits:
+            hit = seg.intersection(geom)
+            hits = [c for g in lines_of(hit) for c in (g.coords[0], g.coords[-1])]
+        if not hits:
+            return None
+        return min(hits, key=lambda h: dist(a, h))
+
+    def _drive_y(self, x):
+        h = self._first_hit((x, self.P.bounds[3]), (x, self.P.bounds[3] + 700.0), self.ocean_drive)
+        return h[1] if h else None
+
+    def _span_x(self, poly, x0, y, x1):
+        """How far east along y from x0 poly reaches (to x1 at most)."""
+        hit = LineString([(x0, y), (x1, y)]).intersection(poly)
+        ends = [g for g in lines_of(hit) if g.distance(Point(x0, y)) < 1.0]
+        if not ends:
+            return x0
+        return max(c[0] for c in ends[0].coords)
+
+    def _bulb(self, end, d, cls, own=None):
+        """A cul-de-sac's turning circle where a street ends (d: the street's
+        direction there). Left out where it would not fit."""
+        c = (end[0] + d[0] * BULB_R, end[1] + d[1] * BULB_R)
+        hw = CLASSES[cls]["w"] * 0.5
+        disc = Point(c).buffer(BULB_R + hw + 3.0)
+        if not self.play_land_prep.contains(disc):
+            return False
+        for s in self.sources:
+            if s[0] is own:
+                continue
+            if s[0].distance(Point(c)) < BULB_R + 14.0:
+                return False
+        if any(r["poly"].distance(Point(c)) < BULB_R + 20.0 for r in self.reserved):
+            return False
+        for pts in ring_arcs(c, BULB_R, math.atan2(-d[1], -d[0])):
+            self.add(pts, cls, "", "bulb")
+        self.bulbs.append(c)
+        return True
+
+    def _add_cut(self, pts, cls, name, tag, cut=None, keep=None, bulbs=(False, False), link=None, min_len=60.0):
+        """A street, less what lies in `cut` and outside `keep`; an end left
+        dead by the cut (or flagged in `bulbs`) gets a turning circle.
+        link: (edge point, plan node) when it starts at the plan's frame."""
+        line = LineString(pts)
+        geom = line
+        if keep is not None:
+            geom = geom.intersection(keep)
+        if cut is not None and not cut.is_empty:
+            geom = geom.difference(cut)
+        if geom.geom_type == "MultiLineString":
+            geom = linemerge(geom)
+        out = []
+        for piece in lines_of(geom):
+            if piece.length < min_len:
+                continue
+            coords = list(piece.coords)
+            self.add(coords, cls, name, tag)
+            own = self.sources[-1][0]
+            out.append(piece)
+            if link and dist(coords[0], link[0]) < 2.0:
+                self.links.append({"pos": link[0], "plan_node": link[1]})
+            for k, (e, q) in enumerate(((coords[0], coords[1]), (coords[-1], coords[-2]))):
+                orig = pts[0] if k == 0 else pts[-1]
+                flagged = bulbs[k] and dist(e, orig) < 1.0
+                dead = dist(e, orig) >= 1.0 and not any(
+                    s[0].distance(Point(e)) < 2.0 for s in self.sources if s[0] is not own)
+                if flagged or dead:
+                    n = dist(e, q) or 1.0
+                    self._bulb(e, ((e[0] - q[0]) / n, (e[1] - q[1]) / n), cls, own)
+        return out
+
+    def _reserve(self, line, sgn, size, area, kind):
+        """Room for civic grounds (W x D) beside a road, square to it, searched
+        from the road's middle outward; kept in self.reserved."""
+        W, D = size
+        hw = CLASSES["avenue"]["w"] * 0.5
+        area_p = prep(area)
+        L = line.length
+        for k in range(0, int(L / 20.0)):
+            s = L * 0.5 + (k + 1) // 2 * 20.0 * (1 if k % 2 else -1)
+            if s < W * 0.5 + 30.0 or s > L - W * 0.5 - 30.0:
+                continue
+            p, t = _along(line, s)
+            n = (-t[1] * sgn, t[0] * sgn)
+            c = (p[0] + n[0] * (hw + 3.5 + D * 0.5), p[1] + n[1] * (hw + 3.5 + D * 0.5))
+            yaw = yaw_facing(*n)
+            poly = lot_poly(c[0], c[1], yaw, W, D)
+            if not area_p.contains(poly.buffer(8.0)):
+                continue
+            if self.routes_geom.distance(poly) < 30.0:
+                continue
+            # Clear of the other arterials' corners, which hold the mini-malls.
+            if any(a.distance(poly) < 90.0 for a, _ in self.arterials if a is not line):
+                continue
+            if any(Point(q).distance(poly) < 70.0 for q in self.lm_pts):
+                continue
+            if any(r["poly"].distance(poly) < 30.0 for r in self.reserved):
+                continue
+            self.reserved.append({"kind": kind, "c": c, "yaw": yaw, "W": W, "D": D, "poly": poly, "n": n})
+            return self.reserved[-1]
+        return None
+
+    def _heights_roads(self):
+        """Magnolia Heights: the flats (straight north-south drives, one kind
+        of street tree each, palm-lined cross streets from the city) and,
+        further out, estate roads that wind west to the Beltway."""
+        bx0, by0, bx1, by1 = self.P.bounds
+        west, north, east = self.ring
+        z = self.zone_poly
+        hz = z["heights"]
+        both = unary_union([hz, z["bayou_town"]]).buffer(1.0)
+        xs = [bx0 - FLATS_FIRST - FLATS_PITCH * k for k in range(FLATS_STREETS)]
+        self.flats_xs = xs
+        for k, x in enumerate(xs):
+            self._clip_add([(x, north - 1.0), (x, by1 + 5.0)], both, "street", FLATS_NAMES[k], "flats:" + FLATS_TREES[k])
+        # Blackwater Bayou's streets carry on west on the same pitch.
+        for x in _steps(xs[-1] - FLATS_PITCH, west + 20.0, -FLATS_PITCH):
+            self._clip_add([(x, 560.0 - 5.0), (x, by1 + 5.0)], z["bayou_town"].buffer(1.0), "street")
+        h_top, h_bot = hz.bounds[1], hz.bounds[3]
+        juncs = self._open_juncs("w")
+        show = [j for j in self._spaced([j for j in juncs if h_top + 20 < j[0] < h_bot - 20], 140.0)]
+        self.showcase_ys = []
+        bayou_ys = []
+        for along, n, w in juncs:
+            e = self._edge_point(n, "w")
+            if any(j[1] == n for j in show):
+                cls = "avenue" if w >= 15 else "street"
+                self._add_cut([e, (xs[-1], e[1])], cls, "", "showcase", keep=hz.buffer(1.0), link=(e, n), min_len=30.0)
+                self.showcase_ys.append(e[1])
+            elif e[1] > h_bot:
+                # Blackwater Bayou: its streets run on to the Beltway.
+                if w < 15 and any(abs(e[1] - o) < 70.0 for o in bayou_ys):
+                    continue
+                bayou_ys.append(e[1])
+                cls = "avenue" if w >= 15 else "street"
+                self._add_cut([e, (west, e[1])], cls, "", "suburb", keep=z["bayou_town"].buffer(1.0), link=(e, n), min_len=30.0)
+        # Estate roads: a 90 m estate either side, winding out to the Beltway.
+        y = north + ESTATE_PITCH
+        k = 0
+        while y < h_bot - 60.0:
+            snap = [s for s in self.showcase_ys if abs(s - y) <= 45.0]
+            if snap:
+                y = min(snap, key=lambda s: abs(s - y))
+            a = (xs[-1] - 47.5, y)
+            # One long bow each, all the same way (like contour lines), so
+            # the estates between two roads keep their depth.
+            pts = [(xs[-1], y)] + wavy(a, (west, y), -ESTATE_WIND)
+            if self._add_cut(pts, "street", ESTATE_NAMES[k % len(ESTATE_NAMES)], "estate_road",
+                             cut=self.routes_geom.buffer(84.0), keep=hz.buffer(1.0), min_len=120.0):
+                k += 1
+            y += ESTATE_PITCH
+
+    def _fringe_roads(self):
+        """The north fringe: Capitol Hill rowhouse blocks. North-south streets
+        from the city about 120 m apart, and one row street across."""
+        bx0, by0, bx1, by1 = self.P.bounds
+        west, north, east = self.ring
+        fz = self.zone_poly["fringe"]
+        juncs = self._open_juncs("n")
+        mid_y = (by0 + north) * 0.5
+        rx = sorted(p[0] for p in self._points(self.routes_geom.intersection(LineString([(bx0, mid_y), (bx1, mid_y)]))))
+        last = bx0
+        picks = []
+        while True:
+            r = next((r for r in rx if r > last + 1.0), None)
+            if r is not None and r - last <= 200.0:
+                last = r
+                continue
+            win = [j for j in juncs if last + 85.0 <= j[0] <= last + 165.0 and j[0] <= bx1 - 60.0
+                   and all(abs(j[0] - q) >= 85.0 for q in rx)]
+            if not win:
+                if r is None:
+                    break
+                last = r
+                continue
+            j = min(win, key=lambda j: abs(j[0] - last - FRINGE_PITCH) - (40.0 if j[2] >= 15 else 0.0))
+            picks.append(j)
+            last = j[0]
+        for along, n, w in picks:
+            e = self._edge_point(n, "n")
+            cls = "avenue" if w >= 15 else "street"
+            self._add_cut([e, (e[0], north - 1.0)], cls, "", "rowhouse", keep=fz.buffer(1.0), link=(e, n), min_len=30.0)
+        self.fringe_y = by0 - 110.0
+        x0 = self.flats_xs[0] if self.flats_xs else bx0
+        keep = unary_union([fz, self.zone_poly["heights"]]).buffer(0.01)
+        self._clip_add([(x0, self.fringe_y), (bx1, self.fringe_y)], keep, "street", FRINGE_ROW_NAME, "rowhouse")
+
+    def _eastside_roads(self):
+        """The east side: LA arterial superblocks (avenues about 450 m apart,
+        a boulevard down the middle), curving tract streets inside them,
+        cul-de-sacs where a street stops short."""
+        bx0, by0, bx1, by1 = self.P.bounds
+        west, north, east = self.ring
+        ez = self.zone_poly["eastside"]
+        col = [g for g in lines_of(LineString([(east - 1.0, north), (east - 1.0, by1 + 600.0)]).intersection(ez))]
+        bottom_e = max((c[1] for g in col for c in g.coords), default=by1)
+        juncs = self._open_juncs("e")
+        art = self._pick_run([j for j in juncs if j[2] > 0], north, ARTERIAL_PITCH, 380.0, 540.0, bottom_e - 250.0, 60.0)
+        belt = [s[0] for s in self.sources if s[3] == "beltway"]
+        top = next((g for g in belt if g.distance(Point((bx1 + east) / 2, north)) < 2.0), None)
+        if top is not None:
+            self.arterials.append([top, "h"])
+        ys = [north]
+        for k, (along, n, w) in enumerate(art):
+            e = self._edge_point(n, "e")
+            for piece in self._add_cut([e, (east, e[1])], "avenue", ARTERIAL_NAMES[k % len(ARTERIAL_NAMES)], "arterial",
+                                       keep=ez.buffer(1.0), link=(e, n), min_len=30.0):
+                self.arterials.append([piece, "h"])
+            ys.append(e[1])
+        # Sunvale Boulevard down the middle to Brisa Beach.
+        xs = (bx1 + east) * 0.5
+        shore_line = unary_union([self.ocean_drive, self.palmetto])
+        foot = self._first_hit((xs, north), (xs, by1 + 600.0), shore_line)
+        spine_end = foot if foot else (xs, bottom_e)
+        keep = unary_union([ez, self.zone_poly["beach_town"]]).buffer(1.0)
+        for piece in self._add_cut([(xs, north - 1.0), spine_end], "avenue", SPINE_NAME, "arterial", keep=keep, min_len=30.0):
+            self.arterials.append([piece, "v"])
+            self.spine = piece
+        east_leg = [g for g in belt if g.distance(Point(east, (north + bottom_e) * 0.5)) < 2.0]
+        for g in east_leg:
+            self.arterials.append([g, "v"])
+        # Civic grounds: the school on the boulevard, the DMV on an arterial.
+        if getattr(self, "spine", None) is not None:
+            self._reserve(self.spine, -1.0, SCHOOL_PLOT, ez, "school_e")
+        h_arts = [a for a, o in self.arterials if o == "h" and a is not top]
+        if h_arts:
+            self._reserve(h_arts[0], 1.0, DMV_PLOT, ez, "dmv")
+        cut = unary_union([self.routes_geom.buffer(51.0)] + [r["poly"].buffer(45.0) for r in self.reserved])
+        e_bands = [j for j in juncs if j[0] > by0 + 5.0]
+        for bi, yt in enumerate(ys):
+            yb = ys[bi + 1] if bi + 1 < len(ys) else None
+            amp = TRACT_BOW if bi % 2 == 0 else -TRACT_BOW
+            y = yt + ARTERIAL_DEPTH + max(0.0, -amp)
+            limit = (yb - ARTERIAL_DEPTH - max(0.0, amp)) if yb is not None else ez.bounds[3] - 40.0
+            j = 0
+            while y <= limit:
+                snap = [o for o in e_bands if y <= o[0] <= y + 40.0]
+                link = None
+                if bi == 0 and y <= self.fringe_y <= y + 40.0:
+                    y = self.fringe_y
+                    start = (bx1, y)
+                    bulb0 = False
+                elif snap:
+                    o = snap[0]
+                    start = self._edge_point(o[1], "e")
+                    y = start[1]
+                    link = (start, o[1])
+                    bulb0 = False
+                else:
+                    start = (bx1 + 46.0, y)
+                    bulb0 = True
+                if y > limit:
+                    break
+                name = ""
+                self._add_cut(wavy(start, (xs, y), amp), "street", name, "tract", cut=cut, keep=ez.buffer(1.0),
+                              bulbs=(bulb0, False), link=link)
+                end = east - 86.0 if j % 2 else east
+                self._add_cut(wavy((xs, y), (end, y), amp), "street", name, "tract", cut=cut, keep=ez.buffer(1.0),
+                              bulbs=(False, j % 2 == 1))
+                j += 1
+                y += TRACT_PITCH
+
+    def _shore_roads(self):
+        """The south shore: Levittown. Collector streets from the city to
+        Seabreeze Drive about 400 m apart, and between them gently curving
+        lanes and loops that meet them at T junctions only."""
+        bx0, by0, bx1, by1 = self.P.bounds
+        west, north, east = self.ring
+        sz = self.zone_poly["shore"]
+        keep = sz.buffer(1.0)
+        juncs = [j for j in self._open_juncs("s") if j[2] > 0]
+        s_east = self._span_x(sz, bx0, by1 + 40.0, east)
+        picks = self._pick_run(juncs, west, COLLECTOR_PITCH, 300.0, 520.0, s_east - 200.0, 60.0, 130.0)
+        cols = [west]
+        for along, n, w in picks:
+            e = self._edge_point(n, "s")
+            yd = self._drive_y(e[0])
+            if yd is None:
+                continue
+            self._add_cut([e, (e[0], yd)], "avenue" if w >= 15 else "street", "", "collector", keep=keep,
+                          link=(e, n), min_len=30.0)
+            cols.append(e[0])
+        used = {p[1] for p in picks}
+        bays = [(cols[i], cols[i + 1] if i + 1 < len(cols) else None) for i in range(len(cols))]
+        mid = (bx0 + bx1) * 0.5
+        wide = [b for b in bays if b[1] is not None and b[1] - b[0] >= 340.0]
+        civic = min(wide, key=lambda b: abs((b[0] + b[1]) * 0.5 - mid)) if wide else None
+        names = iter(LOOP_NAMES * 3)
+        self.lane0 = []
+        for i, (xa, xb) in enumerate(bays):
+            amp = LOOP_BOW if i % 2 == 0 else -LOOP_BOW
+            y0 = by1 + 41.0 + (LOOP_STAGGER if i % 2 else 0.0) + max(0.0, -amp)
+            x_hi = xb if xb is not None else self._span_x(sz, xa + 5.0, y0, east)
+            yds = [self._drive_y(x) for x in (xa + 10.0, (xa + x_hi) * 0.5, x_hi - 10.0)]
+            yd = min(v for v in yds if v is not None) if any(v is not None for v in yds) else by1 + 340.0
+            ymax = yd - 49.5 - max(0.0, amp)
+            if (xa, xb) == civic:
+                ymax -= max(SCHOOL_PLOT[1], GREEN_PLOT[1]) + 1.5
+                self._civic_bay(xa, xb, yd)
+            lanes = []
+            y = y0
+            while y <= ymax:
+                lanes.append(y)
+                y += LOOP_PITCH
+            self._bay(i, xa, xb, x_hi, lanes, amp, names, keep)
+        # Stubs: the city's other streets run down into the first lane.
+        last = -1e9
+        for along, n, w in juncs:
+            if n in used:
+                continue
+            e = self._edge_point(n, "s")
+            hit = None
+            for ln, xa_, xb_ in self.lane0:
+                if xa_ + 100.0 <= e[0] <= xb_ - 60.0:
+                    hit = self._first_hit(e, (e[0], e[1] + 200.0), ln)
+                    break
+            if hit is None or e[0] - last < 150.0:
+                continue
+            last = e[0]
+            self._add_cut([e, (hit[0], hit[1] + 2.0)], "street", "", "stub", keep=keep, link=(e, n), min_len=20.0)
+
+    def _bay(self, i, xa, xb, x_hi, lanes, amp, names, keep):
+        """The lanes of one bay between two collectors (xb None: the last bay,
+        open at its east end): U loops and crescents."""
+        R = LOOP_BEND
+
+        def leg(y, x0, x1):
+            return bowed(x0, x1, y, amp, min(x0, x1), max(x0, x1))
+
+        def loop(k, opening_west):
+            ya, yb = lanes[k], lanes[k + 1]
+            if opening_west:
+                cx = (xb - 87.0) if xb is not None else x_hi - 80.0
+                pts = leg(ya, xa, cx) + arc((cx, (ya + yb) * 0.5), R, -math.pi / 2, math.pi / 2)[1:-1] + leg(yb, cx, xa)
+            else:
+                cx = xa + 87.0
+                pts = leg(ya, xb, cx) + arc((cx, (ya + yb) * 0.5), R, -math.pi / 2, -math.pi * 1.5)[1:-1] + leg(yb, cx, xb)
+            got = self._add_cut(pts, "street", next(names), "loop", keep=keep)
+            if got and k == 0:
+                self.lane0.append((got[0], xa, xb if xb is not None else x_hi))
+
+        def crescent(k, bulb_end=False):
+            x1 = xb if xb is not None else x_hi - 20.0
+            got = self._add_cut(leg(lanes[k], xa, x1), "street", next(names), "loop", keep=keep,
+                                bulbs=(False, bulb_end or xb is None))
+            if got and k == 0:
+                self.lane0.append((got[0], xa, x1))
+
+        n = len(lanes)
+        k = 0
+        if xb is None:
+            while k + 1 < n:
+                loop(k, True)
+                k += 2
+            if k < n:
+                crescent(k, True)
+            return
+        if i % 2 == 1 and n:
+            crescent(0)
+            k = 1
+        west_open = True
+        while k + 1 < n:
+            loop(k, west_open)
+            west_open = not west_open
+            k += 2
+        while k < n:
+            crescent(k)
+            k += 1
+
+    def _civic_bay(self, xa, xb, yd):
+        """The village green (shops, pool, playground) and the public school
+        side by side on Seabreeze Drive."""
+        sz = self.zone_poly["shore"]
+        hw = CLASSES["avenue"]["w"] * 0.5
+        # The spare width goes 30% to each end and 40% between the two, so
+        # they never overlap in a bay that only just fits them.
+        free = (xb - xa) - GREEN_PLOT[0] - SCHOOL_PLOT[0]
+        left = xa + free * 0.3
+        for kind, size in (("green", GREEN_PLOT), ("school_s", SCHOOL_PLOT)):
+            W, D = size
+            c = (left + W * 0.5, yd - hw - 3.5 - D * 0.5)
+            left += W + free * 0.4
+            poly = lot_poly(c[0], c[1], math.pi, W, D)
+            if not sz.contains(poly.buffer(2.0)):
+                continue
+            self.reserved.append({"kind": kind, "c": c, "yaw": math.pi, "W": W, "D": D, "poly": poly, "n": (0.0, -1.0)})
+
+    def _pier_site(self):
+        """Brisa Beach's pier: out over the Gulf from the foot of the cross
+        street nearest the promenade, square to the coast."""
+        d, inland = self.brisa_dirs
+        sea = (-inland[0], -inland[1])
+        prom = next((self.L([lm["pos"]])[0] for lm in self.world["landmarks"] if lm["id"] == "brisa_promenade"), None)
+        feet = sorted(self.brisa_feet, key=lambda f: dist(f[0], prom) if prom else 0.0)
+        W, D = LOT["pier_rides"]
+        for foot, base in feet:
+            far = (foot[0] + sea[0] * 400.0, foot[1] + sea[1] * 400.0)
+            hit = self._first_hit(foot, far, self.gulf.boundary)
+            if hit is None:
+                continue
+            root = (hit[0] - sea[0] * 2.0, hit[1] - sea[1] * 2.0)
+            c = (root[0] + sea[0] * D * 0.5, root[1] + sea[1] * D * 0.5)
+            yaw = yaw_facing(*sea)
+            poly = lot_poly(c[0], c[1], yaw, W, D)
+            if poly.intersection(self.gulf).area < 0.95 * poly.area:
+                continue
+            if self.routes_geom.distance(poly) < 60.0:
+                continue
+            self.pier = {"c": c, "yaw": yaw, "poly": poly, "foot": foot, "root": root, "sea": sea}
+            return
+
+    def _pier_land(self):
+        """The pier's deck joins the play area (it stands over the Gulf)."""
+        if self.pier is None:
+            return
+        poly = self.pier["poly"]
+        self.A = self.A.union(poly)
+        self.play_land = self.play_land.union(poly)
+        self.play_land_prep = prep(self.play_land.buffer(-0.5))
+        self.A_prep = prep(self.A)
+
+    def _clip_add(self, pts, poly, cls, name="", kind="suburb"):
+        out = []
         for piece in lines_of(LineString(pts).intersection(poly)):
             if piece.length >= 30.0:
-                self.add(list(piece.coords), cls, name, "suburb")
+                self.add(list(piece.coords), cls, name, kind)
+                out.append(piece)
+        return out
 
     def towns(self):
         drivable = [s for s in self.sources if CLASSES[s[1]]["graph"]]
@@ -612,11 +1206,11 @@ class Country:
             for k in streets:
                 p = (m[0] + u[0] * k, m[1] + u[1] * k)
                 self._clip_add([(p[0] - v[0] * half, p[1] - v[1] * half), (p[0] + v[0] * half, p[1] + v[1] * half)],
-                               self.play_land.buffer(1.0), "street", "")
+                               self.play_land.buffer(1.0), "street", "", "town")
             for k in backs:
                 p = (m[0] + v[0] * k, m[1] + v[1] * k)
                 self._clip_add([(p[0] - u[0] * 190, p[1] - u[1] * 190), (p[0] + u[0] * 190, p[1] + u[1] * 190)],
-                               self.play_land.buffer(1.0), "street", "")
+                               self.play_land.buffer(1.0), "street", "", "town")
             r = 200 if kind == "town" else (130 if kind != "truck_stop" else 90)
             zone = Point(m).buffer(r).intersection(self.play_land)
             self.town_zones.append({"id": t["id"], "name": t["name"], "kind": kind, "style": style,
@@ -671,7 +1265,7 @@ class Country:
             if not cands:
                 cands = [int(tree.nearest(mid))]
             j = max(cands, key=lambda k: CLASSES[drivable[k][1]]["prio"])
-            pieces.append({"pts": list(g.coords), "cls": drivable[j][1], "name": drivable[j][2]})
+            pieces.append({"pts": list(g.coords), "cls": drivable[j][1], "name": drivable[j][2], "tag": drivable[j][3]})
         # Junctions: snap ends together.
         node_pos = []
         grid = {}
@@ -724,7 +1318,7 @@ class Country:
             pts = pc["pts"]
             pts[0] = new_pos[a]
             pts[-1] = new_pos[b]
-            out.append({"pts": pts, "cls": pc["cls"], "name": pc["name"], "a": a, "b": b})
+            out.append({"pts": pts, "cls": pc["cls"], "name": pc["name"], "tag": pc["tag"], "a": a, "b": b})
         pieces = out
         # Drop short spurs (overshoots past a junction), twice.
         link_pts = [l["pos"] for l in self.links]
@@ -763,7 +1357,11 @@ class Country:
         for pc in self.pieces:
             c = CLASSES[pc["cls"]]
             line = LineString(pc["pts"])
-            pts = resample(line, c["step"])
+            step = c["step"]
+            if pc["tag"] != "route":
+                # Curving suburb streets: short enough edges to follow the bend.
+                step = min(step, max(4.0, 0.35 * min_radius(line)))
+            pts = resample(line, step)
             ids = [nid(pc["a"])]
             for p in pts[1:-1]:
                 nodes.append([round(p[0], 2), round(p[1], 2)])
@@ -873,6 +1471,58 @@ class Country:
         self.front_lines = [LineString(pc["pts"]) for pc in self.pieces]
         self.front_half = [CLASSES[pc["cls"]]["w"] * 0.5 for pc in self.pieces]
         self.front_tree = STRtree(self.front_lines)
+        # The graph edges as the game sees them, for the square-to-road
+        # measure the tests use (tests/test_runner.gd _turn_off_road).
+        self.edge_segs = [LineString([self.nodes[e[0]], self.nodes[e[1]]]) for e in self.edges]
+        self.edge_tree = STRtree(self.edge_segs)
+        self.node_edges = {}
+        for i, e in enumerate(self.edges):
+            self.node_edges.setdefault(e[0], []).append(i)
+            self.node_edges.setdefault(e[1], []).append(i)
+
+    def _node_tangent(self, n, e):
+        a, b = self.nodes[self.edges[e][0]], self.nodes[self.edges[e][1]]
+        L = dist(a, b) or 1.0
+        t = ((b[0] - a[0]) / L, (b[1] - a[1]) / L)
+        around = self.node_edges.get(n, [])
+        if len(around) != 2:
+            return t
+        o = around[0] if around[1] == e else around[1]
+        p, q = self.nodes[self.edges[o][0]], self.nodes[self.edges[o][1]]
+        M = dist(p, q) or 1.0
+        u = ((q[0] - p[0]) / M, (q[1] - p[1]) / M)
+        if u[0] * t[0] + u[1] * t[1] < 0.0:
+            u = (-u[0], -u[1])
+        if u[0] * t[0] + u[1] * t[1] < 0.87:
+            return t
+        m = math.hypot(t[0] + u[0], t[1] + u[1]) or 1.0
+        return ((t[0] + u[0]) / m, (t[1] + u[1]) / m)
+
+    def _road_turn(self, f, yaw):
+        """How far (deg) a frame of this yaw whose front centre is f turns off
+        the road edge within 8 m of f, measured on the graph edges with their
+        tangents blended at bends, as the tests measure it; -1 with none."""
+        best, pick = math.inf, -1
+        fp = Point(f)
+        for j in self.edge_tree.query(fp.buffer(40.0)):
+            j = int(j)
+            seg = self.edge_segs[j]
+            if seg.length <= 0.1:
+                continue
+            dd = seg.distance(fp) - CLASSES[CLASS_NAMES[self.edges[j][2]]]["w"] * 0.5
+            if dd < best:
+                best, pick = dd, j
+        if pick < 0 or best > 8.0:
+            return -1.0
+        a, b = self.nodes[self.edges[pick][0]], self.nodes[self.edges[pick][1]]
+        ab = (b[0] - a[0], b[1] - a[1])
+        u = min(1.0, max(0.0, ((f[0] - a[0]) * ab[0] + (f[1] - a[1]) * ab[1]) / (ab[0] ** 2 + ab[1] ** 2)))
+        ta = self._node_tangent(self.edges[pick][0], pick)
+        tb = self._node_tangent(self.edges[pick][1], pick)
+        dx, dy = ta[0] + (tb[0] - ta[0]) * u, ta[1] + (tb[1] - ta[1]) * u
+        m = math.hypot(dx, dy) or 1.0
+        ax = (math.cos(yaw), -math.sin(yaw))
+        return math.degrees(math.asin(min(1.0, abs(ax[0] * dy / m - ax[1] * dx / m))))
 
     def _frontage(self, q):
         """The road piece nearest q: (point on its centreline, unit tangent,
@@ -886,7 +1536,7 @@ class Country:
             n = (-n[0], -n[1])
         return p, t, n, self.front_half[i], i, s
 
-    def _front_spot(self, q, w, d, setback=3.5):
+    def _front_spot(self, q, w, d, setback=3.5, tol=1.5):
         """A w x d rect square to the road nearest q, its front edge `setback`
         metres off the road's edge: (centre, yaw, normal, polygon) or None
         when it would not run alongside that road (past a road's end, or
@@ -900,7 +1550,7 @@ class Country:
         yaw = yaw_facing(n[0], n[1])
         poly = lot_poly(c[0], c[1], yaw, w, d)
         a, b = poly.exterior.coords[0], poly.exterior.coords[1]
-        if abs(line.distance(Point(a)) - line.distance(Point(b))) > 1.5:
+        if abs(line.distance(Point(a)) - line.distance(Point(b))) > tol:
             return None
         return c, yaw, n, poly
 
@@ -911,7 +1561,10 @@ class Country:
             return False
         if self.lot_grid.hits(poly) or self.plot_grid.hits(poly):
             return False
-        return self._square_to_roads(poly, yaw)
+        if not self._square_to_roads(poly, yaw):
+            return False
+        a, b = poly.exterior.coords[0], poly.exterior.coords[1]
+        return self._road_turn(((a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5), yaw) < 3.5
 
     def _square_to_roads(self, poly, yaw):
         """Whether every road within 10 m of poly runs along or across it
@@ -1004,11 +1657,12 @@ class Country:
                     return True
         return False
 
-    def estate_at(self, q, size, ident="", zone="", style=0, grand=False, sun=False):
+    def estate_at(self, q, size, ident="", zone="", style=0, grand=False, sun=False, tol=1.5):
         """Walled (style 0) or hedged (1) grounds round a mansion, on a plot
-        square to the road nearest q."""
+        square to the road nearest q (tol: how far its front corners may sit
+        unevenly off a winding road)."""
         W, D = size
-        spot = self._front_spot(q, W, D)
+        spot = self._front_spot(q, W, D, tol=tol)
         if spot is None:
             return False
         c, yaw, n, poly = spot
@@ -1099,6 +1753,7 @@ class Country:
         for name, poly in self.zones:
             zone_of[name] = prep(poly)
         towns = [(t, prep(t["zone"])) for t in self.town_zones]
+        towers = {}  # condo towers per tile: two at most keeps a tile's triangles down
         for pi, pc in enumerate(self.pieces):
             cls = pc["cls"]
             if cls not in ("street", "avenue", "road", "highway", "lane"):
@@ -1112,22 +1767,47 @@ class Country:
                 if tp.contains(mid):
                     style = t["style"]
                     zname = t["id"]
+            sides = (1.0, -1.0)
             if style is None:
                 for name, zp in zone_of.items():
                     if zp.contains(mid):
                         style = name
                         zname = name
+            if style is None:
+                # A road along a zone's edge (the Beltway): the zone beside it.
+                for sg in sides:
+                    q = Point(self._side_point(line, line.length * 0.5, sg, w * 0.5 + 20.0))
+                    for name, zp in zone_of.items():
+                        if zp.contains(q):
+                            style, zname, sides = name, name, (sg,)
             if style is None or style == "truck_stop":
                 continue
+            tag = pc["tag"]
+            if style == "heights":
+                if tag.startswith("flats") or tag in ("showcase", "estate_road", "beltway", "route"):
+                    continue
+                style = "estates"
+            elif style == "eastside":
+                if tag in ("tract", "bulb"):
+                    continue
+                if tag in ("arterial", "beltway", "route"):
+                    style = "arterial"
+            elif style == "shore":
+                if tag == "seabreeze":
+                    style = "beach"
+                    by = {sg: Point(self._side_point(line, line.length * 0.5, sg, w * 0.5 + 20.0)) for sg in (1.0, -1.0)}
+                    sides = (min(by, key=lambda sg: self.gulf.distance(by[sg])),)  # the sea side only
+                elif tag in PATTERN_WALKS["shore"]:
+                    continue
             table = SUBURB_STYLE[style]
             kinds = list(table)
             weights = [table[k] for k in kinds]
             homes = CLUSTER_HOMES.get(style)
-            for sgn in (1.0, -1.0):
+            for sgn in sides:
                 s = 14.0
                 while s < line.length - 14.0:
                     kind = self.rng.choices(kinds, weights)[0]
-                    if style == "heights" and kind == "mansion":
+                    if style == "estates":
                         width = float(round(self.rng.uniform(64.0, 84.0)))
                         if s + width > line.length - 14.0:
                             break
@@ -1135,8 +1815,9 @@ class Country:
                                               (width, depth), "", zname, 0)
                                for depth in ((width,) if width >= 80.0 else ()) + (88.0, 76.0, 64.0)):
                             s += width + self.rng.uniform(2.0, 6.0)
-                            continue
-                        kind = "house"
+                        else:
+                            s += 8.0
+                        continue
                     elif homes and kind in DWELLINGS:
                         sub = "trailers" if kind == "trailer_home" else style
                         width = self.rng.uniform(62.0, 78.0) if sub == "trailers" else self.rng.uniform(48.0, 64.0)
@@ -1149,6 +1830,13 @@ class Country:
                         else:
                             s += 4.0
                         continue
+                    if kind == "condo_tower":
+                        tq = self._side_point(line, min(s + 13.0, line.length), sgn, w * 0.5 + 16.5)
+                        tkey = (math.floor(tq[0] / TILE), math.floor(tq[1] / TILE))
+                        if towers.get(tkey, 0) >= 2:
+                            kind = "deco_hotel"
+                        else:
+                            towers[tkey] = towers.get(tkey, 0) + 1
                     lw, ld = LOT[kind]
                     s += lw * 0.5
                     if s > line.length - 14.0:
@@ -1279,6 +1967,434 @@ class Country:
                         self.add_plot(c, yaw, FIELD_CELL, FIELD_CELL, "field",
                                       [part(pick[0], 0.0, 0.0, FIELD_CELL - 2.0, FIELD_CELL - 2.0, pick[1], pick[2])])
 
+    # --- Outskirts patterns: lots and grounds -------------------------------------
+
+    def outskirts_lots(self):
+        self.zone_prep = {name: prep(poly) for name, poly in self.zones}
+        self._pier_lots()
+        self._heights_lots()
+        self._fringe_blocks()
+        self._eastside_lots()
+        self._shore_lots()
+
+    def _zone_at(self, p):
+        pt = Point(p)
+        for name, zp in self.zone_prep.items():
+            if zp.contains(pt):
+                return name
+        return ""
+
+    def _pieces(self, tags, zone=None):
+        """Road pieces whose tag starts with one of `tags`, their middle in zone."""
+        out = []
+        for i, pc in enumerate(self.pieces):
+            if not pc["tag"].startswith(tuple(tags)):
+                continue
+            if zone and self._zone_at(self.front_lines[i].interpolate(0.5, normalized=True).coords[0]) != zone:
+                continue
+            out.append(i)
+        return out
+
+    def _walk_lots(self, pi, sgn, w, d, place, zone=None, gap=ROW_GAP, setback=3.5):
+        """Rects w x d one after another along one side of road piece pi,
+        square to it and set back from its kerb; place(c, yaw, n, poly) adds
+        what stands there and says whether it fitted."""
+        line = self.front_lines[pi]
+        hw = self.front_half[pi]
+        zp = self.zone_prep.get(zone) if zone else None
+        s = 4.0 + w * 0.5
+        count = 0
+        while s <= line.length - 4.0 - w * 0.5:
+            p, t = _along(line, s)
+            n = (-t[1] * sgn, t[0] * sgn)
+            off = hw + setback + d * 0.5
+            c = (p[0] + n[0] * off, p[1] + n[1] * off)
+            yaw = yaw_facing(*n)
+            poly = lot_poly(c[0], c[1], yaw, w, d)
+            a, b = poly.exterior.coords[0], poly.exterior.coords[1]
+            ok = abs(line.distance(Point(a)) - line.distance(Point(b))) <= 1.5 and (zp is None or zp.contains(Point(c)))
+            if ok and place(c, yaw, n, poly):
+                count += 1
+                _, t0 = _along(line, max(0.0, s - 4.0))
+                _, t1 = _along(line, min(line.length, s + 4.0))
+                bend = (t0[0] * t1[1] - t0[1] * t1[0]) / 8.0 * sgn  # > 0: bending towards the lot
+                s += (w + gap) / max(0.3, 1.0 - bend * (hw + setback))
+            else:
+                s += 2.0
+        return count
+
+    def _plain(self, kind, zone, size=None):
+        return lambda c, yaw, n, poly: self.try_lot(c[0], c[1], yaw, kind, "", zone, size)
+
+    # The pier at Brisa Beach and its boardwalk.
+    def _pier_lots(self):
+        pr = self.pier
+        if pr is None:
+            return
+        W, D = LOT["pier_rides"]
+        c, yaw, sea = pr["c"], pr["yaw"], pr["sea"]
+        self.lots.append({"x": c[0], "y": c[1], "yaw": yaw, "w": W, "d": D, "kind": "pier_rides", "id": "",
+                          "zone": "beach_town", "plot": -1})
+        self.lot_grid.add(pr["poly"].buffer(1.5))
+        # A boardwalk from the end of the street over the sand to the pier.
+        length = dist(pr["foot"], pr["root"]) - 15.0 - 1.0
+        if length > 10.0:
+            mid = 1.0 + length * 0.5
+            q = (pr["root"][0] - sea[0] * mid, pr["root"][1] - sea[1] * mid)
+            parts = [part("paving", 0.0, 0.0, 20.0, length, 0.0, 1)]
+            for z in _steps(-length * 0.5 + 6.0, length * 0.5 - 3.0, 18.0):
+                for x in (-11.5, 11.5):
+                    parts.append(part("trees", x, z, 0.0, 0.0, 0.0, TREE_KINDS.index("palm")))
+            self.add_plot(q, yaw, 20.0, length, "civic", parts)
+
+    # Magnolia Heights: the flats.
+    def _heights_lots(self):
+        flats = self._pieces(("flats:",), "heights")
+        if not flats:
+            return
+        hz = self.zone_poly["heights"]
+        y0, y1 = hz.bounds[1], hz.bounds[3]
+        xs = self.flats_xs
+        self._place_near((xs[0] + 30.0, (y0 + y1) * 0.5), "post_office", "", "heights", 200.0)
+        self._place_near((xs[-1] - 30.0, (y0 + y1) * 0.5 - 140.0), "fire_station", "", "heights", 200.0)
+        for pi in flats:
+            for sgn in (1.0, -1.0):
+                self._walk_lots(pi, sgn, *FLATS_LOT, self._plain("house", "heights", FLATS_LOT), "heights")
+        # Estates along the winding roads, the Beltway and the route out west.
+        hp = self.zone_prep["heights"]
+        for pi, pc in enumerate(self.pieces):
+            if pc["tag"] not in ("estate_road", "beltway", "route"):
+                continue
+            line = self.front_lines[pi]
+            if line.intersection(hz).length < 60.0:
+                continue
+            hw = self.front_half[pi]
+            for sgn in (1.0, -1.0):
+                s = 6.0
+                while s < line.length - 40.0:
+                    width = float(round(self.rng.uniform(64.0, 84.0)))
+                    if s + width > line.length - 6.0:
+                        break
+                    ok = False
+                    for depth in ((width,) if width >= 80.0 else ()) + (88.0, 76.0, 64.0):
+                        q = self._side_point(line, s + width * 0.5, sgn, hw + 3.5 + depth * 0.5)
+                        if hp.contains(Point(q)) and self.estate_at(q, (width, depth), "", "heights", 0, tol=4.0):
+                            ok = True
+                            break
+                    s += width + self.rng.uniform(2.0, 6.0) if ok else 8.0
+
+    # The north fringe: rowhouse blocks round an H alley.
+    def _fringe_blocks(self):
+        fz = self.zone_poly["fringe"]
+        self.block_count = 0
+        for b in polys_of(fz.difference(self.road_area)):
+            if b.area < 3000.0:
+                continue
+            mrr = b.minimum_rotated_rectangle
+            if b.area / mrr.area < 0.95:
+                continue
+            cs = list(mrr.exterior.coords)[:4]
+            e0 = (cs[1][0] - cs[0][0], cs[1][1] - cs[0][1])
+            e1 = (cs[2][0] - cs[1][0], cs[2][1] - cs[1][1])
+            l0, l1 = math.hypot(*e0), math.hypot(*e1)
+            lu = e0 if l0 >= l1 else e1
+            U, V = max(l0, l1) * 0.5, min(l0, l1) * 0.5
+            if U < 40.0 or V < 35.0:
+                continue
+            u = (lu[0] / max(l0, l1), lu[1] / max(l0, l1))
+            yaw = math.atan2(-u[1], u[0])  # local x along u, local z along (-u.y, u.x)
+            c = mrr.centroid.coords[0]
+            inner = b.buffer(-13.0)
+            if inner.is_empty or self.lot_grid.hits(inner) or self.plot_grid.hits(inner):
+                continue
+            self._h_block(c, yaw, U, V)
+
+    def _face(self, c, yaw, lx, lz):
+        """What lies 3 m past a block's face: 'road', 'frame' or None."""
+        q = Point(frame_point(c, yaw, lx, lz))
+        if self.road_prep.contains(q):
+            return "road"
+        if self.P.contains(q):
+            return "frame"
+        return None
+
+    def _h_block(self, c, yaw, U, V):
+        inset = {"road": 1.0, "frame": 5.0}
+        fz = {sz: self._face(c, yaw, 0.0, sz * (V + 3.0)) for sz in (-1, 1)}
+        fx = {sx: self._face(c, yaw, sx * (U + 3.0), 0.0) for sx in (-1, 1)}
+        legs = [-(U - ALLEY_IN), U - ALLEY_IN] if U >= 46.0 else [0.0]
+        rows = []  # (lx, lz, w, outward sign, along z?)
+        for sz in (-1, 1):
+            if fz[sz] is None:
+                continue
+            zc = sz * (V - inset[fz[sz]] - ROW_DEPTH * 0.5)
+            ends = [-U + (inset[fx[-1]] if fx[-1] else 1.0)] + [v for g in legs for v in (g - 2.5, g + 2.5)] + \
+                   [U - (inset[fx[1]] if fx[1] else 1.0)]
+            for a, b in zip(ends[::2], ends[1::2]):
+                rows += [(x, zc, w, sz, False) for x, w in self._row_split(a, b)]
+        for sx in (-1, 1):
+            if fx[sx] is None:
+                continue
+            xc = sx * (U - inset[fx[sx]] - ROW_DEPTH * 0.5)
+            a = -V + ((inset[fz[-1]] + ROW_DEPTH + ROW_GAP) if fz[-1] else 1.0)
+            b = V - ((inset[fz[1]] + ROW_DEPTH + ROW_GAP) if fz[1] else 1.0)
+            rows += [(xc, z, w, sx, True) for z, w in self._row_split(a, b)]
+        placed = 0
+        for lx, lz, w, sgn, side in rows:
+            q = frame_point(c, yaw, lx, lz)
+            # The row faces out of the block (its front, -z, at the face).
+            ry = yaw + (-math.pi * 0.5 * sgn if side else (0.0 if sgn < 0 else math.pi))
+            if self.try_lot(q[0], q[1], ry, "rowhouse_row", "", "fringe", (round(w, 2), ROW_DEPTH)):
+                placed += 1
+        if placed < 2:
+            return
+        # The yards and the alley: a plot over the whole block.
+        zb = {sz: (V - (inset[fz[sz]] + ROW_DEPTH) if fz[sz] else V - 1.0) for sz in (-1, 1)}
+        parts = [part("lawn", 0.0, 0.0, 2.0 * U, 2.0 * V)]
+        for g in legs:
+            parts.append(part("alley", g, (zb[1] - zb[-1]) * 0.5, ALLEY, zb[1] + zb[-1]))
+            for sz in (-1, 1):
+                if fz[sz] is not None:
+                    parts.append(part("alley", g, sz * (zb[sz] + V) * 0.5, ALLEY_NECK, V - zb[sz], 0.0, 1))
+        if len(legs) == 2:
+            parts.append(part("alley", 0.0, 0.0, 2.0 * (U - ALLEY_IN) - ALLEY, ALLEY))
+        tree = TREE_KINDS.index("plane")
+        for sz in (-1, 1):
+            z = sz * (ALLEY * 0.5 + (zb[sz] - ALLEY * 0.5) * 0.5)
+            for x in ([g * 0.5 for g in legs] if len(legs) == 2 else [-U * 0.5, U * 0.5]):
+                parts.append(part("trees", x, z, 0.0, 0.0, 0.0, tree))
+        self.add_plot(c, yaw, 2.0 * U, 2.0 * V, "block", parts)
+        self.block_count += 1
+
+    @staticmethod
+    def _row_split(a, b):
+        """Equal rows filling a..b with ROW_GAP between: [(centre, width)]."""
+        L = b - a
+        if L < 12.0:
+            return []
+        n = max(1, round((L + ROW_GAP) / (ROW_TARGET + ROW_GAP)))
+        w = (L - (n - 1) * ROW_GAP) / n
+        return [(a + w * 0.5 + k * (w + ROW_GAP), w) for k in range(n)]
+
+    # Civic grounds laid out as a plot with their building(s) as plot lots.
+    def _civic_plot(self, r):
+        c, yaw, W, D = r["c"], r["yaw"], r["W"], r["D"]
+        poly = lot_poly(c[0], c[1], yaw, W, D)
+        if not self._free(poly, yaw):
+            print("WARNING: no room for", r["kind"])
+            return False
+        fz = -D * 0.5
+        lots = []
+        if r["kind"] in ("school_e", "school_s"):
+            parts = [part("lawn", 0.0, 0.0, W, D),
+                     part("parking", -W * 0.5 + 23.0, fz + 22.0, 40.0, 36.0, 0.0, 1),
+                     part("playground", W * 0.5 - 21.0, fz + 19.0, 32.0, 26.0),
+                     part("paving", 0.0, fz + 2.0, 24.0, 4.0),
+                     part("field", -W * 0.25 + 3.0, fz + 46.0 + (D - 46.0) * 0.5, W * 0.5 - 8.0, D - 50.0, 0.0, 2),
+                     part("field", W * 0.25 - 3.0, fz + 46.0 + (D - 46.0) * 0.5, W * 0.5 - 14.0, D - 50.0, 0.0, 1)]
+            lots.append(("public_school", 0.0, fz + 4.0 + 20.0))
+        elif r["kind"] == "dmv":
+            parts = [part("lawn", 0.0, 0.0, W, D),
+                     part("parking", W * 0.5 - 33.0, fz + 17.0, 56.0, 30.0, 0.0, 0),
+                     part("course", 0.0, D * 0.5 - 20.0, W - 10.0, 36.0)]
+            lots.append(("dmv_office", -W * 0.5 + 25.0, fz + 2.0 + 15.0))
+        else:  # the village green
+            parts = [part("lawn", 0.0, 0.0, W, D),
+                     part("parking", -W * 0.5 + 36.0, fz + 15.0, 66.0, 26.0, 0.0, 0),
+                     part("paving", -W * 0.5 + 36.0, fz + 35.0, 66.0, 6.0),
+                     part("pool", W * 0.5 - 30.0, fz + 22.0, 34.0, 22.0),
+                     part("playground", W * 0.5 - 30.0, D * 0.5 - 20.0, 26.0, 20.0),
+                     part("paving", 8.0, 0.0, 4.0, D - 4.0)]
+            for k in range(6):
+                lots.append(("shopfront", -W * 0.5 + 8.0 + 10.6 * k + 5.0, fz + 38.0 + 7.0))
+            for x in _steps(-W * 0.5 + 6.0, W * 0.5 - 6.0, 16.0):
+                parts.append(part("trees", x, D * 0.5 - 4.0, 0.0, 0.0, 0.0, TREE_KINDS.index("plane")))
+        k = self.add_plot(c, yaw, W, D, "civic", parts)
+        for kind, x, z in lots:
+            q = frame_point(c, yaw, x, z)
+            self.try_lot(q[0], q[1], yaw, kind, "", self._zone_at(c), plot=k)
+        self._drive_to_road(frame_point(c, yaw, 0.0, fz), r["n"], 3.5)
+        return True
+
+    # The east side: civic grounds, corner malls, tract houses.
+    def _eastside_lots(self):
+        for r in self.reserved:
+            if r["kind"] in ("school_e", "dmv"):
+                self._civic_plot(r)
+        hs = [a for a, o in self.arterials if o == "h"]
+        vs = [a for a, o in self.arterials if o == "v"]
+        k = 0
+        ezp = self.zone_prep["eastside"]
+        for h in hs:
+            for v in vs:
+                if h is v:
+                    continue
+                for J in self._points(h.intersection(v)):
+                    # A mini-mall on one corner and gas stations on two
+                    # others, turning round from one crossing to the next.
+                    quads = [(1, 1), (-1, 1), (-1, -1), (1, -1)]
+                    quads = [q for q in quads[k % 4:] + quads[:k % 4]
+                             if ezp.contains(Point(J[0] + q[0] * 40.0, J[1] + q[1] * 40.0))]
+                    mall = next((q for q in quads if self._corner(J, q[0], q[1], "mall")), None)
+                    gas = 0
+                    for q in quads:
+                        if q != mall and gas < 2 and self._corner(J, q[0], q[1], "gas"):
+                            gas += 1
+                    k += 1
+        ez = self.zone_poly["eastside"]
+        x0, y0, x1, y1 = ez.bounds
+        sp = getattr(self, "spine", None)
+        xs = (self.P.bounds[2] + self.ring[2]) * 0.5
+        self._place_near((xs + 40.0, (y0 + 2 * y1) / 3.0), "fire_station", "", "eastside", 220.0)
+        self._place_near((self.P.bounds[2] + 60.0, (2 * y0 + y1) / 3.0), "post_office", "", "eastside", 220.0)
+        for pi in self._pieces(("tract", "bulb"), "eastside"):
+            for sgn in (1.0, -1.0):
+                self._walk_lots(pi, sgn, *TRACT_LOT, self._plain("house", "eastside", TRACT_LOT), "eastside")
+
+    def _corner(self, J, sx, sy, role):
+        """A corner mini-mall (two strips in an L round a parking square) or
+        a gas station on one corner of two arterials."""
+        o = CLASSES["avenue"]["w"] * 0.5 + 3.5
+        O = (J[0] + sx * o, J[1] + sy * o)
+        yaw_h = yaw_facing(0.0, sy)  # fronting the east-west arterial
+        yaw_v = yaw_facing(sx, 0.0)  # fronting the north-south one
+        if role == "gas":
+            w, d = LOT["gas_station"]
+            c = (O[0] + sx * w * 0.5, O[1] + sy * d * 0.5)
+            if not self.zone_prep["eastside"].contains(Point(c)):
+                return False
+            return self.try_lot(c[0], c[1], yaw_h, "gas_station", "", "eastside")
+        lw, ld = MALL_LEG
+        yard = MALL_YARD
+        pc = (O[0] + sx * yard * 0.5, O[1] + sy * yard * 0.5)
+        a = (O[0] + sx * (yard + 2.0 + lw * 0.5), O[1] + sy * ld * 0.5)
+        b = (O[0] + sx * ld * 0.5, O[1] + sy * (yard + 2.0 + lw * 0.5))
+        pp = lot_poly(pc[0], pc[1], yaw_h, yard, yard)
+        pa = lot_poly(a[0], a[1], yaw_h, lw, ld)
+        pb = lot_poly(b[0], b[1], yaw_v, lw, ld)
+        ez = self.zone_prep["eastside"]
+        if not all(ez.contains(q.centroid) for q in (pp, pa, pb)):
+            return False
+        if not (self._free(pp, yaw_h) and self._free(pa, yaw_h) and self._free(pb, yaw_v)):
+            return False
+        if pa.distance(pb) < 1.6 or pp.distance(pa) < 1.6 or pp.distance(pb) < 1.6:
+            return False
+        self.try_lot(a[0], a[1], yaw_h, "strip_mall", "", "eastside", MALL_LEG)
+        self.try_lot(b[0], b[1], yaw_v, "strip_mall", "", "eastside", MALL_LEG)
+        self.add_plot(pc, yaw_h, yard, yard, "civic", [part("parking", 0.0, 0.0, yard - 1.0, yard - 1.0, 0.0, 0),
+                                                       part("trees", -yard * 0.5 + 2.0, yard * 0.5 - 2.0, 0.0, 0.0, 0.0,
+                                                            TREE_KINDS.index("palm"))])
+        return True
+
+    # The south shore: the green, the school, Levittown parcels.
+    def _shore_lots(self):
+        for r in self.reserved:
+            if r["kind"] in ("green", "school_s"):
+                self._civic_plot(r)
+        sz = self.zone_poly["shore"]
+        x0, y0, x1, y1 = sz.bounds
+        cols = self._pieces(("collector",), "shore")
+        for kind, frac in (("sheriff_station", 0.2), ("fire_station", 0.55), ("post_office", 0.85)):
+            x = x0 + (x1 - x0) * frac
+            near = min(cols, key=lambda i: self.front_lines[i].distance(Point(x, y0 + 120.0)), default=None)
+            q = self.front_lines[near].interpolate(0.5, normalized=True).coords[0] if near is not None else (x, y0 + 120.0)
+            self._place_near(q, kind, "", "shore", 220.0)
+        tree = TREE_KINDS.index("magnolia")
+        W, D = CAPE_PARCEL
+
+        def parcel(c, yaw, n, poly):
+            if not self._free(poly, yaw):
+                return False
+            flip = 1.0 if self.rng.random() < 0.5 else -1.0
+            parts = [part("lawn", 0.0, 0.0, W, D), part("paving", 6.0 * flip, -10.5, 3.0, 9.0)]
+            if self.rng.random() < 0.6:
+                parts.append(part("trees", -6.0 * flip, 9.0, 0.0, 0.0, 0.0, tree))
+            k = self.add_plot(c, yaw, W, D, "parcel", parts)
+            h = frame_point(c, yaw, -2.0 * flip, -D * 0.5 + CAPE_SETBACK + LOT["cape_house"][1] * 0.5)
+            self.try_lot(h[0], h[1], yaw, "cape_house", "", "shore", plot=k)
+            return True
+
+        for pi in self._pieces(PATTERN_WALKS["shore"], "shore"):
+            for sgn in (1.0, -1.0):
+                self._walk_lots(pi, sgn, W, D, parcel, "shore", gap=1.6)
+
+    # Street trees along the kerbs (plots of type "verge").
+    def verges(self):
+        lights = []
+        for road in self.roads:
+            n = len(road["nodes"]) - 1
+            for k in range(0, n, 2):
+                a, b = self.nodes[road["nodes"][k]], self.nodes[road["nodes"][k + 1]]
+                L = dist(a, b)
+                if L <= 8.0:
+                    continue
+                dx, dy = (b[0] - a[0]) / L, (b[1] - a[1]) / L
+                hw = CLASSES[CLASS_NAMES[road["cls"]]]["w"] * 0.5
+                m = ((a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5)
+                for sd in (1.0, -1.0):  # either side: the tiles pick one
+                    lights.append((m[0] - dy * sd * (hw + 0.6), m[1] + dx * sd * (hw + 0.6)))
+        light_tree = STRtree([Point(q) for q in lights]) if lights else None
+        plans = []
+        for i, pc in enumerate(self.pieces):
+            tag = pc["tag"]
+            mid = self.front_lines[i].interpolate(0.5, normalized=True).coords[0]
+            zone = self._zone_at(mid)
+            if pc["cls"] not in ("street", "avenue"):
+                continue
+            if tag.startswith("flats:") and zone == "heights":
+                plans.append((i, tag.split(":")[1], VERGE_STEP))
+            elif tag == "showcase":
+                plans.append((i, "palm", PALM_STEP))
+            elif tag == "rowhouse" and zone == "fringe":
+                plans.append((i, "plane", 14.0))
+            elif tag == "arterial" and zone == "eastside":
+                plans.append((i, "palm", 20.0))
+        made = 0
+        for i, kind, step in plans:
+            line = self.front_lines[i]
+            hw = self.front_half[i]
+            off = hw + 1.2
+            if min_radius(line) < 150.0:
+                continue
+            others = [int(j) for j in self.front_tree.query(line.buffer(30.0)) if int(j) != i]
+            for sgn in (1.0, -1.0):
+                spots = []
+                for s in _steps(10.0, line.length - 10.0, step):
+                    q = self._side_point(line, s, sgn, off)
+                    pt = Point(q)
+                    if light_tree is not None and any(Point(lights[int(j)]).distance(pt) < 6.0
+                                                      for j in light_tree.query(pt.buffer(6.0))):
+                        continue
+                    if any(self.front_lines[j].distance(pt) < self.front_half[j] + 1.5 for j in others):
+                        continue
+                    if self.lot_grid.hits(pt.buffer(0.8)) or not self.play_land_prep.contains(pt):
+                        continue
+                    spots.append(s)
+                # Runs of 50 m or less, each a plot square to the road.
+                run = []
+                for s in spots + [None]:
+                    if run and (s is None or s - run[0] > 50.0 or s - run[-1] > step * 1.5):
+                        a, b = run[0], run[-1]
+                        sm = (a + b) * 0.5
+                        p, t = _along(line, sm)
+                        n = (-t[1] * sgn, t[0] * sgn)
+                        c = (p[0] + n[0] * off, p[1] + n[1] * off)
+                        yaw = yaw_facing(*n)
+                        cs, sn = math.cos(yaw), math.sin(yaw)
+                        parts = []
+                        for r in run:
+                            q = self._side_point(line, r, sgn, off)
+                            dx, dy = q[0] - c[0], q[1] - c[1]
+                            lx, lz = dx * cs - dy * sn, dx * sn + dy * cs
+                            parts.append(part("trees", round(lx, 2), round(lz, 2), 0.0, 0.0, 0.0, TREE_KINDS.index(kind)))
+                        self.plots.append({"x": c[0], "y": c[1], "yaw": yaw, "w": max(2.0, b - a + 2.0), "d": 1.5,
+                                           "type": "verge", "parts": parts})
+                        made += 1
+                        run = []
+                    if s is not None:
+                        run.append(s)
+        self.verge_count = made
+
     # --- Ground -------------------------------------------------------------------
 
     def ground_zones(self):
@@ -1290,6 +2406,8 @@ class Country:
             taken = taken.union(z)
         # Sand along the Gulf, inside the play area.
         sand = self.coast.buffer(45.0).intersection(self.play_land).difference(taken)
+        if self.pier is not None:
+            sand = sand.difference(self.pier["poly"])
         zones.append(("sand", sand))
         taken = taken.union(sand)
         for name, poly in self.zones:
@@ -1403,11 +2521,14 @@ class Country:
         self.join_ends()
         self.graph()
         self.build_graph_arrays()
+        self._pier_land()
         self.walls()
         self.lot_setup()
         self.landmark_lots()
         self.town_lots()
+        self.outskirts_lots()
         self.street_lots()
+        self.verges()
         self.farm_lots()
         self.field_plots()
         self.ground_zones()
@@ -1433,6 +2554,80 @@ class Country:
             if off > worst[0]:
                 worst = (off, item.get("kind", item.get("type")), round(item["x"]), round(item["y"]))
         print("plots:", counts, "turned estate houses:", turned, "worst turn off the fronting road (deg):", worst)
+        self.self_check()
+
+    def self_check(self):
+        """Geometry checks with shapely: lots clear of each other, of the roads
+        and of the water; plots off the roads and inside the play area; the
+        road graph in one piece with the city; the test's own turn measure."""
+        lot_polys = [lot_poly(l["x"], l["y"], l["yaw"], l["w"], l["d"]) for l in self.lots]
+        tree = STRtree(lot_polys)
+        overlap = []
+        for i, pl in enumerate(lot_polys):
+            for j in tree.query(pl):
+                j = int(j)
+                if j > i and pl.intersection(lot_polys[j]).area > 0.5:
+                    overlap.append((self.lots[i]["kind"], self.lots[j]["kind"], round(pl.centroid.x), round(pl.centroid.y)))
+        road_only = unary_union([LineString(pc["pts"]).buffer(CLASSES[pc["cls"]]["w"] * 0.5) for pc in self.pieces])
+        road_p = prep(road_only)
+        on_road = [(l["kind"], round(l["x"]), round(l["y"])) for l, pl in zip(self.lots, lot_polys)
+                   if road_p.intersects(pl) and road_only.intersection(pl).area > 0.5]
+        wet = [(l["kind"], round(l["x"]), round(l["y"])) for l, pl in zip(self.lots, lot_polys)
+               if l["kind"] != "pier_rides" and self.water_prep.intersects(pl) and self.water.intersection(pl).area > 1.0]
+        land = prep(self.play_land.buffer(1.0))
+        p_road, p_wet, p_out = [], [], []
+        for q in self.plots:
+            pl = lot_poly(q["x"], q["y"], q["yaw"], q["w"], q["d"])
+            tag = (q["type"], round(q["x"]), round(q["y"]))
+            if q["type"] not in ("verge", "block") and road_p.intersects(pl) and road_only.intersection(pl).area > 0.5:
+                p_road.append(tag)
+            if self.water_prep.intersects(pl) and self.water.intersection(pl).area > 1.0:
+                p_wet.append(tag)
+            if not land.contains(pl):
+                p_out.append(tag)
+        # The graph: every node reached from the links to the city.
+        adj = {}
+        for e in self.edges:
+            adj.setdefault(e[0], []).append(e[1])
+            adj.setdefault(e[1], []).append(e[0])
+        seen = set()
+        stack = [l[0] for l in self.link_pairs]
+        while stack:
+            n = stack.pop()
+            if n in seen:
+                continue
+            seen.add(n)
+            stack.extend(adj.get(n, []))
+        cut_off = len(self.nodes) - len(seen)
+        worst_lot = max([self._road_turn(frame_point((l["x"], l["y"]), l["yaw"], 0.0, -l["d"] * 0.5), l["yaw"])
+                         for l in self.lots if l["plot"] < 0 and l["zone"] != "sand"], default=0.0)
+        fronting = sum(1 for l in self.lots if l["plot"] < 0 and l["zone"] != "sand"
+                       and self._road_turn(frame_point((l["x"], l["y"]), l["yaw"], 0.0, -l["d"] * 0.5), l["yaw"]) >= 0.0)
+        worst_plot = max([self._road_turn(frame_point((q["x"], q["y"]), q["yaw"], 0.0, -q["d"] * 0.5), q["yaw"])
+                          for q in self.plots], default=0.0)
+        print("self-check: lot overlaps %d %s, lots on roads %d %s, lots in water %d %s" % (
+            len(overlap), overlap[:4], len(on_road), on_road[:4], len(wet), wet[:4]))
+        print("self-check: plots on roads %d %s, in water %d %s, outside the play area %d %s" % (
+            len(p_road), p_road[:4], len(p_wet), p_wet[:4], len(p_out), p_out[:4]))
+        print("self-check: graph nodes not reached from the city %d of %d; test measure: %d fronting lots, worst lot %.2f deg, worst plot %.2f deg"
+              % (cut_off, len(self.nodes), fronting, worst_lot, worst_plot))
+        by_zone = {}
+        for l in self.lots:
+            z = l["zone"]
+            by_zone.setdefault(z, [0, {}])[0] += 1
+        for q in self.plots:
+            z = self._zone_at((q["x"], q["y"])) or "-"
+            types = by_zone.setdefault(z, [0, {}])[1]
+            types[q["type"]] = types.get(q["type"], 0) + 1
+        for z in ("heights", "bayou_town", "fringe", "eastside", "shore", "beach_town"):
+            if z in by_zone:
+                kinds = {}
+                for l in self.lots:
+                    if l["zone"] == z:
+                        kinds[l["kind"]] = kinds.get(l["kind"], 0) + 1
+                print("  %-10s lots %4d %s plots %s" % (z, by_zone[z][0], dict(sorted(kinds.items(), key=lambda kv: -kv[1])), by_zone[z][1]))
+        print("  blocks", getattr(self, "block_count", 0), "verges", getattr(self, "verge_count", 0), "bulbs", len(self.bulbs),
+              "pier", bool(self.pier), "reserved", [r["kind"] for r in self.reserved])
 
     def export(self):
         def ring(poly):

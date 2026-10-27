@@ -354,7 +354,7 @@ func start_traffic(c, from: int, to: int) -> void:
 ## Hands a police car (or a stolen car left behind) back to normal traffic.
 func join_traffic_here() -> void:
 	var fwd := -global_basis.z
-	var ahead: int = city.nearest_node(global_position + fwd * 25.0)
+	var ahead: int = city.node_ahead(global_position, fwd)
 	# Came from: the street out of `ahead` that points back past the car
 	# (the junction nearest behind may not share a street with it).
 	var behind := -1

@@ -42,6 +42,21 @@ const CROPS := [
 ]
 
 
+## Bellerive v3 outskirts surfaces.
+const LOT_ASPHALT := Color(0.24, 0.24, 0.25)
+const ALLEY_PAVE := Color(0.5, 0.48, 0.45)
+const PAVE := Color(0.74, 0.72, 0.67)
+const DECK_WOOD := Color(0.56, 0.43, 0.3)
+const POOL_DECK := Color(0.85, 0.83, 0.78)
+const RUBBER := Color(0.62, 0.36, 0.26)
+const TRACK_RED := Color(0.62, 0.3, 0.24)
+const INFIELD := Color(0.66, 0.5, 0.34)
+const FIELD_GRASS := Color(0.36, 0.6, 0.27)
+const PAINT := Color(0.94, 0.94, 0.92)
+const CONE := Color(0.95, 0.45, 0.1)
+const PLAY_COLORS := [Color(0.85, 0.25, 0.2), Color(0.95, 0.75, 0.2), Color(0.2, 0.5, 0.8), Color(0.3, 0.65, 0.35)]
+
+
 ## Draws one part of a plot. mb.xform holds the plot's frame; colliders go
 ## to `out` in that frame ([centre, size, yaw]).
 static func draw(kind: String, p: Array, tree_kinds: Array, mb, out: Array, rng: RandomNumberGenerator) -> void:
@@ -107,6 +122,32 @@ static func draw(kind: String, p: Array, tree_kinds: Array, mb, out: Array, rng:
 			var leaf := MeshBuilder.glow(Color(0.35, 0.55, 0.25), MeshBuilder.GRASS)
 			for r in int(d / 1.2):
 				mb.box(Vector3(0, 0.2, -d * 0.5 + 0.6 + r * 1.2), Vector3(w - 0.8, 0.4, 0.5), leaf)
+		"parking":
+			_parking(mb, w, d, v)
+		"alley":
+			Kit._pad(mb, -w * 0.5, w * 0.5, -d * 0.5, d * 0.5, MeshBuilder.glow(ALLEY_PAVE, MeshBuilder.CONCRETE), SURFACE_Y)
+			# A gutter down the middle of the long way.
+			if d >= w:
+				_paint(mb, Vector2(0, -d * 0.5), Vector2(0, d * 0.5), 0.3, ALLEY_PAVE.darkened(0.25))
+			else:
+				_paint(mb, Vector2(-w * 0.5, 0), Vector2(w * 0.5, 0), 0.3, ALLEY_PAVE.darkened(0.25))
+		"paving":
+			if v == 1:
+				# Boardwalk planks.
+				Kit._pad(mb, -w * 0.5, w * 0.5, -d * 0.5, d * 0.5, MeshBuilder.glow(DECK_WOOD, MeshBuilder.PAVING), SURFACE_Y + 0.004)
+				for i in int(d / 3.0):
+					var z := -d * 0.5 + (i + 1) * 3.0
+					_paint(mb, Vector2(-w * 0.5, z), Vector2(w * 0.5, z), 0.12, DECK_WOOD.darkened(0.3))
+			else:
+				Kit._pad(mb, -w * 0.5, w * 0.5, -d * 0.5, d * 0.5, MeshBuilder.glow(PAVE, MeshBuilder.CONCRETE), SURFACE_Y + 0.004)
+		"pool":
+			_pool(mb, local, w, d)
+		"playground":
+			_playground(mb, local, w, d, rng)
+		"field":
+			_field(mb, local, w, d, v)
+		"course":
+			_course(mb, local, w, d)
 	mb.xform = base
 	for col in local:
 		out.append([t * col[0], col[1], float(p[5]) + (col[2] if col.size() > 2 else 0.0)])
@@ -190,6 +231,16 @@ static func _tree(mb, out: Array, p: Vector3, kind: String, rng: RandomNumberGen
 			mb.limb(p, p + Vector3(0, 1.2, 0), 0.14, 0.11, Props.BARK, 5, false)
 			mb.clump(p + Vector3(0, 2.2, 0), Vector3(1.7, 1.3, 1.7), leaf, rng.randi(), 7, 3, 0.22)
 			out.append([p + Vector3(0, 1.0, 0), Vector3(0.4, 2.0, 0.4)])
+		"crepe_myrtle":
+			Props.crepe_myrtle(mb, out, p, rng)
+		# Street trees of the outskirts: cheap round crowns (a trunk and two
+		# clumps), so a street of them stays light.
+		"magnolia":
+			_round_tree(mb, out, p, rng, Color(0.17, 0.32, 0.15), 1.5, Vector3(2.2, 2.6, 2.2))
+		"jacaranda":
+			_round_tree(mb, out, p, rng, Color(0.6, 0.48, 0.84), 2.4, Vector3(3.0, 1.5, 3.0))
+		"plane":
+			_round_tree(mb, out, p, rng, Color(0.4, 0.54, 0.25), 3.0, Vector3(2.6, 2.3, 2.6))
 		_:
 			Props.oak(mb, out, p, rng)
 
@@ -319,3 +370,188 @@ static func _boat(mb, w: float, d: float, rng: RandomNumberGenerator) -> void:
 		mb.box(Vector3(s * (w * 0.5 - 0.06), 0.4, 0), Vector3(0.1, 0.5, d), hull)
 	mb.box(Vector3(0, 0.4, -d * 0.5 + 0.06), Vector3(w, 0.5, 0.1), hull)
 	mb.box(Vector3(0, 0.45, d * 0.5 - 0.2), Vector3(w * 0.5, 0.06, 0.5), WOOD)
+
+
+# --- Outskirts grounds (Bellerive v3) --------------------------------------------------
+
+## A painted line flat on the ground from a to b (x, z), two triangles.
+static func _paint(mb, a: Vector2, b: Vector2, width: float, color: Color, y := LINE_Y) -> void:
+	var dir := b - a
+	if dir.length() < 0.01:
+		return
+	var n := Vector2(-dir.y, dir.x).normalized() * width * 0.5
+	mb.flat(PackedVector2Array([a - n, b - n, b + n, a + n]), y, color)
+
+
+static func _round_tree(mb, out: Array, p: Vector3, rng: RandomNumberGenerator, leaf_color: Color, trunk: float, crown: Vector3) -> void:
+	var s := rng.randf_range(0.85, 1.15)
+	var leaf := MeshBuilder.glow(leaf_color.lerp(leaf_color.lightened(0.15), rng.randf()), MeshBuilder.GRASS)
+	mb.limb(p, p + Vector3(0, trunk * s, 0), 0.18, 0.12, Props.BARK, 5, false)
+	var top := p + Vector3(0, trunk * s + crown.y * 0.7 * s, 0)
+	mb.clump(top, crown * s, leaf, rng.randi(), 7, 3, 0.22)
+	mb.clump(top + Vector3(0.5, crown.y * 0.6, -0.3) * s, crown * 0.6 * s, leaf.lightened(0.06), rng.randi(), 6, 3, 0.22)
+	out.append([p + Vector3(0, 1.0, 0), Vector3(0.4, 2.0, 0.4)])
+
+
+## An asphalt lot with painted stalls 2.7 m wide, rows along x (variant 0)
+## or along z (1): a row at each long edge, a back-to-back pair in the
+## middle when it is deep enough.
+static func _parking(mb, w: float, d: float, v: int) -> void:
+	Kit._pad(mb, -w * 0.5, w * 0.5, -d * 0.5, d * 0.5, MeshBuilder.glow(LOT_ASPHALT, MeshBuilder.ASPHALT), SURFACE_Y)
+	var along := w if v == 0 else d
+	var across := d if v == 0 else w
+	var n := int((along - 1.0) / 2.7)
+	var x0 := -n * 2.7 * 0.5
+	var rows: Array = [[-across * 0.5 + 0.5, 1.0], [across * 0.5 - 0.5, -1.0]]
+	if across >= 34.0:
+		rows.append([0.0, 1.0])
+		rows.append([0.0, -1.0])
+	for r: Array in rows:
+		var z: float = r[0]
+		var dir: float = r[1]
+		for i in n + 1:
+			var x := x0 + i * 2.7
+			var a := Vector2(x, z) if v == 0 else Vector2(z, x)
+			var b := Vector2(x, z + 5.0 * dir) if v == 0 else Vector2(z + 5.0 * dir, x)
+			_paint(mb, a, b, 0.12, PAINT)
+
+
+## A public pool: a concrete deck, the water with lane lines, a fence round it.
+static func _pool(mb, out: Array, w: float, d: float) -> void:
+	Kit._pad(mb, -w * 0.5, w * 0.5, -d * 0.5, d * 0.5, MeshBuilder.glow(POOL_DECK, MeshBuilder.CONCRETE), SURFACE_Y)
+	var pw := w - 7.0
+	var pd := d - 7.0
+	Kit._pad(mb, -pw * 0.5, pw * 0.5, -pd * 0.5, pd * 0.5, MeshBuilder.glow(WATER, MeshBuilder.GLOSS), SURFACE_Y + 0.01)
+	var lanes := maxi(2, int(pd / 2.5))
+	for i in range(1, lanes):
+		var z := -pd * 0.5 + pd * i / lanes
+		_paint(mb, Vector2(-pw * 0.5 + 1.0, z), Vector2(pw * 0.5 - 1.0, z), 0.15, WATER.darkened(0.35), SURFACE_Y + 0.02)
+	_mesh_fence(mb, out, w, d, 1.8)
+
+
+## A chain-link fence round a w x d rect, h high: posts, a dark mesh, colliders.
+static func _mesh_fence(mb, out: Array, w: float, d: float, h: float) -> void:
+	var mesh_col := Color(0.2, 0.25, 0.22)
+	for side: Array in [[Vector3(-w * 0.5, 0, -d * 0.5), Vector3(w * 0.5, 0, -d * 0.5)], [Vector3(-w * 0.5, 0, d * 0.5), Vector3(w * 0.5, 0, d * 0.5)],
+			[Vector3(-w * 0.5, 0, -d * 0.5), Vector3(-w * 0.5, 0, d * 0.5)], [Vector3(w * 0.5, 0, -d * 0.5), Vector3(w * 0.5, 0, d * 0.5)]]:
+		var a: Vector3 = side[0]
+		var b: Vector3 = side[1]
+		var n := maxi(1, int(a.distance_to(b) / 4.0))
+		for i in n + 1:
+			mb.box(a.lerp(b, float(i) / n) + Vector3(0, h * 0.5, 0), Vector3(0.08, h, 0.08), IRON)
+		var c := (a + b) * 0.5
+		var size := Vector3(absf(b.x - a.x) + 0.05, h - 0.1, absf(b.z - a.z) + 0.05)
+		mb.box(c + Vector3(0, h * 0.5, 0), size, mesh_col)
+		out.append([c + Vector3(0, h * 0.5, 0), Vector3(maxf(size.x, 0.2), h, maxf(size.z, 0.2))])
+
+
+## A playground: a rubber pad, a climbing frame with a slide, a swing set.
+static func _playground(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator) -> void:
+	Kit._pad(mb, -w * 0.5, w * 0.5, -d * 0.5, d * 0.5, MeshBuilder.glow(RUBBER, MeshBuilder.PAVING), SURFACE_Y)
+	var col: Color = PLAY_COLORS[rng.randi() % PLAY_COLORS.size()]
+	var trim: Color = PLAY_COLORS[(rng.randi() + 1) % PLAY_COLORS.size()]
+	# Climbing frame: four posts, a deck, a pitched roof, a slide off one side.
+	var f := Vector3(-w * 0.2, 0, 0)
+	for sx: float in [-1.0, 1.0]:
+		for sz: float in [-1.0, 1.0]:
+			mb.box(f + Vector3(sx * 1.4, 1.6, sz * 1.4), Vector3(0.15, 3.2, 0.15), col)
+	mb.box(f + Vector3(0, 1.5, 0), Vector3(3.0, 0.15, 3.0), trim)
+	mb.box(f + Vector3(0, 3.3, 0), Vector3(3.2, 0.2, 3.2), col)
+	Kit._beam(mb, f + Vector3(1.5, 1.5, 0), f + Vector3(4.5, 0.2, 0), 0.1, trim, 0.9)
+	out.append([f + Vector3(0, 1.6, 0), Vector3(3.0, 3.2, 3.0)])
+	# Swings: an A-frame each end, a bar, two seats.
+	var s := Vector3(w * 0.25, 0, 0)
+	for sx: float in [-1.0, 1.0]:
+		Kit._beam(mb, s + Vector3(sx * 2.2, 0, -0.9), s + Vector3(sx * 2.2, 2.4, 0), 0.12, IRON)
+		Kit._beam(mb, s + Vector3(sx * 2.2, 0, 0.9), s + Vector3(sx * 2.2, 2.4, 0), 0.12, IRON)
+		mb.box(s + Vector3(sx * 0.8, 0.5, 0), Vector3(0.5, 0.06, 0.25), trim)
+	mb.box(s + Vector3(0, 2.4, 0), Vector3(4.6, 0.12, 0.12), IRON)
+	out.append([s + Vector3(0, 1.2, 0), Vector3(4.6, 2.4, 1.8)])
+
+
+## A sports field: football with goals (variant 0), a baseball diamond with
+## a backstop (1), or a field inside a running track (2). Its long way runs
+## along x when it is wider than deep.
+static func _field(mb, out: Array, w: float, d: float, v: int) -> void:
+	Kit._pad(mb, -w * 0.5, w * 0.5, -d * 0.5, d * 0.5, MeshBuilder.glow(FIELD_GRASS, MeshBuilder.GRASS), SURFACE_Y)
+	if v == 1:
+		# Home plate near the -z edge, the diamond opening to +z.
+		var home := Vector2(0, -d * 0.5 + 6.0)
+		var b := 19.4 # 27.4 m between bases, on the diagonal
+		var dirt := PackedVector2Array([home + Vector2(0, -3.0), home + Vector2(b + 4.0, b), home + Vector2(0, 2.0 * b + 6.0), home + Vector2(-b - 4.0, b)])
+		mb.flat(dirt, SURFACE_Y + 0.006, INFIELD)
+		var grass := PackedVector2Array([home + Vector2(0, 3.0), home + Vector2(b - 3.0, b), home + Vector2(0, 2.0 * b - 3.0), home + Vector2(-b + 3.0, b)])
+		mb.flat(grass, SURFACE_Y + 0.012, MeshBuilder.glow(FIELD_GRASS.lightened(0.05), MeshBuilder.GRASS))
+		for q: Vector2 in [home, home + Vector2(b, b), home + Vector2(0, 2.0 * b), home + Vector2(-b, b)]:
+			mb.box(Vector3(q.x, 0.04, q.y), Vector3(0.5, 0.06, 0.5), PAINT)
+		var reach := minf(d - 8.0, w * 0.5 - 2.0) * 0.7
+		_paint(mb, home, home + Vector2(reach, reach), 0.12, PAINT)
+		_paint(mb, home, home + Vector2(-reach, reach), 0.12, PAINT)
+		# Backstop behind home.
+		var back := Vector3(home.x, 2.0, home.y - 4.0)
+		mb.box(back, Vector3(10.0, 4.0, 0.1), Color(0.2, 0.25, 0.22))
+		out.append([back, Vector3(10.0, 4.0, 0.3)])
+		return
+	var long_x := w >= d
+	var L := w if long_x else d
+	var S := d if long_x else w
+	var fl := L - 4.0
+	var fs := S - 4.0
+	if v == 2:
+		# The track: a stadium-shaped ring, six lanes wide, round the field.
+		var r := S * 0.5 - 1.0
+		var straight := maxf(0.0, L - 2.0 - 2.0 * r)
+		mb.flat(_stadium(straight, r, long_x), SURFACE_Y + 0.006, MeshBuilder.glow(TRACK_RED, MeshBuilder.PAVING))
+		mb.flat(_stadium(straight, r - 7.0, long_x), SURFACE_Y + 0.012, MeshBuilder.glow(FIELD_GRASS, MeshBuilder.GRASS))
+		fl = straight + 4.0
+		fs = 2.0 * (r - 7.0) - 6.0
+		if fs < 8.0:
+			return
+	# Football: touchlines, halfway line, goals.
+	var hx := fl * 0.5
+	var hz := fs * 0.5
+	var pts := [Vector2(-hx, -hz), Vector2(hx, -hz), Vector2(hx, hz), Vector2(-hx, hz)]
+	for i in 4:
+		_paint(mb, _xz(pts[i], long_x), _xz(pts[(i + 1) % 4], long_x), 0.12, PAINT, LINE_Y + 0.004)
+	_paint(mb, _xz(Vector2(0, -hz), long_x), _xz(Vector2(0, hz), long_x), 0.12, PAINT, LINE_Y + 0.004)
+	for sx: float in [-1.0, 1.0]:
+		var g := _xz(Vector2(sx * hx, 0), long_x)
+		var across := Vector3(0, 0, 3.6) if long_x else Vector3(3.6, 0, 0)
+		var c := Vector3(g.x, 0, g.y)
+		mb.box(c - across + Vector3(0, 1.2, 0), Vector3(0.12, 2.4, 0.12), PAINT)
+		mb.box(c + across + Vector3(0, 1.2, 0), Vector3(0.12, 2.4, 0.12), PAINT)
+		mb.box(c + Vector3(0, 2.4, 0), Vector3(0.12, 0.12, 7.3) if long_x else Vector3(7.3, 0.12, 0.12), PAINT)
+		out.append([c + Vector3(0, 1.2, 0), Vector3(0.3, 2.4, 7.4) if long_x else Vector3(7.4, 2.4, 0.3)])
+
+
+static func _xz(p: Vector2, long_x: bool) -> Vector2:
+	return p if long_x else Vector2(p.y, p.x)
+
+
+## A stadium outline (two half circles joined by straights), counter-clockwise.
+static func _stadium(straight: float, r: float, long_x: bool) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for half in 2:
+		var cx := straight * 0.5 * (1.0 if half == 0 else -1.0)
+		for k in 13:
+			var a := -PI * 0.5 + PI * half + PI * k / 12.0
+			out.append(_xz(Vector2(cx + cos(a) * r, sin(a) * r), long_x))
+	if not long_x:
+		out.reverse() # swapping the axes mirrors the outline
+	return out
+
+
+## A DMV road-test course: asphalt, lane lines, cones, a parking box.
+static func _course(mb, _out: Array, w: float, d: float) -> void:
+	Kit._pad(mb, -w * 0.5, w * 0.5, -d * 0.5, d * 0.5, MeshBuilder.glow(LOT_ASPHALT.lightened(0.05), MeshBuilder.ASPHALT), SURFACE_Y)
+	for z: float in [-d * 0.5 + 3.0, d * 0.5 - 3.0]:
+		_paint(mb, Vector2(-w * 0.5 + 3.0, z), Vector2(w * 0.5 - 3.0, z), 0.15, PAINT)
+	_paint(mb, Vector2(-w * 0.5 + 6.0, 0), Vector2(w * 0.5 - 30.0, 0), 0.15, Color(0.95, 0.8, 0.2))
+	# Cones for the slalom, a box to park in at the far end.
+	for i in 8:
+		var x := -w * 0.5 + 10.0 + i * (w - 44.0) / 7.0
+		var z := 4.0 if i % 2 == 0 else -4.0
+		mb.cylinder(Vector3(x, 0, z), 0.25, 0.6, CONE, 5)
+	var px := w * 0.5 - 14.0
+	for q: Array in [[Vector2(px - 3.0, -6.0), Vector2(px - 3.0, 6.0)], [Vector2(px + 3.0, -6.0), Vector2(px + 3.0, 6.0)], [Vector2(px - 3.0, 6.0), Vector2(px + 3.0, 6.0)]]:
+		_paint(mb, q[0], q[1], 0.15, PAINT)

@@ -291,7 +291,7 @@ func plan_ride(pos: Vector3) -> Dictionary:
 		return {}
 	var city = game.city
 	var fwd: Vector3 = -cab.global_basis.z
-	var ahead: int = city.nearest_node(cab.global_position + fwd * 20.0)
+	var ahead: int = city.node_ahead(cab.global_position, fwd)
 	if ahead < 0:
 		return {}
 	var plan := _approach(ahead, curb, pos)

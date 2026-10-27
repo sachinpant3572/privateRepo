@@ -1,14 +1,19 @@
 extends RefCounted
-## Bellerive's street plan, v4: a California grid (HANDOFF-bellerive-ca.md).
+## Bellerive's street plan, v5: a California grid (HANDOFF-bellerive-ca.md).
 ##
 ## The streets are a planar graph laid out like LA's or SF's:
-## - Arterials run on one citywide north-south/east-west pitch (ART_X,
-##   ART_Y_NORTH, ART_Y_SOUTH), so the boulevards line up across districts.
-##   The seam roads (Lantern and Rampart north-south, Crescent and Wharf
-##   east-west) are among them.
-## - Each district fills its superblocks with an even grid of local streets
-##   (`grid` in PATCHES), also on the compass; districts differ in block
-##   size and how many streets are dropped.
+## - Arterials run straight north-south and east-west across the city
+##   (ART_X, ART_Y_NORTH, ART_Y_SOUTH), unevenly spaced as LA's are, so the
+##   boulevards line up across districts. The seam roads (Lantern and
+##   Rampart north-south, Crescent and Wharf east-west) are among them.
+## - Each district splits its superblocks into blocks with local streets
+##   (`grid` in PATCHES), also on the compass. Districts that split an
+##   interval into the same number of blocks put their streets in the same
+##   places, so a local street runs right through its district and on
+##   across the boulevards, ending at a major road. The halfway street of
+##   each superblock is an avenue (LA's half-mile collectors).
+## - The old town round Lantern Square keeps its own grid, turned 30
+##   degrees, and meets the city grid along the boulevards round it.
 ## - Only a few roads leave the grid:
 ##   - Liberty Avenue, the one long diagonal (an old road, like Broadway);
 ##   - Magnolia Avenue, from the west into the civic centre;
@@ -43,13 +48,13 @@ const MOREAU_HALF := 40.0
 const PARK_SIZE := Vector2(204, 132)
 ## The unnamed or minor arterials (the seam roads are laid out by name).
 const ARTERIALS := [
-	{"x": -30.0, "bank": "north", "cls": "avenue", "road": "palmetto"},
-	{"x": 1050.0, "bank": "north", "cls": "avenue", "road": "cypress"},
+	{"x": -80.0, "bank": "north", "cls": "avenue", "road": "palmetto"},
+	{"x": 1010.0, "bank": "north", "cls": "avenue", "road": "cypress"},
 	{"y": 140.0, "bank": "north", "cls": "boulevard", "road": "aurum"},
-	{"y": 860.0, "bank": "north", "cls": "avenue", "road": "basin", "to": 690.0},
-	{"x": -30.0, "bank": "south", "cls": "avenue", "road": "palmetto"},
+	{"y": 860.0, "bank": "north", "cls": "avenue", "road": "basin", "to": 330.0},
+	{"x": -80.0, "bank": "south", "cls": "avenue", "road": "palmetto"},
 	{"x": 690.0, "bank": "south", "cls": "avenue", "road": "harbor"},
-	{"x": 1050.0, "bank": "south", "cls": "avenue", "road": "cypress"},
+	{"x": 1010.0, "bank": "south", "cls": "avenue", "road": "cypress"},
 	{"y": 1400.0, "bank": "south", "cls": "boulevard", "road": "morrow"},
 ]
 ## Lot rectangle (along the front, deep) each landmark needs; blocks too
@@ -94,13 +99,17 @@ const ROAD_NAMES := {
 }
 
 ## The citywide arterial grid (California: the boulevards run straight
-## north-south and east-west on a regular pitch, so they line up from one
-## district to the next). Positions in local metres, beyond the bounds
+## north-south and east-west and line up from one district to the next;
+## their spacing is uneven, as LA's is, 400 to 875 m apart). Positions in
+## local metres, beyond the bounds
 ## too, as the ends of the outer superblocks. North of the river the lines
 ## at y 140, 500 and 860 are arterials; south of it, y 1400.
-const ART_X := [-390.0, -30.0, 330.0, 690.0, 1050.0, 1410.0, 1770.0]
+const ART_X := [-390.0, -80.0, 330.0, 690.0, 1010.0, 1460.0, 1770.0]
 const ART_Y_NORTH := [-220.0, 140.0, 500.0, 860.0, 1220.0]
-const ART_Y_SOUTH := [1040.0, 1220.0, 1400.0, 1580.0, 1760.0]
+const ART_Y_SOUTH := [1040.0, 1240.0, 1400.0, 1610.0, 1760.0]
+## District streets fall up to this share of a block off an even split
+## (so the grid isn't ruler-straight in its spacing).
+const SPLIT_JITTER := 0.12
 
 ## District grids. `seed` is a point inside the patch's region (regions are
 ## the land cut apart by the seam roads). Lines of constant u run along V,
@@ -117,34 +126,38 @@ const ART_Y_SOUTH := [1040.0, 1220.0, 1400.0, 1580.0, 1760.0]
 ## `cls_u`/`cls_v` give the u- or v-lines their own class (Midtown's
 ## avenues).
 const PATCHES := [
-	# Gilt: downtown, square blocks for towers round the civic centre.
-	{"id": "gilt_w", "bank": "north", "seed": Vector2(150, 200), "grid": [4, 4], "angle": 0.0,
-		"su": [90.0, 90.0], "sv": [90.0, 90.0], "fam": "uv", "cls": "street", "cut": [0.04, 0.04], "lane": 0.0, "max": [190.0, 190.0, 30000.0]},
-	# Midtown: a Manhattan grid, long thin blocks between avenues (the
-	# u-lines) that run north-south; Liberty Avenue cuts across it like
-	# Broadway.
+	# Gilt: downtown, blocks for towers round the civic centre. Its north-
+	# south streets carry on through the Lantern Quarter West down to the
+	# river, its cross streets east through Midtown.
+	{"id": "gilt_w", "bank": "north", "seed": Vector2(150, 200), "grid": [4, 6], "angle": 0.0,
+		"su": [90.0, 90.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
+	# Midtown: a Manhattan grid, long thin blocks between avenues that run
+	# north-south; Liberty Avenue cuts across it like Broadway. Its
+	# cross streets carry on east through the Wards.
 	{"id": "midtown", "bank": "north", "seed": Vector2(500, 150), "grid": [3, 6], "angle": 0.0,
 		"su": [120.0, 120.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cls_u": "avenue", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
-	# The Lantern Quarter, the old town by the river: narrow streets, small
-	# square blocks.
-	{"id": "quarter_w", "bank": "north", "seed": Vector2(150, 800), "grid": [5, 5], "angle": 0.0,
-		"su": [72.0, 72.0], "sv": [72.0, 72.0], "fam": "uv", "cls": "quarter", "cut": [0.05, 0.05], "lane": 0.06, "max": [150.0, 150.0, 12000.0]},
-	{"id": "quarter_e", "bank": "north", "seed": Vector2(520, 750), "grid": [5, 5], "angle": 0.0,
-		"su": [72.0, 72.0], "sv": [72.0, 72.0], "fam": "uv", "cls": "quarter", "cut": [0.05, 0.05], "lane": 0.06, "max": [150.0, 150.0, 12000.0]},
-	# The Wards: small-lot blocks, long east-west (South LA's bungalow
-	# grid).
-	{"id": "wards", "bank": "north", "seed": Vector2(1000, 600), "grid": [5, 7], "angle": 0.0,
-		"su": [72.0, 72.0], "sv": [51.0, 51.0], "fam": "uv", "cls": "street", "cut": [0.06, 0.0], "lane": 0.0, "max": [150.0, 60.0, 9000.0]},
-	{"id": "wards_n", "bank": "north", "seed": Vector2(1000, 150), "grid": [5, 5], "angle": 0.0,
-		"su": [72.0, 72.0], "sv": [72.0, 72.0], "fam": "uv", "cls": "street", "cut": [0.05, 0.0], "lane": 0.0, "max": [150.0, 80.0, 12000.0]},
-	# Ironwharf: big industrial lots.
+	# The Lantern Quarter. The west part is on the city grid, small blocks.
+	{"id": "quarter_w", "bank": "north", "seed": Vector2(150, 800), "grid": [4, 5], "angle": 0.0,
+		"su": [90.0, 90.0], "sv": [72.0, 72.0], "fam": "uv", "cls": "quarter", "cut": [0.0, 0.0], "lane": 0.06, "max": [0.0, 0.0, 0.0]},
+	# The old town round Lantern Square keeps its own grid, turned 30
+	# degrees (downtown LA's old plaza grid; SF's SoMa). It meets the city
+	# grid along the boulevards round it, where its streets end.
+	{"id": "quarter_e", "bank": "north", "seed": Vector2(520, 750), "angle": 30.0, "origin": Vector2(510, 880), "bend": 0.0,
+		"su": [64.0, 78.0], "sv": [64.0, 78.0], "fam": "uv", "cls": "quarter", "cut": [0.0, 0.0], "lane": 0.06, "max": [0.0, 0.0, 0.0]},
+	# The Wards: long east-west blocks (South LA's bungalow grid); the
+	# streets run on through Crescent Boulevard.
+	{"id": "wards", "bank": "north", "seed": Vector2(1000, 600), "grid": [4, 6], "angle": 0.0,
+		"su": [90.0, 90.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
+	{"id": "wards_n", "bank": "north", "seed": Vector2(1000, 150), "grid": [4, 6], "angle": 0.0,
+		"su": [90.0, 90.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
+	# Ironwharf: big industrial lots, a few streets dropped for yards.
 	{"id": "docks", "bank": "north", "seed": Vector2(1000, 960), "grid": [4, 3], "angle": 0.0,
-		"su": [90.0, 90.0], "sv": [120.0, 120.0], "fam": "uv", "cls": "street", "cut": [0.25, 0.2], "lane": 0.0, "max": [190.0, 250.0, 40000.0]},
+		"su": [90.0, 90.0], "sv": [120.0, 120.0], "fam": "uv", "cls": "street", "cut": [0.12, 0.1], "lane": 0.0, "max": [190.0, 250.0, 40000.0]},
 	# Morrow Point: a suburban grid over the bridge.
 	{"id": "point_w", "bank": "south", "seed": Vector2(150, 1420), "grid": [5, 3], "angle": 0.0,
-		"su": [72.0, 72.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.08, 0.04], "lane": 0.0, "max": [150.0, 130.0, 12000.0]},
+		"su": [72.0, 72.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
 	{"id": "point_e", "bank": "south", "seed": Vector2(800, 1400), "grid": [5, 3], "angle": 0.0,
-		"su": [72.0, 72.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.08, 0.04], "lane": 0.0, "max": [150.0, 130.0, 12000.0]},
+		"su": [72.0, 72.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
 ]
 
 var window := Rect2()
@@ -182,6 +195,10 @@ var _park_at := Vector2.ZERO
 var _park_poly := PackedVector2Array()
 ## Outlines district streets stay out of: the park and the set pieces.
 var _holes: Array[PackedVector2Array] = []
+## Set pieces on grid lines (Liberty Green, Moreau Square), just inside
+## them: district streets are clipped out of these but not trimmed back
+## from them, so the streets round them stay.
+var _voids: Array[PackedVector2Array] = []
 ## The district being laid out, shrunk by half its street gap.
 var _inner: Array[PackedVector2Array] = []
 var _river_half := 80.0
@@ -251,6 +268,12 @@ func build(win: Rect2, margin: float, seed_v: int, river_line: PackedVector2Arra
 	for sp in set_pieces:
 		var f := face_of(sp.at)
 		sp.face = f if f >= 0 and faces[f].kind == "land" and f != park_face else -1
+	# The grid streets round the parks take their names.
+	for named in [[park_face, "park"], [set_piece_face("moreau_square"), "moreau"]]:
+		if named[0] >= 0:
+			for e in faces[named[0]].edges:
+				if edge_road[e] == "":
+					edge_road[e] = named[1]
 
 
 ## Build time per step, in ms (for the tests and tuning).
@@ -476,16 +499,14 @@ func _layout(src: Array) -> void:
 	var point_ave := PackedVector2Array([b1, Vector2(b1.x, bottom)])
 	_holes = []
 	set_pieces = []
-	# Liberty Green: a rectangular park filling most of a superblock in the
-	# Wards (Central Park and LA's MacArthur Park, scaled down), a street
-	# all round it. District streets stop at its edge.
-	_park_poly = _rect_poly(Rect2(_park_at - PARK_SIZE * 0.5, PARK_SIZE))
-	var park_ring := _park_poly.duplicate()
-	park_ring.append(_park_poly[0])
-	src.append({"pts": _resample(park_ring, STEP), "cls": "street", "road": "park", "patch": -1, "fam": -1})
-	_holes.append(_park_poly)
+	# Liberty Green: a rectangular park filling a few blocks in the Wards
+	# (Central Park and LA's MacArthur Park, scaled down), on grid lines, so
+	# the streets round it are the grid's and run on past it.
+	_voids = []
+	_park_poly = _rect_poly(_snap_to_grid(Rect2(_park_at - PARK_SIZE * 0.5, PARK_SIZE), "wards_n"))
+	_voids.append(Geometry2D.offset_polygon(_park_poly, -3.0)[0])
 	var cut_out: Array[PackedVector2Array] = _civic_centre(src, magnolia)
-	_moreau_square(src)
+	_moreau_square()
 	var roads: Array = [[lantern, "boulevard", "lantern"], [crescent, "boulevard", "crescent"], [rampart, "avenue", "rampart"],
 			[liberty, "avenue", "liberty"], [magnolia, "avenue", "magnolia"], [wharf, "avenue", "wharf"], [river_road, "river", "river_road"],
 			[levee, "river", "levee"], [quay, "quay", "quay"], [PackedVector2Array([b0, b1]), "bridge", "bridge"],
@@ -572,19 +593,44 @@ func _civic_centre(src: Array, magnolia: PackedVector2Array) -> Array[PackedVect
 	return [cut_disk, _rect_poly(grounds.grow(-3.0))]
 
 
-## Moreau Square: a square park in the Wards, square to the grid, with
-## a street round it (SF's Alamo Square; the painted rows face it).
-func _moreau_square(src: Array) -> void:
-	var u := Vector2(1, 0)
-	var v := Vector2(0, 1)
-	var sq := PackedVector2Array()
-	for k in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
-		sq.append(MOREAU_AT + u * k.x * MOREAU_HALF + v * k.y * MOREAU_HALF)
-	var ring := sq.duplicate()
-	ring.append(sq[0])
-	src.append({"pts": _resample(ring, STEP), "cls": "street", "road": "moreau", "patch": -1, "fam": -1})
-	_holes.append(sq)
+## Moreau Square: a park square in the Wards on one block of the grid
+## (SF's Alamo Square; the painted rows face it). The grid's streets run
+## round it.
+func _moreau_square() -> void:
+	var sq := _rect_poly(_snap_to_grid(Rect2(MOREAU_AT - Vector2.ONE * MOREAU_HALF, Vector2.ONE * MOREAU_HALF * 2.0), "wards_n"))
+	_voids.append(Geometry2D.offset_polygon(sq, -3.0)[0])
 	set_pieces.append({"id": "moreau_square", "kind": "square", "at": MOREAU_AT, "face": -1})
+
+
+## Rect r with each side moved onto the nearest street line of district
+## `patch`'s grid (each side to a different line), so a park's ring road
+## is part of the grid's streets and they run on past it instead of
+## stopping beside it.
+func _snap_to_grid(r: Rect2, patch: String) -> Rect2:
+	var p: Dictionary = {}
+	for q in PATCHES:
+		if q.id == patch:
+			p = q
+	var xs: Array = ART_X.duplicate()
+	for sp in _splits(ART_X, p.grid[0], -INF, INF, "x" + p.bank):
+		xs.append(sp[0])
+	var ys: Array = (ART_Y_NORTH if p.bank == "north" else ART_Y_SOUTH).duplicate()
+	for sp in _splits(ART_Y_NORTH if p.bank == "north" else ART_Y_SOUTH, p.grid[1], -INF, INF, "y" + p.bank):
+		ys.append(sp[0])
+	var x0 := _nearest(xs, r.position.x, INF)
+	var x1 := _nearest(xs, r.end.x, x0)
+	var y0 := _nearest(ys, r.position.y, INF)
+	var y1 := _nearest(ys, r.end.y, y0)
+	return Rect2(minf(x0, x1), minf(y0, y1), absf(x1 - x0), absf(y1 - y0))
+
+
+## The value in `values` nearest v, other than `not`.
+static func _nearest(values: Array, v: float, not_v: float) -> float:
+	var best := INF
+	for x in values:
+		if x != not_v and absf(x - v) < absf(best - v):
+			best = x
+	return best
 
 
 ## The point of a north-south road at height y.
@@ -671,9 +717,14 @@ func _patch_lines(src: Array, k: int, region: PackedVector2Array) -> void:
 			_add_pieces(src, _v_line(o, u_dir, v_dir, bend, v, tilt, start, hi.x + spare), region, gap, k, 1)
 
 
-## A straight grid: each superblock of the arterial grid split evenly into
+## A straight grid: each superblock of the arterial grid split into
 ## p.grid[0] by p.grid[1] blocks. The arterials themselves are laid out
-## citywide in _layout.
+## citywide in _layout. Every street runs right across the district, and a
+## split shared with the district over the seam (the same fraction of the
+## same superblock) lands on the same line, so the street carries on
+## through it. The splits are a few metres off even (the same few metres
+## in both districts), and the one halfway between two arterials is an
+## avenue, like LA's half-mile roads.
 func _grid_lines(src: Array, k: int, region: PackedVector2Array) -> void:
 	var p: Dictionary = PATCHES[k]
 	var lo := Vector2(INF, INF)
@@ -686,31 +737,39 @@ func _grid_lines(src: Array, k: int, region: PackedVector2Array) -> void:
 	var gap: float = minf(p.su[0], p.sv[0]) * 0.55
 	_inner = Geometry2D.offset_polygon(region, -gap * 0.5)
 	var art_y: Array = ART_Y_NORTH if p.bank == "north" else ART_Y_SOUTH
-	for x in _splits(ART_X, p.grid[0], lo.x, hi.x):
-		_add_pieces(src, PackedVector2Array([Vector2(x, lo.y), Vector2(x, hi.y)]), region, gap, k, 0)
-	for y in _splits(art_y, p.grid[1], lo.y, hi.y):
-		_add_pieces(src, PackedVector2Array([Vector2(lo.x, y), Vector2(hi.x, y)]), region, gap, k, 1)
+	for s in _splits(ART_X, p.grid[0], lo.x, hi.x, "x" + p.bank):
+		_add_pieces(src, PackedVector2Array([Vector2(s[0], lo.y), Vector2(s[0], hi.y)]), region, gap, k, 0, "avenue" if s[1] else "")
+	for s in _splits(art_y, p.grid[1], lo.y, hi.y, "y" + p.bank):
+		_add_pieces(src, PackedVector2Array([Vector2(lo.x, s[0]), Vector2(hi.x, s[0])]), region, gap, k, 1, "avenue" if s[1] else "")
 
 
-## The points that split each interval of `arts` into n equal parts,
-## between lo and hi (the arterials themselves left out).
-static func _splits(arts: Array, n: int, lo: float, hi: float) -> Array:
+## The points that split each interval of `arts` into n parts, between lo
+## and hi (the arterials themselves left out): [at, halfway]. Each but the
+## halfway one is nudged up to SPLIT_JITTER of a block off even, by a hash
+## of where it falls, so two districts splitting the same interval into the
+## same number of blocks agree.
+func _splits(arts: Array, n: int, lo: float, hi: float, axis: String) -> Array:
 	var out: Array = []
 	for i in arts.size() - 1:
 		for j in range(1, n):
-			var at: float = lerpf(arts[i], arts[i + 1], float(j) / n)
+			var f := float(j) / n
+			var halfway := absf(f - 0.5) < 0.001
+			var key := hash([seed_value, axis, i, n, j])
+			var block: float = (arts[i + 1] - arts[i]) / n
+			var nudge := 0.0 if halfway else (float(absi(key) % 1000) / 999.0 * 2.0 - 1.0) * SPLIT_JITTER * block
+			var at: float = lerpf(arts[i], arts[i + 1], f) + nudge
 			if at > lo and at < hi:
-				out.append(at)
+				out.append([at, halfway])
 	return out
 
 
 ## Adds the parts of street line `pts` inside `region` (and outside the
 ## park) to src; false if none was kept.
-func _add_pieces(src: Array, pts: PackedVector2Array, region: PackedVector2Array, gap: float, k: int, fam: int) -> bool:
+func _add_pieces(src: Array, pts: PackedVector2Array, region: PackedVector2Array, gap: float, k: int, fam: int, cls_override := "") -> bool:
 	if pts.size() < 2:
 		return false
 	var pieces := Geometry2D.intersect_polyline_with_polygon(pts, region)
-	for hole in _holes:
+	for hole in _holes + _voids:
 		var outside: Array[PackedVector2Array] = []
 		for piece in pieces:
 			outside.append_array(Geometry2D.clip_polyline_with_polygon(piece, hole))
@@ -739,7 +798,7 @@ func _add_pieces(src: Array, pts: PackedVector2Array, region: PackedVector2Array
 			var n := part.size()
 			part[0] += (part[0] - part[1]).normalized() * 1.5
 			part[n - 1] += (part[n - 1] - part[n - 2]).normalized() * 1.5
-			var cls: String = PATCHES[k].get("cls_v" if fam == 1 else "cls_u", PATCHES[k].cls)
+			var cls: String = cls_override if cls_override != "" else PATCHES[k].get("cls_v" if fam == 1 else "cls_u", PATCHES[k].cls)
 			src.append({"pts": part, "cls": cls, "road": "", "patch": k, "fam": fam})
 			kept = true
 	return kept
@@ -1160,7 +1219,16 @@ func _rebuild_adj() -> void:
 		_adj[edge_b[e]].append(e)
 
 
-## Junctions closer than MERGE become one, at the busiest one's position.
+## Rank of the biggest road class meeting at junction n.
+func _node_rank(n: int) -> int:
+	var r := 0
+	for e in _adj[n]:
+		r = maxi(r, CLASSES[edge_cls[e]].rank)
+	return r
+
+
+## Junctions closer than MERGE become one, at the position of the one on
+## the biggest road (the busiest of those).
 func _merge_close() -> void:
 	var n := node_pos.size()
 	var parent := PackedInt32Array()
@@ -1182,8 +1250,12 @@ func _merge_close() -> void:
 						var rk := _find(parent, k)
 						var rm := _find(parent, m)
 						if rk != rm:
-							# The busier junction keeps its place.
-							if _adj[rm].size() > _adj[rk].size():
+							# The junction on the bigger road keeps its place
+							# (so boulevards stay ruler-straight), then the
+							# busier one.
+							var wk := Vector2i(_node_rank(rk), _adj[rk].size())
+							var wm := Vector2i(_node_rank(rm), _adj[rm].size())
+							if wm > wk:
 								parent[rk] = rm
 							else:
 								parent[rm] = rk

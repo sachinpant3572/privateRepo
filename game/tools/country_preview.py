@@ -30,6 +30,17 @@ PART_COLORS = {
     "gate": (255, 60, 60), "trees": (30, 110, 40), "court": (225, 220, 205), "parterre": (60, 140, 70),
     "tennis": (70, 140, 170), "orchard": (90, 150, 70), "crop": (220, 200, 100), "vines": (100, 130, 60),
     "boat": (240, 240, 240), "woodpile": (120, 80, 50), "garden": (130, 100, 60),
+    # Bellerive v3 outskirts.
+    "parking": (95, 95, 100), "alley": (150, 145, 140), "paving": (205, 200, 190), "pool": (70, 170, 210),
+    "playground": (200, 120, 70), "field": (90, 175, 80), "course": (80, 80, 90),
+}
+# Lots by kind (others grey-brown; landmarks red).
+KIND_COLORS = {
+    "fire_station": (210, 50, 40), "post_office": (60, 90, 170), "dmv_office": (130, 130, 160),
+    "sheriff_station": (110, 85, 40), "public_school": (215, 175, 60), "rowhouse_row": (150, 80, 65),
+    "cape_house": (235, 230, 215), "pier_rides": (190, 150, 95), "brownstone_row": (120, 70, 50),
+    "painted_lady_row": (200, 140, 180), "mansion": (110, 95, 85), "strip_mall": (170, 160, 120),
+    "gas_station": (230, 200, 60),
 }
 LINE_PARTS = ("wall", "hedge", "fence", "gate", "trees")
 ROAD_COLORS = {"highway": (250, 240, 200), "avenue": (240, 240, 240), "road": (235, 225, 200), "street": (225, 225, 225),
@@ -119,13 +130,15 @@ def main() -> None:
                 pts = [W(*q) for q in corners(px, pz, rot, pw, pd)]
                 d.polygon(pts, fill=col)
         d.polygon([P(q) for q in corners(x, y, yaw, w, dd)], outline=(255, 255, 255))
+    kind_names = c.get("kinds", [])
     for lot in c["lots"]:
         x, y, yaw, w, dd, kind, ident, zone = lot[:8]
+        name = kind_names[kind] if kind < len(kind_names) else ""
         cs, sn = math.cos(yaw), math.sin(yaw)
         pts = []
         for lx, lz in ((-w / 2, -dd / 2), (w / 2, -dd / 2), (w / 2, dd / 2), (-w / 2, dd / 2)):
             pts.append(P((x + lx * cs + lz * sn, y - lx * sn + lz * cs)))
-        d.polygon(pts, fill=(200, 60, 60) if ident else (120, 100, 90), outline=(40, 30, 30))
+        d.polygon(pts, fill=(200, 60, 60) if ident else KIND_COLORS.get(name, (120, 100, 90)), outline=(40, 30, 30))
         # Front edge (towards the street).
         d.line([pts[0], pts[1]], fill=(255, 255, 0), width=1)
     for w in c["walls"]:
