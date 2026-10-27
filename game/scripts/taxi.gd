@@ -677,7 +677,9 @@ func _approach(start: int, curb: Dictionary, side_of: Vector3) -> Dictionary:
 		var length := 0.0
 		for k in range(1, nodes.size()):
 			length += city.node_pos(nodes[k - 1]).distance_to(city.node_pos(nodes[k]))
-		var score := length + (0.0 if near_side else 60.0) + (400.0 if turns_back else 0.0)
+		# The far side means crossing the street to the cab: worth a loop
+		# round the block on a grid.
+		var score := length + (0.0 if near_side else 250.0) + (400.0 if turns_back else 0.0)
 		options.append({"nodes": nodes, "stop": s[0], "yaw": s[1], "to": dir[1], "score": score})
 	if options.is_empty():
 		return {}

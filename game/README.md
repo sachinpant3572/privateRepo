@@ -80,7 +80,7 @@ phone.
   first, without leaving the curb.
 - **Demo map**: about 1.3 km x 1.5 km of Bellerive on both banks of the
   Morrow, from the world map (`data/world_map.json`, the city's
-  `demo_window`). You start outside **Union Station** in the Gilt District.
+  `demo_window`). You start outside **Union Station** in Midtown.
   The window is open: its margin ring is drivable and the country carries on.
 - **Country round Bellerive** (phase 2 of `../WORLD_V3_PLAN.md`;
   `scripts/country.gd`, `country_tiles.gd`, `kits/country_kit.gd`): the
@@ -125,8 +125,10 @@ phone.
     are big in Gilt, tight in the Quarter, long and staggered in the
     Wards, with T-junctions where streets were dropped.
   - **Long roads**:
-    - **Liberty Avenue**, the diagonal from Aurum Tower to Ironwharf;
-    - **Magnolia Avenue**, curving through Gilt;
+    - **Liberty Avenue**, the diagonal from Founders Circle across Midtown
+      (like Broadway) to Ironwharf;
+    - **Magnolia Avenue**, curving through Gilt to the City Hall grounds and
+      on beyond them, like DC's diagonals;
     - **Lantern Boulevard**, which crosses the river on **Morrow Bridge**
       to **Morrow Point**, a far-bank district.
   - **Street classes**:
@@ -138,8 +140,25 @@ phone.
     - ordinary streets;
     - narrow Quarter streets paved with old pavers;
     - pedestrian lanes with bollards and string lights.
-  - **Liberty Green**, a park on Liberty Avenue with paths, a bandstand, a
-    pond and oaks.
+  - **Bellerive v3 set pieces** (borrowed from DC, New York and California;
+    `../HANDOFF-bellerive-v3.md`, research in
+    `../reference/world/bellerive_patterns.md`):
+    - **the civic centre**: City Hall on its lawn with a drive round it, the
+      **Esplanade** (a mall with a reflecting pool and elm rows) running east
+      to **Founders Circle**, a traffic circle with the Founders Obelisk where
+      Lantern Boulevard meets Liberty Avenue. The Parish Courthouse, the
+      Federal Building, the Public Library and Police Headquarters face the
+      mall;
+    - **Midtown**: Manhattan's long thin blocks between wide avenues, Liberty
+      cutting across with a bowtie at **Liberty Square** (LED tower), the Main
+      Post Office and Fire Headquarters nearby;
+    - **Moreau Square**: a square park ringed by painted Victorian rows (SF's
+      Alamo Square);
+    - **Morrow Point**: brownstone rows round green block cores (Brooklyn);
+    - the **Ferry Building** on the Ironwharf quay (SF);
+    - palm-lined boulevards (LA).
+  - **Liberty Green**, a long park on Liberty Avenue (Central Park, scaled
+    down) with paths, a bandstand, a pond and oaks.
   - Some downtown blocks are plazas or car parks, and some Ward blocks are
     pocket parks or a chapel.
   - Buildings stand on parcels in each block, facing its front street;
@@ -147,6 +166,9 @@ phone.
 - Each block takes its layout from the map district it falls in:
   - **Gilt District**: mid-rise glass towers on stone plazas, street lights,
     traffic lights, rooftop helipads and gardens.
+  - **Midtown**: the same towers, taller, with LED towers among them.
+  - **Morrow Point**: brownstone rows; the blocks on Moreau Square have
+    painted Victorian rows.
   - **Lantern Quarter**: rings of Creole townhouses with cast-iron galleries
     round shady courtyards, gas lamps, crepe myrtles.
   - **Floodline Wards**: rows of shotgun houses with porches and backyards,
@@ -159,7 +181,7 @@ phone.
     Tower, The Blue Lantern, Lantern Square, the precinct (BUSTED respawn),
     Floodline Clinic (WASTED respawn), Wharfside Courts, Moreau House, Teo's
     apartment, Warehouse 9, The Pit, the Old Streetcar Depot and the
-    Drowned Streetcar.
+    Drowned Streetcar, and the government buildings (`kits/civic_kit.gd`).
   - **Streetcars**: the Lantern Line runs from Union Station down to the
     river (rails, overhead wires, streetcars at stops); the rusty drowned
     line leads into the old depot.

@@ -18,15 +18,21 @@ extends RefCounted
 ##   own in the middle of the front. Each parcel gets one layout:
 ##   - Lantern Quarter: Creole townhouse rings, shops and gardens;
 ##   - Floodline Wards and Morrow Point: shotgun rows, chapels, pocket parks;
-##   - Gilt District: towers, plazas and parking;
+##   - Gilt District: towers, plazas and parking; Midtown taller, with LED
+##     towers;
+##   - Morrow Point: brownstone rows round green block cores (Brooklyn);
+##   - round Moreau Square: painted Victorian rows (SF's Alamo Square);
 ##   - Ironwharf: warehouses and container yards, cranes on the quay;
-##   - landmarks.
+##   - landmarks, the government buildings among them (kits/civic_kit.gd);
+##   - the civic centre's set pieces: City Hall's grounds, the Esplanade
+##     with its reflecting pool, Founders Circle with the obelisk.
 ##   The rest of the lot (corners of odd-shaped blocks) gets trees,
 ##   planters or barrels.
 
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const Buildings = preload("res://scripts/kits/building_kit.gd")
 const Props = preload("res://scripts/kits/prop_kit.gd")
+const Civic = preload("res://scripts/kits/civic_kit.gd")
 const StreetPlan = preload("res://scripts/street_plan.gd")
 
 ## Road and block slabs reach down into the water so quays have walls.
@@ -60,8 +66,8 @@ const ZEBRA_STYLES := ["downtown", "quarter", "station", "tower", "police", "hos
 ## Biggest parcel (along the front, deep) per district style; bigger lots
 ## are split.
 const PARCEL_MAX := {
-	"downtown": Vector2(58, 50), "quarter": Vector2(46, 42), "wards": Vector2(110, 32),
-	"docks": Vector2(84, 64),
+	"downtown": Vector2(58, 50), "midtown": Vector2(52, 50), "quarter": Vector2(46, 42), "wards": Vector2(110, 32),
+	"docks": Vector2(84, 64), "brownstone": Vector2(40, 34), "painted": Vector2(44, 32),
 }
 const PARCEL_DEFAULT := Vector2(50, 44)
 ## Room a landmark's parcel takes beyond its lot need (along, deep).
@@ -70,9 +76,18 @@ const LANDMARK_ROOM := Vector2(8, 6)
 const LANDMARK_PARCEL := {"moreau_house": Vector2(40, 30), "teo_apartment": Vector2(40, 30)}
 ## Ground colour of a block's lot by district style.
 const LOT_GROUND := {
-	"quarter": Color(0.55, 0.53, 0.49), "wards": Color(0.32, 0.53, 0.27), "downtown": PLAZA,
-	"docks": YARD, "green": Color(0.36, 0.58, 0.3),
+	"quarter": Color(0.55, 0.53, 0.49), "wards": Color(0.32, 0.53, 0.27), "downtown": PLAZA, "midtown": PLAZA,
+	"docks": YARD, "green": Color(0.36, 0.58, 0.3), "brownstone": Color(0.32, 0.53, 0.27), "painted": Color(0.32, 0.53, 0.27),
 }
+## Map landmarks built by the civic kit: landmark id -> kit kind.
+const CIVIC_LANDMARKS := {
+	"city_hall": "city_hall", "county_courthouse": "county_courthouse", "federal_building": "federal_building",
+	"public_library": "public_library", "police_headquarters": "police_headquarters",
+	"main_post_office": "main_post_office", "fire_headquarters": "fire_headquarters",
+	"ferry_building": "ferry_building", "liberty_square": "led_tower",
+}
+## The set pieces whose blocks are lawn rather than lots.
+const LAWNS := ["green", "esplanade", "circle", "square"]
 
 
 class Ctx:
@@ -335,11 +350,13 @@ static func _street(ctx: Ctx, e: int, cls: String) -> void:
 			while t < s0 + run - 4.0:
 				var off := 2.2 if line >= 0 else 0.0
 				for side in ([-1.0, 1.0] if line >= 0 else [0.0]):
-					if style == "downtown":
+					# Palms (LA's Wilshire and Sunset) except where the
+					# streetcar runs the Quarter's oak-shaded neutral ground.
+					if style in ["downtown", "midtown"] or line < 0:
 						Props.palm(mb, local, Vector3(t, 0.25, side * off), ctx.deco)
 					else:
 						Props.oak(mb, local, Vector3(t, 0.25, side * off), ctx.deco)
-				t += 14.0
+				t += 12.0 if style != "quarter" or line < 0 else 14.0
 			if ng >= 1.0:
 				local.append([Vector3(ng_mid, 0.4, 0), Vector3(ng, 0.8, 6.0)])
 			_done(ctx, local, false, ctx.props)
@@ -617,10 +634,22 @@ static func split(r: Rect2, size: Vector2) -> Array:
 static func _land_block(ctx: Ctx, style: String) -> void:
 	var city = ctx.city
 	var district: String = city.district_style(ctx.face)
-	_flat_in_front(ctx, ctx.ff, ctx.lot, KERB + 0.01, _paved(LOT_GROUND.get("green" if style == "green" else district, PAVEMENT)))
-	if style == "green":
+	if district == "wards" and city.faces_square(ctx.face):
+		district = "painted"
+	var grounds: bool = ctx.plan.set_piece(ctx.face) == "grounds"
+	var lawn: bool = style in LAWNS or grounds
+	_flat_in_front(ctx, ctx.ff, ctx.lot, KERB + 0.01, _paved(LOT_GROUND.green if lawn else LOT_GROUND.get(district, PAVEMENT)))
+	if style in LAWNS:
 		_use_parcel(ctx, ctx.rect)
-		_liberty_green(ctx)
+		match style:
+			"green":
+				_liberty_green(ctx)
+			"esplanade":
+				_esplanade(ctx)
+			"circle":
+				_founders_circle(ctx)
+			"square":
+				_square_park(ctx)
 		_furniture(ctx, "park")
 		return
 	var lm: Dictionary = city.landmark_at(ctx.face)
@@ -637,6 +666,10 @@ static func _land_block(ctx: Ctx, style: String) -> void:
 		rest = [Rect2(r.position.x, r.position.y, parcel.position.x - r.position.x, r.size.y),
 			Rect2(parcel.end.x, r.position.y, r.end.x - parcel.end.x, r.size.y),
 			Rect2(parcel.position.x, r.position.y, lw, parcel.position.y - r.position.y)]
+		if grounds:
+			# City Hall stands alone on its lawn.
+			rest = []
+			district = "grounds"
 	var docks_ff = docks_frame(ctx.plan, ctx.face) if district == "docks" and lm.is_empty() else null
 	if docks_ff != null:
 		# Yards turn their backs to the quay, so cranes reach over the water.
@@ -659,8 +692,9 @@ static func _land_block(ctx: Ctx, style: String) -> void:
 				if ctx.hx < 4.0 or ctx.hz < 4.0:
 					continue
 				_district_parcel(ctx, district)
-	_filler(ctx, district)
-	_furniture(ctx, district)
+	var look := "downtown" if district == "midtown" else district
+	_filler(ctx, look)
+	_furniture(ctx, look)
 
 
 ## A place (places.gd) on parcel `r`: its storefront at the front, and
@@ -708,6 +742,9 @@ static func docks_frame(plan, face: int):
 
 
 static func _landmark(ctx: Ctx, id: String) -> void:
+	if CIVIC_LANDMARKS.has(id):
+		_civic(ctx, CIVIC_LANDMARKS[id], GRASS if id in ["city_hall", "county_courthouse", "public_library"] else PLAZA)
+		return
 	match id:
 		"union_station":
 			_union_station(ctx)
@@ -746,6 +783,20 @@ static func _landmark(ctx: Ctx, id: String) -> void:
 static func _district_parcel(ctx: Ctx, district: String) -> void:
 	var roll := ctx.rng.randf()
 	match district:
+		"midtown":
+			if roll < 0.12 and ctx.hx >= 11.0 and ctx.hz >= 9.0:
+				_civic(ctx, "led_tower", PLAZA)
+			elif roll < 0.18:
+				_plaza(ctx)
+			else:
+				_downtown(ctx, 1.4)
+		"brownstone":
+			if roll < 0.08:
+				_pocket_park(ctx)
+			else:
+				_rows(ctx, "brownstone_row", 14.0)
+		"painted":
+			_rows(ctx, "painted_lady_row", 14.0)
 		"downtown":
 			if roll < 0.1:
 				_plaza(ctx)
@@ -993,25 +1044,26 @@ static func _chapel(ctx: Ctx) -> void:
 
 ## Gilt District: towers on a stone plaza, sized to the block. Kept mid-rise
 ## so roofs don't swallow the street under the 3/4 camera.
-static func _downtown(ctx: Ctx) -> void:
+## `tall` scales the heights (Midtown stands taller).
+static func _downtown(ctx: Ctx, tall := 1.0) -> void:
 	var rng := ctx.rng
 	var hx := ctx.hx
 	var hz := ctx.hz
 	_ground(ctx, PLAZA)
 	match rng.randi() % 3:
 		0:
-			_tower(ctx, Vector3.ZERO, hx * 2 - 6.0, hz * 2 - 6.0, rng.randf_range(18.0, 30.0))
+			_tower(ctx, Vector3.ZERO, hx * 2 - 6.0, hz * 2 - 6.0, rng.randf_range(18.0, 30.0) * tall)
 			var local := _at(ctx, Vector3(0, KERB, 0), 0.0)
 			for x in [-hx + 1.5, hx - 1.5]:
 				Props.planter(ctx.mb, local, Vector3(x, 0, hz - 1.5))
 			_done(ctx, local, false, ctx.props)
 		1:
 			for x in [-hx * 0.5, hx * 0.5]:
-				_tower(ctx, Vector3(x, 0, -1.5), hx - 2.5, hz * 2 - 7.0, rng.randf_range(14.0, 26.0))
+				_tower(ctx, Vector3(x, 0, -1.5), hx - 2.5, hz * 2 - 7.0, rng.randf_range(14.0, 26.0) * tall)
 		_:
 			for x in [-hx * 0.5, hx * 0.5]:
 				for z in [-hz * 0.5, hz * 0.5]:
-					_tower(ctx, Vector3(x, 0, z), hx - 3.0, hz - 3.0, rng.randf_range(11.0, 22.0))
+					_tower(ctx, Vector3(x, 0, z), hx - 3.0, hz - 3.0, rng.randf_range(11.0, 22.0) * tall)
 
 
 static func _tower(ctx: Ctx, pos: Vector3, w: float, d: float, h: float) -> void:
@@ -1304,6 +1356,121 @@ static func _liberty_green(ctx: Ctx) -> void:
 			Props.bench(mb, local, Vector3(2.6, 0, s * hz * f), -PI / 2)
 		Props.gas_lamp(mb, local, Vector3(s * hx * 0.62, 0, -2.2), ctx.glow)
 		Props.gas_lamp(mb, local, Vector3(-2.2, 0, s * hz * 0.62), ctx.glow)
+	_done(ctx, local, false, ctx.props)
+
+
+# --- Civic centre and set pieces ---------------------------------------------------
+
+## A civic kit building filling the parcel, its front to the street.
+static func _civic(ctx: Ctx, kind: String, ground: Color) -> void:
+	_ground(ctx, ground)
+	var local := _at(ctx, Vector3(0, KERB, 0), PI)
+	Civic.build(kind, ctx.mb, local, Vector2(ctx.hx * 2.0, ctx.hz * 2.0), ctx.rng)
+	_done(ctx, local)
+
+
+## Rows of terraced houses (`kind`, a civic kit row) along the parcel's
+## street sides, each `depth` deep, with the gardens behind them meeting in
+## a green core.
+static func _rows(ctx: Ctx, kind: String, depth: float) -> void:
+	var hx := ctx.hx
+	var hz := ctx.hz
+	_ground(ctx, GRASS)
+	var d := minf(depth, hz - 1.0)
+	for side in [1.0, -1.0]:
+		if not ctx.open["+z" if side > 0 else "-z"] or (side < 0 and hz < depth + 4.0):
+			continue
+		var x := -hx
+		while x < hx - 6.0:
+			var w := minf(36.0, hx - x)
+			if hx - x - w < 8.0:
+				w = hx - x
+			var local := _at(ctx, Vector3(x + w * 0.5, KERB, side * (hz - d * 0.5)), PI if side > 0 else 0.0)
+			Civic.build(kind, ctx.mb, local, Vector2(w - 0.4, d), ctx.rng)
+			_done(ctx, local)
+			x += w
+	var props := _at(ctx, Vector3(0, KERB, 0), 0.0)
+	for k in int(hx / 9.0):
+		if ctx.rng.randf() < 0.6:
+			Props.oak(ctx.mb, props, Vector3(-hx + 6.0 + k * 18.0, 0, ctx.rng.randf_range(-1.5, 1.5)), ctx.rng)
+	_done(ctx, props, false, ctx.props)
+
+
+## The Esplanade: a lawn between the drives with a reflecting pool down the
+## middle, gravel walks and rows of elms either side, benches facing it.
+static func _esplanade(ctx: Ctx) -> void:
+	var mb = ctx.mb
+	var hx := ctx.hx
+	var hz := ctx.hz
+	var pool := _at(ctx, Vector3(0, KERB, 0), PI / 2)
+	Civic.build("reflecting_pool", mb, pool, Vector2(minf(24.0, hz * 2.0 - 16.0), minf(120.0, hx * 2.0 - 24.0)), ctx.rng)
+	_done(ctx, pool, false, ctx.props)
+	var local := _at(ctx, Vector3(0, KERB, 0), 0.0)
+	for z in [-hz + 6.0, hz - 6.0]:
+		mb.box(Vector3(0, 0.03, z), Vector3(hx * 2.0 - 4.0, 0.04, 3.0), PLAZA.lightened(0.08))
+	var x := -hx + 6.0
+	while x <= hx - 6.0:
+		for z in [-hz + 2.5, hz - 2.5]:
+			Props.oak(mb, local, Vector3(x, 0, z), ctx.rng)
+		if absf(x) > 8.0 and int((x + hx) / 12.0) % 2 == 0:
+			Props.bench(mb, local, Vector3(x + 6.0, 0, hz - 8.2), 0.0)
+			Props.bench(mb, local, Vector3(x + 6.0, 0, -hz + 8.2), PI)
+		x += 12.0
+	_done(ctx, local, false, ctx.props)
+
+
+## Founders Circle: a round lawn with walks from the middle out to the
+## crossings and the Founders Obelisk at the centre.
+static func _founders_circle(ctx: Ctx) -> void:
+	var mb = ctx.mb
+	var r := minf(ctx.hx, ctx.hz)
+	var local := _at(ctx, Vector3(0, KERB, 0), 0.0)
+	mb.cylinder(Vector3(0, 0.0, 0), r + 2.0, 0.04, PLAZA, 20)
+	mb.cylinder(Vector3(0, 0.0, 0), r - 1.0, 0.06, MeshBuilder.glow(GRASS, MeshBuilder.GRASS), 20)
+	var saved: Transform3D = mb.xform
+	for k in 4:
+		mb.xform = saved * Transform3D(Basis(Vector3.UP, PI / 4 + k * PI / 2), Vector3.ZERO)
+		mb.box(Vector3(0, 0.08, -r * 0.5), Vector3(2.4, 0.04, r), PLAZA)
+	mb.xform = saved
+	for k in 8:
+		var a := TAU * (k + 0.5) / 8.0
+		Props.palm(mb, local, Vector3(cos(a), 0, sin(a)) * (r - 4.0), ctx.rng)
+	_done(ctx, local, false, ctx.props)
+	var obelisk := _at(ctx, Vector3(0, KERB, 0), PI)
+	Civic.build("founders_obelisk", mb, obelisk, Vector2(minf(28.0, r * 1.4), minf(28.0, r * 1.4)), ctx.rng)
+	_done(ctx, obelisk)
+
+
+## Moreau Square: a lawn with walks corner to corner, a fountain where they
+## meet and oaks round the edge.
+static func _square_park(ctx: Ctx) -> void:
+	var mb = ctx.mb
+	var hx := ctx.hx
+	var hz := ctx.hz
+	var local := _at(ctx, Vector3(0, KERB, 0), 0.0)
+	var saved: Transform3D = mb.xform
+	for s in [-1.0, 1.0]:
+		var diag := Vector3(hx * 2.0, 0, hz * 2.0 * s)
+		mb.xform = saved * Transform3D(Basis(Vector3.UP, atan2(-diag.z, diag.x)), Vector3.ZERO)
+		mb.box(Vector3(0, 0.03, 0), Vector3(diag.length() - 4.0, 0.04, 2.4), PLAZA)
+	mb.xform = saved
+	mb.cylinder(Vector3(0, 0, 0), 4.0, 0.5, Buildings.STONE, 12)
+	mb.cylinder(Vector3(0, 0.05, 0), 3.6, 0.5, Color(0.35, 0.6, 0.75), 12)
+	mb.cylinder(Vector3(0, 0.5, 0), 0.5, 2.2, Buildings.STONE.lightened(0.1), 6)
+	local.append([Vector3(0, 0.5, 0), Vector3(8.0, 1.0, 8.0)])
+	var x := -hx + 3.0
+	while x <= hx - 3.0:
+		for z in [-hz + 3.0, hz - 3.0]:
+			if ctx.rng.randf() < 0.8:
+				Props.oak(mb, local, Vector3(x, 0, z), ctx.rng)
+		x += 11.0
+	var z := -hz + 14.0
+	while z <= hz - 14.0:
+		for xx in [-hx + 3.0, hx - 3.0]:
+			Props.oak(mb, local, Vector3(xx, 0, z), ctx.rng)
+		z += 11.0
+	for q in [Vector3(-1, 0, -1), Vector3(1, 0, -1), Vector3(-1, 0, 1), Vector3(1, 0, 1)]:
+		Props.bench(mb, local, q * 7.0, atan2(q.x, q.z))
 	_done(ctx, local, false, ctx.props)
 
 

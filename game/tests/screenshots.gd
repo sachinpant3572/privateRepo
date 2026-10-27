@@ -24,6 +24,14 @@ const TOUR := [
 	["9_drowned_streetcar", "drowned_streetcar", Vector3(0, 0, 0)],
 	["10_streetcar_depot", "streetcar_depot", Vector3(0, 0, 0)],
 	["11_lantern_line", "union_station", Vector3(-26, 0, 11.0)],
+	# Bellerive v3: the civic centre, Midtown and the waterfront.
+	["25_city_hall", "city_hall", Vector3(0, 0, 0)],
+	["26_courthouse", "county_courthouse", Vector3(0, 0, 0)],
+	["27_library", "public_library", Vector3(0, 0, 0)],
+	["28_liberty_square", "liberty_square", Vector3(0, 0, 0)],
+	["29_post_office", "main_post_office", Vector3(0, 0, 0)],
+	["30_ferry_building", "ferry_building", Vector3(0, 0, 0)],
+	["31_fire_hq", "fire_headquarters", Vector3(0, 0, 0)],
 ]
 
 
@@ -78,6 +86,11 @@ func _run() -> void:
 		["22_river_road", _road_spot(game, "river_road", Vector2(480, 1010))],
 		["23_morrow_point", _road_spot(game, "point_ave", Vector2(330, 1300))],
 		["24_wharf_street", _road_spot(game, "wharf", Vector2(1000, 860))],
+		["32_founders_circle", _road_spot(game, "founders", game.city.plan.circle_at + Vector2(0, 46))],
+		["33_esplanade", _road_spot(game, "esplanade", game.city.plan.circle_at + Vector2(-120, 32))],
+		["34_moreau_square", _road_spot(game, "moreau", game.city.plan.MOREAU_AT + Vector2(0, 50))],
+		["35_morrow_point_rows", _road_spot(game, "", Vector2(600, 1350))],
+		["36_midtown", _road_spot(game, "", Vector2(500, 200))],
 	]
 	for stop in roads:
 		var pos: Vector3 = stop[1]

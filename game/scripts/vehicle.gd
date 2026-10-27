@@ -456,13 +456,22 @@ func _traffic_ai() -> void:
 	var aim := target
 	if ab.length() > TRAFFIC_LOOKAHEAD:
 		var t := clampf((global_position - a).dot(ab) / ab.length_squared(), 0.0, 1.0)
-		aim = a + ab * minf(1.0, t + TRAFFIC_LOOKAHEAD / ab.length())
+		# Far off the lane (a left turn across a boulevard), look nearer, so
+		# the car swings out to its lane before running down it rather than
+		# cutting the corner into the median's nose.
+		var off := (global_position - (a + ab * t)).length()
+		var ahead := clampf(TRAFFIC_LOOKAHEAD - off, 2.0, TRAFFIC_LOOKAHEAD)
+		aim = a + ab * minf(1.0, t + ahead / ab.length())
 	aim.y = global_position.y
 	desired_dir = (aim - global_position).normalized() if aim.distance_to(global_position) > 0.5 else to.normalized()
 	throttle = minf(TRAFFIC_THROTTLE, TRAFFIC_CRUISE / max_speed)
 	if to.length() < TRAFFIC_SLOW_ZONE:
 		# Slow for the junction, so heavy, understeering models still make
 		# the turn instead of running wide (onto a boulevard median).
+		throttle = minf(throttle, TRAFFIC_TURN_SPEED / max_speed)
+	elif ab.length() > 0.5 and (-global_basis.z).angle_to(ab) > 0.4:
+		# Still coming round from the last junction: hold turn speed until
+		# lined up with the new street, or a fast model runs wide mid-turn.
 		throttle = minf(throttle, TRAFFIC_TURN_SPEED / max_speed)
 	var dt := get_physics_process_delta_time()
 	if _reverse_time > 0.0:

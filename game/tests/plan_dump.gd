@@ -34,9 +34,9 @@ func _init() -> void:
 			names.append(lm.id)
 	var t0 := Time.get_ticks_msec()
 	var plan := StreetPlan.new()
-	plan.build(rect, 110.0, 1234, river, half, spots, Vector2(830, 560))
+	plan.build(rect, 110.0, 1234, river, half, spots, preload("res://scripts/city.gd").PARK_AT)
 	var ms := Time.get_ticks_msec() - t0
-	var data := {"ms": ms, "window": [rect.position.x, rect.position.y, rect.size.x, rect.size.y], "nodes": [], "edges": [], "faces": [], "landmarks": [], "park": plan.park_face}
+	var data := {"ms": ms, "window": [rect.position.x, rect.position.y, rect.size.x, rect.size.y], "nodes": [], "edges": [], "faces": [], "landmarks": [], "park": plan.park_face, "pieces": []}
 	for p in plan.node_pos:
 		data.nodes.append([p.x, p.y])
 	for e in plan.edge_count():
@@ -45,6 +45,8 @@ func _init() -> void:
 		var face: Dictionary = plan.faces[f]
 		var rect_l := plan.lot_rect(f) if face.kind == "land" else Rect2()
 		data.faces.append({"kind": face.kind, "poly": _arr(face.poly), "inner": _arr(face.inner), "lot": _arr(face.lot), "rect": [rect_l.size.x, rect_l.size.y]})
+	for sp in plan.set_pieces:
+		data.pieces.append([sp.id, sp.kind, sp.face])
 	for k in spots.size():
 		data.landmarks.append([names[k], spots[k][1].x, spots[k][1].y, plan.face_of(spots[k][1])])
 	var f := FileAccess.open(out_path, FileAccess.WRITE)

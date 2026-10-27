@@ -96,9 +96,13 @@ static func build(city) -> Array:
 
 
 ## Block f can hold a place: playable land with a front lot on the
-## sidewalk, not the park, a landmark or a docks yard on the quay.
+## sidewalk, not the park, a set piece, a landmark or a docks yard on the
+## quay.
 static func _eligible(city, f: int) -> bool:
 	if not city.in_window(f) or not city.plan.is_land(f) or city.plan.is_park(f):
+		return false
+	# Set pieces (the Esplanade, Founders Circle, the squares) are lawns.
+	if city.plan.set_piece(f) != "":
 		return false
 	if not city.landmark_at(f).is_empty():
 		return false

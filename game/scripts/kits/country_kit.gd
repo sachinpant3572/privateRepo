@@ -13,6 +13,7 @@ extends RefCounted
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const Buildings = preload("res://scripts/kits/building_kit.gd")
 const Props = preload("res://scripts/kits/prop_kit.gd")
+const Civic = preload("res://scripts/kits/civic_kit.gd")
 
 const KINDS := [
 	# Rural.
@@ -145,8 +146,13 @@ static func build(kind: String, mb, out: Array, size: Vector2, rng: RandomNumber
 		"torque_tone": torque_tone(mb, out, w, d, rng)
 		"aurum_hangar": aurum_hangar(mb, out, w, d, rng)
 		_:
-			# Unknown kind: a plain block, so a typo shows instead of a hole.
-			_solid(mb, out, Vector3(0, 2.0, 0), Vector3(w * 0.6, 4.0, d * 0.6), Color(1.0, 0.0, 1.0))
+			# Government buildings and terraced homes come from the civic
+			# kit; an unknown kind is a plain block, so a typo shows instead
+			# of a hole.
+			if kind in Civic.kinds():
+				Civic.build(kind, mb, out, Vector2(w, d), rng)
+			else:
+				_solid(mb, out, Vector3(0, 2.0, 0), Vector3(w * 0.6, 4.0, d * 0.6), Color(1.0, 0.0, 1.0))
 
 
 # --- Helpers ------------------------------------------------------------------

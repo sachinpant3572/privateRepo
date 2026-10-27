@@ -8,7 +8,10 @@ extends Camera3D
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const L = preload("res://scripts/layers.gd")
 
-const DISTANCE := 60.0
+## Far enough back (about 190 m up) that the tallest downtown towers, 150 m
+## or so, stay in front of the camera instead of clipping open. The view is
+## orthographic, so distance doesn't change the framing.
+const DISTANCE := 220.0
 const FOOT_SIZE := 26.0
 const DRIVE_SIZE := 48.0
 ## Degrees below the horizon. 90 would be straight down with no fronts at all.
@@ -31,7 +34,7 @@ func _ready() -> void:
 	projection = PROJECTION_ORTHOGONAL
 	size = FOOT_SIZE
 	near = 1.0
-	far = 200.0
+	far = DISTANCE + 120.0
 	rotation_degrees = Vector3(-PITCH, 0.0, 0.0)
 	current = true
 

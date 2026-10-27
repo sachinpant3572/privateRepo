@@ -92,6 +92,11 @@ buildings too".
 - B-9 **Districts:** Midtown (style `midtown`: taller towers ×1.4, 12% LED towers). Morrow Point's style is now `brownstone`. Wards blocks that front Moreau Square become `painted` rows.
 - B-10 **Boulevard trees:** palms every 12 m, except where the streetcar runs through the Quarter, which keeps oaks (St. Charles Avenue).
 
+- B-11 **First test round fixes.**
+  - `_trim_holes`: a district street stretch that runs alongside a set piece within the street gap is cut. A head-on end of up to 1.6 gaps stays, and so does a corner pass-by of up to 2.2 gaps. This removed a 15 m sliver block between the Gilt grid and the north side of the mall.
+  - The 83 m block on the north side of the mall holds the courthouse; its 50x40 m lot fits facing the mall. The Federal Building moved to the block north of the City Hall grounds, facing them across Capitol Drive, with its lot cut to 47x39 m. Rejected: growing blocks toward the facing side. A side holds a lot no wider than 2 x (half - 3), and the north frontages are only 47 m and 83 m.
+  - Union Station faces north (`LANDMARK_FACING`), as before v3. The spawn and the walk, drive and taxi tests start in front of it, heading north.
+
 ## Cost (rough)
 
 | Option | Scope | Time |

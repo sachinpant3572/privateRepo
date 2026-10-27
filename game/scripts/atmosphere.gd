@@ -62,7 +62,13 @@ func _ready() -> void:
 	rng.randomize()
 	sun = DirectionalLight3D.new()
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 110.0
+	# The camera sits 220 m back (TopDownCamera.DISTANCE), so the ground is
+	# 205-235 m away. Splits put the sharpest cascade that holds all of it
+	# there; the nearer ones only hold tower tops.
+	sun.directional_shadow_max_distance = 300.0
+	sun.directional_shadow_split_1 = 0.45
+	sun.directional_shadow_split_2 = 0.62
+	sun.directional_shadow_split_3 = 0.8
 	sun.shadow_blur = 1.5
 	add_child(sun)
 	env = Environment.new()

@@ -34,7 +34,7 @@ const SIDEWALK := 3.0
 const WALK_INSET := 1.2
 ## Liberty Green, the park, sits on Liberty Avenue nearest here (local
 ## metres): where the Quarter meets the Wards.
-const PARK_AT := Vector2(830, 560)
+const PARK_AT := Vector2(870, 356)
 ## Parked cars sit this far out from the curb (their centre).
 const PARK_FROM_CURB := 1.0
 ## Scenery round the window, in metres.
@@ -51,7 +51,7 @@ const COUNTRY_BASE := 1_000_000
 ## A town counts as the district round it this far out.
 const TOWN_RADIUS := 420.0
 const PATCH_DISTRICTS := {
-	"gilt": "gilt_district", "quarter": "lantern_quarter", "wards": "floodline_wards",
+	"gilt": "gilt_district", "midtown": "midtown", "quarter": "lantern_quarter", "wards": "floodline_wards",
 	"docks": "ironwharf", "point": "morrow_point",
 }
 
@@ -135,7 +135,7 @@ func build(seed_v: int) -> void:
 		_towns.append({"id": t.id, "name": t.name, "style": t.kind, "faction": "", "local": Vector2(t.pos[0], t.pos[1])})
 	for lm in _map_landmarks:
 		var f: int = plan.face_of(lm.local)
-		if plan.is_land(f) and not _landmarks.has(f) and not plan.is_park(f):
+		if plan.is_land(f) and not _landmarks.has(f) and not plan.is_park(f) and plan.set_piece(f) in ["", "grounds"]:
 			_landmarks[f] = {"id": lm.id, "type": lm.type, "name": lm.name, "local": lm.local}
 	places = Places.build(self)
 	for p in places:
@@ -383,9 +383,24 @@ func block_style(f: int) -> String:
 		return "sliver"
 	if plan.is_park(f):
 		return "green"
+	var piece: String = plan.set_piece(f)
+	if piece in ["esplanade", "circle", "square"]:
+		return piece
 	if _landmarks.has(f):
 		return _landmarks[f].type
 	return district_style(f)
+
+
+## True when block f fronts on Moreau Square (its painted rows face it).
+func faces_square(f: int) -> bool:
+	var sq: int = plan.set_piece_face("moreau_square")
+	if sq < 0 or f == sq:
+		return false
+	for e in plan.faces[f].edges:
+		var slots: Vector2i = plan.edge_face[e]
+		if slots.x == sq or slots.y == sq:
+			return true
+	return false
 
 
 ## The style of the district block f is in ("quarter", "wards", ...).

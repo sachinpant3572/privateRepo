@@ -21,7 +21,8 @@ func _run() -> void:
 	var tests := [
 		"test_city_streams_cells",
 		"test_city_follows_world_map",
-		"test_street_plan_is_not_a_grid",
+		"test_street_plan_is_a_california_grid",
+		"test_bellerive_borrows_dc_ny_and_california",
 		"test_wanted_level_decays_out_of_sight",
 		"test_player_walks",
 		"test_punching_civilian_gives_one_star",
@@ -102,6 +103,89 @@ func test_city_streams_cells() -> void:
 	_check(city.cell_node(city.cell_at(city.spawn_point)) == null, "far cells are unloaded")
 
 
+## Bellerive v3 (HANDOFF-bellerive-v3.md): the civic centre (City Hall on
+## its grounds, the Esplanade, Founders Circle), Midtown's long blocks with
+## Liberty Avenue cutting across, Moreau Square and its painted rows, and
+## the government buildings facing the mall.
+func test_bellerive_borrows_dc_ny_and_california() -> void:
+	await _new_game(false)
+	var city = game.city
+	var plan = city.plan
+	for id in ["founders_circle", "city_hall_grounds", "esplanade", "moreau_square"]:
+		_check(plan.set_piece_face(id) >= 0, "set piece %s is a block" % id)
+	_check(city.landmark_block("city_hall") == plan.set_piece_face("city_hall_grounds"), "City Hall stands on its grounds")
+	for id in ["esplanade", "founders_circle", "moreau_square"]:
+		var f: int = plan.set_piece_face(id)
+		_check(f < 0 or city.landmark_at(f).is_empty(), "%s has no landmark lot in it" % id)
+	# Founders Circle: a ring with at least four roads meeting it, and none
+	# crossing its lawn.
+	var ring := {}
+	for e in plan.edge_count():
+		if plan.edge_road[e] == "founders":
+			ring[plan.edge_a[e]] = true
+			ring[plan.edge_b[e]] = true
+	var spokes := 0
+	var inside := 0
+	for e in plan.edge_count():
+		if plan.edge_road[e] == "founders":
+			continue
+		for n in [plan.edge_a[e], plan.edge_b[e]]:
+			if ring.has(n):
+				spokes += 1
+		var mid: Vector2 = (plan.pos(plan.edge_a[e]) + plan.pos(plan.edge_b[e])) * 0.5
+		if mid.distance_to(plan.circle_at) < plan.CIRCLE_R - 4.0:
+			inside += 1
+	_check(spokes >= 4, "roads meet Founders Circle (%d)" % spokes)
+	_check(inside == 0, "no street crosses the circle's lawn (%d)" % inside)
+	# Magnolia Avenue stops at the City Hall grounds, like DC's diagonals.
+	var grounds: int = plan.set_piece_face("city_hall_grounds")
+	var through := 0
+	for e in plan.edge_count():
+		if plan.edge_road[e] == "magnolia" and grounds >= 0:
+			var mid: Vector2 = (plan.pos(plan.edge_a[e]) + plan.pos(plan.edge_b[e])) * 0.5
+			if Geometry2D.is_point_in_polygon(mid, plan.faces[grounds].inner):
+				through += 1
+	_check(through == 0, "Magnolia Avenue goes round the grounds, not through them")
+	# The buildings on the Esplanade face it, City Hall faces down it and
+	# the Federal Building faces the grounds from the north.
+	for pair in [["county_courthouse", Vector3(0, 0, 1)], ["federal_building", Vector3(0, 0, 1)], ["public_library", Vector3(0, 0, -1)],
+			["police_headquarters", Vector3(0, 0, -1)], ["city_hall", Vector3(1, 0, 0)]]:
+		var out: Vector3 = city.landmark_frame(pair[0]).basis.z
+		_check(out.dot(pair[1]) > 0.7, "%s faces the civic centre (front %s)" % [pair[0], out])
+	# Midtown: avenues (district streets of avenue class) with long thin
+	# blocks between them, and Liberty Avenue crossing at least one.
+	var avenues := 0
+	var crossings := 0
+	for e in plan.edge_count():
+		if plan.edge_patch[e] >= 0 and plan.PATCHES[plan.edge_patch[e]].id == "midtown" and plan.edge_cls[e] == "avenue":
+			avenues += 1
+			for n in [plan.edge_a[e], plan.edge_b[e]]:
+				for e2 in plan.edges_of(n):
+					if plan.edge_road[e2] == "liberty":
+						crossings += 1
+	_check(avenues >= 10, "Midtown has avenues (%d pieces)" % avenues)
+	_check(crossings >= 2, "Liberty Avenue cuts across Midtown's avenues (%d)" % crossings)
+	var long_blocks := 0
+	var mid_blocks := 0
+	for f in plan.faces.size():
+		if plan.face_patch(f) == "midtown" and plan.is_land(f) and city.in_window(f) and city.landmark_at(f).is_empty():
+			mid_blocks += 1
+			var r: Rect2 = plan.lot_rect(f)
+			if maxf(r.size.x, r.size.y) > minf(r.size.x, r.size.y) * 1.6:
+				long_blocks += 1
+	_check(mid_blocks > 0 and long_blocks * 2 > mid_blocks, "Midtown's blocks are long and thin (%d of %d)" % [long_blocks, mid_blocks])
+	# New district looks are in use.
+	var styles := {}
+	for f in plan.faces.size():
+		if plan.is_land(f) and city.in_window(f):
+			styles[city.district_style(f)] = true
+			if city.faces_square(f):
+				styles["painted"] = true
+			styles[city.block_style(f)] = true
+	for style in ["midtown", "brownstone", "painted", "esplanade", "circle", "square"]:
+		_check(styles.has(style), "style '%s' is used" % style)
+
+
 func test_city_follows_world_map() -> void:
 	await _new_game(false)
 	var city = game.city
@@ -115,7 +199,7 @@ func test_city_follows_world_map() -> void:
 	for landmark in ["police", "hospital", "park", "green", "court", "station", "tower", "club", "safehouse"]:
 		_check(styles.has(landmark), "map landmark '%s' is placed" % landmark)
 	_check(city.landmark_at(city.block_of(city.spawn_point - city.landmark_frame("union_station").basis.z * 6.0)).get("id") == "union_station", "player starts at Union Station")
-	_check(city.district_at(city.spawn_point).name == "Gilt District", "Union Station is in the Gilt District")
+	_check(city.district_at(city.spawn_point).name == "Midtown", "Union Station is in Midtown")
 	_check(city.police_station.distance_to(city.spawn_point) > 100.0, "police station comes from the map, not the fallback")
 	_check(city.district_at(city.hospital).name == "Floodline Wards", "clinic is in the Floodline Wards")
 	_check(city.district_at(city.node_pos(_road_node(plan, "point_ave"))).name == "Morrow Point", "Point Avenue runs through Morrow Point")
@@ -128,10 +212,12 @@ func test_city_follows_world_map() -> void:
 	_check(not wet.is_empty() and wet.all(func(c): return c == "bridge"), "only Morrow Bridge crosses the river, got %s" % [wet])
 
 
-## The map should read as a city that grew, not a grid: districts at their
-## own angles, curved and diagonal roads, T-junctions, blocks of many
-## shapes and sizes. Each check would fail on a (warped) grid.
-func test_street_plan_is_not_a_grid() -> void:
+## The map should read as a California city (Sachin, 2026-10-27: "few of
+## them [diagonal] but rest all have bigger parallel roads"): one straight
+## north-south/east-west grid, boulevards running right through it on a
+## regular pitch, few diagonals, mostly rectangular blocks. The old warped
+## plan failed every one of these (17% of streets on the compass).
+func test_street_plan_is_a_california_grid() -> void:
 	await _new_game(false)
 	var city = game.city
 	var plan = city.plan
@@ -139,7 +225,8 @@ func test_street_plan_is_not_a_grid() -> void:
 	var bearing := PackedFloat32Array()
 	bearing.resize(9) # street length by bearing (mod 90 degrees), 10-degree bins
 	var total := 0.0
-	var square := 0.0 # length within 10 degrees of the compass
+	var square := 0.0 # length within 5 degrees of the compass
+	var diagonal := 0.0 # length more than 15 degrees off it
 	for e in plan.edge_count():
 		var a: Vector2 = plan.pos(plan.edge_a[e])
 		var b: Vector2 = plan.pos(plan.edge_b[e])
@@ -149,18 +236,27 @@ func test_street_plan_is_not_a_grid() -> void:
 		counts[cls] = counts.get(cls, 0) + 1
 		if plan.drivable(e):
 			var deg := fposmod(rad_to_deg((b - a).angle()), 90.0)
-			bearing[mini(int(deg / 10.0), 8)] += a.distance_to(b)
+			var off := minf(deg, 90.0 - deg)
 			total += a.distance_to(b)
-			if minf(deg, 90.0 - deg) < 10.0:
-				square += a.distance_to(b)
+			square += a.distance_to(b) if off < 5.0 else 0.0
+			diagonal += a.distance_to(b) if off > 15.0 else 0.0
 	for cls in ["boulevard", "avenue", "river", "street", "quarter", "lane", "bridge", "quay"]:
 		_check(counts.get(cls, 0) > 0, "street class '%s' is used" % cls)
-	var top := 0.0
-	for v in bearing:
-		top = maxf(top, v)
-	_check(top < total * 0.35, "streets run at many angles (top 10-degree bin %.0f%% of length)" % (top / total * 100.0))
-	_check(square < total * 0.45, "most streets are off the compass (%.0f%% within 10 degrees of it)" % (square / total * 100.0))
-	# Junctions: plenty of T-junctions, not all crossroads.
+	_check(square > total * 0.8, "streets run north-south and east-west (%.0f%% within 5 degrees)" % (square / total * 100.0))
+	_check(diagonal < total * 0.1, "only a few diagonals (%.0f%% more than 15 degrees off)" % (diagonal / total * 100.0))
+	# The boulevards run straight through, district to district.
+	for road in ["lantern", "crescent", "aurum", "rampart", "cypress"]:
+		var lo := Vector2(INF, INF)
+		var hi := Vector2(-INF, -INF)
+		for e in plan.edge_count():
+			if plan.edge_road[e] == road:
+				for q in [plan.pos(plan.edge_a[e]), plan.pos(plan.edge_b[e])]:
+					lo = Vector2(minf(lo.x, q.x), minf(lo.y, q.y))
+					hi = Vector2(maxf(hi.x, q.x), maxf(hi.y, q.y))
+		var span := maxf(hi.x - lo.x, hi.y - lo.y)
+		var drift := minf(hi.x - lo.x, hi.y - lo.y)
+		_check(span > 900.0 and drift < 3.0, "%s runs straight through (%.0f m long, %.1f m off line)" % [road, span, drift])
+	# Junctions: a grid, so crossroads more than T-junctions.
 	var tees := 0
 	var crosses := 0
 	for n in plan.node_count():
@@ -169,9 +265,9 @@ func test_street_plan_is_not_a_grid() -> void:
 		var d: int = plan.edges_of(n).size()
 		tees += 1 if d == 3 else 0
 		crosses += 1 if d == 4 else 0
-	_check(tees > crosses * 1.5, "T-junctions outnumber crossroads (%d T, %d crossroads)" % [tees, crosses])
-	# Blocks: many are not plain rectangles (not four-cornered, a corner well
-	# off square, or bent sides), and sizes vary.
+	_check(crosses > tees, "crossroads outnumber T-junctions (%d crossroads, %d T)" % [crosses, tees])
+	# Blocks: mostly rectangles (the odd ones lie along Liberty Avenue and
+	# the river), in different sizes from district to district.
 	var odd := 0
 	var land := 0
 	var areas: Array = []
@@ -195,9 +291,10 @@ func test_street_plan_is_not_a_grid() -> void:
 				bend += turn
 		if corners != 4 or skew > deg_to_rad(12.0) or bend > deg_to_rad(15.0):
 			odd += 1
-	_check(odd > land * 0.25, "blocks come in many shapes (%d of %d not rectangles)" % [odd, land])
+	_check(odd < land * 0.35, "blocks are mostly rectangles (%d of %d not)" % [odd, land])
 	areas.sort()
-	_check(areas[areas.size() * 9 / 10] > areas[areas.size() / 10] * 3.0, "blocks come in different sizes")
+	var spread: float = areas[areas.size() * 9 / 10] / areas[areas.size() / 10]
+	_check(spread > 2.0, "blocks differ in size from district to district (90th/10th percentile %.1f)" % spread)
 	# Long roads: the diagonal avenue and the bridge.
 	var liberty := 0.0
 	for e in plan.edge_count():
@@ -258,7 +355,8 @@ func test_street_plan_is_not_a_grid() -> void:
 	# A corner 0.2 m past a point in line with it once went with that point.
 	var tidied: PackedVector2Array = plan._tidy(PackedVector2Array([Vector2(0, 0), Vector2(10, 0), Vector2(10.2, 0), Vector2(10.2, 10), Vector2(0, 10)]))
 	_check(absf(plan.area(tidied)) > 100.0, "tidying an outline keeps a corner next to a spare point (area %.1f)" % absf(plan.area(tidied)))
-	for id in ["union_station", "aurum_tower", "lantern_square", "blue_lantern", "bpd_lantern", "floodline_clinic", "wharfside_courts", "moreau_house", "teo_apartment", "warehouse_9", "the_pit", "streetcar_depot", "drowned_streetcar"]:
+	for id in ["union_station", "aurum_tower", "lantern_square", "blue_lantern", "bpd_lantern", "floodline_clinic", "wharfside_courts", "moreau_house", "teo_apartment", "warehouse_9", "the_pit", "streetcar_depot", "drowned_streetcar",
+			"city_hall", "county_courthouse", "federal_building", "public_library", "police_headquarters", "main_post_office", "fire_headquarters", "ferry_building", "liberty_square"]:
 		var f: int = city.landmark_block(id)
 		_check(f >= 0, "landmark %s is placed" % id)
 		if f >= 0:
