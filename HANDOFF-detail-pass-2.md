@@ -36,6 +36,14 @@ Follows HANDOFF-modern-look.md (surface codes, shader, traps live there).
    trunk (the siding code) and nine folded fronds plus dead ones.
    Crepe myrtles have three stems and bloom clumps. Downtown sidewalks
    got street trees in grates, halfway between the street lights.
+   Live oaks have six clumps; clumps are open underneath and branches
+   have no end caps, since the camera never sees them.
+7. Triangle cost, measured over all 655 cells:
+   - mean 2.7k -> 3.5k per cell; p90 5.7k -> 7.1k; max 12k -> 17.1k (one
+     120 x 205 m downtown block);
+   - oaks were the biggest cost, then gas lamps and hydrants, which I
+     slimmed;
+   - about 70k triangles for a ~20-cell view.
 5. Metal (code 15) read near black because there are no reflection
    probes. The shader now fakes a sky-and-street reflection and metallic
    is 0.3, so every steel prop reads as light steel.

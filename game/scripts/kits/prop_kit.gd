@@ -25,8 +25,8 @@ const SCOOTERS := [Color(0.2, 0.75, 0.4), Color(0.95, 0.4, 0.2), Color(0.15, 0.1
 ## `glow` builder, also the pool of light it throws at night.
 static func gas_lamp(mb, out: Array, p: Vector3, glow = null) -> void:
 	var iron := MeshBuilder.glow(IRON, MeshBuilder.GLOSS)
-	mb.cylinder(p + Vector3(0, 0.15, 0), 0.16, 0.5, iron, 6)
-	mb.cylinder(p + Vector3(0, 0.15, 0), 0.09, 3.1, iron, 5)
+	mb.box(p + Vector3(0, 0.4, 0), Vector3(0.3, 0.5, 0.3), iron)
+	mb.cylinder(p + Vector3(0, 0.15, 0), 0.09, 3.1, iron, 4)
 	mb.box(p + Vector3(0, 3.0, 0), Vector3(0.6, 0.06, 0.06), iron)
 	mb.box(p + Vector3(0, 3.45, 0), Vector3(0.42, 0.55, 0.42), MeshBuilder.glow(LAMP_GLOW, MeshBuilder.GLOW_LAMP))
 	_pool(mb, glow, p + Vector3(0, 0.2, 0), 5.0, POOL_WARM)
@@ -199,13 +199,13 @@ static func pay_station(mb, out: Array, p: Vector3) -> void:
 ## domed bonnet (gloss red, a yellow-capped top nut).
 static func hydrant(mb, out: Array, p: Vector3) -> void:
 	var red := MeshBuilder.glow(Color(0.82, 0.15, 0.12), MeshBuilder.GLOSS)
-	mb.cylinder(p + Vector3(0, 0.15, 0), 0.24, 0.08, red, 8)
-	mb.cylinder(p + Vector3(0, 0.15, 0), 0.17, 0.62, red, 8)
+	mb.box(p + Vector3(0, 0.19, 0), Vector3(0.44, 0.08, 0.44), red)
+	mb.cylinder(p + Vector3(0, 0.15, 0), 0.17, 0.62, red, 6)
 	mb.box(p + Vector3(0, 0.55, 0), Vector3(0.52, 0.13, 0.13), red)
 	for side in [-1.0, 1.0]:
 		mb.box(p + Vector3(side * 0.28, 0.55, 0), Vector3(0.05, 0.16, 0.16), MeshBuilder.glow(STEEL, MeshBuilder.METAL))
 	mb.box(p + Vector3(0, 0.5, -0.2), Vector3(0.18, 0.18, 0.12), red)
-	mb.ball(p + Vector3(0, 0.78, 0), Vector3(0.2, 0.12, 0.2), red, 8, 2)
+	mb.ball(p + Vector3(0, 0.78, 0), Vector3(0.2, 0.12, 0.2), red, 6, 2)
 	mb.box(p + Vector3(0, 0.92, 0), Vector3(0.1, 0.08, 0.1), Color(0.95, 0.85, 0.3))
 	out.append([p + Vector3(0, 0.5, 0), Vector3(0.45, 1.0, 0.45)])
 
@@ -277,32 +277,31 @@ static func roadworks(mb, out: Array, p: Vector3) -> void:
 	out.append([p + Vector3(0, 0.5, 0.2), Vector3(4.0, 1.0, 1.4)])
 
 
-## Live oak: a short, thick trunk forking into low limbs that spread a
-## broad, lumpy crown, with grey Spanish moss hanging off the limbs.
+## Live oak: a short, thick trunk forking into four low limbs, a clump at
+## each tip and two over the fork making a broad, lumpy crown, with grey
+## Spanish moss hanging off the limbs.
 static func oak(mb, out: Array, p: Vector3, rng: RandomNumberGenerator) -> void:
 	var s := rng.randf_range(0.85, 1.2)
 	var seed := rng.randi()
 	var leaf := _leaf(LEAF.lerp(LEAF_LIGHT, rng.randf()))
 	var fork := p + Vector3(0, 2.0 * s, 0)
-	mb.limb(p, fork, 0.4 * s, 0.28 * s, BARK, 6)
+	mb.limb(p, fork, 0.4 * s, 0.28 * s, BARK, 6, false)
 	var turn := rng.randf() * TAU
 	for i in 4:
 		var a := turn + TAU * i / 4.0 + rng.randf_range(-0.3, 0.3)
 		var d := Vector3(cos(a), 0, sin(a))
 		var tip := fork + d * rng.randf_range(1.7, 2.3) * s + Vector3(0, rng.randf_range(0.9, 1.5) * s, 0)
-		mb.limb(fork, tip, 0.2 * s, 0.09 * s, BARK, 5)
+		mb.limb(fork, tip, 0.2 * s, 0.09 * s, BARK, 5, false)
 		var tint := leaf.lightened(0.08) if i % 2 == 0 else leaf.darkened(0.06)
-		mb.clump(tip + Vector3(0, 0.5 * s, 0), Vector3(1.4, 0.95, 1.4) * s * rng.randf_range(0.9, 1.1), tint, seed + i, 9, 4, 0.28)
-		if i % 2 == 0:
-			mb.clump(fork.lerp(tip, 0.45) + Vector3(0, 1.3 * s, 0), Vector3(1.25, 0.9, 1.25) * s, tint.lightened(0.04), seed + 20 + i, 9, 4, 0.28)
+		mb.clump(tip + Vector3(0, 0.5 * s, 0), Vector3(1.5, 1.0, 1.5) * s * rng.randf_range(0.9, 1.1), tint, seed + i, 9, 4, 0.28)
 		if i % 2 == 0:
 			# Moss hangs off the limb's outer half (thin along Z so it faces
 			# the camera).
 			for m in 2:
 				var at := fork.lerp(tip, 0.6 + m * 0.25) + Vector3(0, -0.45 * s, 0)
 				mb.box(at, Vector3(0.16, 0.9, 0.05) * s, MOSS)
-	mb.clump(fork + Vector3(0.4, 2.3, 0.3) * s, Vector3(1.5, 1.0, 1.5) * s, leaf.lightened(0.07), seed + 9, 9, 4, 0.28)
-	mb.clump(fork + Vector3(-0.5, 2.0, -0.4) * s, Vector3(1.4, 0.9, 1.4) * s, leaf.lightened(0.02), seed + 10, 9, 4, 0.28)
+	mb.clump(fork + Vector3(0.4, 2.3, 0.3) * s, Vector3(1.6, 1.0, 1.6) * s, leaf.lightened(0.07), seed + 9, 9, 4, 0.28)
+	mb.clump(fork + Vector3(-0.5, 2.0, -0.4) * s, Vector3(1.5, 0.9, 1.5) * s, leaf.lightened(0.02), seed + 10, 9, 4, 0.28)
 	out.append([p + Vector3(0, 1.5, 0), Vector3(0.8, 3.0, 0.8)])
 
 
@@ -315,7 +314,7 @@ static func street_tree(mb, out: Array, p: Vector3, rng: RandomNumberGenerator) 
 	mb.box(p + Vector3(0, 0.01, 0), Vector3(1.6, 0.02, 1.6), MeshBuilder.glow(Color(0.55, 0.54, 0.5), MeshBuilder.CONCRETE))
 	mb.box(p + Vector3(0, 0.016, 0), Vector3(1.36, 0.02, 1.36), MeshBuilder.glow(Color(0.33, 0.31, 0.29), MeshBuilder.GLOSS))
 	mb.box(p + Vector3(0, 0.022, 0), Vector3(0.46, 0.02, 0.46), Color(0.22, 0.17, 0.12))
-	mb.limb(p, p + Vector3(0, 2.8, 0) * s, 0.13, 0.09, BARK.lightened(0.12), 5)
+	mb.limb(p, p + Vector3(0, 2.8, 0) * s, 0.13, 0.09, BARK.lightened(0.12), 5, false)
 	mb.clump(p + Vector3(0, 3.7, 0) * s, Vector3(1.5, 1.5, 1.5) * s, leaf, seed, 9, 4, 0.28)
 	mb.clump(p + Vector3(0.45, 4.8, 0.2) * s, Vector3(1.1, 1.0, 1.1) * s, leaf.lightened(0.08), seed + 1, 6)
 	mb.clump(p + Vector3(-0.5, 4.5, -0.3) * s, Vector3(1.0, 0.9, 1.0) * s, leaf.darkened(0.06), seed + 2, 6)
@@ -323,21 +322,20 @@ static func street_tree(mb, out: Array, p: Vector3, rng: RandomNumberGenerator) 
 
 
 ## Crepe myrtle: three slim, pale, splaying stems carrying bloom clusters
-## (mostly pink, some white, lilac or watermelon red) over a little green.
+## (mostly pink, some white, lilac or watermelon red).
 static func crepe_myrtle(mb, out: Array, p: Vector3, rng: RandomNumberGenerator) -> void:
 	var roll := rng.randf()
 	var bloom := Color(0.88, 0.5, 0.68) if roll < 0.55 else (Color(0.86, 0.84, 0.84) if roll < 0.75 else (Color(0.68, 0.55, 0.82) if roll < 0.9 else Color(0.84, 0.28, 0.38)))
 	bloom = _leaf(bloom)
 	var seed := rng.randi()
 	var turn := rng.randf() * TAU
-	mb.clump(p + Vector3(0, 2.2, 0), Vector3(1.1, 0.6, 1.1), _leaf(LEAF), seed + 7, 6)
 	for i in 3:
 		var a := turn + TAU * i / 3.0
 		var d := Vector3(cos(a), 0, sin(a))
 		var tip := p + d * 0.55 + Vector3(0, 2.3, 0)
-		mb.limb(p + d * 0.06, tip, 0.07, 0.045, Color(0.66, 0.55, 0.45), 4)
-		mb.clump(tip + d * 0.15 + Vector3(0, 0.4, 0), Vector3(0.72, 0.6, 0.72), bloom.darkened(0.04 * i), seed + i, 7, 4, 0.25)
-	mb.clump(p + Vector3(0, 3.05, 0), Vector3(0.78, 0.58, 0.78), bloom.lightened(0.06), seed + 5, 7, 4, 0.25)
+		mb.limb(p + d * 0.06, tip, 0.07, 0.045, Color(0.66, 0.55, 0.45), 4, false)
+		mb.clump(tip + d * 0.15 + Vector3(0, 0.4, 0), Vector3(0.75, 0.62, 0.75), bloom.darkened(0.04 * i), seed + i, 7, 3, 0.25)
+	mb.clump(p + Vector3(0, 3.05, 0), Vector3(0.78, 0.58, 0.78), bloom.lightened(0.06), seed + 5, 7, 3, 0.25)
 	out.append([p + Vector3(0, 1.0, 0), Vector3(0.4, 2.0, 0.4)])
 
 
@@ -535,7 +533,7 @@ static func palm(mb, out: Array, p: Vector3, rng: RandomNumberGenerator) -> void
 	for i in 3:
 		var t := (i + 1) / 3.0
 		var q := p + Vector3(0, h * t, 0) + lean * t * t
-		mb.limb(prev, q, lerpf(0.24, 0.16, i / 3.0), lerpf(0.24, 0.16, t), trunk, 6)
+		mb.limb(prev, q, lerpf(0.24, 0.16, i / 3.0), lerpf(0.24, 0.16, t), trunk, 6, false)
 		prev = q
 	var crown := prev + Vector3(0, 0.1, 0)
 	mb.clump(crown, Vector3(0.42, 0.4, 0.42), Color(0.45, 0.42, 0.25), rng.randi(), 6, 3)

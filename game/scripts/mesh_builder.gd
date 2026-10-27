@@ -554,11 +554,12 @@ func ball(center: Vector3, radius: Vector3, color: Color, sides := 6, rings := 3
 ## top to bottom, each vertex pushed in or out by up to `lump` of the radius
 ## (from `seed`, so a cell rebuilds the same). Shared vertices with smooth
 ## normals, shaded darker underneath so a crown of clumps reads as depth.
+## Open at the bottom pole: the camera never looks up into it.
 func clump(center: Vector3, radius: Vector3, color: Color, seed: int, sides := 7, rings := 4, lump := 0.18) -> void:
 	var base := verts.size()
-	for r in rings + 1:
+	for r in rings:
 		var t := PI * r / rings
-		var count := 1 if r == 0 or r == rings else sides
+		var count := 1 if r == 0 else sides
 		var shade := lerpf(1.0, 0.6, float(r) / rings)
 		for i in count:
 			var d := _sphere_pt(t, TAU * i / sides)
@@ -569,11 +570,9 @@ func clump(center: Vector3, radius: Vector3, color: Color, seed: int, sides := 7
 			normals.append((xform.basis * n).normalized())
 			colors.append(Color(color.r * shade, color.g * shade, color.b * shade, color.a))
 			uvs.append(_uv(p, n))
-	var last := verts.size() - 1
 	for i in sides:
 		var j := (i + 1) % sides
 		_tri_idx(base, base + 1 + i, base + 1 + j)
-		_tri_idx(last, last - sides + j, last - sides + i)
 		for r in rings - 2:
 			var a := base + 1 + r * sides
 			var b := a + sides
@@ -599,8 +598,9 @@ static func _sphere_pt(theta: float, phi: float) -> Vector3:
 
 
 ## A tapered limb from `a` to `b` (radius `ra` at a, `rb` at b) with flat
-## ends: arms, legs and necks.
-func limb(a: Vector3, b: Vector3, ra: float, rb: float, color: Color, sides := 6) -> void:
+## ends: arms, legs and necks. Without `caps` the ends stay open (trunks and
+## branches, whose ends are buried in the ground or the crown).
+func limb(a: Vector3, b: Vector3, ra: float, rb: float, color: Color, sides := 6, caps := true) -> void:
 	var axis := (b - a).normalized()
 	var side := axis.cross(Vector3.FORWARD if absf(axis.z) < 0.9 else Vector3.RIGHT).normalized()
 	var up := side.cross(axis)
@@ -611,8 +611,9 @@ func limb(a: Vector3, b: Vector3, ra: float, rb: float, color: Color, sides := 6
 		var d1 := side * cos(a1) + up * sin(a1)
 		var n := ((d0 + d1) * 0.5).normalized()
 		quad(a + d0 * ra, a + d1 * ra, b + d1 * rb, b + d0 * rb, n, color)
-		tri(b, b + d0 * rb, b + d1 * rb, axis, color)
-		tri(a, a + d1 * ra, a + d0 * ra, -axis, color)
+		if caps:
+			tri(b, b + d0 * rb, b + d1 * rb, axis, color)
+			tri(a, a + d1 * ra, a + d0 * ra, -axis, color)
 
 
 ## A flat polygon, convex or not (x, z points, clockwise on screen) at height y,
