@@ -175,8 +175,8 @@ want it. At Moreau House, Jules chooses:
   at **Union Station**, and let them destroy each other while High Water walks
   away with the money.
 
-Each branch is its own finale mission and sets act 2's opening in Porto Brisa
-(see `WORLD_BIBLE.md`, story spine).
+Each branch is its own finale mission and sets act 2's opening in Concordia and the Keys
+(see `WORLD_BIBLE.md`, story spine; Porto Brisa, the act's old setting, is now expansion 1).
 
 ## Side content available during act 1
 

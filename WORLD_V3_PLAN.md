@@ -183,6 +183,22 @@ adding what Florida has and it lacked:
 - **Missions**: Act 1 (`ACT1_MISSIONS.md`); later, speedboat runs through the Keys, a
   hurricane evacuation with the bridges closing, and a smuggling war over the Keys.
 
+### 2.5 Porto Brisa: the beach city across the Gulf (Rio de Janeiro), expansion 1
+
+Sachin, Oct 27: "Keep it as a fifth city, perhaps a later expansion. We will adding more
+cities in later expansions." Porto Brisa keeps its approved bible districts (Praia Dourada,
+Morro Alto, Centro Velho, Marina Azul) and lies south across the Gulf of Solvera, off the
+state map. In the data it is an `expansions` entry, not a city: nothing in the game reads it
+yet.
+- **Before it opens**: Comando Maré and Os Corvos are Porto Brisa crews working in
+  Bellerive (Maré runs the Keys and swamp routes, the Corvos hold a Brisa Beach club). The
+  Gulf ferry and Porto Brisa flights show on the boards as "coming soon".
+- **When it opens**: the crews' war goes home; Jules's past as a getaway driver and Lua
+  Ferreira come due; the Sentinel's Light legend; the metro, a hillside cable car, football
+  and carnival.
+- **Transit (busy, mixed)**: one metro line, the hillside cable car, minibuses, the Gulf
+  ferry to Ironwharf and Isla Serena, an airport; no tram.
+
 ## 3. The countryside
 
 Each region has one biome, one landmark, one faction and one sentence of mood, and most
@@ -308,6 +324,7 @@ interiors phase 0 about 2).
 | 4 | Las Brasas and the Keys; airship; scheduled flights and ferries | 6-8 |
 | 5 | Concordia; metro, cable cars; Castellanes, Ledger, Halberd | 8-10 |
 | 6 | Steelhaven and Corran; the Loop; Local 12, Tenmile, Copper Kings; riots | 6-8 |
+| Expansion 1 | Porto Brisa (section 2.5) and the Gulf ferry and flights to it | 8-10 |
 
 **Recommended: a seamless state built in phases** (one streamed world, about 34-44
 sessions in all). Each city still ships as its own phase, behind a story gate (the Great
@@ -324,10 +341,25 @@ Storm's closed bridges, a dock strike).
 
 - The names Concordia and Steelhaven. Alternatives: Federal City or Capitola; Ironmouth or
   Rustwater.
-- Retiring Porto Brisa (Rio) and moving its beach crews to Bellerive's beach and the Keys.
-  Act 2 ("the money route") then moves to Concordia and the Keys. Jules's backstory as a
-  getaway driver in Porto Brisa becomes the Keys and Isla Serena.
 - Whether trespass into Fort Granite gives 4 stars or 2-3 on a phone.
-- Comando Maré and Os Corvos keep their approved Porto Brisa names. In a Florida setting
-  two Portuguese-named crews could read as an ethnic group cast as criminals, which the
-  bible forbids. Renaming them, or giving them mixed membership on screen, is Sachin's call.
+- Where expansion 2 and later go (section 9 lists the open edges).
+
+## 9. Expansions
+
+More cities come in later expansions (Sachin, Oct 27). The rules, so each one fits:
+- **The state stays 12 x 9 km.** An expansion city lies past an edge of it, across water or a
+  border, and is its own map. It is reached first by scheduled travel (ferry, flight, train:
+  a kiosk and a fade, section 6), so no streamed road has to cross into it. A drivable
+  border crossing can come later if one is worth building.
+- **Each expansion city** gets what the four base cities have: a theme from a real place, a
+  condition that sets its transit, services and NPCs, districts, landmarks, factions,
+  characters and a story strand, plus an `expansions` entry in `world_map.json` and an arrow
+  at the edge of `world_map.svg`.
+- **Story**: the base story (acts 1-4) never needs an expansion; an expansion adds its own
+  act or strand that picks up threads the base story leaves open.
+- **Open edges**:
+  - south across the Gulf: Porto Brisa (expansion 1);
+  - north past Steelhaven and Cinder Ridge: a border city by the Solvera Line's northern
+    extension;
+  - west past Hollow Mesa: a desert border city by highway or air;
+  - east past Sovereign Bay: an island or coastal city by sea and air.

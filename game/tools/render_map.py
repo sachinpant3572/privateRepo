@@ -156,6 +156,10 @@ def world_svg(world):
             my = (line[k][1] + line[k + 1][1]) / 2
             out.append(text(mx * s + 8, my * s, wtr["name"], 11, "600", "#2f5f86", anchor="start"))
     out.append(text(world["size"][0] * 0.3 * s, (world["size"][1] - 300) * s, "GULF OF SOLVERA", 22, "700", "#2f5f86"))
+    # Expansion cities lie off this map; an arrow at the edge points the way.
+    for i, x in enumerate(world.get("expansions", [])):
+        out.append(text(world["size"][0] * 0.3 * s, (world["size"][1] - 120) * s + i * 18,
+                        f'\u2193 {x["name"]} (expansion {x["expansion"]}): {x["where"]}', 14, "700", "#2f5f86"))
     out.append(_legend(10, h + 12))
     out.append("</svg>")
     return "\n".join(out)

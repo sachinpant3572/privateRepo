@@ -11,8 +11,8 @@
     {"id": "castellane", "name": "Castellane Family", "color": "#7b241c", "kind": "mafia", "home": "concordia", "note": "Old-school family of dons; restaurants, the docks union, protection"},
     {"id": "marrow", "name": "Marrow Krewe", "color": "#4f8a3c", "kind": "gang", "home": "bellerive", "note": "Old bayou smuggling families"},
     {"id": "highwater", "name": "High Water", "color": "#3a7bd5", "kind": "gang", "home": "bellerive", "note": "Crew from the storm-wrecked wards; part gang, part neighbourhood watch"},
-    {"id": "mare", "name": "Comando Maré", "color": "#e05a47", "kind": "drug_mafia", "home": "bellerive", "note": "Speedboat smugglers running the Keys and the swamp"},
-    {"id": "corvos", "name": "Os Corvos", "color": "#7b4fa0", "kind": "gang", "home": "bellerive", "note": "Flashy club and beach crew on Brisa Beach, Maré's rivals"},
+    {"id": "mare", "name": "Comando Maré", "color": "#e05a47", "kind": "drug_mafia", "home": "porto_brisa", "note": "Porto Brisa's speedboat smugglers; in Bellerive they run the Keys and the swamp routes", "operates": ["bellerive"]},
+    {"id": "corvos", "name": "Os Corvos", "color": "#7b4fa0", "kind": "gang", "home": "porto_brisa", "note": "Porto Brisa's flashy club and beach crew; in Bellerive they hold a Brisa Beach club, Maré's rivals", "operates": ["bellerive"]},
     {"id": "aces", "name": "Velvet Aces", "color": "#c2185b", "kind": "syndicate", "home": "las_brasas", "note": "Showbiz crime family skimming the Blaze's casinos"},
     {"id": "dust", "name": "Dust Riders", "color": "#a0522d", "kind": "gang", "home": "hollow_mesa", "note": "Desert bikers running guns and meth along Route 40"},
     {"id": "tenmile", "name": "Tenmile Crew", "color": "#1e8449", "kind": "drug_mafia", "home": "steelhaven", "note": "Heroin crew using teen runners in the emptied east side"},
@@ -289,5 +289,8 @@
     {"id": "firebreak_road_morrow_bridge", "name": "Morrow River bridge", "type": "bridge", "pos": [6585, 3424], "phase": 3, "route": "firebreak_road", "minor": true, "detail": true},
     {"id": "firebreak_road_pine_creek_ford", "name": "Pine Creek ford", "type": "ford", "pos": [6098, 2827], "phase": 3, "route": "firebreak_road", "minor": true, "detail": true},
     {"id": "lakeshore_drive_cinder_upper_bridge", "name": "Cinder River bridge", "type": "bridge", "pos": [4677, 2103], "phase": 3, "route": "lakeshore_drive", "minor": true, "detail": true}
+  ],
+  "expansions": [
+    {"id": "porto_brisa", "name": "Porto Brisa", "expansion": 1, "inspired_by": "Rio de Janeiro", "where": "south, across the Gulf of Solvera (off this map)", "theme": "Beach city between green mountains and the sea: hillside favelas, Praia Dourada, a cable car, the old port", "links": ["Gulf ferry from Ironwharf", "flights from Bellerive International and Sovereign International", "the smugglers' speedboat route from the Keys"], "factions": ["mare", "corvos"], "story": "Jules's past as a getaway driver; Lua Ferreira; the Sentinel's Light; the Maré and Corvos war at home"}
   ]
 }

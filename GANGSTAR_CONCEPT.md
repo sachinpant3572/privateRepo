@@ -213,6 +213,9 @@ one city.
 
 ### Suggested phasing
 
+*Superseded by world v3 (`WORLD_V3_PLAN.md` sections 7 and 9): four cities on one state in
+phases 1-6, then expansion cities from Porto Brisa on. Kept for the record.*
+
 1. **MVP**: one city (New Orleans-like), cars, bikes, boats, taxis, one story
    act, basketball and boxing, 2 factions, clothing shop.
 2. **Expansion 1**: second city, trains and metro, more sports, faction wars.

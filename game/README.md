@@ -90,6 +90,8 @@ phone.
   - 59 routes (highways down to trails, rail, metro, trams, ferries, flights),
     147 landmarks (bus and train stations, airports, fords and bridges among them)
     and 20 factions.
+  - Porto Brisa (Rio de Janeiro) is expansion 1, across the Gulf and off this
+    map: an `expansions` entry that the game does not read yet.
   The game reads only Bellerive's window. Items with `"phase"` above 1 inside
   it are planned, and are skipped when the city loads.
 - **Street plan** (`scripts/street_plan.gd`; research and rules in

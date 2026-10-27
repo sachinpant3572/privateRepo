@@ -6,8 +6,10 @@ Wolves, Crescent Syndicate).
 **World v3, Oct 27, 2026** (`WORLD_V3_PLAN.md`): four cities instead of three, on a 12 x 9 km state.
 - **Concordia** (the planned capital) and **Steelhaven** (the desolate motor city) are new.
   Their names are *working names*, not approved yet.
-- **Porto Brisa is retired** pending Sachin's approval: its beach crews move to Bellerive's
-  new Brisa Beach and the Keys, and Bellerive becomes the Florida-like city.
+- **Porto Brisa becomes expansion 1** (Sachin, Oct 27: "Keep it as a fifth city, perhaps a
+  later expansion. We will adding more cities in later expansions."). It lies south across
+  the Gulf of Solvera, off the state map. Bellerive becomes the Florida-like city; Porto
+  Brisa's two crews also work in Bellerive (the Keys, Brisa Beach) until it opens.
 
 Sections below marked *(v3)* changed with it.
 
@@ -47,6 +49,7 @@ which supports the phone hub.
 |---|---|---|
 | ~300 years ago | French settlers found **Bellerive** on the crescent of the Morrow River | Lantern Quarter's old streets, lamp posts |
 | ~200 years ago | The state capital, **Concordia**, is laid out on Sovereign Bay to a grand plan *(v3)* | The Mall, the radial avenues |
+| ~200 years ago | Portuguese traders build **Porto Brisa**, across the Gulf, below the Pico Leão cliffs *(expansion 1)* | Centro Velho, the Sentinel lighthouse |
 | ~150 years ago | Silver rush in **Cinder Ridge**; the silver train vanishes in a tunnel collapse | Legend of the Silver Train (secret) |
 | ~100 years ago | **Steelhaven**'s motor plants boom on Lake Corran *(v3)* | The Brass Tower, Ostrander Motors |
 | ~70 years ago | **Las Brasas** grows from a rail stop into a neon desert city | The Blaze, the Sign Yard |
@@ -73,7 +76,7 @@ Serena, the cruise port and the swamp park with airboats.
 | **Magnolia Heights** | Mansions under oak trees | Aurum Consortium | Wealthy targets, property to buy |
 | **Floodline Wards** | Colourful shotgun houses, storm scars, street courts | High Water crew (contested) | Turf wars, street business, basketball |
 | **Blackwater Bayou** | Swamp, stilt houses, airboats | Marrow Krewe | Hidden places, lore, boat chases |
-| **Brisa Beach** *(v3, phase 2)* | Pastel Art Deco hotels, beach, clubs | Os Corvos | Nightlife, the beach war with Comando Maré |
+| **Brisa Beach** *(v3, phase 2)* | Pastel Art Deco hotels, beach, clubs; named by Porto Brisa's emigrants | Os Corvos (a club outpost) | Nightlife, the beach war with Comando Maré |
 
 ### Concordia *(v3, working name; phase 5; Washington DC, Manhattan, San Francisco)*
 
@@ -104,10 +107,20 @@ dead plant, urban prairie, a reviving midtown. On Lake Corran, north-east.
 | **Ashgrove** | An enclave town inside the city | Local 12 |
 | **Lakeshore Pointe** | Rich suburb across the boundary road | Aurum Consortium |
 
-### Porto Brisa *(retired in v3, pending approval)*
+### Porto Brisa *(expansion 1, inspired by Rio de Janeiro)*
 
-Was the Rio-inspired beach city. Its beach (Praia Dourada) becomes Bellerive's
-Brisa Beach; Comando Maré moves to the Keys.
+Beaches, steep hillside neighbourhoods, carnival, football. South across the Gulf
+of Solvera, off the state map: reached by the Gulf ferry from Ironwharf, by air,
+or on the smugglers' speedboat route from the Keys.
+
+| District | Feel | Controlled by |
+|---|---|---|
+| **Praia Dourada** | Long beach, kiosks, volleyball, promenade | Os Corvos |
+| **Morro Alto** | Hillside houses, stairways, rooftop views | Comando Maré |
+| **Centro Velho** | Old colonial centre, metro hub, Avenida da Festa | Neutral |
+| **Marina Azul** | Yachts, ferry to Isla Serena, seafood markets | Aurum Consortium |
+
+Later expansions add more cities the same way (`WORLD_V3_PLAN.md` section 9).
 
 ### Las Brasas (phase 4 in v3, inspired by Las Vegas)
 
@@ -175,12 +188,12 @@ Smugglers' Cove, and the Sunken Casino offshore (secret dive).
 | **Aurum Consortium** | Corporate empire with a philanthropic face and criminal muscle | Own the Solvera Line and everything along it | Gilt District, all cities |
 | **Marrow Krewe** | Old bayou smuggling families; loyal, proud, old-school | Keep the river free and the bayou theirs | Blackwater Bayou, Ironwharf |
 | **High Water** | Crew born from the storm-wrecked wards; part gang, part neighbourhood watch | Keep their homes from being sold off | Floodline Wards |
-| **Comando Maré** | Disciplined speedboat smugglers | Control the Keys and the swamp routes | The Keys *(v3; was Morro Alto)* |
-| **Os Corvos** | Flashy beach-side rivals | Take Maré's routes and Aurum's money | Brisa Beach *(v3)* |
+| **Comando Maré** | Disciplined hillside crew and speedboat smugglers | Control Porto Brisa's port routes, and the Keys and swamp routes into Bellerive | Morro Alto, Porto Brisa; the Keys *(v3)* |
+| **Os Corvos** | Flashy beach-side rivals | Take Maré's routes and Aurum's money | Praia Dourada, Porto Brisa; a Brisa Beach club *(v3)* |
 
 Every crew recruits across backgrounds; a crew's name is its own history, never a
-people. Whether Comando Maré and Os Corvos keep their Porto Brisa names in Bellerive is
-open (`WORLD_V3_PLAN.md` section 8).
+people. Comando Maré and Os Corvos are two crews among Porto Brisa's many people (its
+police, traders, workers, families), not the face of the city.
 | **Velvet Aces** | Showbiz crime family running the strip's back rooms | Launder Aurum's money for a cut | The Blaze |
 | **Dust Riders** | Desert biker gang | Run guns and parts along Route 40 | Dust Yards, Hollow Mesa |
 | **Police** (Bellerive PD, Solvera State Police) | Some honest, many bought | Order, or a paycheck | Everywhere; not joinable |
@@ -226,10 +239,12 @@ Act 1 missions: `ACT1_MISSIONS.md`.
 1. **Act 1, Bellerive (street level)**: Jules returns, searches for Teo,
    finds the stolen ledger and is caught between the Marrow Krewe and Aurum.
    Ends with a faction choice.
-2. **Act 2, Porto Brisa (the money route)**: the ledger leads to how Aurum
-   moves its money through the port; Comando Maré and Os Corvos go to war.
-   *(v3 proposal, pending: Act 2 moves to Concordia and the Keys; the war is
-   fought on Brisa Beach. Steelhaven gets its own act or side strand.)*
+2. **Act 2, Concordia and the Keys (the money route)** *(v3; was Porto Brisa)*:
+   the ledger leads to how Aurum moves its money through the capital and the
+   Keys; Comando Maré and Os Corvos go to war on Brisa Beach. Steelhaven gets
+   its own act or side strand.
+   - **Expansion 1, Porto Brisa (home waters)**: the crews' war goes home;
+     Jules's past as a getaway driver and Lua Ferreira come due.
 3. **Act 3, Las Brasas and the desert (the line)**: the Solvera Line deals,
    Velvet Aces' laundering, Dust Riders' guns, a break-in at Fort Granite.
 4. **Act 4, Isla Serena (the vault)**: Aurum's offshore vault and the finale.
@@ -250,6 +265,6 @@ pays off somewhere on the map.
   a collapsed tunnel.
 - **The Drowned Village** (Lake Miravel): rooftops visible in a drought year.
 - **The Sunken Casino** (off Isla Serena): a hotel that slid into the sea.
-- **The Sentinel's Light** (Porto Brisa): the lighthouse signals smugglers in
+- **The Sentinel's Light** (Porto Brisa, expansion 1): the lighthouse signals smugglers in
   code.
 - **The Vault under Fort Granite**: what the army really stores there.

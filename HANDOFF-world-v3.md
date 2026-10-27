@@ -61,8 +61,8 @@ Started 2026-10-27. Sachin's asks (verbatim in the session):
   swamp, the hurricane and the port; it keeps its name, districts and all missions, and gains a
   Deco beach district and the Keys). Las Brasas stays the Vegas city. Two new cities: **Concordia**,
   the planned capital (DC radials and Mall, Manhattan blocks, SF bay, hills and red bridge), and
-  **Steelhaven**, the desolate motor city on Lake Corran (Detroit). Porto Brisa is retired; its
-  beach crews (Os Corvos, Comando Maré) move to Bellerive's beach and the Keys. The two new names
+  **Steelhaven**, the desolate motor city on Lake Corran (Detroit). Porto Brisa becomes expansion 1
+  (Sachin's call, below); its crews also work in Bellerive's beach and the Keys. The two new names
   are working names: the bible's names were approved, these are not yet.
   Rejected: Bellerive as the desolate city (it has no motor industry; its storm wards already give
   it a ruined edge).
@@ -99,6 +99,17 @@ Started 2026-10-27. Sachin's asks (verbatim in the session):
   Bellerive gains a one-line Gulfline Metro and a bus terminal (phase 2). Table in
   WORLD_V3_PLAN.md section 5.
 
+- **W-10 Porto Brisa is expansion 1** (Sachin, Oct 27: "Keep it as a fifth city, perhaps a later
+  expansion. We will adding more cities in later expansions."):
+  - it lies south across the Gulf, off the 12 x 9 km map, reached by ferry and air;
+  - in the data it is an `expansions` entry (no game code reads it), and the SVG shows an arrow;
+  - Maré and Corvos keep their home there and work in Bellerive until it opens, which also
+    settles the naming worry (they are Porto Brisa crews, not Bellerive's Latin community);
+  - act 2 moves to Concordia and the Keys, since the base story must not need an expansion;
+  - the rules for later expansion cities are in WORLD_V3_PLAN.md section 9.
+  Cheaper option: a one-line placeholder with no plan section (saves about half an hour now,
+  costs it later).
+
 ## Traps and lessons
 
 - Research agents could not open source pages (proxy blocked); facts rest on search summaries,
@@ -119,6 +130,4 @@ Started 2026-10-27. Sachin's asks (verbatim in the session):
 ## Open questions for Sachin
 
 - The names Concordia and Steelhaven (alternatives in WORLD_V3_PLAN.md).
-- Retiring Porto Brisa (Rio).
-- Renaming Comando Maré and Os Corvos for the Florida setting (approved names).
 - Tilt steering needs a check on a real phone.
