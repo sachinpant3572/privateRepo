@@ -32,6 +32,8 @@ const WAIT_TIME := 40.0
 const WALK_AWAY := 60.0
 ## Seconds without moving before a cab counts as stuck.
 const STUCK_TIME := 10.0
+## Destinations priced per frame while the list fills in.
+const CHOICE_ROWS := 8
 ## After a drop-off the cab waits until you are this far away (m), or this
 ## long (s), before it drives off (so it doesn't clip you pulling out).
 const CLEAR_DISTANCE := 5.0
@@ -88,6 +90,9 @@ var _bar_text: Label
 var _bar_skip: Button
 var _fade: ColorRect
 var _panel_mode := ""
+## Bumped whenever the panel is rebuilt, so a destination list still being
+## filled in (CHOICE_ROWS a frame) stops when the panel moves on.
+var _panel_gen := 0
 
 
 func _ready() -> void:
@@ -844,7 +849,16 @@ func _show_choices() -> void:
 	_panel_height(540)
 	_panel_title.text = "TAXI  ·  Where to?"
 	_clear_body()
+	var gen := _panel_gen
+	var planned := 0
 	for d in destinations():
+		# Each fare takes a few route searches: fill the list in over a
+		# few frames rather than stalling the one you get in on.
+		if planned > 0 and planned % CHOICE_ROWS == 0:
+			await get_tree().process_frame
+			if gen != _panel_gen or not is_instance_valid(_panel) or _panel_mode != "choose":
+				return
+		planned += 1
 		var plan := plan_ride(d.pos)
 		if plan.is_empty():
 			continue
@@ -922,6 +936,7 @@ func _panel_height(h: float) -> void:
 
 
 func _clear_body() -> void:
+	_panel_gen += 1
 	for c in _panel_body.get_children():
 		_panel_body.remove_child(c)
 		c.queue_free()

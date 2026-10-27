@@ -22,6 +22,11 @@ const LOAD_RADIUS := 130.0
 const UNLOAD_RADIUS := 210.0
 const LOOKAHEAD := 1.2
 const NODE_GRID := 50.0
+## Barricades stand BARRICADE_IN m inside the play area where a road leaves
+## it; the road's junctions within BARRICADE_CUT of the edge are cut off for
+## traffic, which could never reach them to turn round.
+const BARRICADE_IN := 8.0
+const BARRICADE_CUT := 14.0
 
 var tile_size := 100.0
 ## [{id, w, speed}] by class index.
@@ -64,6 +69,10 @@ var focus_node: Node3D
 var glow_visible := false
 var seed_value := 1234
 
+## Junctions cars may use: joined to the city (Ember Canyon Drive, between
+## two barricades, is not) and not on the stretch past a storm barricade,
+## which traffic could never reach to turn round.
+var usable := PackedByteArray()
 var _adj: Array = [] # node -> PackedInt32Array of edges
 var _node_grid := {}
 var _lot_by_id := {}
@@ -139,6 +148,30 @@ func load_data(seed_v := 1234) -> void:
 		if not _node_grid.has(key):
 			_node_grid[key] = PackedInt32Array()
 		_node_grid[key].append(n)
+	_find_usable()
+
+
+func _find_usable() -> void:
+	var blocked := {}
+	for b in barricades:
+		var p := Vector2(b[0], b[1])
+		var d := Vector2(b[2], b[3])
+		var out := d if not in_play_area(p + d * (BARRICADE_IN + 1.0)) else -d
+		for n in nodes_near(p + out * BARRICADE_IN, BARRICADE_CUT):
+			blocked[n] = true
+	usable.resize(node_pos.size())
+	usable.fill(0)
+	var queue: Array = []
+	for c in links:
+		if not blocked.has(c):
+			usable[c] = 1
+			queue.append(c)
+	while not queue.is_empty():
+		var n: int = queue.pop_back()
+		for m in neighbours(n):
+			if usable[m] == 0 and not blocked.has(m):
+				usable[m] = 1
+				queue.append(m)
 
 
 func _process(delta: float) -> void:
@@ -166,8 +199,10 @@ func _focus_point() -> Vector3:
 	if node == null:
 		return Vector3.ZERO
 	var pos := node.global_position
-	# Ride along with whatever the focus drives.
-	var v = node.get("velocity")
+	# Ride along with whatever the focus drives (the player stands still in
+	# a car; the car has the velocity).
+	var car = node.get("vehicle")
+	var v = car.get("velocity") if is_instance_valid(car) and car is Node3D else node.get("velocity")
 	if v is Vector3:
 		pos += v * LOOKAHEAD
 	return pos

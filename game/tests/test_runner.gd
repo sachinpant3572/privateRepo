@@ -64,7 +64,7 @@ func _run() -> void:
 		"test_country_joins_the_city",
 		"test_country_tiles_stream",
 		"test_country_walls_stop_cars",
-		"test_traffic_drives_into_the_country",
+		"test_traffic_drives_into_the_country", "test_traffic_turns_round_at_barricades",
 		"test_country_kit_builds_every_kind",
 	]
 	# ONLY=name1,name2 runs just those (handy while working on one test).
@@ -1845,6 +1845,8 @@ func test_taxi_hail_ride_and_pay() -> void:
 	_check(game.hud.touch.seated and game.hud.touch.buttons().is_empty(), "no driving controls in the back")
 	_check(taxi._panel.visible and taxi._panel_mode == "choose", "the destination list comes up")
 	var dests: Array = taxi.destinations()
+	await _frames(ceili(dests.size() / float(taxi.CHOICE_ROWS)) + 1)
+	_check(taxi._panel_body.get_child_count() >= 3, "and fills in over a few frames (%d rows)" % taxi._panel_body.get_child_count())
 	_check(dests.size() >= 3, "destinations to pick from, got %d" % dests.size())
 	var dest := {}
 	for d in dests:
@@ -2196,7 +2198,7 @@ func test_country_walls_stop_cars() -> void:
 		var p: Vector3 = car.global_position
 		var past := (Vector2(p.x, p.z) - m).dot(n)
 		_check(past < 0.5, "the car stays on the land side of wall %d (%.1f m past)" % [kind, past])
-		_check(Vector2(p.x, p.z).distance_to(m) < 14.0, "and it drove up to the wall (%.1f m away)" % Vector2(p.x, p.z).distance_to(m))
+		_check(Vector2(p.x, p.z).distance_to(m) < 5.0, "and it drove up to the wall (%.1f m away)" % Vector2(p.x, p.z).distance_to(m))
 		await _press("interact")
 		car.queue_free()
 		await _frames(2)
@@ -2232,6 +2234,74 @@ func test_traffic_drives_into_the_country() -> void:
 			worst = maxf(worst, c.road_distance(Vector2(q.x, q.z), 60.0))
 	_check(moved > 60.0, "traffic car drives on (%.1f m in 10 s)" % moved)
 	_check(worst < 1.0, "it keeps to the country roads (worst %.1f m off the edge)" % worst)
+
+
+## Traffic heading for a storm barricade turns round short of it (the road's
+## last stretch, past the barricade, is out of the drive graph), and every
+## junction traffic may use can be routed to from the city.
+func test_traffic_turns_round_at_barricades() -> void:
+	await _new_game(false)
+	var city = game.city
+	var c = city.country
+	var Country = preload("res://scripts/country.gd")
+	var cut_ok := true
+	for b in c.barricades:
+		var p := Vector2(b[0], b[1])
+		var d := Vector2(b[2], b[3])
+		var hit: Vector2 = p + (d if not c.in_play_area(p + d * 9.0) else -d) * Country.BARRICADE_IN
+		for n in c.nodes_near(hit, Country.BARRICADE_CUT - 0.5):
+			cut_ok = cut_ok and c.usable[n] == 0
+	_check(cut_ok, "no junction traffic uses lies past or just short of a barricade")
+	var from: Vector3 = city.node_pos(city.COUNTRY_BASE + c.links.keys()[0])
+	var unrouted := 0
+	var tried := 0
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	while tried < 25:
+		var n: int = rng.randi() % c.node_count()
+		if c.usable[n] == 0:
+			continue
+		tried += 1
+		if city.route_nodes(from, city.node_pos(city.COUNTRY_BASE + n)).is_empty():
+			unrouted += 1
+	_check(unrouted == 0, "routes reach usable country junctions (%d of %d did not)" % [unrouted, tried])
+	for bi in 2:
+		var b: Array = c.barricades[bi]
+		var bp := Vector2(b[0], b[1])
+		# The new dead end nearest the barricade, and the junction before it.
+		var a := -1
+		for n in c.nodes_near(bp, 120.0):
+			if c.usable[n] == 1 and (a < 0 or c.pos(n).distance_to(bp) < c.pos(a).distance_to(bp)):
+				a = n
+		_check(a >= 0, "barricade %d has a usable junction near it" % bi)
+		if a < 0:
+			continue
+		var back := -1
+		for m in c.neighbours(a):
+			if c.usable[m] == 1:
+				back = m
+		var start_node: int = city.COUNTRY_BASE + (back if back >= 0 else a)
+		var aim: int = city.COUNTRY_BASE + a
+		city.stream_now(city.node_pos(start_node))
+		var car = _spawn_car(start_node, Vector3.ZERO, 0.0)
+		if back >= 0:
+			car.position = city.lane_start(start_node, aim)
+			var dd: Vector3 = city.node_pos(aim) - city.node_pos(start_node)
+			car.rotation.y = atan2(-dd.x, -dd.z)
+			car.start_traffic(city, start_node, aim)
+		else:
+			car.start_traffic(city, start_node, city.next_nodes(start_node)[0])
+		car.driver = Vehicle.Driver.TRAFFIC
+		_place_player_at(car.position + Vector3(0, 0, 20))
+		var nearest := INF
+		for f in 20:
+			await _frames(30)
+			city.stream_now(car.global_position)
+			nearest = minf(nearest, Vector2(car.global_position.x, car.global_position.z).distance_to(bp))
+		var end := Vector2(car.global_position.x, car.global_position.z).distance_to(bp)
+		_check(nearest > 4.0 and end > nearest + 25.0, "traffic turns round short of barricade %d (closest %.1f m, %.1f m away after 10 s)" % [bi, nearest, end])
+		car.queue_free()
+		await _frames(2)
 
 
 ## Every countryside kind builds at its footprint and on lots 30% smaller and

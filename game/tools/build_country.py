@@ -470,7 +470,7 @@ class Country:
         belt = [(west, by1 + 30.0), (west, north), (east, north), (east, 700.0)]
         for piece in lines_of(LineString(fillet(belt, 60.0, 8.0)).intersection(self.A.difference(self.P))):
             self.add(list(piece.coords), "avenue", "Bellerive Beltway", "suburb")
-        # Gulf Shore Drive and Ocean Drive: the coast 90 m inland, from the
+        # Gulf Shore Drive and Seabreeze Drive: the coast 90 m inland, from the
         # western edge of the city to Brisa Beach's north end, over the
         # river mouth.
         coast = LineString(self.L([[5000, 8590], [5600, 8650], [7600, 8650], [8400, 8000], [8780, 7470]]))
@@ -482,7 +482,7 @@ class Country:
         drive = drive.intersection(box(west - 200, -1000, east + 300, 2100)).difference(self.P.buffer(60.0))
         for piece in lines_of(drive):
             if piece.length > 60:
-                self.add(list(piece.coords), "avenue", "Ocean Drive", "suburb")
+                self.add(list(piece.coords), "avenue", "Seabreeze Drive", "suburb")
         self.ocean_drive = unary_union(lines_of(drive))
         # Brisa Beach cross streets: square to the coast, every 95 m.
         d = (800 / 1031.0, -650 / 1031.0)
@@ -495,7 +495,7 @@ class Country:
             self._clip_add([a, b], zone["beach_town"].buffer(2.0), "street")
         back = [(start[0] + inland[0] * 300, start[1] + inland[1] * 300),
                 (start[0] + inland[0] * 300 + d[0] * 1200, start[1] + inland[1] * 300 + d[1] * 1200)]
-        self._clip_add(back, zone["beach_town"].buffer(2.0), "street", "Collins Row")
+        self._clip_add(back, zone["beach_town"].buffer(2.0), "street", "Palmetto Row")
         # South shore streets: north-south from the frame to the drive.
         self.brisa_dirs = (d, inland)
 

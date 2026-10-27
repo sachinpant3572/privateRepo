@@ -425,10 +425,10 @@ func _pos2(n: int) -> Vector2:
 
 
 ## A junction cars can use: on a drivable street of the plan (the margin
-## past the window included) or any country road.
+## past the window included) or a country road joined to it (Country.usable).
 func drive_node(n: int) -> bool:
 	if n >= COUNTRY_BASE:
-		return country.degree(n - COUNTRY_BASE) > 0
+		return country.usable[n - COUNTRY_BASE] == 1
 	return n >= 0 and plan.degree(n) > 0 and plan.bounds.grow(2.0).has_point(plan.pos(n))
 
 
@@ -440,7 +440,8 @@ func _nodes_near(p: Vector2, r: float) -> Array:
 			out.append(n)
 	if country != null:
 		for c in country.nodes_near(p, r):
-			out.append(COUNTRY_BASE + c)
+			if country.usable[c] == 1:
+				out.append(COUNTRY_BASE + c)
 	return out
 
 
@@ -501,7 +502,8 @@ func next_nodes(n: int) -> Array:
 	if n >= COUNTRY_BASE:
 		var c := n - COUNTRY_BASE
 		for m in country.neighbours(c):
-			out.append(COUNTRY_BASE + m)
+			if country.usable[m] == 1:
+				out.append(COUNTRY_BASE + m)
 		if country.links.has(c) and drive_node(country.links[c]):
 			out.append(country.links[c])
 		return out
@@ -512,7 +514,8 @@ func next_nodes(n: int) -> Array:
 				out.append(m)
 	if country != null:
 		for c in country.plan_links.get(n, []):
-			out.append(COUNTRY_BASE + c)
+			if country.usable[c] == 1:
+				out.append(COUNTRY_BASE + c)
 	return out
 
 
@@ -645,10 +648,10 @@ func _build_astar() -> void:
 	for e in country.edge_a.size():
 		var a: int = COUNTRY_BASE + country.edge_a[e]
 		var b: int = COUNTRY_BASE + country.edge_b[e]
-		if a != b and not _astar.are_points_connected(a, b):
+		if a != b and drive_node(a) and drive_node(b) and not _astar.are_points_connected(a, b):
 			_astar.connect_points(a, b)
 	for c in country.links:
-		if _astar.has_point(country.links[c]):
+		if country.usable[c] == 1 and _astar.has_point(country.links[c]):
 			_astar.connect_points(COUNTRY_BASE + c, country.links[c])
 
 

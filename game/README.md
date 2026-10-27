@@ -85,7 +85,7 @@ phone.
 - **Country round Bellerive** (phase 2 of `../WORLD_V3_PLAN.md`;
   `scripts/country.gd`, `country_tiles.gd`, `kits/country_kit.gd`): the
   suburbs (Magnolia Heights, Blackwater Bayou, the east side, the south shore,
-  Brisa Beach with Ocean Drive and Deco Row), Golden Flats (Wheaton, Ridley
+  Brisa Beach with Seabreeze Drive and Deco Row), Golden Flats (Wheaton, Ridley
   Crossing, farms and grain elevators), Saltgrass (bayou, the Gator Farm,
   airboats) and Verdant Hills (Larkspur, the vineyard). Suburb streets run
   straight on from the city's; one road graph covers both, so traffic, the

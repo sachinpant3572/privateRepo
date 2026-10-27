@@ -94,6 +94,7 @@ var _since_reverse := 10.0
 ## The last wall or prop the car pressed against (its normal, flat): a
 ## scripted driver that backed off it drives along it for a moment.
 var _wall_normal := Vector3.ZERO
+var _wall_frame := -100
 var _deployed := false
 var _light_time := 0.0
 var _lights: Array[MeshInstance3D] = []
@@ -200,6 +201,7 @@ func drive_path(points: PackedVector3Array, throttle_amount := 0.6) -> void:
 	_stuck_time = 0.0
 	_reverse_time = 0.0
 	_since_reverse = 10.0
+	_wall_normal = Vector3.ZERO
 	# Skip the junction just behind us; drive on to the next one.
 	var fwd := -global_basis.z
 	while path_index < path.size() - 1:
@@ -274,6 +276,8 @@ func _script_ai() -> void:
 		if braking and blocker is Node3D:
 			var away: Vector3 = global_position - blocker.global_position
 			_wall_normal = Vector3(away.x, 0.0, away.z).normalized()
+		elif Engine.get_physics_frames() - _wall_frame > 5:
+			_wall_normal = Vector3.ZERO # pinned on a car, not on that old wall
 		_reverse_time = 1.2 if _since_reverse > 3.0 else minf(_last_reverse + 0.8, 3.2)
 		_last_reverse = _reverse_time
 
@@ -612,6 +616,7 @@ func _handle_collisions(before: Vector3) -> void:
 		var impact := absf(before.dot(col.get_normal()))
 		if not (other != null and other.has_method("bump")):
 			_wall_normal = Vector3(col.get_normal().x, 0.0, col.get_normal().z).normalized()
+			_wall_frame = Engine.get_physics_frames()
 		if driver == Driver.TRAFFIC:
 			if other != null and other.has_method("bump"):
 				if _yield_time < -1.0:
