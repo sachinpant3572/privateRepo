@@ -94,10 +94,11 @@ vec3 pattern(int c, vec3 col, vec2 uv, vec3 wpos, inout float rough, inout float
 	} else if (c == 9) {
 		vec2 cell = abs(fract(uv / vec2(0.16, 0.16)) - 0.5);
 		col *= 1.0 - 0.25 * step(0.42, max(cell.x, cell.y));
-		vec2 frame = abs(fract(uv / vec2(1.0, 1.65)) - 0.5);
-		col = mix(col, vec3(0.75, 0.77, 0.8), step(0.47, max(frame.x, frame.y)));
-		rough = 0.12;
-		spec = 0.85;
+		// Module frames every metre along the row; rows end at the geometry.
+		float frame = abs(fract(uv.x) - 0.5);
+		col = mix(col, vec3(0.75, 0.77, 0.8), step(0.475, frame));
+		rough = 0.3;
+		spec = 0.5;
 	} else if (c == 10) {
 		float lap = fract(uv.y / 0.22);
 		col *= 0.86 + 0.14 * smoothstep(0.0, 0.85, lap);
@@ -123,8 +124,8 @@ void surface(vec3 base, float code, vec3 wpos, vec3 wnormal, vec3 view_dir, vec2
 	if (detail > 0.5) {
 		col = pattern(c, col, uv, wpos, rough, spec);
 	} else if (c == 9) {
-		rough = 0.12;
-		spec = 0.85;
+		rough = 0.3;
+		spec = 0.5;
 	}
 	if (detail > 0.5) {
 		float grain = vnoise(wpos.xz * 2.1 + wpos.y * 1.7) * 0.7 + vnoise(wpos.xz * 0.3 + wpos.y * 0.2) * 0.3;
@@ -136,7 +137,7 @@ void surface(vec3 base, float code, vec3 wpos, vec3 wnormal, vec3 view_dir, vec2
 			float patch = step(0.96, hash(pc + 17.0));
 			col = mix(col, col * 0.86, patch);
 			float crack = abs(vnoise(wpos.xz * 0.55) * 2.0 - 1.0);
-			col *= mix(0.72, 1.0, smoothstep(0.0, 0.02, crack) + step(0.28, vnoise(wpos.xz * 0.09 + 3.0)));
+			col *= mix(0.8, 1.0, smoothstep(0.0, 0.012, crack) + step(0.22, vnoise(wpos.xz * 0.09 + 3.0)));
 		} else if (c == 3) {
 			// Concrete: speckle and the odd stain.
 			col *= 0.94 + 0.1 * hash(floor(wpos.xz * 14.0));
@@ -146,9 +147,9 @@ void surface(vec3 base, float code, vec3 wpos, vec3 wnormal, vec3 view_dir, vec2
 	if (c == 1) {
 		rough = 0.85;
 		spec = 0.3;
-	} else if (c == 2) {
-		// Glass: dark tint mirroring the sky above the horizon and the
-		// street below it, with a bright edge where it faces away.
+	} else if (c == 2 || c == 4) {
+		// Glass, and windows by day: dark tint mirroring the sky above the
+		// horizon and the street below it, brighter at grazing angles.
 		vec3 r = reflect(-view_dir, wnormal);
 		vec3 sky = mix(sky_tint.rgb * 1.05, vec3(0.75, 0.82, 0.9), 0.35) * mix(1.0, 0.18, night);
 		vec3 refl = mix(base * 0.6, sky, smoothstep(-0.15, 0.35, r.y));
@@ -250,10 +251,11 @@ void fragment() {
 ## glints fade and lamp light streaks across it.
 const WATER_SHADER := """
 shader_type spatial;
-render_mode diffuse_toon, specular_disabled;
+render_mode diffuse_burley, specular_schlick_ggx;
 
 global uniform float night;
 global uniform float wet;
+global uniform vec4 sky_tint;
 
 varying vec3 world_pos;
 
@@ -261,15 +263,24 @@ void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 
+// River water: rolling ripples tilt the normal, the sky shows in it more at
+// grazing angles, and the sun and lamps glint off the crests.
 void fragment() {
 	vec2 p = world_pos.xz;
 	float a = sin(p.x * 0.35 + TIME * 1.2 + sin(p.y * 0.21 + TIME * 0.7) * 2.0);
 	float b = sin(p.y * 0.5 - TIME * 0.9 + sin(p.x * 0.17) * 1.5);
-	float glint = smoothstep(0.8, 0.95, a * b);
+	float c = sin(p.x * 1.7 + p.y * 0.6 + TIME * 2.3) * sin(p.y * 1.9 - p.x * 0.4 - TIME * 1.8);
+	float glint = smoothstep(0.6, 0.95, a * b) * smoothstep(0.55, 0.9, c);
 	float drops = smoothstep(0.92, 1.0, sin(p.x * 3.1 + TIME * 7.0) * sin(p.y * 2.7 - TIME * 6.0)) * wet;
-	ALBEDO = COLOR.rgb + vec3(0.22, 0.28, 0.28) * glint * (1.0 - night * 0.6) + vec3(0.2) * drops;
+	vec3 wn = normalize(vec3(a * 0.06 + c * 0.04, 1.0, b * 0.06 - c * 0.03));
+	NORMAL = normalize((VIEW_MATRIX * vec4(wn, 0.0)).xyz);
+	vec3 view_dir = normalize(CAMERA_POSITION_WORLD - world_pos);
+	float fres = pow(1.0 - clamp(dot(view_dir, wn), 0.0, 1.0), 4.0);
+	vec3 sky = sky_tint.rgb * mix(1.0, 0.25, night);
+	ALBEDO = mix(COLOR.rgb * 0.85, sky, 0.25 + 0.5 * fres) + vec3(0.22, 0.28, 0.28) * glint * (1.0 - night * 0.6) + vec3(0.2) * drops;
 	EMISSION = vec3(1.0, 0.8, 0.45) * glint * night * 0.25;
-	ROUGHNESS = 1.0;
+	ROUGHNESS = 0.12;
+	SPECULAR = 0.7;
 }
 """
 

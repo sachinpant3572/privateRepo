@@ -25,28 +25,44 @@ const STONE := Color(0.62, 0.6, 0.58)
 const IRON := Color(0.1, 0.12, 0.11)
 const TRIM := Color(0.97, 0.96, 0.92)
 const DARK := Color(0.1, 0.11, 0.13)
+const PANE := Color(0.16, 0.2, 0.24)
 const WOOD := Color(0.42, 0.28, 0.18)
 const ROOF_TAR := Color(0.32, 0.3, 0.3)
 const GOLD := Color(0.9, 0.72, 0.25)
 const SHOP_GLASS := Color(0.55, 0.68, 0.72)
 const AWNINGS := [Color(0.75, 0.15, 0.2), Color(0.15, 0.4, 0.3), Color(0.2, 0.3, 0.6), Color(0.85, 0.55, 0.15)]
 const NEONS := [Color(1.0, 0.3, 0.55), Color(0.3, 0.85, 1.0), Color(1.0, 0.75, 0.2), Color(0.55, 1.0, 0.45), Color(0.8, 0.4, 1.0)]
+## Modern roofs: cool-roof membranes, sedum, rooftop plant and solar.
+const MEMBRANES := [Color(0.8, 0.81, 0.82), Color(0.64, 0.66, 0.68), Color(0.72, 0.7, 0.66), Color(0.46, 0.48, 0.5)]
+const SEDUM := Color(0.44, 0.52, 0.28)
+const UNIT := Color(0.8, 0.82, 0.84)
+const CHROME := Color(0.7, 0.72, 0.75)
+const SOLAR_BLUE := Color(0.08, 0.12, 0.22)
+const SKY_GLASS := Color(0.35, 0.45, 0.55)
+const DECK := Color(0.58, 0.42, 0.3)
+const PARASOLS := [Color(0.95, 0.93, 0.86), Color(0.2, 0.45, 0.5), Color(0.85, 0.4, 0.3), Color(0.3, 0.32, 0.35)]
+const BRICKS := [Color(0.6, 0.32, 0.25), Color(0.52, 0.28, 0.22), Color(0.68, 0.44, 0.34)]
 
 
 ## A window opening that may light up at night (about `lit` of them do).
+## Dark ones are plain glass (the shader still lights a few at night).
 static func _window(rng: RandomNumberGenerator, lit := 0.55) -> Color:
-	return MeshBuilder.glow(DARK, MeshBuilder.GLOW_WINDOW) if rng.randf() < lit else DARK
+	return MeshBuilder.glow(DARK, MeshBuilder.GLOW_WINDOW) if rng.randf() < lit else MeshBuilder.glow(PANE, MeshBuilder.GLASS)
 
 
 ## Two- to four-storey Creole townhouse with a cast-iron gallery over the
 ## sidewalk, shuttered French doors and a flat roof (Lantern Quarter).
+## About a quarter are bare brick rather than painted stucco.
 static func townhouse(mb, out: Array, w: float, d: float, floors: int, rng: RandomNumberGenerator) -> void:
 	var body: Color = CREOLE[rng.randi() % CREOLE.size()]
 	var shutter: Color = SHUTTERS[rng.randi() % SHUTTERS.size()]
+	var cornice := body.darkened(0.25)
+	if rng.randf() < 0.25:
+		body = MeshBuilder.glow(BRICKS[rng.randi() % BRICKS.size()], MeshBuilder.BRICK)
+		cornice = TRIM.darkened(0.12)
 	var h := floors * FLOOR + 0.6
 	_solid(mb, out, Vector3(0, h * 0.5, 0), Vector3(w, h, d), body)
-	mb.box(Vector3(0, h + 0.12, 0), Vector3(w + 0.3, 0.25, d + 0.3), body.darkened(0.25))
-	mb.box(Vector3(0, h + 0.26, 0), Vector3(w - 0.6, 0.04, d - 0.6), ROOF_TAR)
+	mb.box(Vector3(0, h + 0.12, 0), Vector3(w + 0.3, 0.25, d + 0.3), cornice)
 	var bays := maxi(1, int(w / 2.6))
 	var bay_w := w / bays
 	var front := -d * 0.5 - 0.04
@@ -62,6 +78,8 @@ static func townhouse(mb, out: Array, w: float, d: float, floors: int, rng: Rand
 				var open_h := 2.4 if (f > 0 or is_door) else 1.6
 				var open_y := y + (0.2 if (f > 0 or is_door) else 0.9) + open_h * 0.5
 				mb.box(Vector3(x, open_y, front), Vector3(bay_w * 0.45, open_h, 0.08), WOOD if is_door else _window(rng))
+				if f > 0:
+					mb.box(Vector3(x, open_y - open_h * 0.5 - 0.04, front - 0.1), Vector3(bay_w * 0.52, 0.06, 0.2), TRIM)
 				for side in [-1.0, 1.0]:
 					mb.box(Vector3(x + side * bay_w * 0.34, open_y, front - 0.02), Vector3(bay_w * 0.2, open_h, 0.06), shutter)
 		mb.box(Vector3(0, y + FLOOR - 0.15, front), Vector3(w, 0.12, 0.08), TRIM)
@@ -70,7 +88,9 @@ static func townhouse(mb, out: Array, w: float, d: float, floors: int, rng: Rand
 	# Back: a simple window band per floor (seen across courtyards).
 	for f in floors:
 		mb.box(Vector3(0, f * FLOOR + 1.8, d * 0.5 + 0.04), Vector3(w * 0.8, 1.2, 0.06), _window(rng, 0.4))
-	_roof_clutter(mb, w, d, h + 0.25, rng)
+	# A mini-split condenser on a bracket at the back.
+	mb.box(Vector3(w * 0.3, FLOOR + 0.5, d * 0.5 + 0.3), Vector3(0.8, 0.6, 0.5), MeshBuilder.glow(UNIT, MeshBuilder.METAL))
+	_flat_roof(mb, w, d, h + 0.25, rng, cornice)
 
 
 ## Ground-floor shop: a lit display window, a glazed door, a striped awning
@@ -119,14 +139,15 @@ static func shotgun(mb, out: Array, w: float, d: float, rng: RandomNumberGenerat
 		body = paint
 	if damaged:
 		body = body.lerp(Color(0.6, 0.58, 0.55), 0.55)
+	body = MeshBuilder.glow(body, MeshBuilder.SIDING)
 	var pier := 0.6
 	var wall := 3.2
 	var porch := 2.2
-	mb.box(Vector3(0, pier * 0.5, 0), Vector3(w, pier, d), Color(0.45, 0.42, 0.4))
+	mb.box(Vector3(0, pier * 0.5, 0), Vector3(w, pier, d), MeshBuilder.glow(Color(0.5, 0.48, 0.46), MeshBuilder.CONCRETE))
 	_solid(mb, out, Vector3(0, pier + wall * 0.5, porch * 0.5), Vector3(w, wall, d - porch), body)
 	var front := -d * 0.5 + porch
 	# Porch: floor, steps, posts and roof.
-	mb.box(Vector3(0, pier, -d * 0.5 + porch * 0.5), Vector3(w, 0.12, porch), WOOD.lightened(0.2))
+	mb.box(Vector3(0, pier, -d * 0.5 + porch * 0.5), Vector3(w, 0.12, porch), MeshBuilder.glow(WOOD.lightened(0.2), MeshBuilder.SIDING))
 	mb.box(Vector3(w * 0.25, pier * 0.5, -d * 0.5 - 0.3), Vector3(1.2, pier, 0.6), STONE)
 	for side in [-1.0, 1.0]:
 		mb.box(Vector3(side * (w * 0.5 - 0.15), pier + wall * 0.5, -d * 0.5 + 0.15), Vector3(0.14, wall, 0.14), TRIM)
@@ -141,15 +162,21 @@ static func shotgun(mb, out: Array, w: float, d: float, rng: RandomNumberGenerat
 		mb.box(Vector3(win_x, pier + 1.5, front - 0.04), Vector3(1.0, 1.5, 0.08), _window(rng, 0.6))
 		for side in [-1.0, 1.0]:
 			mb.box(Vector3(win_x + side * 0.72, pier + 1.5, front - 0.06), Vector3(0.4, 1.5, 0.06), TRIM if body.v < 0.8 else SHUTTERS[0])
-	# Front-facing gable roof (ridge runs front to back).
-	# Tin and shingle roofs in a few weathered colours: from the top-down
-	# camera the roof is most of what shows.
-	var roofs := [Color(0.36, 0.33, 0.33), Color(0.55, 0.28, 0.22), Color(0.3, 0.45, 0.38), Color(0.38, 0.42, 0.5), Color(0.6, 0.58, 0.52)]
+	# Front-facing gable roof (ridge runs front to back) in standing-seam
+	# metal: from the top-down camera the roof is most of what shows. Some
+	# carry a row of solar panels.
+	var roofs := [Color(0.36, 0.33, 0.33), Color(0.55, 0.28, 0.22), Color(0.3, 0.45, 0.38), Color(0.38, 0.42, 0.5), Color(0.62, 0.62, 0.6)]
 	var roof: Color = roofs[rng.randi() % roofs.size()] if not damaged else Color(0.42, 0.4, 0.38)
 	var saved: Transform3D = mb.xform
 	mb.xform = saved * Transform3D(Basis(Vector3.UP, PI / 2), Vector3.ZERO)
-	mb.gable(Vector3(0, pier + wall + 0.9, 0), Vector3(d + 0.3, 1.8, w + 0.5), roof, body.lightened(0.15))
+	var gable_c := Vector3(0, pier + wall + 0.9, 0)
+	var gable_s := Vector3(d + 0.3, 1.8, w + 0.5)
+	mb.gable(gable_c, gable_s, MeshBuilder.glow(roof, MeshBuilder.SEAM_ROOF), body.lightened(0.15))
+	if not damaged and rng.randf() < 0.35:
+		_slope_solar(mb, gable_c, gable_s, 1.6)
 	mb.xform = saved
+	if not damaged:
+		mb.box(Vector3(-w * 0.2, 0.35, d * 0.5 + 0.35), Vector3(0.8, 0.6, 0.5), MeshBuilder.glow(UNIT, MeshBuilder.METAL))
 	if damaged:
 		mb.box(Vector3(w * 0.12, pier + wall + 1.0, 1.5), Vector3(w * 0.7, 0.1, d * 0.4), Color(0.2, 0.45, 0.85))
 
@@ -157,6 +184,8 @@ static func shotgun(mb, out: Array, w: float, d: float, rng: RandomNumberGenerat
 ## Two-storey ward apartment with an outside stair (Teo's place).
 static func ward_apartment(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator) -> void:
 	var body: Color = WARDS[rng.randi() % WARDS.size()]
+	if rng.randf() < 0.5:
+		body = MeshBuilder.glow(body, MeshBuilder.SIDING)
 	var h := FLOOR * 2 + 0.4
 	_solid(mb, out, Vector3(0, h * 0.5, 0), Vector3(w, h, d), body)
 	mb.box(Vector3(0, h + 0.1, 0), Vector3(w + 0.4, 0.2, d + 0.4), body.darkened(0.3))
@@ -168,84 +197,134 @@ static func ward_apartment(mb, out: Array, w: float, d: float, rng: RandomNumber
 	for s in 8:
 		mb.box(Vector3(w * 0.5 + 0.6, 0.2 + s * 0.42, -d * 0.3 + s * 0.45), Vector3(1.1, 0.12, 0.45), IRON)
 	mb.box(Vector3(w * 0.5 + 0.6, FLOOR, d * 0.1), Vector3(1.2, 0.12, 1.6), IRON)
-	_roof_clutter(mb, w, d, h + 0.2, rng)
+	_flat_roof(mb, w, d, h + 0.2, rng, body.darkened(0.3))
 
 
-## Glass office tower with stone lobby, floor bands and roof gear (Gilt
-## District). `accent` trims the crown (gold for Aurum).
+## Glass office tower: a curtain wall with mullions and spandrel bands over
+## a glazed stone lobby, and a busy plant roof (Gilt District). `accent`
+## trims the crown (gold for Aurum).
 static func tower(mb, out: Array, w: float, d: float, h: float, rng: RandomNumberGenerator, accent := Color(0.75, 0.78, 0.82)) -> void:
-	var glass: Color = GLASS[rng.randi() % GLASS.size()]
+	var glass: Color = MeshBuilder.glow(GLASS[rng.randi() % GLASS.size()], MeshBuilder.GLASS)
 	var lobby := 4.6
-	_solid(mb, out, Vector3(0, lobby * 0.5, 0), Vector3(w, lobby, d), STONE)
-	_solid(mb, out, Vector3(0, lobby + (h - lobby) * 0.5, 0), Vector3(w - 0.8, h - lobby, d - 0.8), glass)
+	var gw := w - 0.8
+	var gd := d - 0.8
+	_solid(mb, out, Vector3(0, lobby * 0.5, 0), Vector3(w, lobby, d), MeshBuilder.glow(STONE, MeshBuilder.CONCRETE))
+	_solid(mb, out, Vector3(0, lobby + (h - lobby) * 0.5, 0), Vector3(gw, h - lobby, gd), glass)
+	var spandrel := MeshBuilder.glow(Color(0.5, 0.54, 0.58), MeshBuilder.METAL)
 	var y := lobby + 3.5
 	while y < h - 1.0:
-		mb.box(Vector3(0, y, 0), Vector3(w - 0.6, 0.3, d - 0.6), glass.lightened(0.35))
-		# Office floors: some rooms stay lit at night.
-		for k in 4:
-			if rng.randf() < 0.45:
-				var x0 := -w * 0.5 + 0.4 + (k + 0.5) * (w - 0.8) / 4.0
-				mb.box(Vector3(x0, y - 1.6, -d * 0.5 + 0.38), Vector3((w - 0.8) / 4.0 - 0.4, 2.2, 0.05), MeshBuilder.glow(glass.darkened(0.15), MeshBuilder.GLOW_WINDOW))
+		mb.box(Vector3(0, y, 0), Vector3(gw + 0.12, 0.4, gd + 0.12), spandrel)
 		y += 3.5
-	for i in 5:
-		var x := -w * 0.4 + i * w * 0.2
-		mb.box(Vector3(x, lobby + (h - lobby) * 0.5, -d * 0.5 + 0.35), Vector3(0.16, h - lobby, 0.12), glass.darkened(0.25))
-	# Entrance canopy and doors.
-	mb.box(Vector3(0, 3.6, -d * 0.5 - 1.2), Vector3(w * 0.5, 0.25, 2.4), DARK)
-	mb.box(Vector3(0, 1.5, -d * 0.5 - 0.04), Vector3(w * 0.35, 3.0, 0.08), Color(0.25, 0.32, 0.38))
-	# The roof is what the top-down camera sees most: a dark deck inside a
-	# trimmed parapet, with a helipad, a roof garden or plant and tanks.
-	var deck: Color = [Color(0.36, 0.38, 0.41), Color(0.42, 0.4, 0.37), Color(0.33, 0.37, 0.36)][rng.randi() % 3]
-	mb.box(Vector3(0, h + 0.03, 0), Vector3(w - 0.8, 0.06, d - 0.8), deck)
+	# Mullions on every face, about every 1.8 m.
+	var mullion := MeshBuilder.glow(Color(0.42, 0.45, 0.5), MeshBuilder.METAL)
+	var mh := h - lobby
+	var my := lobby + mh * 0.5
+	var nx := maxi(2, int(gw / 1.8))
+	for i in range(1, nx):
+		var x := -gw * 0.5 + gw * i / nx
+		for side in [-1.0, 1.0]:
+			mb.box(Vector3(x, my, side * (gd * 0.5 + 0.04)), Vector3(0.12, mh, 0.08), mullion)
+	var nz := maxi(2, int(gd / 1.8))
+	for i in range(1, nz):
+		var z := -gd * 0.5 + gd * i / nz
+		for side in [-1.0, 1.0]:
+			mb.box(Vector3(side * (gw * 0.5 + 0.04), my, z), Vector3(0.08, mh, 0.12), mullion)
+	# Lobby: full-height glazing and a steel entrance canopy.
+	mb.box(Vector3(0, 2.0, -d * 0.5 - 0.04), Vector3(w * 0.8, 3.6, 0.08), MeshBuilder.glow(Color(0.3, 0.38, 0.45), MeshBuilder.GLOW_WINDOW))
+	mb.box(Vector3(0, 4.0, -d * 0.5 - 1.2), Vector3(w * 0.5, 0.2, 2.4), MeshBuilder.glow(Color(0.3, 0.32, 0.35), MeshBuilder.METAL))
+	mb.box(Vector3(0, 3.88, -d * 0.5 - 1.2), Vector3(w * 0.46, 0.04, 2.2), MeshBuilder.glow(Color(1.0, 0.95, 0.85), MeshBuilder.GLOW_LAMP))
+	# The roof is what the top-down camera sees most: a membrane inside a
+	# trimmed parapet with a gondola track round the edge, cooling plant,
+	# and a helipad, a roof garden or solar rows.
+	var deck: Color = MEMBRANES[rng.randi() % MEMBRANES.size()]
+	mb.box(Vector3(0, h + 0.03, 0), Vector3(gw, 0.06, gd), MeshBuilder.glow(deck, MeshBuilder.ROOF))
 	for side in [-1.0, 1.0]:
 		mb.box(Vector3(side * (w * 0.5 - 0.25), h + 0.45, 0), Vector3(0.5, 0.9, d - 0.2), accent)
 		mb.box(Vector3(0, h + 0.45, side * (d * 0.5 - 0.25)), Vector3(w - 1.2, 0.9, 0.5), accent)
+		mb.box(Vector3(side * (gw * 0.5 - 0.7), h + 0.12, 0), Vector3(0.12, 0.08, gd - 1.2), MeshBuilder.glow(CHROME, MeshBuilder.METAL))
+	# Building maintenance unit parked on its track.
+	mb.box(Vector3(gw * 0.5 - 0.7, h + 0.7, gd * 0.3), Vector3(1.4, 1.2, 1.6), MeshBuilder.glow(UNIT, MeshBuilder.METAL))
+	mb.box(Vector3(gw * 0.5 - 2.4, h + 1.4, gd * 0.3), Vector3(3.6, 0.3, 0.3), MeshBuilder.glow(Color(0.85, 0.75, 0.2), MeshBuilder.GLOSS))
+	# Cooling towers at the back.
+	var cw := minf(w * 0.45, 7.0)
+	_hvac(mb, Vector3(-w * 0.12, h, gd * 0.5 - 1.8), Vector3(cw, 1.6, 2.2))
 	var roll := rng.randf()
 	if roll < 0.3 and w >= 14.0:
-		# Helipad with a yellow H.
-		mb.box(Vector3(0, h + 0.3, 0), Vector3(w * 0.6, 0.5, d * 0.6), DARK)
-		mb.box(Vector3(-w * 0.1, h + 0.56, 0), Vector3(w * 0.05, 0.02, d * 0.3), Color(0.95, 0.85, 0.2))
-		mb.box(Vector3(w * 0.1, h + 0.56, 0), Vector3(w * 0.05, 0.02, d * 0.3), Color(0.95, 0.85, 0.2))
-		mb.box(Vector3(0, h + 0.56, 0), Vector3(w * 0.2, 0.02, d * 0.05), Color(0.95, 0.85, 0.2))
+		# Helipad: concrete deck, white ring and H, perimeter lights.
+		mb.box(Vector3(0, h + 0.3, -d * 0.08), Vector3(w * 0.6, 0.5, d * 0.5), MeshBuilder.glow(Color(0.5, 0.5, 0.5), MeshBuilder.CONCRETE))
+		var hc := Vector3(0, h + 0.55, -d * 0.08)
+		mb.cylinder(hc, w * 0.2, 0.01, Color(0.95, 0.95, 0.92), 12)
+		mb.cylinder(hc, w * 0.18, 0.02, Color(0.32, 0.33, 0.34), 12)
+		var yellow := Color(0.95, 0.85, 0.2)
+		mb.box(hc + Vector3(-w * 0.06, 0.03, 0), Vector3(w * 0.03, 0.02, w * 0.18), yellow)
+		mb.box(hc + Vector3(w * 0.06, 0.03, 0), Vector3(w * 0.03, 0.02, w * 0.18), yellow)
+		mb.box(hc + Vector3(0, 0.03, 0), Vector3(w * 0.12, 0.02, w * 0.03), yellow)
+		for k in 8:
+			var ang := TAU * k / 8.0
+			mb.box(hc + Vector3(cos(ang) * w * 0.22, 0.05, sin(ang) * w * 0.22), Vector3(0.2, 0.1, 0.2), MeshBuilder.glow(Color(0.4, 1.0, 0.5), MeshBuilder.GLOW_LAMP))
 	elif roll < 0.55:
-		# Roof garden: lawn, planters and a pergola.
-		mb.box(Vector3(0, h + 0.08, d * 0.1), Vector3(w * 0.7, 0.06, d * 0.5), Color(0.38, 0.6, 0.3))
-		for x in [-w * 0.25, 0.0, w * 0.25]:
-			mb.ball(Vector3(x, h + 0.7, -d * 0.25), Vector3(0.7, 0.6, 0.7), Color(0.28, 0.5, 0.26), 5, 2)
-		mb.box(Vector3(0, h + 2.4, d * 0.1), Vector3(w * 0.4, 0.12, d * 0.2), WOOD)
+		# Roof garden: lawn, timber deck, planters and a pergola.
+		mb.box(Vector3(-w * 0.12, h + 0.08, -d * 0.12), Vector3(w * 0.45, 0.06, d * 0.45), MeshBuilder.glow(Color(0.38, 0.6, 0.3), MeshBuilder.GRASS))
+		mb.box(Vector3(w * 0.22, h + 0.08, -d * 0.12), Vector3(w * 0.25, 0.06, d * 0.45), MeshBuilder.glow(DECK, MeshBuilder.SIDING))
+		for x in [-w * 0.3, -w * 0.12, w * 0.06]:
+			mb.ball(Vector3(x, h + 0.7, -d * 0.36), Vector3(0.7, 0.6, 0.7), Color(0.28, 0.5, 0.26), 5, 2)
+		mb.box(Vector3(w * 0.22, h + 2.4, -d * 0.12), Vector3(w * 0.25, 0.12, d * 0.3), WOOD)
+		for k in 4:
+			mb.cylinder(Vector3(w * 0.22 + (w * 0.11 if k % 2 == 0 else -w * 0.11), h + 0.1, -d * 0.12 + (d * 0.13 if k < 2 else -d * 0.13)), 0.06, 2.3, WOOD, 4)
 	else:
-		mb.box(Vector3(w * 0.15, h + 0.9, d * 0.1), Vector3(w * 0.35, 1.8, d * 0.4), Color(0.55, 0.56, 0.58))
-		mb.cylinder(Vector3(-w * 0.2, h, -d * 0.15), 0.12, 6.0, Color(0.6, 0.6, 0.62), 4)
-	for i in rng.randi_range(1, 3):
-		mb.box(Vector3(w * rng.randf_range(-0.35, 0.35), h + 0.5, d * rng.randf_range(0.2, 0.38)), Vector3(1.4, 1.0, 1.0), Color(0.72, 0.74, 0.76))
-	if rng.randf() < 0.35:
-		mb.cylinder(Vector3(-w * 0.3, h + 0.06, d * 0.28), 1.1, 2.6, WOOD.lightened(0.1), 7)
-		mb.cylinder(Vector3(-w * 0.3, h + 2.66, d * 0.28), 1.2, 0.5, ROOF_TAR, 7)
+		_solar(mb, -gw * 0.5 + 0.9, gw * 0.5 - 1.8, -gd * 0.5 + 0.9, gd * 0.5 - 4.0, h)
+	# Telecom mast with an aircraft warning light.
+	var mast := Vector3(-gw * 0.5 + 1.2, h, gd * 0.5 - 1.2)
+	mb.cylinder(mast, 0.12, 6.0, Color(0.6, 0.6, 0.62), 4)
+	for k in 3:
+		var ang := TAU * k / 3.0
+		mb.box(mast + Vector3(cos(ang) * 0.3, 4.6, sin(ang) * 0.3), Vector3(0.2, 1.2, 0.2), Color(0.9, 0.9, 0.9))
+	mb.box(mast + Vector3(0, 6.05, 0), Vector3(0.25, 0.2, 0.25), MeshBuilder.glow(Color(1.0, 0.15, 0.1), MeshBuilder.GLOW_NEON))
 
 
 ## Corrugated dockside warehouse with roll-up doors and a loading dock
 ## (Ironwharf). `number` paints a big digit on the roof (Warehouse 9).
 static func warehouse(mb, out: Array, w: float, d: float, h: float, rng: RandomNumberGenerator, number := -1) -> void:
-	var colors := [Color(0.62, 0.3, 0.24), Color(0.5, 0.55, 0.58), Color(0.42, 0.52, 0.42), Color(0.7, 0.66, 0.58)]
-	var body: Color = colors[rng.randi() % colors.size()]
+	var colors := [Color(0.62, 0.3, 0.24), Color(0.5, 0.55, 0.58), Color(0.42, 0.52, 0.42), Color(0.7, 0.66, 0.58), Color(0.82, 0.83, 0.84)]
+	var body: Color = MeshBuilder.glow(colors[rng.randi() % colors.size()], MeshBuilder.SEAM_ROOF)
 	_solid(mb, out, Vector3(0, h * 0.5, 0), Vector3(w, h, d), body)
-	var rib := 1.4
-	var x := -w * 0.5 + rib * 0.5
-	while x < w * 0.5:
-		mb.box(Vector3(x, h * 0.5, -d * 0.5 - 0.05), Vector3(0.18, h, 0.1), body.darkened(0.2))
-		x += rib
+	mb.box(Vector3(0, 0.5, 0), Vector3(w + 0.06, 1.0, d + 0.06), MeshBuilder.glow(Color(0.55, 0.54, 0.52), MeshBuilder.CONCRETE))
 	var doors := maxi(1, int(w / 9.0))
+	var slats := MeshBuilder.glow(Color(0.6, 0.61, 0.63), MeshBuilder.SIDING)
 	for i in doors:
 		var dx := -w * 0.5 + w * (i + 0.5) / doors
-		mb.box(Vector3(dx, 2.3, -d * 0.5 - 0.1), Vector3(4.0, 4.4, 0.1), Color(0.55, 0.56, 0.58))
+		mb.box(Vector3(dx, 2.3, -d * 0.5 - 0.1), Vector3(4.0, 4.4, 0.1), slats)
 		mb.box(Vector3(dx, 4.6, -d * 0.5 - 0.15), Vector3(4.3, 0.3, 0.15), Color(0.95, 0.75, 0.2))
-	mb.box(Vector3(0, 0.6, -d * 0.5 - 1.5), Vector3(w * 0.9, 1.2, 3.0), STONE.darkened(0.15))
+		# LED wall pack over each door.
+		mb.box(Vector3(dx, 5.2, -d * 0.5 - 0.2), Vector3(0.5, 0.25, 0.2), MeshBuilder.glow(Color(0.95, 0.97, 1.0), MeshBuilder.GLOW_LAMP))
+		for side in [-1.0, 1.0]:
+			mb.box(Vector3(dx + side * 1.6, 0.9, -d * 0.5 - 3.05), Vector3(0.3, 0.5, 0.15), Color(0.1, 0.1, 0.1))
+	mb.box(Vector3(0, 0.6, -d * 0.5 - 1.5), Vector3(w * 0.9, 1.2, 3.0), MeshBuilder.glow(STONE.darkened(0.15), MeshBuilder.CONCRETE))
+	for side in [-1.0, 1.0]:
+		mb.cylinder(Vector3(side * w * 0.47, 0.0, -d * 0.5 - 3.4), 0.14, 1.1, MeshBuilder.glow(Color(0.95, 0.78, 0.15), MeshBuilder.GLOSS), 6)
 	if rng.randf() < 0.6:
 		Props.graffiti(mb, Vector3(rng.randf_range(-w * 0.3, w * 0.3), 6.0, -d * 0.5 - 0.12), rng.randf_range(2.5, 4.5), rng)
 	_solid_only(out, Vector3(0, 0.6, -d * 0.5 - 1.5), Vector3(w * 0.9, 1.2, 3.0))
-	mb.gable(Vector3(0, h + 0.6, 0), Vector3(w + 0.4, 1.2, d + 0.4), body.darkened(0.35), body)
-	for i in 3:
-		mb.box(Vector3(-w * 0.3 + i * w * 0.3, h + 0.95, d * 0.15), Vector3(1.4, 0.15, d * 0.3), Color(0.7, 0.85, 0.9))
+	var gable_c := Vector3(0, h + 0.6, 0)
+	var gable_s := Vector3(w + 0.4, 1.2, d + 0.4)
+	mb.gable(gable_c, gable_s, MeshBuilder.glow(Color(0.62, 0.64, 0.66) if rng.randf() < 0.5 else body.darkened(0.35), MeshBuilder.SEAM_ROOF), body)
+	if number < 0 and rng.randf() < 0.5:
+		_slope_solar(mb, gable_c, gable_s, 1.2)
+		# The back slope, mirrored.
+		var saved: Transform3D = mb.xform
+		mb.xform = saved * Transform3D(Basis(Vector3.UP, PI), Vector3.ZERO)
+		_slope_solar(mb, gable_c, gable_s, 1.2)
+		mb.xform = saved
+	else:
+		# Skylight strips down the back slope.
+		var saved: Transform3D = mb.xform
+		mb.xform = saved * Transform3D(Basis(Vector3.UP, PI), Vector3.ZERO)
+		for i in 3:
+			var x := -w * 0.3 + i * w * 0.3
+			_slope_quad(mb, gable_c, gable_s, x - 0.7, x + 0.7, 0.2, 0.8, MeshBuilder.glow(SKY_GLASS, MeshBuilder.GLASS))
+		mb.xform = saved
+	for i in 2:
+		mb.cylinder(Vector3(-w * 0.15 + i * w * 0.3, h + 1.1, 0.0), 0.45, 0.6, MeshBuilder.glow(CHROME, MeshBuilder.METAL), 8)
 	if number >= 0:
 		_digit(mb, number, Vector3(0, h + 1.3, -d * 0.12), 3.0, Color(0.95, 0.95, 0.9))
 
@@ -320,7 +399,10 @@ static func blue_lantern(mb, out: Array, rng: RandomNumberGenerator) -> void:
 	mb.box(Vector3(-6.0, 1.6, -7.06), Vector3(5.0, 2.0, 0.08), MeshBuilder.glow(Color(0.6, 0.3, 0.7), MeshBuilder.GLOW_WINDOW))
 	mb.box(Vector3(6.0, 1.6, -7.06), Vector3(5.0, 2.0, 0.08), MeshBuilder.glow(Color(0.6, 0.3, 0.7), MeshBuilder.GLOW_WINDOW))
 	_gallery_front(mb, 24.0, 18.0)
-	_roof_clutter(mb, 24.0, 18.0, 8.3, rng)
+	var saved: Transform3D = mb.xform
+	mb.xform = saved * Transform3D(Basis(), Vector3(0, 0, 2.0))
+	_flat_roof(mb, 24.0, 18.0, 8.3, rng, blue.darkened(0.3))
+	mb.xform = saved
 
 
 static func _gallery_front(mb, w: float, d: float) -> void:
@@ -335,6 +417,12 @@ static func precinct(mb, out: Array) -> void:
 	_solid(mb, out, Vector3(0, 4.5, 4.0), Vector3(28.0, 9.0, 18.0), body)
 	mb.box(Vector3(0, 7.0, -5.06), Vector3(28.0, 1.0, 0.1), Color(0.15, 0.25, 0.6))
 	mb.box(Vector3(0, 9.15, 4.0), Vector3(28.4, 0.3, 18.4), body.darkened(0.3))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 911
+	var saved: Transform3D = mb.xform
+	mb.xform = saved * Transform3D(Basis(), Vector3(0, 0, 4.0))
+	_flat_roof(mb, 28.0, 18.0, 9.3, rng, body.darkened(0.3))
+	mb.xform = saved
 	mb.box(Vector3(0, 1.6, -5.06), Vector3(4.0, 3.2, 0.1), MeshBuilder.glow(Color(0.25, 0.32, 0.4), MeshBuilder.GLOW_WINDOW))
 	mb.box(Vector3(0, 4.2, -5.1), Vector3(5.0, 0.6, 0.06), MeshBuilder.glow(Color(0.35, 0.55, 1.0), MeshBuilder.GLOW_NEON))
 	mb.box(Vector3(0, 3.6, -6.0), Vector3(6.0, 0.2, 2.0), Color(0.15, 0.25, 0.6))
@@ -410,11 +498,143 @@ static func courts(mb, out: Array, props) -> void:
 
 # --- Helpers ------------------------------------------------------------------
 
-static func _roof_clutter(mb, w: float, d: float, top: float, rng: RandomNumberGenerator) -> void:
-	if rng.randf() < 0.6:
-		mb.box(Vector3(w * rng.randf_range(-0.25, 0.25), top + 0.45, d * rng.randf_range(-0.2, 0.25)), Vector3(1.2, 0.9, 1.0), Color(0.72, 0.74, 0.76))
-	if rng.randf() < 0.35:
-		mb.box(Vector3(w * 0.3, top + 0.9, d * 0.3), Vector3(0.7, 1.8, 0.7), Color(0.55, 0.3, 0.25))
+## Modern flat roof inside a parapet, `top` being the roof surface: a
+## membrane (now and then a sedum green roof) with HVAC units, vents and,
+## on bigger roofs, a stair hut at the back; the front half gets solar rows,
+## a roof terrace or skylights. `plain` keeps it to membrane, parapet and
+## plant (roofs with a sign painted on them).
+static func _flat_roof(mb, w: float, d: float, top: float, rng: RandomNumberGenerator, edge: Color, plain := false) -> void:
+	var green := not plain and w * d > 60.0 and rng.randf() < 0.15
+	var membrane: Color = MEMBRANES[rng.randi() % MEMBRANES.size()]
+	mb.box(Vector3(0, top + 0.02, 0), Vector3(w - 0.3, 0.04, d - 0.3), MeshBuilder.glow(SEDUM, MeshBuilder.GRASS) if green else MeshBuilder.glow(membrane, MeshBuilder.ROOF))
+	var t := 0.22
+	var ph := 0.45
+	var coping := MeshBuilder.glow(edge.lightened(0.25), MeshBuilder.CONCRETE)
+	for side in [-1.0, 1.0]:
+		mb.box(Vector3(side * (w * 0.5 - t * 0.5), top + ph * 0.5, 0), Vector3(t, ph, d), edge)
+		mb.box(Vector3(0, top + ph * 0.5, side * (d * 0.5 - t * 0.5)), Vector3(w - t * 2.0, ph, t), edge)
+		mb.box(Vector3(side * (w * 0.5 - t * 0.5), top + ph + 0.02, 0), Vector3(t + 0.06, 0.04, d + 0.06), coping)
+		mb.box(Vector3(0, top + ph + 0.02, side * (d * 0.5 - t * 0.5)), Vector3(w, 0.04, t + 0.06), coping)
+	var x0 := -w * 0.5 + 0.7
+	var x1 := w * 0.5 - 0.7
+	# Back half: plant, a stair hut on bigger roofs, vents and a dish.
+	var hut := w * d > 70.0 and w > 6.0
+	if hut:
+		_stair_hut(mb, Vector3(x1 - 1.1, top, d * 0.5 - 1.9), edge)
+	var plant_x1 := x1 - 2.6 if hut else x1
+	if w > 6.0:
+		_hvac(mb, Vector3(lerpf(x0, plant_x1, rng.randf_range(0.2, 0.5)), top, d * 0.18), Vector3(minf(2.4, w * 0.3), 1.0, 1.3))
+	else:
+		_hvac(mb, Vector3(x0 + 0.6, top, d * 0.22), Vector3(0.9, 0.7, 0.55))
+	for i in rng.randi_range(1, 3):
+		mb.cylinder(Vector3(rng.randf_range(x0, plant_x1), top, rng.randf_range(0.0, d * 0.5 - 0.7)), 0.08, 0.7, MeshBuilder.glow(CHROME, MeshBuilder.METAL), 5)
+	if not plain and rng.randf() < 0.3:
+		_dish(mb, Vector3(x0 + 0.4, top, d * 0.5 - 0.7))
+	if plain:
+		return
+	# Front half.
+	var z0 := -d * 0.5 + 0.6
+	var z1 := -0.4
+	var roll := rng.randf()
+	if green:
+		_terrace(mb, x0, x0 + (x1 - x0) * 0.45, z0, z1, top, rng)
+	elif roll < 0.4 and z1 - z0 > 1.8:
+		_solar(mb, x0, x1, z0, z1, top)
+	elif roll < 0.62 and z1 - z0 > 2.2:
+		_terrace(mb, x0, x1, z0, z1, top, rng)
+	elif roll < 0.85:
+		var n := maxi(1, int((x1 - x0) / 2.6))
+		for i in n:
+			var x := x0 + (x1 - x0) * (i + 0.5) / n
+			mb.box(Vector3(x, top + 0.2, (z0 + z1) * 0.5), Vector3(1.1, 0.35, minf(1.8, z1 - z0)), MeshBuilder.glow(SKY_GLASS, MeshBuilder.GLASS))
+	else:
+		_hvac(mb, Vector3(lerpf(x0, x1, 0.6), top, (z0 + z1) * 0.5), Vector3(0.9, 0.7, 0.55))
+
+
+## Rooftop air-handling unit with dark fan grilles on top.
+static func _hvac(mb, base: Vector3, size: Vector3) -> void:
+	mb.box(base + Vector3(0, size.y * 0.5 + 0.08, 0), size, MeshBuilder.glow(UNIT, MeshBuilder.METAL))
+	var fans := maxi(1, int(size.x / 1.1))
+	var r := minf(size.x / fans, size.z) * 0.36
+	for i in fans:
+		var x := base.x - size.x * 0.5 + (i + 0.5) * size.x / fans
+		mb.cylinder(Vector3(x, base.y + size.y + 0.08, base.z), r, 0.03, Color(0.16, 0.17, 0.19), 7)
+
+
+## Stair and lift bulkhead with a steel door facing the front.
+static func _stair_hut(mb, base: Vector3, edge: Color) -> void:
+	mb.box(base + Vector3(0, 1.25, 0), Vector3(2.2, 2.5, 2.6), edge)
+	mb.box(base + Vector3(0, 2.52, 0), Vector3(2.4, 0.06, 2.8), MeshBuilder.glow(MEMBRANES[1], MeshBuilder.ROOF))
+	mb.box(base + Vector3(0.35, 1.05, -1.32), Vector3(0.9, 2.1, 0.06), MeshBuilder.glow(Color(0.32, 0.36, 0.4), MeshBuilder.METAL))
+	mb.box(base + Vector3(0.35, 2.25, -1.35), Vector3(0.3, 0.12, 0.06), MeshBuilder.glow(Color(1.0, 0.95, 0.85), MeshBuilder.GLOW_LAMP))
+
+
+static func _dish(mb, base: Vector3) -> void:
+	mb.cylinder(base, 0.04, 0.6, Color(0.5, 0.5, 0.52), 4)
+	mb.ball(base + Vector3(0, 0.75, 0), Vector3(0.4, 0.12, 0.4), Color(0.88, 0.88, 0.86), 7, 2)
+
+
+## Rows of solar panels on rails, tilted up toward the back so they face
+## the front (-Z), filling x0..x1 by z0..z1 at roof height `y`.
+static func _solar(mb, x0: float, x1: float, z0: float, z1: float, y: float) -> void:
+	const DEPTH := 1.6
+	const RISE := 0.4
+	x0 = ceilf(x0)
+	x1 = floorf(x1)
+	if x1 - x0 < 1.0:
+		return
+	var panel := MeshBuilder.glow(SOLAR_BLUE, MeshBuilder.SOLAR)
+	var z := z0
+	while z + DEPTH <= z1:
+		var lo := y + 0.25
+		var a := Vector3(x0, lo, z)
+		var b := Vector3(x1, lo, z)
+		var c := Vector3(x1, lo + RISE, z + DEPTH)
+		var e := Vector3(x0, lo + RISE, z + DEPTH)
+		mb.quad(a, b, c, e, (e - a).cross(b - a).normalized(), panel)
+		mb.quad(e, c, Vector3(x1, y, z + DEPTH), Vector3(x0, y, z + DEPTH), Vector3.BACK, Color(0.3, 0.32, 0.35))
+		z += DEPTH + 0.7
+
+
+## Solar panels laid on the front slope of a gable built by mb.gable with the
+## same `center` and `size` (ridge along local X), set in from the edges.
+static func _slope_solar(mb, center: Vector3, size: Vector3, inset: float) -> void:
+	var x0 := ceilf(center.x - size.x * 0.5 + inset)
+	var x1 := floorf(center.x + size.x * 0.5 - inset)
+	if x1 - x0 >= 1.0:
+		_slope_quad(mb, center, size, x0, x1, 0.18, 0.82, MeshBuilder.glow(SOLAR_BLUE, MeshBuilder.SOLAR))
+
+
+## A panel lying just above the front slope of that gable, from x0 to x1
+## and from f0 to f1 of the way up from the eave to the ridge.
+static func _slope_quad(mb, center: Vector3, size: Vector3, x0: float, x1: float, f0: float, f1: float, color: Color) -> void:
+	var h := size * 0.5
+	var n := Vector3(0, h.z, -h.y).normalized()
+	var y0 := center.y - h.y + n.y * 0.08
+	var zf := center.z - h.z + n.z * 0.08
+	var a := Vector3(0, y0 + size.y * f0, zf + h.z * f0)
+	var b := Vector3(0, y0 + size.y * f1, zf + h.z * f1)
+	mb.quad(Vector3(x0, a.y, a.z), Vector3(x1, a.y, a.z), Vector3(x1, b.y, b.z), Vector3(x0, b.y, b.z), n, color)
+
+
+## Roof terrace: a timber deck with planters, loungers and a parasol.
+static func _terrace(mb, x0: float, x1: float, z0: float, z1: float, y: float, rng: RandomNumberGenerator) -> void:
+	var mid := Vector3((x0 + x1) * 0.5, y, (z0 + z1) * 0.5)
+	mb.box(mid + Vector3(0, 0.07, 0), Vector3(x1 - x0, 0.06, z1 - z0), MeshBuilder.glow(DECK, MeshBuilder.SIDING))
+	var planter := Color(0.3, 0.31, 0.33)
+	mb.box(Vector3(mid.x, y + 0.3, z0 + 0.25), Vector3(x1 - x0, 0.5, 0.4), planter)
+	var n := maxi(2, int((x1 - x0) / 1.4))
+	for i in n:
+		var x := x0 + (x1 - x0) * (i + 0.5) / n
+		mb.ball(Vector3(x, y + 0.75, z0 + 0.25), Vector3(0.45, 0.35, 0.3), Color(0.26, 0.48, 0.24).lightened(rng.randf() * 0.15), 5, 2)
+	var shade: Color = PARASOLS[rng.randi() % PARASOLS.size()]
+	var px := lerpf(x0, x1, 0.65)
+	var pz := lerpf(z0, z1, 0.6)
+	mb.cylinder(Vector3(px, y + 0.1, pz), 0.04, 2.1, Color(0.85, 0.85, 0.85), 4)
+	mb.ball(Vector3(px, y + 2.15, pz), Vector3(1.2, 0.28, 1.2), shade, 8, 2)
+	for k in 2:
+		var lx := lerpf(x0, x1, 0.2 + 0.18 * k)
+		mb.box(Vector3(lx, y + 0.25, pz), Vector3(0.6, 0.18, 1.6), Color(0.94, 0.94, 0.92))
 
 
 static func _solid(mb, out: Array, center: Vector3, size: Vector3, color: Color) -> void:

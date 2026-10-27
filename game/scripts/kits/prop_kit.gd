@@ -15,6 +15,9 @@ const CONTAINERS := [Color(0.78, 0.28, 0.2), Color(0.2, 0.45, 0.72), Color(0.28,
 
 const POOL_WARM := Color(0.55, 0.38, 0.16)
 const POOL_COOL := Color(0.4, 0.42, 0.38)
+const LED := Color(0.92, 0.96, 1.0)
+const AD_COLORS := [Color(0.95, 0.5, 0.3), Color(0.4, 0.75, 0.95), Color(0.9, 0.85, 0.4), Color(0.85, 0.45, 0.75)]
+const SCOOTERS := [Color(0.2, 0.75, 0.4), Color(0.95, 0.4, 0.2), Color(0.15, 0.15, 0.15)]
 
 
 ## Black cast-iron gas lamp with a warm lantern (Lantern Quarter). With a
@@ -27,24 +30,139 @@ static func gas_lamp(mb, out: Array, p: Vector3, glow = null) -> void:
 	out.append([p + Vector3(0, 1.5, 0), Vector3(0.3, 3.0, 0.3)])
 
 
-## Modern street light; the arm reaches toward `dir` (over the road).
+## LED street light: a slim steel pole with a tapered arm toward `dir`
+## (over the road) and a flat cobra head.
 static func street_light(mb, out: Array, p: Vector3, dir: Vector3, glow = null) -> void:
-	mb.cylinder(p + Vector3(0, 0.15, 0), 0.1, 6.0, STEEL, 4)
-	mb.box(p + dir * 1.2 + Vector3(0, 6.0, 0), Vector3(absf(dir.x) * 2.4 + 0.15, 0.12, absf(dir.z) * 2.4 + 0.15), STEEL)
-	mb.box(p + dir * 2.3 + Vector3(0, 5.9, 0), Vector3(0.6, 0.15, 0.6), MeshBuilder.glow(Color(0.95, 0.95, 0.85), MeshBuilder.GLOW_LAMP))
-	_pool(mb, glow, p + dir * 2.3 + Vector3(0, 0.05, 0), 7.0, POOL_COOL)
+	var steel := MeshBuilder.glow(STEEL, MeshBuilder.METAL)
+	mb.box(p + Vector3(0, 0.35, 0), Vector3(0.3, 0.4, 0.3), steel)
+	mb.cylinder(p + Vector3(0, 0.15, 0), 0.09, 6.2, steel, 5)
+	mb.box(p + dir * 1.1 + Vector3(0, 6.15, 0), Vector3(absf(dir.x) * 2.2 + 0.08, 0.08, absf(dir.z) * 2.2 + 0.08), steel)
+	mb.box(p + dir * 2.4 + Vector3(0, 6.08, 0), Vector3(absf(dir.x) * 0.5 + 0.32, 0.12, absf(dir.z) * 0.5 + 0.32), MeshBuilder.glow(Color(0.35, 0.37, 0.4), MeshBuilder.METAL))
+	mb.box(p + dir * 2.4 + Vector3(0, 6.0, 0), Vector3(absf(dir.x) * 0.4 + 0.24, 0.06, absf(dir.z) * 0.4 + 0.24), MeshBuilder.glow(LED, MeshBuilder.GLOW_LAMP))
+	_pool(mb, glow, p + dir * 2.4 + Vector3(0, 0.05, 0), 7.0, POOL_COOL)
 	out.append([p + Vector3(0, 2.0, 0), Vector3(0.3, 4.0, 0.3)])
 
 
-## Traffic light on a pole, signals facing along `dir`.
+## Mast-arm traffic signal: the pole stands at p, the arm reaches 5 m over
+## the road toward `dir` and carries two signal heads (lenses on both
+## faces along the street), a traffic camera and a street-name sign.
 static func traffic_light(mb, out: Array, p: Vector3, dir: Vector3) -> void:
-	mb.cylinder(p + Vector3(0, 0.15, 0), 0.1, 4.2, Color(0.2, 0.22, 0.2), 4)
-	mb.box(p + Vector3(0, 4.2, 0), Vector3(0.45, 1.3, 0.45), Color(0.15, 0.16, 0.15))
-	var face := p + dir * 0.24 + Vector3(0, 4.2, 0)
-	mb.box(face + Vector3(0, 0.4, 0), Vector3(0.22, 0.22, 0.22), Color(0.9, 0.2, 0.15))
-	mb.box(face, Vector3(0.22, 0.22, 0.22), Color(0.95, 0.75, 0.15))
-	mb.box(face - Vector3(0, 0.4, 0), Vector3(0.22, 0.22, 0.22), Color(0.2, 0.85, 0.35))
-	out.append([p + Vector3(0, 2.0, 0), Vector3(0.3, 4.0, 0.3)])
+	var paint := MeshBuilder.glow(Color(0.2, 0.22, 0.22), MeshBuilder.GLOSS)
+	mb.cylinder(p + Vector3(0, 0.15, 0), 0.13, 6.0, paint, 6)
+	var along := Vector3(absf(dir.z), 0, absf(dir.x))
+	mb.box(p + dir * 2.6 + Vector3(0, 5.8, 0), Vector3(absf(dir.x) * 5.2 + 0.12, 0.12, absf(dir.z) * 5.2 + 0.12), paint)
+	for k in 2:
+		var head := p + dir * (2.4 + k * 2.2) + Vector3(0, 5.15, 0)
+		mb.box(head, Vector3(0.36, 1.1, 0.36), Color(0.1, 0.1, 0.1))
+		var lit := k == 0
+		for side in [-1.0, 1.0]:
+			var face: Vector3 = head + along * side * 0.2
+			mb.box(face + Vector3(0, 0.33, 0), along * 0.04 + (Vector3.ONE - along) * 0.24, Color(0.45, 0.1, 0.08))
+			mb.box(face, along * 0.04 + (Vector3.ONE - along) * 0.24, Color(0.45, 0.35, 0.08))
+			mb.box(face - Vector3(0, 0.33, 0), along * 0.04 + (Vector3.ONE - along) * 0.24, MeshBuilder.glow(Color(0.2, 0.95, 0.5), MeshBuilder.GLOW_NEON) if lit else Color(0.1, 0.35, 0.18))
+	mb.box(p + dir * 1.2 + Vector3(0, 6.15, 0), along * 1.6 + Vector3(0, 0.35, 0) + dir.abs() * 0.04, Color(0.12, 0.42, 0.25))
+	mb.box(p + dir * 0.6 + Vector3(0, 5.6, 0), Vector3(0.22, 0.2, 0.22) + dir.abs() * 0.2, MeshBuilder.glow(Color(0.85, 0.86, 0.88), MeshBuilder.GLOSS))
+	# Pedestrian signal and push button.
+	mb.box(p - dir * 0.25 + Vector3(0, 2.8, 0), Vector3(0.36, 0.36, 0.36), Color(0.1, 0.1, 0.1))
+	mb.box(p - dir * 0.25 + Vector3(0, 2.8, 0) + along * 0.19, along * 0.04 + (Vector3.ONE - along) * 0.26, MeshBuilder.glow(Color(1.0, 0.95, 0.85), MeshBuilder.GLOW_NEON))
+	mb.box(p - dir * 0.15 + Vector3(0, 1.1, 0), Vector3(0.14, 0.2, 0.14), Color(0.9, 0.75, 0.2))
+	out.append([p + Vector3(0, 2.0, 0), Vector3(0.35, 4.0, 0.35)])
+
+
+## Bus shelter facing -Z: glass back and ends, a steel roof, a bench and a
+## lit advertising panel, with the stop flag on a pole by the curb.
+static func bus_shelter(mb, out: Array, p: Vector3, rng: RandomNumberGenerator) -> void:
+	var steel := MeshBuilder.glow(Color(0.3, 0.32, 0.35), MeshBuilder.METAL)
+	var glass := MeshBuilder.glow(Color(0.5, 0.6, 0.65), MeshBuilder.GLASS)
+	mb.box(p + Vector3(0, 2.45, 0.1), Vector3(3.8, 0.12, 1.7), steel)
+	mb.box(p + Vector3(0, 1.3, 0.85), Vector3(3.6, 2.1, 0.05), glass)
+	for side in [-1.0, 1.0]:
+		mb.box(p + Vector3(side * 1.85, 1.3, 0.35), Vector3(0.05, 2.1, 1.0), glass)
+		mb.box(p + Vector3(side * 1.88, 1.2, 0.85), Vector3(0.1, 2.4, 0.1), steel)
+	var ad: Color = AD_COLORS[rng.randi() % AD_COLORS.size()]
+	mb.box(p + Vector3(1.85, 1.3, 0.35), Vector3(0.14, 1.7, 0.95), Color(0.15, 0.15, 0.17))
+	mb.box(p + Vector3(1.85, 1.3, 0.35), Vector3(0.18, 1.5, 0.8), MeshBuilder.glow(ad, MeshBuilder.GLOW_NEON))
+	mb.box(p + Vector3(-0.3, 0.48, 0.55), Vector3(2.4, 0.08, 0.45), steel)
+	mb.box(p + Vector3(-0.8, 2.0, 0.84), Vector3(1.2, 0.5, 0.06), MeshBuilder.glow(Color(0.15, 0.2, 0.35), MeshBuilder.GLOW_NEON))
+	mb.cylinder(p + Vector3(-2.4, 0.15, -0.3), 0.05, 2.8, STEEL, 4)
+	mb.box(p + Vector3(-2.4, 2.75, -0.3), Vector3(0.5, 0.5, 0.05), Color(0.15, 0.35, 0.75))
+	out.append([p + Vector3(0, 1.2, 0.6), Vector3(3.8, 2.4, 0.6)])
+	out.append([p + Vector3(-2.4, 1.2, -0.3), Vector3(0.2, 2.4, 0.2)])
+
+
+## Electric-vehicle charging post with a lit status ring and a holstered
+## cable.
+static func ev_charger(mb, out: Array, p: Vector3) -> void:
+	mb.box(p + Vector3(0, 0.2, 0), Vector3(0.6, 0.1, 0.45), MeshBuilder.glow(Color(0.6, 0.6, 0.6), MeshBuilder.CONCRETE))
+	mb.box(p + Vector3(0, 0.95, 0), Vector3(0.42, 1.5, 0.28), MeshBuilder.glow(Color(0.92, 0.93, 0.94), MeshBuilder.GLOSS))
+	mb.box(p + Vector3(0, 1.45, -0.15), Vector3(0.3, 0.32, 0.04), MeshBuilder.glow(Color(0.1, 0.12, 0.15), MeshBuilder.GLASS))
+	mb.box(p + Vector3(0, 1.72, 0), Vector3(0.44, 0.06, 0.3), MeshBuilder.glow(Color(0.2, 0.75, 1.0), MeshBuilder.GLOW_NEON))
+	mb.box(p + Vector3(0.24, 0.95, -0.05), Vector3(0.1, 0.25, 0.12), Color(0.12, 0.12, 0.12))
+	out.append([p + Vector3(0, 0.8, 0), Vector3(0.45, 1.6, 0.35)])
+
+
+## Bike-share dock along local X: a kiosk with a screen, a docking rail and
+## a few bikes in the scheme's colour.
+static func bike_dock(mb, out: Array, p: Vector3, length: float, rng: RandomNumberGenerator) -> void:
+	var brand := Color(0.15, 0.55, 0.85)
+	var steel := MeshBuilder.glow(Color(0.4, 0.42, 0.45), MeshBuilder.METAL)
+	mb.box(p + Vector3(-length * 0.5 - 0.4, 0.9, 0), Vector3(0.5, 1.8, 0.4), MeshBuilder.glow(brand, MeshBuilder.GLOSS))
+	mb.box(p + Vector3(-length * 0.5 - 0.4, 1.3, -0.21), Vector3(0.36, 0.5, 0.04), MeshBuilder.glow(Color(0.5, 0.75, 0.95), MeshBuilder.GLOW_NEON))
+	mb.box(p + Vector3(0, 0.3, 0.3), Vector3(length, 0.1, 0.12), steel)
+	var slots := int(length / 0.8)
+	for i in slots:
+		var x := -length * 0.5 + (i + 0.5) * length / slots
+		mb.box(Vector3(x, 0.5, 0.3) + p, Vector3(0.1, 0.4, 0.14), steel)
+		if rng.randf() < 0.7:
+			bike(mb, p + Vector3(x, 0, -0.35), brand)
+	out.append([p + Vector3(0, 0.5, 0), Vector3(length + 1.0, 1.0, 1.6)])
+
+
+## A city bike standing across local X (wheels front and back along Z).
+static func bike(mb, p: Vector3, color: Color) -> void:
+	for z in [-0.5, 0.5]:
+		mb.box(p + Vector3(0, 0.33, z), Vector3(0.05, 0.6, 0.6), Color(0.08, 0.08, 0.08))
+	mb.box(p + Vector3(0, 0.55, 0), Vector3(0.07, 0.07, 0.95), MeshBuilder.glow(color, MeshBuilder.GLOSS))
+	mb.box(p + Vector3(0, 0.82, -0.4), Vector3(0.5, 0.05, 0.05), Color(0.15, 0.15, 0.15))
+	mb.box(p + Vector3(0, 0.82, 0.32), Vector3(0.14, 0.06, 0.24), Color(0.1, 0.1, 0.1))
+	mb.box(p + Vector3(0, 0.62, -0.52), Vector3(0.28, 0.2, 0.2), MeshBuilder.glow(color, MeshBuilder.GLOSS))
+
+
+## Dockless e-scooter left standing on its kickstand, along local X.
+static func scooter(mb, p: Vector3, yaw: float, color: Color) -> void:
+	var saved: Transform3D = mb.xform
+	mb.xform = saved * Transform3D(Basis(Vector3.UP, yaw), p)
+	mb.box(Vector3(0, 0.12, 0), Vector3(0.9, 0.06, 0.18), Color(0.12, 0.12, 0.13))
+	mb.box(Vector3(0.42, 0.62, 0), Vector3(0.05, 1.0, 0.05), MeshBuilder.glow(color, MeshBuilder.GLOSS))
+	mb.box(Vector3(0.42, 1.12, 0), Vector3(0.05, 0.05, 0.5), Color(0.12, 0.12, 0.13))
+	for x in [-0.42, 0.42]:
+		mb.box(Vector3(x, 0.1, 0), Vector3(0.2, 0.2, 0.06), Color(0.08, 0.08, 0.08))
+	mb.xform = saved
+
+
+## Recycling and rubbish bins side by side (black and blue lids).
+static func bins(mb, out: Array, p: Vector3) -> void:
+	for k in 2:
+		var c := Color(0.2, 0.22, 0.24) if k == 0 else Color(0.15, 0.35, 0.65)
+		var q := p + Vector3(k * 0.7 - 0.35, 0, 0)
+		mb.box(q + Vector3(0, 0.55, 0), Vector3(0.6, 0.9, 0.6), MeshBuilder.glow(c, MeshBuilder.GLOSS))
+		mb.box(q + Vector3(0, 1.03, 0), Vector3(0.64, 0.06, 0.64), MeshBuilder.glow(c.darkened(0.25), MeshBuilder.GLOSS))
+	out.append([p + Vector3(0, 0.55, 0), Vector3(1.3, 1.1, 0.6)])
+
+
+## Wayfinding totem: a slim slab with a lit city map on its face (-Z).
+static func wayfinding(mb, out: Array, p: Vector3) -> void:
+	mb.box(p + Vector3(0, 1.3, 0), Vector3(0.9, 2.3, 0.2), MeshBuilder.glow(Color(0.18, 0.2, 0.24), MeshBuilder.GLOSS))
+	mb.box(p + Vector3(0, 1.4, -0.11), Vector3(0.7, 1.4, 0.04), MeshBuilder.glow(Color(0.85, 0.88, 0.8), MeshBuilder.GLOW_NEON))
+	mb.box(p + Vector3(0, 2.3, -0.12), Vector3(0.7, 0.2, 0.04), Color(0.95, 0.75, 0.2))
+	out.append([p + Vector3(0, 1.2, 0), Vector3(0.9, 2.4, 0.25)])
+
+
+## Parking pay station.
+static func pay_station(mb, out: Array, p: Vector3) -> void:
+	mb.box(p + Vector3(0, 0.8, 0), Vector3(0.35, 1.3, 0.3), MeshBuilder.glow(Color(0.2, 0.3, 0.5), MeshBuilder.GLOSS))
+	mb.box(p + Vector3(0, 1.2, -0.16), Vector3(0.24, 0.2, 0.03), MeshBuilder.glow(Color(0.6, 0.85, 0.7), MeshBuilder.GLOW_NEON))
+	out.append([p + Vector3(0, 0.7, 0), Vector3(0.35, 1.4, 0.3)])
 
 
 static func hydrant(mb, out: Array, p: Vector3) -> void:

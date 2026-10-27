@@ -64,7 +64,9 @@ func _ready() -> void:
 	env = Environment.new()
 	env.background_mode = Environment.BG_COLOR
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+	# ACES: deeper shadows and a soft roll-off on bright glass and paint.
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES
+	env.tonemap_exposure = 0.85
 	var world_env := WorldEnvironment.new()
 	world_env.environment = env
 	add_child(world_env)

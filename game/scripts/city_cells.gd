@@ -33,13 +33,14 @@ const StreetPlan = preload("res://scripts/street_plan.gd")
 const SLAB := 1.2
 const KERB := 0.15
 
-const ASPHALT := Color(0.2, 0.2, 0.23)
+const ASPHALT := Color(0.27, 0.27, 0.29)
 const PAVEMENT := Color(0.58, 0.56, 0.52)
 ## Granite kerb faces.
 const CURB := Color(0.66, 0.65, 0.63)
 const PAVERS := Color(0.5, 0.38, 0.32)
 const MARKING := Color(0.92, 0.8, 0.3)
 const WHITE_LINE := Color(0.9, 0.9, 0.88)
+const BIKE_GREEN := Color(0.17, 0.38, 0.26)
 const GRASS := Color(0.34, 0.56, 0.28)
 const PLAZA := Color(0.72, 0.69, 0.63)
 const YARD := Color(0.46, 0.46, 0.45)
@@ -229,7 +230,7 @@ static func _paved(color: Color) -> Color:
 	var code := MeshBuilder.CONCRETE
 	if color.g > color.r * 1.25 and color.g > color.b * 1.2:
 		code = MeshBuilder.GRASS
-	elif color.v < 0.3:
+	elif color.v < 0.34:
 		code = MeshBuilder.ASPHALT
 	elif color.b < color.r * 0.8 and color.v < 0.5:
 		code = 1.0
@@ -371,12 +372,68 @@ static func _street(ctx: Ctx, e: int, cls: String) -> void:
 	if cls != "lane":
 		for k in ctx.deco.randi_range(0, 2):
 			Props.road_mark(mb, Vector3(ctx.deco.randf_range(s0 + 2.0, s0 + run - 2.0), 0.0, ctx.deco.randf_range(-w * 0.3, w * 0.3)), Vector3.RIGHT, ctx.deco)
-	if style in ZEBRA_STYLES and cls != "lane":
+	var zebra: bool = style in ZEBRA_STYLES and cls != "lane"
+	if zebra:
 		if s0 > 0.0:
 			Props.crosswalk(mb, Vector3(s0 + 1.6, 0.0, 0), Vector3.RIGHT, w - 1.5)
 		if s1 > 0.0:
 			Props.crosswalk(mb, Vector3(s0 + run - 1.6, 0.0, 0), Vector3.RIGHT, w - 1.5)
+	if cls in ["boulevard", "avenue", "river", "street"] and run > 10.0:
+		# Traffic keeps right: towards b on the +z side, towards a on -z.
+		var gap := 3.6 if zebra else 1.0
+		if s1 > 0.0:
+			_approach(mb, s0 + run - gap, 1.0, cls, w, style == "downtown" or style == "quarter", run > 32.0)
+		if s0 > 0.0:
+			_approach(mb, s0 + gap, -1.0, cls, w, style == "downtown" or style == "quarter", run > 32.0)
+		if cls != "street":
+			# Parking lane lines.
+			for side in [-1.0, 1.0]:
+				mb.box(Vector3(mid, 0.01, side * (w * 0.5 - 2.2)), Vector3(run - 6.0, 0.02, 0.12), WHITE_LINE)
 	mb.xform = Transform3D.IDENTITY
+
+
+## Markings where traffic heading `heading` (+1 along the street frame's x,
+## -1 against it) reaches a junction whose markings end at x: a stop bar
+## across its half of the street, on cycling streets a green bike box ahead
+## of the bar, and (if `arrows`) lane arrows behind it.
+static func _approach(mb, x: float, heading: float, cls: String, w: float, bikes: bool, arrows: bool) -> void:
+	var side := heading # right-hand traffic: +x heading drives on +z
+	var inner := 3.2 if cls == "boulevard" else 0.3
+	var outer := w * 0.5 - 0.4
+	if bikes and cls != "street":
+		mb.box(Vector3(x - heading * 1.4, 0.011, side * (inner + outer) * 0.5), Vector3(2.6, 0.02, outer - inner), BIKE_GREEN)
+		x -= heading * 2.9
+	mb.box(Vector3(x, 0.012, side * (inner + outer) * 0.5), Vector3(0.5, 0.02, outer - inner), WHITE_LINE)
+	if not arrows:
+		return
+	var lanes: Array
+	match cls:
+		"boulevard":
+			lanes = [5.4, 9.8]
+		"street":
+			lanes = [w * 0.22]
+		_:
+			lanes = [w * 0.125, w * 0.375]
+	for k in lanes.size():
+		var turn := -1 if k == 0 and lanes.size() > 1 else 0
+		_arrow(mb, Vector3(x - heading * 6.0, 0.012, side * lanes[k]), heading, turn)
+
+
+## A lane arrow painted on the street frame's ground, pointing along
+## `heading` (+1 or -1 on x); `turn` -1 adds a left-turn head.
+static func _arrow(mb, p: Vector3, heading: float, turn: int) -> void:
+	var paint := WHITE_LINE
+	mb.box(p + Vector3(-heading * 0.5, 0, 0), Vector3(2.2, 0.02, 0.18), paint)
+	var tip := p.x + heading * 1.4
+	var base := p.x + heading * 0.6
+	mb.tri(Vector3(base, p.y + 0.01, p.z - 0.4), Vector3(base, p.y + 0.01, p.z + 0.4), Vector3(tip, p.y + 0.01, p.z), Vector3.UP, paint)
+	if turn != 0:
+		# Left of the heading is -z for +x traffic.
+		var left := -heading
+		var y := p.y + 0.01
+		mb.box(Vector3(p.x - heading * 0.4, p.y, p.z + left * 0.45), Vector3(0.18, 0.02, 0.9), paint)
+		var hz := p.z + left * 0.9
+		mb.tri(Vector3(p.x - heading * 0.8, y, hz), Vector3(p.x, y, hz), Vector3(p.x - heading * 0.4, y, hz + left * 0.7), Vector3.UP, paint)
 
 
 ## Dashed line along the street frame's x axis at offset z.
@@ -1295,11 +1352,12 @@ static func _furniture(ctx: Ctx, kind: String) -> void:
 						Props.street_light(ctx.mb, local, Vector3(t, 0, 0), street, ctx.glow)
 						t += 18.0
 					if rng.randf() < 0.5:
-						Props.trash_can(ctx.mb, local, Vector3(minf(4.0, half), 0, 0))
+						Props.bins(ctx.mb, local, Vector3(minf(4.0, half), 0, 0.2))
 					if rng.randf() < 0.35:
 						Props.bench(ctx.mb, local, Vector3(maxf(-4.0, -half), 0, 0.4), 0.0)
 					if rng.randf() < 0.6:
 						Props.traffic_light(ctx.mb, local, Vector3(-half - 1.5, 0, 0), street)
+					_modern_street(ctx, local, half, true)
 				"wards":
 					# Power lines on the south-facing sides.
 					if out.y > 0.4:
@@ -1312,7 +1370,9 @@ static func _furniture(ctx: Ctx, kind: String) -> void:
 						if rng.randf() < 0.4:
 							Props.crepe_myrtle(ctx.mb, local, Vector3(rng.randf_range(-half, half), 0, 0), rng)
 					if rng.randf() < 0.25:
-						Props.trash_can(ctx.mb, local, Vector3(minf(7.0, half), 0, 0))
+						Props.bins(ctx.mb, local, Vector3(minf(7.0, half), 0, 0.3))
+					if ctx.deco.randf() < 0.15:
+						Props.scooter(ctx.mb, Vector3(ctx.deco.randf_range(-half, half), 0.15, 1.6), ctx.deco.randf() * TAU, Props.SCOOTERS[ctx.deco.randi() % Props.SCOOTERS.size()])
 				"docks":
 					var t := -half
 					while t <= half:
@@ -1332,6 +1392,8 @@ static func _furniture(ctx: Ctx, kind: String) -> void:
 						Props.cafe_table(ctx.mb, local, Vector3(minf(6.0, half) if ctx.deco.randf() < 0.5 else maxf(-6.0, -half), 0, 1.3), parasol)
 					if rng.randf() < 0.3:
 						Props.trash_can(ctx.mb, local, Vector3(half - 1.0, 0, 0))
+					if kind == "quarter":
+						_modern_street(ctx, local, half, false)
 					# Festoon lights across narrow Quarter streets.
 					if kind == "quarter" and cls == "quarter" and out.y > -0.3 and ctx.deco.randf() < 0.45:
 						var t0 := ctx.deco.randf_range(-half * 0.6, half * 0.6)
@@ -1341,6 +1403,26 @@ static func _furniture(ctx: Ctx, kind: String) -> void:
 		if rng.randf() < 0.15 and half > 4.0:
 			Props.mailbox(ctx.mb, local, Vector3(3.0 - half, 0, 0))
 		_done(ctx, local, false, ctx.props)
+
+
+## Present-day kit along a curb (furniture frame, -Z to the street): a bus
+## shelter, a bike-share dock, EV chargers or a wayfinding totem (the
+## first two downtown only), and dockless scooters left about.
+static func _modern_street(ctx: Ctx, local: Array, half: float, downtown: bool) -> void:
+	var deco := ctx.deco
+	var roll := deco.randf()
+	if downtown and roll < 0.25 and half > 6.0:
+		Props.bus_shelter(ctx.mb, local, Vector3(half * 0.4, 0, 1.2), deco)
+	elif roll < (0.45 if downtown else 0.15) and half > 5.0:
+		Props.bike_dock(ctx.mb, local, Vector3(half * 0.35, 0, 1.6), minf(5.6, half), deco)
+	elif downtown and roll < 0.6 and half > 7.0:
+		for k in 2:
+			Props.ev_charger(ctx.mb, local, Vector3(half * 0.5 + k * 3.0 - 1.5, 0, 0.15))
+	elif downtown and roll < 0.75:
+		Props.wayfinding(ctx.mb, local, Vector3(half * 0.5, 0, 0.7))
+	if deco.randf() < 0.3:
+		for k in deco.randi_range(1, 2):
+			Props.scooter(ctx.mb, Vector3(deco.randf_range(-half, half), 0, 2.0 + k * 0.4), deco.randf() * TAU, Props.SCOOTERS[deco.randi() % Props.SCOOTERS.size()])
 
 
 # --- Outside the window ----------------------------------------------------------
