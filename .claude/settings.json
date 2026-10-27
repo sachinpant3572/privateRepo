@@ -9,7 +9,10 @@
   "autoCompactWindow": 400000,
   "permissions": {
     "deny": [
-      "Agent(claude-code-guide)"
+      "Agent(claude-code-guide)",
+      "SearchPlugins",
+      "SuggestPluginInstall",
+      "SuggestSkills"
     ]
   },
   "agentPushNotifEnabled": true
