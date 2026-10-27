@@ -19,6 +19,7 @@ class State:
 	var down := false # knocked down or dead, lying on the back
 	var ride := false # sitting astride a scooter or bike
 	var gesture := "" # phone, talk, wave, hands_up, cower, point
+	var texting := false # looking at a phone in the right hand while strolling
 
 var skeleton: Skeleton3D
 var phase := 0.0
@@ -73,6 +74,8 @@ func pose(s: State, delta: float) -> void:
 		lift = -0.28
 	else:
 		lift = _locomotion(s, delta)
+		if s.texting and s.speed < 2.5:
+			_texting()
 		if s.guard and s.punch < 0.0 and s.kick < 0.0 and s.speed < 3.5:
 			_guard()
 		if s.punch >= 0.0:
@@ -128,6 +131,14 @@ func _locomotion(s: State, delta: float) -> float:
 	_target[L_ARM].z -= 0.05 * still
 	_target[R_ARM].z += 0.05 * still
 	return absf(cos(phase)) * lerpf(0.02, 0.07, run) * moving
+
+
+## Right forearm up with the phone screen facing the face, head bowed; the
+## left arm keeps swinging.
+func _texting() -> void:
+	_target[R_ARM] = Vector3(0.3, 0.0, -0.05)
+	_target[R_FORE] = Vector3(1.3, 0.35, 0.0)
+	_target[HEAD].x -= 0.35
 
 
 func _guard() -> void:

@@ -263,6 +263,7 @@ func _process(delta: float) -> void:
 	anim.down = dead or knocked_time > 0.0
 	anim.ride = riding
 	anim.gesture = gesture
+	anim.texting = look.has("phone") and combat_time <= 0.0
 	rig.pose(anim, delta)
 
 
