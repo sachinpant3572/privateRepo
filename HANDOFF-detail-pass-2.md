@@ -55,6 +55,8 @@ Follows HANDOFF-modern-look.md (surface codes, shader, traps live there).
    the Wards).
 
 ## Open questions
+- Clothes, left as is for now: a tote bag swings with the arm when punching,
+  the phone stays in the hand while riding, and no one wears a hood up.
 
 ## Traps
 - Trees take more calls from the cell rng, so lots after them in a cell
