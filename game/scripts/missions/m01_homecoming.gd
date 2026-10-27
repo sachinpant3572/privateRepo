@@ -38,14 +38,14 @@ func run() -> void:
 	kid = npc("Kid", Cast.THIEF, near("union_station", Vector3(-9.0, 0, 0.3)), true)
 	kid.run_speed = 6.3
 	kid.max_health = 45.0
-	getaway = car("scooter", Color(0.2, 0.6, 0.35), curb("union_station", 34.0), street_yaw("union_station"))
+	getaway = car("scooter", Color(0.2, 0.6, 0.35), curb("union_station", -34.0), street_yaw("union_station"))
 	spare = car("scooter", Color(0.95, 0.8, 0.25), curb("union_station", -6.0), street_yaw("union_station"))
 	kid.walk_to(game.player.global_position + Vector3(-0.6, 0, 0.4), true)
 	await until(func(): return kid.arrived, 4.0)
 	if ended:
 		return
 	game.player.take_hit(null, 0.0, Vector3.RIGHT * 0.5)
-	kid.walk_to(near("union_station", Vector3(34.0, 0, 0.6)), true)
+	kid.walk_to(near("union_station", Vector3(-34.0, 0, 0.6)), true)
 	game.player.controllable = true
 	line("Jules", "Hey! That's my bag!")
 	objective("Catch the thief!")

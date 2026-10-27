@@ -70,13 +70,23 @@ func _run() -> void:
 		game.camera.snap()
 		await _frames(90)
 		await _shot(stop[0] + ".png")
-	var green: Vector3 = game.city.node_pos(game.city.plan.park_node) + Vector3(0, 0, 14.0)
-	game.city.stream_now(green)
-	game.player.global_position = green
-	game.player.reset_physics_interpolation()
-	game.camera.snap()
-	await _frames(90)
-	await _shot("19_liberty_green.png")
+	var green: Vector3 = game.city.block_center(game.city.plan.park_face) + Vector3(0, 0, 14.0)
+	var roads := [
+		["19_liberty_green", green],
+		["20_morrow_bridge", _road_spot(game, "bridge", Vector2(330, 1100))],
+		["21_liberty_avenue", _road_spot(game, "liberty", Vector2(740, 530))],
+		["22_river_road", _road_spot(game, "river_road", Vector2(480, 1010))],
+		["23_morrow_point", _road_spot(game, "point_ave", Vector2(330, 1300))],
+		["24_wharf_street", _road_spot(game, "wharf", Vector2(1000, 860))],
+	]
+	for stop in roads:
+		var pos: Vector3 = stop[1]
+		game.city.stream_now(pos)
+		game.player.global_position = pos
+		game.player.reset_physics_interpolation()
+		game.camera.snap()
+		await _frames(90)
+		await _shot(stop[0] + ".png")
 	for mood in MOODS:
 		var pos: Vector3 = game.city.landmark_frame(mood[1]) * mood[2]
 		game.atmosphere.hour = mood[3]
@@ -119,6 +129,22 @@ func _run() -> void:
 	await _shot("3_police_chase.png")
 	print("player at ", p.global_position, " wanted ", Wanted.level)
 	get_tree().quit()
+
+
+## Middle of the street of road `road` nearest `near` (local metres), on
+## its right-hand sidewalk side.
+func _road_spot(game, road: String, near: Vector2) -> Vector3:
+	var plan = game.city.plan
+	var best := Vector3.ZERO
+	var best_d := INF
+	for e in plan.edge_count():
+		if plan.edge_road[e] != road:
+			continue
+		var m: Vector2 = (plan.pos(plan.edge_a[e]) + plan.pos(plan.edge_b[e])) * 0.5
+		if m.distance_to(near) < best_d:
+			best_d = m.distance_to(near)
+			best = Vector3(m.x, 0, m.y)
+	return best
 
 
 func _walk_to_car(game) -> void:

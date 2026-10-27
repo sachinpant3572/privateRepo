@@ -47,27 +47,37 @@ phone.
   animated in code: idle, walk, run, punch, kick, guard, flinch, knockdown,
   riding, and gestures for cutscenes (phone, talk, search, cower...).
   Outfits: tee, jacket, hoodie, dress, tank, suit, uniform.
-- **Demo map**: about 1.3 km x 1.1 km of Bellerive, from the world map
-  (`data/world_map.json`, the city's `demo_window`). You start outside
-  **Union Station** in the Gilt District.
+- **Demo map**: about 1.3 km x 1.5 km of Bellerive on both banks of the
+  Morrow, from the world map (`data/world_map.json`, the city's
+  `demo_window`). You start outside **Union Station** in the Gilt District.
 - **Street plan** (`scripts/street_plan.gd`; research and rules in
   `reference/MAP_BUILDING.md`):
-  - **Layout**: streets follow the Morrow's crescent like New Orleans.
-    Streets parallel to the river curve with it and cross streets fan out.
-    Blocks are bigger in Gilt, tighter in the Quarter, and long and
-    staggered in the Wards, with T-junctions.
+  - **Layout**: a real street network, not a grid. Each district has
+    its own street pattern at its own angle; the streets curve and fan out
+    like New Orleans streets round the river's crescent, and they meet the
+    next district along seam roads. Blocks come in many shapes. Blocks
+    are big in Gilt, tight in the Quarter, long and staggered in the
+    Wards, with T-junctions where streets were dropped.
+  - **Long roads**:
+    - **Liberty Avenue**, the diagonal from Aurum Tower to Ironwharf;
+    - **Magnolia Avenue**, curving through Gilt;
+    - **Lantern Boulevard**, which crosses the river on **Morrow Bridge**
+      to **Morrow Point**, a far-bank district.
   - **Street classes**:
     - **Lantern Boulevard** (the streetcar) and **Crescent Boulevard** have
       neutral grounds with oaks or palms;
-    - **Rampart Avenue**;
-    - a river road along the bank;
+    - **Rampart Avenue**, Liberty, Magnolia and Point avenues, and Wharf
+      Street;
+    - the River Road and the Levee Road along the banks;
     - ordinary streets;
     - narrow Quarter streets paved with old pavers;
     - pedestrian lanes with bollards and string lights.
-  - **Liberty Green** is a park made of four joined blocks, with a bandstand.
+  - **Liberty Green**, a park on Liberty Avenue with paths, a bandstand, a
+    pond and oaks.
   - Some downtown blocks are plazas or car parks, and some Ward blocks are
     pocket parks or a chapel.
-  - Buildings line each block's real shape and face their street.
+  - Buildings stand on parcels in each block, facing its front street;
+    leftover corners get trees, planters or barrels.
 - Each block takes its layout from the map district it falls in:
   - **Gilt District**: mid-rise glass towers on stone plazas, street lights,
     traffic lights, rooftop helipads and gardens.
@@ -90,9 +100,9 @@ phone.
   - Zebra crossings, lane markings, hydrants, benches, bins and mailboxes;
     "road closed" barricades where streets leave the playable area, and
     simpler blocks past the edge so the city doesn't just stop.
-- **Streaming**: the map is split into cells (one block plus its roads).
-  Cells within ~115 m of the player are built on a worker thread and freed
-  past ~165 m; each cell is one mesh (one draw call) and one static body.
+- **Streaming**: the map is split into cells (one block plus its roads;
+  the bridge is a cell of its own). Cells whose block comes within ~105 m of
+  the player are built on a worker thread and freed past ~150 m; each cell is one mesh (one draw call) and one static body.
   Parked cars come and go with the player too. Every cell is about
   0.1k-3.6k triangles and builds in under ~10 ms.
 - **Asset kits** (`scripts/kits/`): code-built, vertex-coloured low-poly
@@ -172,13 +182,22 @@ dialogue.
 
 FPS in screenshots is meaningless: the container renders without a GPU.
 
+A quick top-down look at the street plan alone (a few seconds, no
+display; the landmark points are rough, so it differs a little from the
+game's plan):
+
+```bash
+cd game && godot --headless -s res://tests/plan_dump.gd -- /tmp/plan.json \
+  && python3 tools/plan_preview.py /tmp/plan.json /tmp/plan.png --scale 0.6
+```
+
 ## Layout
 
 | Path | Purpose |
 |---|---|
 | `scripts/main.gd` | Entry point; wires systems, BUSTED/WASTED |
 | `scripts/city.gd` | Map data, road graph, sidewalks, landmark frames, cell streaming |
-| `scripts/street_plan.gd` | The street plan: crescent layout, spacing, street classes, block polygons |
+| `scripts/street_plan.gd` | The street plan: district patches, seam and long roads, the street graph, blocks |
 | `scripts/city_cells.gd` | Builds one cell: streets by class, block layouts fitted to each block, landmarks, parks, street furniture |
 | `scripts/kits/` | Asset kits: `building_kit`, `prop_kit`, `vehicle_kit`, `character_kit` |
 | `data/world_map.json` | The world map: regions, cities, districts, routes, landmarks |
@@ -204,7 +223,7 @@ FPS in screenshots is meaningless: the container renders without a GPU.
 ## Not yet (later milestones)
 
 Missions 4-13, weapons, shops, businesses, interiors, audio, wanted levels
-3-5, drivable boats and streetcars, bridges across the river, Magnolia
+3-5, drivable boats and streetcars, more bridges, Magnolia
 Heights and Blackwater Bayou, modelled characters (AI-generated models with a
 standard animation set, which the skeleton is ready for) and final-quality
 art outside the Lantern Quarter.

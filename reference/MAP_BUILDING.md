@@ -1,8 +1,9 @@
 # Map building: research and the Bellerive street plan
 
-Status: Oct 27, 2026. Why the first demo map read as a chessboard, what
-city-building research and other games say about it, and the plan used to
-overhaul the Bellerive demo map (`game/scripts/street_plan.gd`).
+Status: Oct 27, 2026 (map v2). Why the first demo maps read as a grid,
+what city-building research and other games (GTA, Watch Dogs) say about
+it, and how the Bellerive demo map is built now
+(`game/scripts/street_plan.gd`).
 
 Sources are listed at the end. Some came from search summaries rather than
 full pages (several sites could not be opened from the build environment),
@@ -129,56 +130,174 @@ useful ideas are:
 8. **Fun before realism.** Boulevards are long, readable driving lines. Lanes
    and pedestrian streets are on-foot shortcuts for losing the police.
 
-## 4. How it is built
+## 4. How it is built (map v2)
 
-`street_plan.gd` turns the 25 x 22 street grid into a warped, graded street
-plan. The topology stays a grid, so traffic, streaming, the GPS and the
-missions keep working. Each junction gets a real position:
+Map 0.3 bent a 25 x 22 grid into a crescent. From above it still read as a
+grid: every block had four sides and every junction was a crossroads. Map
+v2 (`street_plan.gd`, rewritten) builds a general street graph instead:
+nodes and blocks have int ids, and blocks have any number of sides.
 
-- **Crescent frame:**
-  - Columns map to an angle around a centre about 3.5 km south of the
-    river; rows map to a radius.
-  - Rows are therefore arcs, and columns are radial spokes.
-- **Spacing:** column and row spacings vary by district (Quarter rows
-  short, Gilt rows long), plus a small random nudge per junction.
-- **Street classes per edge:**
+- **District patches.** The land is cut into regions by the seam roads.
+  Each region gets its own street pattern:
+  - its own angle and spacing;
+  - a **bend** (the long streets curve with the river);
+  - a **fan** (the cross streets splay like spokes round the crescent);
+  - a **cross-bend** (the cross streets curve too).
 
-  | Class | Width | Where |
+  | Patch | Angle | Blocks |
   |---|---|---|
-  | Boulevard | 22-24 m, with neutral ground | The Lantern Line spoke, and the arc between Gilt and the Quarter |
-  | Avenue | 15 m | The spoke between the Quarter and the Wards |
-  | River road | 14 m | Along the bank |
-  | Street | 11 m | Most of the map |
-  | Quarter street | 9 m | Inside the Lantern Quarter |
-  | Lane | 7 m, paved, no cars | Pedestrian lanes |
-  | (closed) | none | Removed streets, which make T-junctions |
+  | Gilt West | -9° | Big downtown blocks, fanned |
+  | Gilt East | +6° | Big blocks, curved the other way |
+  | Gilt South | +29° | One row of streets between Liberty and Crescent |
+  | Lantern Quarter West / East | -12° / -6° | Tight blocks, strongly fanned and curved |
+  | Floodline Wards | -25° | Long shotgun blocks, curved |
+  | Ironwharf | +9° | Big yards on the wharves |
+  | Morrow Point West / East | -10° / -4° | Far bank, fanned |
 
-- **Bank:** junctions next to the river are pulled onto a curve a fixed
-  distance from the water, so the river road bends with the river.
-- **Blocks:** each block's four corners are the junctions around it. Each
-  side is pulled in by half that street's width, then by the sidewalk, to
-  give the lot polygon the buildings stand on.
+- **Seams and long roads:**
+  - Crescent Boulevard (Gilt | Quarter), Rampart Avenue (west | east) and
+    Wharf Street (Wards | docks);
+  - Lantern Boulevard, from Union Station to the river and over **Morrow
+    Bridge** to Morrow Point;
+  - **Liberty Avenue**, the diagonal from Aurum Tower through the
+    Crescent/Rampart junction to Ironwharf (like Esplanade);
+  - Magnolia Avenue, curving through Gilt West;
+  - the River Road and the Levee Road along the banks.
+- **Arrangement.** All lines are overlaid and split where they cross. Each
+  block is a face of the graph, found by walking half-edges.
+- **Thinning.** Minor streets are dropped at random per patch, so streets
+  stop at T-junctions and sightlines break. A drop is kept only if:
+  - every junction can still be driven to;
+  - no dead end appears;
+  - the joined block stays under the patch's size cap.
+- **Liberty Green** is designed, not left over: a 120 x 80 m park on the
+  north side of Liberty Avenue, with a street round its other three sides.
+- **Landmark blocks** that are too small are joined with the neighbour that
+  best improves the fit for the landmark's lot. The fit is measured with
+  the rectangle that best holds the lot, not the biggest one: an L-shaped
+  block's biggest rectangle can be a long strip. The rectangle must also
+  sit on a street side, centred within it, and that side becomes the
+  block's front, so the landmark's door faces a real sidewalk.
+- **Block geometry:**
+  - inner = the face minus half of each street's width;
+  - lot = inner minus the sidewalk;
+  - buildings stand in the biggest rectangle that fits the lot, aligned
+    with the front street, split into parcels by district;
+  - the leftover corners get trees, planters or barrels;
+  - blocks too small for a rectangle become small greens.
+- **Docks** keep their wharves: their bank edges are a "quay" (a wall, not
+  a road). Elsewhere the River Road runs along the bank.
 
-## 5. Result (Oct 27, 2026)
+## 5. Result (map v2, Oct 27, 2026)
 
-- **Street classes** in the window: about 860 streets, 250 narrow Quarter
-  streets, 57 river road, 30 boulevard, 21 avenue, 27 pedestrian lane and
-  46 closed segments.
-- **Shape:** over 100 street segments are tilted more than 5° from the
-  compass, and block sizes vary by more than 30% between the 10th and 90th
-  percentile. `test_street_plan_is_not_a_grid` checks these, and that every
-  junction north of the river can be driven to.
-- **Liberty Green** sits where the Quarter meets the Wards.
-- **The Morrow** in `world_map.json` was reshaped near Bellerive to follow
-  the crescent, so the bank is one smooth curve. Across the river, a strip
-  of the far bank shows inside the window; it can't be reached yet (no
-  bridge).
-- **Next steps:**
-  - a diagonal avenue across the Wards (like Esplanade), which needs blocks
-    split along it;
-  - a bridge or ferry to the far bank;
-  - reading GTA and Gangstar maps for how far apart shortcuts and alleys
-    should be.
+Measured in the game's own build (seed 1234), inside the playable window.
+`test_street_plan_is_not_a_grid` checks each of these.
+
+| Measure | Map 0.3 | Map v2 |
+|---|---|---|
+| Blocks that are not plain rectangles | none | 37% (193 of 510): not four-cornered, a corner more than 12° off square, or bent sides |
+| Junctions | all crossroads | 240 T-junctions, 355 crossroads, 10 with five or more streets |
+| Drivable street length within 10° of the compass | most | 39% |
+| Block area (10th / 50th / 90th percentile) | one size | 1,600 / 3,300 / 6,050 m² |
+
+- **Streets in the window:**
+  - 683 ordinary street segments and 309 Quarter street segments;
+  - 102 avenue, 53 boulevard and 44 river road segments;
+  - 48 pedestrian lanes, 6 quay walls and the bridge.
+- **No holes:** every street has a block on at least one side, except the
+  bridge.
+- **Build time:** about 0.8 s on a desktop CPU; it may be slower on a
+  phone.
+- **Both of Sachin's asks:**
+  - Morrow Bridge reaches Morrow Point, a new district on the far bank;
+  - Liberty Avenue is the diagonal avenue.
+
+## 6. How GTA and Watch Dogs built their cities
+
+Researched Oct 27, 2026 for map v2. Most of these sources are press
+interviews and fan analyses, not developer talks. Several pages could not
+be opened from the build environment, so only a search summary was read;
+those are marked *(summary only)*.
+
+### Watch Dogs: Chicago, curved on purpose
+- **Starting point.** A developer (named only as Arriola) says the team:
+  - started from a top-down view of the real Chicago map in the editor;
+  - laid roads by following the real streets and adjusting them, for
+    example making Wacker follow the river.
+
+  Neighbourhoods and landmarks came after the roads were set. [19]
+  *(summary only)*
+- **Not the real grid.** The team avoided Chicago's grid as "too straight,
+  with too many right angles". Curving the streets keeps players from
+  seeing far ahead, which works better for play. [19] *(summary only)*
+- **Like GTA and Saints Row:**
+  - roads wider than real ones, for driving;
+  - buildings packed tighter, for moving over rooftops;
+  - only the most distinctive neighbourhoods kept. [19][29]
+  *(summary only)*
+- **Density over scale.** Creative director Jonathan Morin wanted density
+  more than size. He said understanding the limits was what let the team
+  build a complex city well. [20][21] *(summary only)*
+
+### Watch Dogs 2: San Francisco, compressed
+- Director of level design Falko Poiker says the team listed over 200
+  landmarks but could only build a fraction. They compressed distances to
+  avoid dead time. [22] *(summary only)*
+- Where a place went depended on its value for play as much as on its real
+  distance from other places. Google Maps was the base reference. [22]
+  *(summary only)*
+- Concept work studied 33 districts and 36 architectural styles. [23]
+  *(summary only)*
+
+### GTA: real cities, redesigned for driving
+- **Vice City:**
+  - art director Aaron Garbut's team moved roads and reshaped land whenever
+    it helped play;
+  - the map was packed far more densely with detail and variety than GTA
+    III. [12]
+  - Late changes went both ways: the beta's curved bridge became straight,
+    and the straight runway became curved. [24] *(summary only)*
+- **Los Santos (GTA V):** fan analyses say Rockstar:
+  - kept LA's major roads, highways and the rough relative positions of
+    landmarks;
+  - dropped many minor streets;
+  - favoured gently sloping, winding roads over six-lane highways;
+  - built Vinewood Hills with almost no cul-de-sacs or dead ends. [25]
+  *(summary only)*
+- **Garbut on process:** the team works from heavy Google and Street View
+  research, then designs the city "like a sculpture", making sure the view
+  down each street looks right. The city comes first, and missions are
+  fitted to it. [26] *(summary only)*
+- **GTA 6:** reports say Rockstar narrowed its roads to a more realistic
+  scale (and added more buildings), with denser traffic. [27]
+  *(summary only)*
+
+### Open-world city design in general
+- Nathan Cheever (Mafia III's New Bordeaux) plans pathways, landmarks,
+  districts, infrastructure and faction boundaries before environment art.
+  [16] *(summary only)*
+- Landmarks are a choice of where to go next, not only an orientation
+  aid: the Disneyland "weenie" that pulls the player forward. [28]
+  *(summary only)*
+- A road-network design paper produces downtown layouts with no dead ends,
+  allowing them only on lower-level roads. [30]
+
+### What Bellerive takes from this
+1. **Curve the grid.** Watch Dogs' rule is the core of map v2: every
+   district grid bends, fans or both, so straight sightlines end within a
+   few blocks.
+2. **Keep the real city's bones, drop the minor streets.** New Orleans gives
+   the seams (Canal and Esplanade become Crescent Boulevard and Liberty
+   Avenue). Minor streets are thinned per district.
+3. **Few dead ends.** Thinning makes T-junctions, never dead ends, as GTA's
+   hills do.
+4. **Compress, and place by play value.** The demo window is 1.3 x 1.5 km.
+   Landmarks get blocks sized for their layouts rather than real ones.
+5. **Density over size.** Small blocks in the Quarter, parcels split by
+   district, filler in leftover corners.
+6. **Roads, then landmarks, then buildings.** The plan is built in that
+   order (`street_plan.gd`, then the landmark grow step, then
+   `city_cells.gd`).
 
 ## Sources
 
@@ -200,3 +319,15 @@ missions keep working. Each junction gets a real position:
 16. 80.lv, "Hidden design decisions behind believable open-world cities" (summary only; the page could not be opened): https://80.lv/articles/hidden-design-decisions-behind-believable-open-world-cities
 17. Purdue / SIGGRAPH 2011 course notes on urban layouts (Parish and Müller 2001; Chen et al. 2008): https://www.cs.purdue.edu/cgvlab/urban/sg_2011_course/umc_SG11_02_urban_layouts.pdf
 18. Larive, thesis on procedural cities (block and lot stages): https://otik.uk.zcu.cz/bitstream/11025/11197/1/Larive.pdf
+19. "Designing Chicago to provide a better video game experience", Legally Sociable (2014), quoting a Watch Dogs developer (summary only; the site could not be reached): https://legallysociable.com/2014/05/15/designing-a-big-city-for-more-gaming-enjoyment/
+20. IBTimes India, "Watch Dogs creative director compares the in-game map with GTA 5" (summary only): https://www.ibtimes.co.in/watch-dogs-creative-director-compares-the-in-game-map-with-gta-5-509714
+21. Softpedia, "Ubisoft: Watch Dogs benefited from design restrictions" (summary only): https://games.softpedia.com/blog/Ubisoft-Watch-Dogs-Benefited-from-Design-Restrictions-354340.shtml
+22. GameStar and GamePro, "Watch Dogs 2: so viel San Francisco steckt im Spiel", interview with Falko Poiker (summary only): https://www.gamestar.de/artikel/watch-dogs-2-so-viel-san-francisco-steckt-im-spiel,3303617.html and https://www.gamepro.de/artikel/watch_dogs_2,3303615.html
+23. Vice, "Watch Dogs 2 turns San Francisco into a playground" (summary only): https://vice.com/en/article/watch-dogs-2-turns-san-francisco-into-a-playground
+24. Sportskeeda, "5 noticeable differences between GTA Vice City's final and beta maps" (summary only): https://sportskeeda.com/gta/5-noticeable-differences-gta-vice-city-s-final-beta-maps
+25. GTABoom, "How well does GTA V's map emulate Los Angeles?" (summary only): https://www.gtaboom.com/How_Well_Does_GTA_V's_Map_Emulate_Los_Angeles ; Southern Urbanism (summary only): https://www.southernurbanism.org/p/citybuilding-less-parking-more-living
+26. MCV/Develop, "Art director Aaron Garbut tells us how the studio crafted the world of GTA" (summary only): https://mcvuk.com/?p=80936
+27. GTABase, "How narrower roads in GTA 6 are going to affect driving", and IBTimes UK on GTA 6 map planning (summary only): https://www.gtabase.com/articles/gta-6/how-narrower-roads-in-gta-6-are-going-to-affect-driving and https://www.ibtimes.co.uk/gta-6-map-planning-began-11-years-ago-narrow-roads-forced-rockstar-add-more-buildings-1827014
+28. "Level Design Basics, Part 3", DOU gamedev blog (summary only): https://gamedev.dou.ua/blogs/level-design-basics-part-3/?hl=en
+29. Pcgamesn on Bus Simulator 18 and city building for games, as quoted in search results (summary only): https://pcgamesn.com/cities-skylines/bus-simulator-18
+30. Peng et al., "Computational Network Design from Functional Specifications" (2016), arXiv:1510.09203 (summary only): https://arxiv.org/pdf/1510.09203

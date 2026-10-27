@@ -53,8 +53,9 @@ var script_throttle := 0.6
 var max_speed := 24.0
 var accel := 14.0
 var turn_rate := 2.4
-var _next_node := Vector2i.ZERO
-var _heading := Vector2i(1, 0)
+## Traffic drives from junction _prev_node to _next_node (plan node ids).
+var _prev_node := -1
+var _next_node := -1
 var _stuck_time := 0.0
 var _reverse_time := 0.0
 var _deployed := false
@@ -201,23 +202,22 @@ func release_player() -> void:
 		_model.material_override = MeshBuilder.material()
 
 
-func start_traffic(c, from: Vector2i, heading: Vector2i) -> void:
+## Drives as traffic, setting off from junction `from` towards `to`.
+func start_traffic(c, from: int, to: int) -> void:
 	city = c
 	driver = Driver.TRAFFIC
-	_heading = heading
-	_next_node = from + heading
+	_prev_node = from
+	_next_node = to
 
 
 ## Hands a police car (or a stolen car left behind) back to normal traffic.
 func join_traffic_here() -> void:
 	var fwd := -global_basis.z
-	var heading := Vector2i(signi(roundi(fwd.x)), 0) if absf(fwd.x) > absf(fwd.z) else Vector2i(0, signi(roundi(fwd.z)))
-	if heading == Vector2i.ZERO:
-		heading = Vector2i(1, 0)
-	var n: Vector2i = city.nearest_node(global_position + fwd * city.PITCH * 0.5)
+	var ahead: int = city.nearest_node(global_position + fwd * 25.0)
+	var behind: int = city.nearest_node(global_position - fwd * 15.0)
 	driver = Driver.TRAFFIC
-	_heading = heading
-	_next_node = n if city.in_grid(n) else city.nearest_node(global_position)
+	_prev_node = behind if behind != ahead else -1
+	_next_node = ahead
 
 
 func bump(push: Vector3) -> void:
@@ -235,11 +235,15 @@ func _player_input() -> void:
 
 
 func _traffic_ai() -> void:
-	var target: Vector3 = city.lane_point(_next_node, _heading)
+	if _next_node < 0:
+		throttle = 0.0
+		return
+	var target: Vector3 = city.lane_point(_prev_node, _next_node)
 	if Vector2(target.x - global_position.x, target.z - global_position.z).length() < 5.0:
-		_heading = city.pick_turn(_next_node, _heading, rng)
-		_next_node += _heading
-		target = city.lane_point(_next_node, _heading)
+		var nxt: int = city.pick_turn(_prev_node, _next_node, rng)
+		_prev_node = _next_node
+		_next_node = nxt
+		target = city.lane_point(_prev_node, _next_node)
 	var to := target - global_position
 	to.y = 0.0
 	desired_dir = to.normalized()

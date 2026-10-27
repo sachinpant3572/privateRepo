@@ -100,8 +100,9 @@ func _tap(at: Vector2) -> void:
 	if wp != null and Vector2(wp.x, wp.z).distance_to(Vector2(local.x, local.z)) < 25.0:
 		game.waypoint = null
 	else:
-		var n: Vector2i = game.city.nearest_node(local)
-		game.waypoint = game.city.node_pos(n)
+		var n: int = game.city.nearest_node(local)
+		if n >= 0:
+			game.waypoint = game.city.node_pos(n)
 	queue_redraw()
 
 
@@ -121,18 +122,12 @@ func _draw() -> void:
 	var tl := _to_screen(Vector3(map.origin.x, 0, map.origin.y))
 	draw_texture_rect(map.texture, Rect2(tl, map.size * MapImage.PX_M * zoom / MapImage.PX_M), false)
 	var font := ThemeDB.fallback_font
-	# Playable area outline, along the edge streets.
+	# Playable area outline.
 	var city = game.city
+	var win: Rect2 = city.window
 	var ring := PackedVector2Array()
-	for i in city.blocks.x + 1:
-		ring.append(_to_screen(city.node_pos(Vector2i(i, 0))))
-	for j in range(1, city.blocks.y + 1):
-		ring.append(_to_screen(city.node_pos(Vector2i(city.blocks.x, j))))
-	for i in range(city.blocks.x - 1, -1, -1):
-		ring.append(_to_screen(city.node_pos(Vector2i(i, city.blocks.y))))
-	for j in range(city.blocks.y - 1, -1, -1):
-		ring.append(_to_screen(city.node_pos(Vector2i(0, j))))
-	ring.append(ring[0])
+	for c in [win.position, Vector2(win.end.x, win.position.y), win.end, Vector2(win.position.x, win.end.y), win.position]:
+		ring.append(_to_screen(Vector3(c.x, 0, c.y)))
 	draw_polyline(ring, Color(1, 1, 1, 0.8), 3.0)
 	# District names.
 	for d in city.districts:

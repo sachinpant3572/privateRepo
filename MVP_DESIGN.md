@@ -260,6 +260,16 @@ device.
   pedestrian lanes), uneven blocks, T-junctions and a park superblock. The
   Morrow was reshaped near the city to match.
 
+  **Map v2 (Oct 27)**: the bent grid still read as a grid, so the street
+  plan was rebuilt as a real street network, after how GTA and Watch Dogs
+  built their cities (`reference/MAP_BUILDING.md` section 6):
+  - each district has its own curved, fanned street pattern, meeting the
+    next along seam roads;
+  - blocks have any shape;
+  - Liberty Avenue is the diagonal, and Morrow Bridge crosses to a new
+    far-bank district, Morrow Point;
+  - the demo window grew to 1.3 km x 1.5 km (25 x 28 blocks' worth).
+
   The extra night, rain and effects work costs about 0.3-0.6 ms of CPU per
   frame on desktop. A Detail LOW setting and a shadows toggle are in the
   phone for weak devices. See `game/README.md`.

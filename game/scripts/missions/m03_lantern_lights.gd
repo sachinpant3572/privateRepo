@@ -110,8 +110,8 @@ func _ambush() -> void:
 	for d in dirs:
 		if placed >= 2:
 			break
-		var spot: Vector2i = game.city.nearest_node(player_pos() + d * 40.0)
-		if not game.city.in_grid(spot):
+		var spot: int = game.city.nearest_node(player_pos() + d * 40.0)
+		if spot < 0:
 			continue
 		var pos: Vector3 = game.city.node_pos(spot)
 		if pos.distance_to(player_pos()) < 20.0:

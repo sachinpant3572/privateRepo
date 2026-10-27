@@ -65,24 +65,24 @@ const ROAD_NAMES := {
 ## caps the blocks that dropping streets makes: length along U, along V,
 ## and area.
 const PATCHES := [
-	{"id": "gilt_w", "bank": "north", "seed": Vector2(150, 200), "origin": Vector2(246, 170), "angle": 3.0, "bend": 0.00012,
-		"su": [64.0, 80.0], "sv": [54.0, 66.0], "fam": "uv", "cls": "street", "cut": [0.06, 0.08], "lane": 0.04, "max": [160.0, 140.0, 9000.0]},
-	{"id": "gilt_e", "bank": "north", "seed": Vector2(500, 150), "origin": Vector2(397, 200), "angle": 6.0, "bend": -0.0001,
-		"su": [66.0, 78.0], "sv": [54.0, 64.0], "fam": "uv", "cls": "street", "cut": [0.05, 0.06], "lane": 0.04, "max": [160.0, 140.0, 9000.0]},
+	{"id": "gilt_w", "bank": "north", "seed": Vector2(150, 200), "origin": Vector2(246, 170), "angle": -9.0, "bend": 0.0003, "fan": 0.00035, "bend_u": 0.0002,
+		"su": [64.0, 80.0], "sv": [54.0, 66.0], "fam": "uv", "cls": "street", "cut": [0.1, 0.1], "lane": 0.04, "max": [160.0, 140.0, 9000.0]},
+	{"id": "gilt_e", "bank": "north", "seed": Vector2(500, 150), "origin": Vector2(397, 200), "angle": 6.0, "bend": -0.0004, "fan": -0.0007, "bend_u": 0.00025,
+		"su": [66.0, 78.0], "sv": [54.0, 64.0], "fam": "uv", "cls": "street", "cut": [0.1, 0.1], "lane": 0.04, "max": [160.0, 140.0, 9000.0]},
 	{"id": "gilt_s", "bank": "north", "seed": Vector2(400, 470), "origin": Vector2(500, 400), "angle": 29.0, "bend": 0.0,
 		"su": [62.0, 76.0], "sv": [60.0, 60.0], "fam": "u", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
-	{"id": "quarter_w", "bank": "north", "seed": Vector2(150, 800), "origin": Vector2(200, 760), "angle": -12.0, "bend": 0.00022,
-		"su": [44.0, 52.0], "sv": [40.0, 48.0], "fam": "uv", "cls": "quarter", "cut": [0.06, 0.05], "lane": 0.1, "max": [105.0, 100.0, 4500.0]},
-	{"id": "quarter_e", "bank": "north", "seed": Vector2(520, 750), "origin": Vector2(480, 830), "angle": -6.0, "bend": 0.0002,
-		"su": [46.0, 54.0], "sv": [42.0, 50.0], "fam": "uv", "cls": "quarter", "cut": [0.06, 0.05], "lane": 0.1, "max": [105.0, 100.0, 4500.0]},
-	{"id": "wards", "bank": "north", "seed": Vector2(1000, 400), "origin": Vector2(940, 225), "angle": -25.0, "bend": 0.00015,
+	{"id": "quarter_w", "bank": "north", "seed": Vector2(150, 800), "origin": Vector2(200, 760), "angle": -12.0, "bend": 0.0005, "fan": 0.0005,
+		"su": [44.0, 52.0], "sv": [40.0, 48.0], "fam": "uv", "cls": "quarter", "cut": [0.1, 0.08], "lane": 0.1, "max": [105.0, 100.0, 4500.0]},
+	{"id": "quarter_e", "bank": "north", "seed": Vector2(520, 750), "origin": Vector2(480, 830), "angle": -6.0, "bend": 0.0006, "fan": -0.0008, "bend_u": 0.0003,
+		"su": [46.0, 54.0], "sv": [42.0, 50.0], "fam": "uv", "cls": "quarter", "cut": [0.1, 0.08], "lane": 0.1, "max": [105.0, 100.0, 4500.0]},
+	{"id": "wards", "bank": "north", "seed": Vector2(1000, 400), "origin": Vector2(940, 225), "angle": -25.0, "bend": 0.0003, "fan": -0.00025,
 		"su": [84.0, 104.0], "sv": [38.0, 46.0], "fam": "uv", "cls": "street", "cut": [0.3, 0.04], "lane": 0.0, "max": [215.0, 60.0, 9000.0]},
 	{"id": "docks", "bank": "north", "seed": Vector2(1000, 960), "origin": Vector2(1050, 960), "angle": 9.0, "bend": 0.0,
 		"su": [100.0, 125.0], "sv": [80.0, 95.0], "fam": "uv", "cls": "street", "cut": [0.25, 0.25], "lane": 0.0, "max": [260.0, 200.0, 40000.0]},
-	{"id": "point_w", "bank": "south", "seed": Vector2(150, 1420), "origin": Vector2(200, 1420), "angle": -10.0, "bend": 0.00018,
-		"su": [56.0, 70.0], "sv": [44.0, 52.0], "fam": "uv", "cls": "street", "cut": [0.14, 0.06], "lane": 0.0, "max": [140.0, 110.0, 7000.0]},
-	{"id": "point_e", "bank": "south", "seed": Vector2(800, 1400), "origin": Vector2(700, 1330), "angle": -4.0, "bend": 0.00016,
-		"su": [58.0, 72.0], "sv": [44.0, 52.0], "fam": "uv", "cls": "street", "cut": [0.14, 0.06], "lane": 0.0, "max": [140.0, 110.0, 7000.0]},
+	{"id": "point_w", "bank": "south", "seed": Vector2(150, 1420), "origin": Vector2(200, 1420), "angle": -10.0, "bend": 0.0004, "fan": 0.0004,
+		"su": [56.0, 70.0], "sv": [44.0, 52.0], "fam": "uv", "cls": "street", "cut": [0.18, 0.1], "lane": 0.0, "max": [140.0, 110.0, 7000.0]},
+	{"id": "point_e", "bank": "south", "seed": Vector2(800, 1400), "origin": Vector2(700, 1330), "angle": -4.0, "bend": 0.00035, "fan": -0.0003, "bend_u": 0.00015,
+		"su": [58.0, 72.0], "sv": [44.0, 52.0], "fam": "uv", "cls": "street", "cut": [0.18, 0.1], "lane": 0.0, "max": [140.0, 110.0, 7000.0]},
 ]
 
 var window := Rect2()
@@ -159,6 +159,14 @@ func build(win: Rect2, margin: float, seed_v: int, river_line: PackedVector2Arra
 	t = _lap("grow", t)
 	_make_blocks()
 	_index()
+	# Landmark blocks keep the rectangle that best holds the landmark, on
+	# the street side it fronts.
+	for w in wants:
+		var f := face_of(w[0])
+		if f >= 0 and faces[f].kind == "land" and faces[f].lot.size() >= 3:
+			var pick := _landmark_rect(f, w[1])
+			faces[f].front = pick[0]
+			faces[f].rect = pick[1]
 	t = _lap("blocks", t)
 	if not _park_poly.is_empty():
 		park_face = face_of(interior_point(_park_poly))
@@ -418,14 +426,21 @@ func _patch_lines(src: Array, k: int, region: PackedVector2Array) -> void:
 		hi = Vector2(maxf(hi.x, u), maxf(hi.y, v))
 	lo -= Vector2(30, 30)
 	hi += Vector2(30, 30)
+	# The u-lines fan out from the middle of the patch (like spokes round
+	# the crescent) and curve; the outer ones are spared so the fan still
+	# covers the region.
+	var fan: float = p.get("fan", 0.0)
+	var bend_u: float = p.get("bend_u", 0.0)
+	var mid := (lo + hi) * 0.5
+	var spare := absf(fan) * (hi.x - lo.x) * (hi.y - lo.y) * 0.25 + absf(bend_u) * pow((hi.y - lo.y) * 0.5, 2)
 	var lines: Array = [] # [polyline, family]
 	if "u" in p.fam:
-		for u in _positions(rng, lo.x, hi.x, p.su):
-			var tilt := rng.randf_range(-0.012, 0.012)
+		for u in _positions(rng, lo.x - spare, hi.x + spare, p.su):
+			var tilt: float = rng.randf_range(-0.012, 0.012) + fan * (u - mid.x)
 			var pts := PackedVector2Array()
 			var v := lo.y
 			while true:
-				var uu: float = u + tilt * v
+				var uu: float = u + tilt * (v - mid.y) + bend_u * pow(v - mid.y, 2)
 				pts.append(o + u_dir * uu + v_dir * (v + bend * uu * uu))
 				if v >= hi.y:
 					break
@@ -435,13 +450,13 @@ func _patch_lines(src: Array, k: int, region: PackedVector2Array) -> void:
 		for v in _positions(rng, lo.y, hi.y, p.sv):
 			var tilt := rng.randf_range(-0.012, 0.012)
 			var pts := PackedVector2Array()
-			var u := lo.x
+			var u := lo.x - spare
 			while true:
 				var vv: float = v + tilt * u
 				pts.append(o + u_dir * u + v_dir * (vv + bend * u * u))
-				if u >= hi.x:
+				if u >= hi.x + spare:
 					break
-				u = minf(u + STEP, hi.x)
+				u = minf(u + STEP, hi.x + spare)
 			lines.append([pts, 1])
 	var gap: float = minf(p.su[0], p.sv[0]) * 0.55
 	for l in lines:
@@ -882,6 +897,47 @@ func _simplify() -> void:
 			edge_b[e1] = w
 			_adj[w].append(e1)
 			changed = true
+	_drop_overlaps()
+
+
+## Drops a district street that runs on top of another street. A patch line
+## nearly in line with the frame or a seam, straightened, leaves two ways
+## between the same junctions along the same line, which breaks the block
+## walk (the blocks either side go missing).
+func _drop_overlaps() -> void:
+	for e in edge_a.size():
+		if _dead[e] == 1 or edge_road[e] != "":
+			continue
+		var a := node_pos[edge_a[e]]
+		var b := node_pos[edge_b[e]]
+		var length := a.distance_to(b)
+		if length < 1.0:
+			continue
+		var dir := (b - a) / length
+		# Walk from one end to the other along streets that stay on e.
+		var cur := edge_a[e]
+		var prev := e
+		var steps := 0
+		while cur != edge_b[e] and steps < 8:
+			var nxt := -1
+			for f in _adj[cur]:
+				if f == e or f == prev:
+					continue
+				var q := node_pos[other(f, cur)]
+				var t := (q - a).dot(dir)
+				if t <= (node_pos[cur] - a).dot(dir) + 0.01 or t > length + 0.5:
+					continue
+				if Geometry2D.get_closest_point_to_segment(q, a, b).distance_to(q) > 1.0:
+					continue
+				nxt = f
+				break
+			if nxt < 0:
+				break
+			prev = nxt
+			cur = other(nxt, cur)
+			steps += 1
+		if cur == edge_b[e] and steps > 0:
+			_kill(e)
 
 
 ## Removes dead edges and lone nodes, renumbering both.
@@ -988,7 +1044,7 @@ func _thin() -> void:
 		group.append(f)
 		pts.append(faces[f].poly)
 		areas.append(faces[f].area)
-	var reach := _reach_count()
+	var stranded := _stranded()
 	for l in links:
 		var e0: int = l[0][0]
 		var p: Dictionary = PATCHES[edge_patch[e0]]
@@ -1010,7 +1066,7 @@ func _thin() -> void:
 				continue
 			for e in l[0]:
 				_kill(e)
-			if _reach_count() < reach:
+			if _stranded() > stranded:
 				for e in l[0]:
 					_revive(e)
 				continue
@@ -1020,7 +1076,7 @@ func _thin() -> void:
 		elif roll < cut + p.lane:
 			for e in l[0]:
 				edge_cls[e] = "lane"
-			if _reach_count() < reach:
+			if _stranded() > stranded:
 				for e in l[0]:
 					edge_cls[e] = p.cls
 
@@ -1085,11 +1141,13 @@ func _revive(e: int) -> void:
 	_adj[edge_b[e]].append(e)
 
 
-## Junctions reachable by car from the first junction with a drivable street.
-func _reach_count() -> int:
+## Junctions with a drivable street that can't be driven to from the first
+## one. (A count of the reachable ones would drop whenever a curved street
+## goes, taking its bend points with it.)
+func _stranded() -> int:
 	var start := -1
 	for k in node_pos.size():
-		if degree(k) > 0:
+		if _drives(k):
 			start = k
 			break
 	if start < 0:
@@ -1097,7 +1155,6 @@ func _reach_count() -> int:
 	var seen := PackedByteArray()
 	seen.resize(node_pos.size())
 	seen[start] = 1
-	var count := 1
 	var todo := PackedInt32Array([start])
 	while not todo.is_empty():
 		var k := todo[todo.size() - 1]
@@ -1108,9 +1165,19 @@ func _reach_count() -> int:
 			var m := edge_b[e] if edge_a[e] == k else edge_a[e]
 			if seen[m] == 0:
 				seen[m] = 1
-				count += 1
 				todo.append(m)
+	var count := 0
+	for k in node_pos.size():
+		if seen[k] == 0 and not _adj[k].is_empty() and _drives(k):
+			count += 1
 	return count
+
+
+func _drives(k: int) -> bool:
+	for e in _adj[k]:
+		if CLASSES[edge_cls[e]].drive:
+			return true
+	return false
 
 
 # --- Blocks ------------------------------------------------------------------------
@@ -1212,52 +1279,138 @@ func _grow_blocks(wants: Array) -> bool:
 		if faces[f].kind != "land":
 			continue
 		var need: Vector2 = w[1]
-		var fit := _fit(lot_rect(f), need)
+		var to_frame := front_frame2d(f).affine_inverse()
+		var fit: float = _landmark_rect(f, need)[2]
 		if fit >= 1.0:
 			continue
-		var face: Dictionary = faces[f]
-		var to_frame := front_frame2d(f).affine_inverse()
-		var best := -1
-		var best_fit := fit + 0.02
-		for e in face.edges:
+		# Options: [fit, edges to drop], one neighbour at a time; when none
+		# helps, pairs (fanned blocks lean, so an L of three blocks may not
+		# fit where the fourth block fills it out).
+		var options: Array = []
+		var singles := _merge_options(f, faces[f].poly, [f], claimed)
+		for o in singles:
+			var gfit := _merged_fit(o[2], to_frame, need)
+			if gfit > fit + 0.02:
+				options.append([gfit, [o[1]]])
+		if _drop_best(options):
+			changed = true
+			continue
+		options = []
+		for o in singles:
+			for o2 in _merge_options(f, o[2], [f, o[0]], claimed):
+				var gfit := _merged_fit(o2[2], to_frame, need)
+				if gfit > fit + 0.02:
+					options.append([gfit, [o[1], o2[1]]])
+		if _drop_best(options):
+			changed = true
+	return changed
+
+
+## Drops the streets of the best option that can go ([fit, edges] each).
+func _drop_best(options: Array) -> bool:
+	options.sort_custom(func(x, y): return x[0] > y[0])
+	for o in options:
+		if _drop_links(o[1]):
+			return true
+	return false
+
+
+## Neighbours of the blocks in `members` (around `poly`, their union) that a
+## landmark block may join: [face, edge between, union polygon].
+func _merge_options(f: int, poly: PackedVector2Array, members: Array, claimed: Dictionary) -> Array:
+	var out: Array = []
+	var seen := {}
+	for m in members:
+		for e in faces[m].edges:
 			if edge_patch[e] < 0 or _dead[e] == 1:
 				continue
 			var slots := edge_face[e]
-			var g := slots.y if slots.x == f else slots.x
-			if g < 0 or g == f or faces[g].kind != "land" or claimed.has(g):
+			var g := slots.y if slots.x == m else slots.x
+			if g < 0 or members.has(g) or seen.has(g) or faces[g].kind != "land" or (claimed.has(g) and g != f):
 				continue
-			var merged := _largest(Geometry2D.merge_polygons(face.poly, faces[g].poly))
-			var approx := _largest(Geometry2D.offset_polygon(merged, -8.5))
-			if approx.size() < 3:
-				continue
-			var gfit := _fit(largest_rect(to_frame * approx), need)
-			if gfit > best_fit:
-				best_fit = gfit
-				best = e
-		if best < 0:
+			seen[g] = true
+			var merged := _largest(Geometry2D.merge_polygons(poly, faces[g].poly))
+			if merged.size() >= 3:
+				out.append([g, e, merged])
+	return out
+
+
+## How well a joined block would hold `need`: its outline, pulled in by
+## about a street half and a sidewalk.
+func _merged_fit(merged: PackedVector2Array, to_frame: Transform2D, need: Vector2) -> float:
+	var approx := _largest(Geometry2D.offset_polygon(merged, -8.5))
+	if approx.size() < 3:
+		return 0.0
+	return _fit(largest_rect(to_frame * approx, need), need)
+
+
+## Drops the streets through `edges` (each with the bends either side), or
+## none of them if that would strand a junction.
+func _drop_links(edges: Array) -> bool:
+	var stranded := _stranded()
+	var killed: Array = []
+	for e in edges:
+		if _dead[e] == 1:
 			continue
-		var l := _full_link(best)
+		var l := _full_link(e)
 		if _adj[l[1]].size() < 3 or _adj[l[2]].size() < 3:
-			continue
-		var reach := _reach_count()
-		for e in l[0]:
-			_kill(e)
-		if _reach_count() < reach:
-			for e in l[0]:
-				_revive(e)
-			continue
-		changed = true
-	return changed
+			for k in killed:
+				_revive(k)
+			return false
+		for k in l[0]:
+			_kill(k)
+			killed.append(k)
+	if _stranded() > stranded:
+		for k in killed:
+			_revive(k)
+		return false
+	return not killed.is_empty()
 
 
 static func _fit(r: Rect2, need: Vector2) -> float:
 	return minf(r.size.x / need.x, r.size.y / need.y)
 
 
+## Where a landmark goes in block f: [side, rect in that side's frame, fit]
+## over the block's street sides, the rect centred on its side so the door
+## (and the sidewalk spot in front) faces that street. Best fit wins, then
+## the camera-facing front, then area.
+func _landmark_rect(f: int, need: Vector2) -> Array:
+	var face: Dictionary = faces[f]
+	var inner: PackedVector2Array = face.inner
+	var best: Array = [face.front, Rect2(), -1.0]
+	var best_a := 0.0
+	for k in inner.size():
+		var e: int = face.sides[k]
+		if e < 0 or not drivable(e) or edge_cls[e] == "bridge":
+			continue
+		var half := inner[k].distance_to(inner[(k + 1) % inner.size()]) * 0.5
+		if half < 8.0:
+			continue
+		var r := largest_rect(side_frame2d(f, k).affine_inverse() * face.lot, need, half - 3.0)
+		var fit := minf(1.0, _fit(r, need))
+		var a := r.get_area()
+		var better: bool = fit > best[2] + 0.001
+		if not better and fit > best[2] - 0.001:
+			better = k == face.front or (best[0] != face.front and a > best_a)
+		if better:
+			best = [k, r, fit]
+			best_a = a
+	if best[2] < 0.0:
+		best = [face.front, largest_rect(front_frame2d(f).affine_inverse() * face.lot, need), 0.0]
+		best[2] = minf(1.0, _fit(best[1], need))
+	return best
+
+
 func _make_blocks() -> void:
 	for f in faces.size():
-		if faces[f].kind == "land":
+		var face: Dictionary = faces[f]
+		face["rect"] = Rect2()
+		face["patch"] = _patch_index(face.center)
+		if face.kind == "land":
 			_block_geom(f)
+			if face.kind == "land" and face.lot.size() >= 3:
+				face.rect = largest_rect(front_frame2d(f).affine_inverse() * face.lot)
 
 
 ## Inner polygon, lot, street sides and front of block f.
@@ -1340,9 +1493,12 @@ func _block_geom(f: int) -> void:
 ## seen from it), basis.z out through it, origin at the front's middle on
 ## the inner polygon.
 func front_frame2d(f: int) -> Transform2D:
-	var face: Dictionary = faces[f]
-	var poly: PackedVector2Array = face.inner
-	var k: int = face.front
+	return side_frame2d(f, faces[f].front)
+
+
+## The same frame on inner side k of block f.
+func side_frame2d(f: int, k: int) -> Transform2D:
+	var poly: PackedVector2Array = faces[f].inner
 	var a := poly[k]
 	var b := poly[(k + 1) % poly.size()]
 	var along := (a - b).normalized()
@@ -1351,12 +1507,33 @@ func front_frame2d(f: int) -> Transform2D:
 
 
 ## The largest rectangle in f's lot aligned with its front frame, in frame
-## coordinates (x along, y = z out through the front).
+## coordinates (x along, y out through the front, so the lot is at y < 0).
 func lot_rect(f: int) -> Rect2:
-	var lp: PackedVector2Array = faces[f].lot
-	if lp.size() < 3:
+	var face: Dictionary = faces[f]
+	if face.has("rect"):
+		return face.rect
+	if face.lot.size() < 3:
 		return Rect2()
-	return largest_rect(front_frame2d(f).affine_inverse() * lp)
+	return largest_rect(front_frame2d(f).affine_inverse() * face.lot)
+
+
+## Id of the district patch block f belongs to ("" outside every patch).
+func face_patch(f: int) -> String:
+	var k: int = faces[f].get("patch", -1)
+	return PATCHES[k].id if k >= 0 else ""
+
+
+## Id of the district patch at local point p ("" outside every patch).
+func patch_at(p: Vector2) -> String:
+	var k := _patch_index(p)
+	return PATCHES[k].id if k >= 0 else ""
+
+
+func _patch_index(p: Vector2) -> int:
+	for r in _regions:
+		if Geometry2D.is_point_in_polygon(p, r[0]):
+			return r[1]
+	return -1
 
 
 func _index() -> void:
@@ -1455,14 +1632,19 @@ static func interior_point(poly: PackedVector2Array) -> Vector2:
 
 ## The largest axis-aligned rectangle inside a polygon (scanlines 1.5 m
 ## apart, so it can be a little generous between them; trimmed for that).
-static func largest_rect(poly: PackedVector2Array) -> Rect2:
+## With `need`, a rectangle that fits need (or comes closest) wins over a
+## bigger one that doesn't: an L-shaped block's largest rectangle can be a
+## long thin strip when a squarer one would hold a landmark. With `reach`,
+## only rectangles on the front (top within a metre or so of the lot's
+## front edge) whose middle is within reach of x = 0 count.
+static func largest_rect(poly: PackedVector2Array, need := Vector2.ZERO, reach := -1.0) -> Rect2:
 	var r := _bbox(poly)
-	var step := 1.5
+	var step := maxf(1.5, r.size.x / 40.0)
 	var xs := PackedFloat32Array()
 	var lows := PackedFloat32Array()
 	var highs := PackedFloat32Array()
 	var n := poly.size()
-	var x := r.position.x + 0.75
+	var x := r.position.x + step * 0.5
 	while x < r.end.x:
 		var zs: Array = []
 		for k in n:
@@ -1483,6 +1665,7 @@ static func largest_rect(poly: PackedVector2Array) -> Rect2:
 		x += step
 	var best := Rect2()
 	var best_a := 0.0
+	var best_f := 0.0
 	for i in xs.size():
 		var top := -INF
 		var bottom := INF
@@ -1491,8 +1674,13 @@ static func largest_rect(poly: PackedVector2Array) -> Rect2:
 			bottom = minf(bottom, highs[j])
 			if bottom <= top:
 				break
-			var a := (xs[j] - xs[i]) * (bottom - top)
-			if a > best_a:
+			var w := xs[j] - xs[i]
+			if reach >= 0.0 and (bottom < -SIDEWALK - 1.5 or absf(xs[i] + w * 0.5) > reach):
+				continue
+			var a := w * (bottom - top)
+			var f := 0.0 if need == Vector2.ZERO else minf(1.0, _fit(Rect2(0, 0, w, bottom - top), need))
+			if f > best_f + 0.001 or (f > best_f - 0.001 and a > best_a):
+				best_f = f
 				best_a = a
-				best = Rect2(xs[i], top, xs[j] - xs[i], bottom - top)
+				best = Rect2(xs[i], top, w, bottom - top)
 	return best

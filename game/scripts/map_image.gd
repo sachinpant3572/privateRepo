@@ -1,7 +1,7 @@
 extends RefCounted
 ## Bakes the demo map into one texture for the minimap and the full map:
 ## water, district-tinted blocks inside their sidewalks, roads, streetcar
-## lines and landmark lots. Built once at start (a few hundred fill_rects).
+## lines and landmark lots. Built once at start (a scanline fill per block).
 ## The bake returns where pixel (0, 0) sits in local metres; one pixel per
 ## PX_M metres.
 
@@ -76,85 +76,60 @@ static func draw_arrow(ci: CanvasItem, at: Vector2, dir: Vector2, size: float, c
 ## Returns {texture, origin (local metres at pixel 0,0), size (pixels)}.
 static func bake(city) -> Dictionary:
 	var plan = city.plan
-	var margin: int = city.MARGIN
-	var lo := Vector2(INF, INF)
-	var hi := Vector2(-INF, -INF)
-	for i in range(-margin, city.blocks.x + margin + 1):
-		for j in range(-margin, city.blocks.y + margin + 1):
-			var p: Vector2 = plan.pos(Vector2i(i, j))
-			lo = Vector2(minf(lo.x, p.x), minf(lo.y, p.y))
-			hi = Vector2(maxf(hi.x, p.x), maxf(hi.y, p.y))
-	lo -= Vector2(40, 40)
-	hi += Vector2(40, 40)
-	var size := Vector2i(ceili((hi.x - lo.x) / PX_M), ceili((hi.y - lo.y) / PX_M))
+	var bounds: Rect2 = plan.bounds.grow(40.0)
+	var size := Vector2i(ceili(bounds.size.x / PX_M), ceili(bounds.size.y / PX_M))
 	var img := Image.create(size.x, size.y, false, Image.FORMAT_RGBA8)
 	img.fill(WATER)
-	var origin := lo
-	for i in range(-margin, city.blocks.x + margin):
-		for j in range(-margin, city.blocks.y + margin):
-			var b := Vector2i(i, j)
-			var inside: bool = city.in_window(b)
-			if not city.block_land(b):
-				# Halves of streets running along the water.
-				var c: PackedVector2Array = plan.corners(b)
-				for k in 4:
-					var cls: String = plan.side_class(b, k)
-					if cls == "closed":
-						continue
-					var a := c[k]
-					var e := c[(k + 1) % 4]
-					var dir := (e - a).normalized()
-					var inward: Vector2 = Vector2(-dir.y, dir.x) * (plan.CLASSES[cls].width * 0.5 + 1.0)
-					_poly(img, origin, PackedVector2Array([a, e, e + inward, a + inward]), ROAD)
-				continue
-			var style: String = city.block_style(b)
-			var color: Color = STYLE_COLORS.get(city.district_at(city.block_center(b)).get("style", "quarter"), STYLE_COLORS.quarter)
-			color = LANDMARK_COLORS.get(style, color)
-			var road := ROAD
-			var walk := SIDEWALK
-			if not inside:
-				color = color.lerp(OUTSIDE, 0.55)
-				road = ROAD.lerp(OUTSIDE, 0.4)
-				walk = SIDEWALK.lerp(OUTSIDE, 0.5)
-			_poly(img, origin, plan.corners(b), road)
-			_poly(img, origin, plan.inner(b), walk)
-			_poly(img, origin, plan.lot(b), color)
-	# Neutral grounds on the boulevards, pavers on pedestrian lanes.
-	for i in range(-margin, city.blocks.x + margin + 1):
-		for j in range(-margin, city.blocks.y + margin + 1):
-			var n := Vector2i(i, j)
-			for d in [Vector2i(1, 0), Vector2i(0, 1)]:
-				var cls: String = plan.edge_class(n, d)
-				if cls != "boulevard" and cls != "lane":
-					continue
-				var a: Vector2 = plan.pos(n)
-				var e: Vector2 = plan.pos(n + d)
-				var dir := (e - a).normalized()
-				var side := Vector2(-dir.y, dir.x)
-				var half := 3.0 if cls == "boulevard" else 3.5
-				var trim := dir * 7.0
-				_poly(img, origin, PackedVector2Array([a + trim - side * half, e - trim - side * half, e - trim + side * half, a + trim + side * half]), MEDIAN if cls == "boulevard" else LANE)
+	var origin := bounds.position
+	for f in plan.faces.size():
+		var inside: bool = city.in_window(f)
+		var road := ROAD if inside else ROAD.lerp(OUTSIDE, 0.4)
+		_poly(img, origin, plan.face_poly(f), road)
+		if not plan.is_land(f):
+			continue
+		var style: String = city.block_style(f)
+		var color: Color = STYLE_COLORS.get(city.district_style(f), STYLE_COLORS.quarter)
+		color = LANDMARK_COLORS.get(style, color)
+		var walk := SIDEWALK
+		if not inside:
+			color = color.lerp(OUTSIDE, 0.55)
+			walk = SIDEWALK.lerp(OUTSIDE, 0.5)
+		_poly(img, origin, plan.inner(f), walk)
+		_poly(img, origin, plan.lot(f), color)
+	for e in plan.edge_count():
+		var cls: String = plan.edge_class(e)
+		var a: Vector2 = plan.pos(plan.edge_a[e])
+		var b: Vector2 = plan.pos(plan.edge_b[e])
+		var dir := (b - a).normalized()
+		var side := Vector2(-dir.y, dir.x)
+		var w: float = plan.edge_width(e) * 0.5
+		# Halves of streets with water beside them, and the bridge.
+		var mid := (a + b) * 0.5
+		for sgn in [-1.0, 1.0]:
+			if plan.face_of(mid + side * sgn * (w + 2.5)) < 0:
+				var s: Vector2 = side * sgn * (w + 1.0)
+				_poly(img, origin, PackedVector2Array([a, b, b + s, a + s]), ROAD if cls != "quay" else SIDEWALK)
+		# Neutral grounds on the boulevards, pavers on pedestrian lanes.
+		if cls == "boulevard" or cls == "lane":
+			var half := 3.0 if cls == "boulevard" else 3.5
+			var trim := dir * minf(7.0, a.distance_to(b) * 0.3)
+			_poly(img, origin, PackedVector2Array([a + trim - side * half, b - trim - side * half, b - trim + side * half, a + trim + side * half]), MEDIAN if cls == "boulevard" else LANE)
 	for line in city.rail_lines:
-		var from: Vector2i = line[0]
-		var to: Vector2i = line[1]
-		var step := (to - from).clamp(Vector2i(-1, -1), Vector2i(1, 1))
-		var n := from
-		while n != to:
-			if not (city.node_ok(n) and city.node_ok(n + step)):
-				n += step
-				continue
-			var a: Vector2 = plan.pos(n)
-			var e: Vector2 = plan.pos(n + step)
-			var dir := (e - a).normalized()
-			var side := Vector2(-dir.y, dir.x) * 1.0
-			_poly(img, origin, PackedVector2Array([a - side, e - side, e + side, a + side]), RAIL if not line[2] else RAIL.darkened(0.3))
-			n += step
+		var nodes: PackedInt32Array = line.nodes
+		for k in nodes.size() - 1:
+			var a: Vector2 = plan.pos(nodes[k])
+			var b: Vector2 = plan.pos(nodes[k + 1])
+			var side := (b - a).normalized().orthogonal()
+			_poly(img, origin, PackedVector2Array([a - side, b - side, b + side, a + side]), RAIL if not line.rusty else RAIL.darkened(0.3))
 	var tex := ImageTexture.create_from_image(img)
 	return {"texture": tex, "origin": origin, "size": Vector2(size)}
 
 
-## Fills a convex polygon (local metres) row by row.
+## Fills a polygon (local metres, convex or not) row by row, even-odd.
 static func _poly(img: Image, origin: Vector2, poly: PackedVector2Array, color: Color) -> void:
+	var n := poly.size()
+	if n < 3:
+		return
 	var pts := PackedVector2Array()
 	var y0 := INF
 	var y1 := -INF
@@ -163,22 +138,20 @@ static func _poly(img: Image, origin: Vector2, poly: PackedVector2Array, color: 
 		pts.append(q)
 		y0 = minf(y0, q.y)
 		y1 = maxf(y1, q.y)
-	var n := pts.size()
 	var h := img.get_height()
 	var w := img.get_width()
+	var xs := PackedFloat32Array()
 	for y in range(maxi(0, floori(y0)), mini(h, ceili(y1))):
 		var yc := y + 0.5
-		var xa := INF
-		var xb := -INF
+		xs.clear()
 		for k in n:
 			var a := pts[k]
 			var b := pts[(k + 1) % n]
 			if (a.y <= yc and b.y > yc) or (b.y <= yc and a.y > yc):
-				var x := a.x + (yc - a.y) / (b.y - a.y) * (b.x - a.x)
-				xa = minf(xa, x)
-				xb = maxf(xb, x)
-		if xa < xb:
-			var x0 := clampi(roundi(xa), 0, w)
-			var x1 := clampi(roundi(xb), 0, w)
+				xs.append(a.x + (yc - a.y) / (b.y - a.y) * (b.x - a.x))
+		xs.sort()
+		for i in range(0, xs.size() - 1, 2):
+			var x0 := clampi(roundi(xs[i]), 0, w)
+			var x1 := clampi(roundi(xs[i + 1]), 0, w)
 			if x1 > x0:
 				img.fill_rect(Rect2i(x0, y, x1 - x0, 1), color)

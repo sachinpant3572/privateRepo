@@ -80,8 +80,8 @@ func _spawn_cop_nearby(center: Vector3) -> void:
 
 
 func _spawn_car_nearby(center: Vector3) -> void:
-	var n: Vector2i = game.city.random_node_between(center, 35.0, 60.0, rng)
-	if n.x < 0:
+	var n: int = game.city.random_node_between(center, 35.0, 60.0, rng)
+	if n < 0:
 		return
 	var pos: Vector3 = game.city.node_pos(n)
 	var to := center - pos

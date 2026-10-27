@@ -65,21 +65,19 @@ func _add_ped(loop: int, point: int):
 
 
 func _spawn_traffic(center: Vector3) -> void:
-	var n: Vector2i = game.city.random_node_between(center, CAR_SPAWN.x, CAR_SPAWN.y, rng)
-	if n.x < 0:
+	var n: int = game.city.random_node_between(center, CAR_SPAWN.x, CAR_SPAWN.y, rng)
+	if n < 0:
 		return
-	var dirs: Array[Vector2i] = []
-	for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-		if game.city.in_grid(n + d) and game.city.plan.drivable(n, d):
-			dirs.append(d)
-	if dirs.is_empty():
+	var options: Array = game.city.next_nodes(n)
+	if options.is_empty():
 		return
-	var heading: Vector2i = dirs[rng.randi() % dirs.size()]
+	var to: int = options[rng.randi() % options.size()]
 	var car = _new_car()
-	car.position = game.city.lane_point(n, heading)
-	car.rotation.y = atan2(-float(heading.x), -float(heading.y))
+	car.position = game.city.lane_start(n, to)
+	var heading: Vector3 = game.city.node_pos(to) - game.city.node_pos(n)
+	car.rotation.y = atan2(-heading.x, -heading.z)
 	car.rng.seed = rng.randi()
-	car.start_traffic(game.city, n, heading)
+	car.start_traffic(game.city, n, to)
 	game.add_child(car)
 	cars.append(car)
 

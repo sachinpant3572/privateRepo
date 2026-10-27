@@ -116,7 +116,7 @@
   "landmarks": [
     {"id": "bpd_lantern", "name": "Lantern Quarter Precinct", "type": "police", "pos": [4600, 4420], "city": "bellerive"},
     {"id": "lantern_square", "name": "Lantern Square", "type": "park", "pos": [4660, 4530], "city": "bellerive"},
-    {"id": "floodline_clinic", "name": "Floodline Clinic", "type": "hospital", "pos": [4840, 4395], "city": "bellerive"},
+    {"id": "floodline_clinic", "name": "Floodline Clinic", "type": "hospital", "pos": [4875, 4395], "city": "bellerive"},
     {"id": "wharfside_courts", "name": "Wharfside Courts", "type": "court", "pos": [4830, 4620], "city": "bellerive"},
     {"id": "aurum_tower", "name": "Aurum Tower", "type": "tower", "pos": [4500, 3900], "city": "bellerive"},
     {"id": "union_station", "name": "Union Station", "type": "station", "pos": [4500, 3800], "city": "bellerive"},

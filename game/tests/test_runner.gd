@@ -58,89 +58,164 @@ func test_city_streams_cells() -> void:
 	_check(single, "every cell draws as at most one mesh (plus its night glow)")
 	_check(city.building_count > 20, "city has buildings, got %d" % city.building_count)
 	var land := 0
-	for i in city.blocks.x:
-		for j in city.blocks.y:
-			land += 1 if city.block_land(Vector2i(i, j)) else 0
-	_check(city.sidewalk_loops.size() == land, "one sidewalk loop per land block")
+	for f in city.plan.faces.size():
+		land += 1 if city.block_land(f) and city.in_window(f) else 0
+	_check(city.sidewalk_loops.size() == land, "one sidewalk loop per playable land block")
 	# Teleport across the map: the old cells go, new ones stream in.
 	_place_player_at(city.hospital)
 	await _frames(240)
-	var near: Vector2i = city.block_of(city.hospital)
-	_check(city.cell_node(near) != null, "cells stream in around the player")
-	_check(city.cell_node(city.block_of(city.spawn_point)) == null, "far cells are unloaded")
+	_check(city.cell_node(city.cell_at(city.hospital)) != null, "cells stream in around the player")
+	_check(city.cell_node(city.cell_at(city.spawn_point)) == null, "far cells are unloaded")
 
 
 func test_city_follows_world_map() -> void:
 	await _new_game(false)
 	var city = game.city
+	var plan = city.plan
 	var styles := {}
-	for i in city.blocks.x:
-		for j in city.blocks.y:
-			styles[city.block_style(Vector2i(i, j))] = true
-	for style in ["quarter", "docks", "wards", "downtown", "water"]:
+	for f in plan.faces.size():
+		if city.in_window(f):
+			styles[city.block_style(f)] = true
+	for style in ["quarter", "docks", "wards", "downtown"]:
 		_check(styles.has(style), "map district style '%s' is used" % style)
-	for landmark in ["police", "hospital", "park", "court", "station", "tower", "club", "safehouse"]:
+	for landmark in ["police", "hospital", "park", "green", "court", "station", "tower", "club", "safehouse"]:
 		_check(styles.has(landmark), "map landmark '%s' is placed" % landmark)
-	_check(city.landmark_at(city.block_of(city.spawn_point)).get("id") == "union_station", "player starts at Union Station")
+	_check(city.landmark_at(city.block_of(city.spawn_point - city.landmark_frame("union_station").basis.z * 6.0)).get("id") == "union_station", "player starts at Union Station")
 	_check(city.district_at(city.spawn_point).name == "Gilt District", "Union Station is in the Gilt District")
 	_check(city.police_station.distance_to(city.spawn_point) > 100.0, "police station comes from the map, not the fallback")
 	_check(city.district_at(city.hospital).name == "Floodline Wards", "clinic is in the Floodline Wards")
-	var wet := 0
-	for i in city.blocks.x + 1:
-		for j in city.blocks.y + 1:
-			wet += 0 if city.in_grid(Vector2i(i, j)) else 1
-	_check(wet > 10, "the river takes out road nodes, got %d" % wet)
+	_check(city.district_at(city.node_pos(_road_node(plan, "point_ave"))).name == "Morrow Point", "Point Avenue runs through Morrow Point")
+	# Only the bridge crosses the river.
+	var wet := []
+	for e in plan.edge_count():
+		var m: Vector2 = (plan.pos(plan.edge_a[e]) + plan.pos(plan.edge_b[e])) * 0.5
+		if plan.is_water_point(m) and plan.drivable(e):
+			wet.append(plan.edge_class(e))
+	_check(not wet.is_empty() and wet.all(func(c): return c == "bridge"), "only Morrow Bridge crosses the river, got %s" % [wet])
 
 
+## The map should read as a city that grew, not a grid: districts at their
+## own angles, curved and diagonal roads, T-junctions, blocks of many
+## shapes and sizes. Each check would fail on a (warped) grid.
 func test_street_plan_is_not_a_grid() -> void:
 	await _new_game(false)
 	var city = game.city
 	var plan = city.plan
 	var counts := {}
-	var tilted := 0
-	var lengths: Array = []
-	for i in city.blocks.x:
-		for j in city.blocks.y:
-			var n := Vector2i(i, j)
-			for d in [Vector2i(1, 0), Vector2i(0, 1)]:
-				var cls: String = plan.edge_class(n, d)
-				counts[cls] = counts.get(cls, 0) + 1
-				var v: Vector3 = city.node_pos(n + d) - city.node_pos(n)
-				var off := absf(atan2(v.z, v.x)) if d.x != 0 else absf(atan2(v.x, v.z))
-				if off > deg_to_rad(5.0):
-					tilted += 1
-				if cls != "closed":
-					lengths.append(v.length())
-	for cls in ["boulevard", "avenue", "street", "quarter", "lane", "closed"]:
+	var bearing := PackedFloat32Array()
+	bearing.resize(9) # street length by bearing (mod 90 degrees), 10-degree bins
+	var total := 0.0
+	var square := 0.0 # length within 10 degrees of the compass
+	for e in plan.edge_count():
+		var a: Vector2 = plan.pos(plan.edge_a[e])
+		var b: Vector2 = plan.pos(plan.edge_b[e])
+		if not city.window.has_point((a + b) * 0.5):
+			continue
+		var cls: String = plan.edge_class(e)
+		counts[cls] = counts.get(cls, 0) + 1
+		if plan.drivable(e):
+			var deg := fposmod(rad_to_deg((b - a).angle()), 90.0)
+			bearing[mini(int(deg / 10.0), 8)] += a.distance_to(b)
+			total += a.distance_to(b)
+			if minf(deg, 90.0 - deg) < 10.0:
+				square += a.distance_to(b)
+	for cls in ["boulevard", "avenue", "river", "street", "quarter", "lane", "bridge", "quay"]:
 		_check(counts.get(cls, 0) > 0, "street class '%s' is used" % cls)
-	_check(tilted > 100, "streets follow the crescent, not the compass (%d tilted)" % tilted)
-	lengths.sort()
-	_check(lengths[lengths.size() * 9 / 10] > lengths[lengths.size() / 10] * 1.3, "blocks come in different sizes")
-	_check(plan.park_node.x >= 0, "Liberty Green park superblock exists")
+	var top := 0.0
+	for v in bearing:
+		top = maxf(top, v)
+	_check(top < total * 0.35, "streets run at many angles (top 10-degree bin %.0f%% of length)" % (top / total * 100.0))
+	_check(square < total * 0.45, "most streets are off the compass (%.0f%% within 10 degrees of it)" % (square / total * 100.0))
+	# Junctions: plenty of T-junctions, not all crossroads.
+	var tees := 0
+	var crosses := 0
+	for n in plan.node_count():
+		if not city.drive_node(n):
+			continue
+		var d: int = plan.edges_of(n).size()
+		tees += 1 if d == 3 else 0
+		crosses += 1 if d == 4 else 0
+	_check(tees > crosses * 0.5, "T-junctions are common (%d T, %d crossroads)" % [tees, crosses])
+	# Blocks: many are not plain rectangles (not four-cornered, a corner well
+	# off square, or bent sides), and sizes vary.
+	var odd := 0
+	var land := 0
+	var areas: Array = []
+	for f in plan.faces.size():
+		if not (plan.is_land(f) and city.in_window(f)):
+			continue
+		land += 1
+		areas.append(plan.faces[f].area)
+		var poly: PackedVector2Array = plan.face_poly(f)
+		var corners := 0
+		var skew := 0.0
+		var bend := 0.0
+		for k in poly.size():
+			var d0 := (poly[k] - poly[k - 1]).normalized()
+			var d1 := (poly[(k + 1) % poly.size()] - poly[k]).normalized()
+			var turn := absf(d0.angle_to(d1))
+			if turn > deg_to_rad(20.0):
+				corners += 1
+				skew = maxf(skew, absf(turn - PI / 2))
+			else:
+				bend += turn
+		if corners != 4 or skew > deg_to_rad(12.0) or bend > deg_to_rad(15.0):
+			odd += 1
+	_check(odd > land * 0.25, "blocks come in many shapes (%d of %d not rectangles)" % [odd, land])
+	areas.sort()
+	_check(areas[areas.size() * 9 / 10] > areas[areas.size() / 10] * 3.0, "blocks come in different sizes")
+	# Long roads: the diagonal avenue and the bridge.
+	var liberty := 0.0
+	for e in plan.edge_count():
+		if plan.edge_road[e] == "liberty":
+			liberty += plan.pos(plan.edge_a[e]).distance_to(plan.pos(plan.edge_b[e]))
+	_check(liberty > 900.0, "Liberty Avenue cuts across the city (%.0f m)" % liberty)
+	var park: Rect2 = plan.lot_rect(plan.park_face) if plan.park_face >= 0 else Rect2()
+	_check(park.size.x > 60.0 and park.size.y > 40.0, "Liberty Green is a big park (%s)" % [park.size])
 	# Every drivable junction can be reached from the spawn.
-	var start: Vector2i = city.nearest_node(city.spawn_point)
+	var start: int = city.nearest_node(city.spawn_point)
 	var seen := {start: true}
 	var todo: Array = [start]
 	while not todo.is_empty():
-		var n: Vector2i = todo.pop_back()
-		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-			if plan.drivable(n, d) and city.in_grid(n + d) and not seen.has(n + d):
-				seen[n + d] = true
-				todo.append(n + d)
+		var n: int = todo.pop_back()
+		for m in city.next_nodes(n):
+			if not seen.has(m):
+				seen[m] = true
+				todo.append(m)
 	var stranded := 0
-	for i in city.blocks.x + 1:
-		for j in range(0, 16):
-			var n := Vector2i(i, j)
-			if city.in_grid(n) and city._degree(n) > 0 and not seen.has(n):
-				stranded += 1
-	_check(stranded == 0, "no stranded junctions north of the river, got %d" % stranded)
-	for id in ["union_station", "lantern_square", "blue_lantern", "bpd_lantern", "floodline_clinic", "moreau_house", "teo_apartment"]:
-		var b: Vector2i = city.landmark_block(id)
-		_check(b.x >= 0, "landmark %s is placed" % id)
-		if b.x >= 0:
-			var lot: PackedVector2Array = plan.lot(b)
-			var span := minf(lot[0].distance_to(lot[1]), lot[1].distance_to(lot[2]))
-			_check(span > 33.0, "%s has room (%.0f m)" % [id, span])
+	for n in plan.node_count():
+		if city.drive_node(n) and not seen.has(n):
+			stranded += 1
+	_check(stranded == 0, "no stranded junctions, got %d" % stranded)
+	# Every street has a block on at least one side, except the bridge (a
+	# street with none is a hole in the map, where blocks went missing).
+	var orphans := 0
+	for e in plan.edge_count():
+		var sides: Vector2i = plan.edge_face[e]
+		if sides.x < 0 and sides.y < 0 and plan.edge_class(e) != "bridge":
+			orphans += 1
+	_check(orphans == 0, "no holes in the map (%d streets with no block either side)" % orphans)
+	for id in ["union_station", "aurum_tower", "lantern_square", "blue_lantern", "bpd_lantern", "floodline_clinic", "wharfside_courts", "moreau_house", "teo_apartment", "warehouse_9", "the_pit", "streetcar_depot", "drowned_streetcar"]:
+		var f: int = city.landmark_block(id)
+		_check(f >= 0, "landmark %s is placed" % id)
+		if f >= 0:
+			var need: Vector2 = plan.LANDMARK_LOTS.get(id, plan.DEFAULT_LOT)
+			var r: Rect2 = plan.lot_rect(f)
+			_check(r.size.x >= need.x - 0.5 and r.size.y >= need.y - 0.5, "%s has room (%s, needs %s)" % [id, r.size, need])
+			# Its door faces the street: the rect's middle is on the front
+			# side and its top on the sidewalk.
+			var inner: PackedVector2Array = plan.faces[f].inner
+			var k: int = plan.front_side(f)
+			var half: float = inner[k].distance_to(inner[(k + 1) % inner.size()]) * 0.5
+			_check(absf(r.get_center().x) <= half and r.end.y > -plan.SIDEWALK - 1.6 and r.end.y < 0.0,
+				"%s fronts its street (rect middle %.1f, side half %.1f, top %.1f)" % [id, r.get_center().x, half, r.end.y])
+
+
+func _road_node(plan, road: String) -> int:
+	for e in plan.edge_count():
+		if plan.edge_road[e] == road:
+			return plan.edge_b[e]
+	return 0
 
 
 func test_wanted_level_decays_out_of_sight() -> void:
@@ -205,9 +280,9 @@ func test_enter_drive_and_exit_car() -> void:
 
 func test_carjacking_ejects_driver() -> void:
 	await _new_game(false)
-	var node := _home() + Vector2i(1, 0)
+	var node: int = game.city.next_nodes(_home())[0]
 	var car = _spawn_car(node, Vector3(0, 0, -3), 0.0)
-	car.start_traffic(game.city, node, Vector2i(0, -1))
+	car.start_traffic(game.city, node, _home())
 	car.driver = Vehicle.Driver.TRAFFIC
 	_place_player(node, Vector3.ZERO)
 	var peds_before: int = game.population.peds.size()
@@ -349,10 +424,14 @@ func test_homecoming_runs_start_to_finish() -> void:
 	await _frames(60)
 	_check(m.getaway.speed > 3.0, "the thief drives his route")
 	# Skip to the end of the chase: both scooters near the Square.
+	# Back along the route's last leg, so both stay in the street.
 	var end: Vector3 = m.getaway.path[m.getaway.path.size() - 1]
-	m.getaway.global_position = end + Vector3(-12, 0, 0)
+	var leg: Vector3 = (end - m.getaway.path[m.getaway.path.size() - 2]).normalized()
+	m.getaway.global_position = end - leg * 12.0
+	m.getaway.rotation.y = atan2(-leg.x, -leg.z)
 	m.getaway.path_index = m.getaway.path.size() - 1
-	m.spare.global_position = end + Vector3(-20, 0, 0)
+	m.spare.global_position = end - leg * 20.0
+	m.spare.rotation.y = atan2(-leg.x, -leg.z)
 	game.city.stream_now(end)
 	await _talk_until(func(): return mm.objective_text == "Beat the crew", 600)
 	_check(m.crew.size() == 3, "the kid and two of his crew fight")
@@ -484,11 +563,11 @@ func _free_game() -> void:
 
 
 ## The road node next to the spawn point (in front of Union Station).
-func _home() -> Vector2i:
+func _home() -> int:
 	return game.city.nearest_node(game.city.spawn_point)
 
 
-func _place_player(node: Vector2i, offset: Vector3) -> void:
+func _place_player(node: int, offset: Vector3) -> void:
 	_place_player_at(game.city.node_pos(node) + offset)
 
 
@@ -500,7 +579,7 @@ func _place_player_at(pos: Vector3) -> void:
 	game.camera.snap()
 
 
-func _spawn_car(node: Vector2i, offset: Vector3, yaw: float):
+func _spawn_car(node: int, offset: Vector3, yaw: float):
 	var car = Vehicle.new()
 	car.city = game.city
 	car.position = game.city.node_pos(node) + offset
