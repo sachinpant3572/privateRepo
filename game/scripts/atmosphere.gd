@@ -164,9 +164,9 @@ func _apply(delta: float) -> void:
 func _apply_indoors() -> void:
 	env.background_color = Color(0.04, 0.04, 0.05)
 	env.ambient_light_color = Color(1.0, 0.95, 0.88)
-	env.ambient_light_energy = 0.55
-	sun.light_color = Color(1.0, 0.96, 0.9)
-	sun.light_energy = 0.75
+	env.ambient_light_energy = 0.3
+	sun.light_color = Color(1.0, 0.95, 0.86)
+	sun.light_energy = 0.55
 	sun.shadow_opacity = 0.45
 	sun.rotation_degrees = Vector3(-72.0, 25.0, 0.0)
 	RenderingServer.global_shader_parameter_set("night", 0.0)

@@ -115,7 +115,7 @@ func prompt() -> Array:
 			return ["%s. %s" % [near.name, why], "CLOSED" if why.begins_with("Closed") else "LOCKED"]
 		State.INSIDE:
 			if _meal > 0.0 or menu.visible:
-				return ["Eating...", ""] if _meal > 0.0 else []
+				return ["Eating...", "EATING"] if _meal > 0.0 else []
 			match _use_target():
 				"exit":
 					return ["Leave: E / EXIT", "EXIT"]

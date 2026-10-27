@@ -55,7 +55,7 @@ static func _corner_store(rng: RandomNumberGenerator) -> Dictionary:
 	var hz := d * 0.5
 	var wall: Color = [Color(0.93, 0.92, 0.88), Color(0.86, 0.92, 0.9), Color(0.95, 0.9, 0.82)][rng.randi() % 3]
 	var stripe: Color = [Color(0.1, 0.55, 0.5), Color(0.75, 0.2, 0.2), Color(0.2, 0.35, 0.65)][rng.randi() % 3]
-	_checker(mb, w, d, 1.0, Color(0.86, 0.86, 0.83), Color(0.7, 0.72, 0.73))
+	_checker(mb, w, d, 1.0, Color(0.76, 0.76, 0.73), Color(0.6, 0.62, 0.64))
 	_walls(mb, out, w, d, wall, stripe)
 	# Gondolas: double-sided shelves running front to back.
 	for gx in [-2.6, -0.2]:
@@ -67,7 +67,7 @@ static func _corner_store(rng: RandomNumberGenerator) -> Dictionary:
 	# Counter, till, rack of cigarettes and lotto behind the clerk.
 	var cx := hx - 2.2
 	_solid(mb, out, Vector3(cx, 0.5, hz - 3.3), Vector3(0.7, 1.0, 3.6), WOOD.darkened(0.2))
-	mb.box(Vector3(cx, 1.03, hz - 3.3), Vector3(0.8, 0.06, 3.7), DARK)
+	mb.box(Vector3(cx, 1.03, hz - 3.3), Vector3(0.8, 0.06, 3.7), Color(0.42, 0.45, 0.5))
 	mb.box(Vector3(cx, 1.2, hz - 2.6), Vector3(0.35, 0.3, 0.4), DARK)
 	mb.box(Vector3(cx + 0.05, 1.42, hz - 2.6), Vector3(0.05, 0.3, 0.4), MeshBuilder.glow(Color(0.4, 0.75, 0.95), MeshBuilder.GLOSS))
 	for k in 6:
