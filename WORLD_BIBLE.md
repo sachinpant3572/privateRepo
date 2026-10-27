@@ -5,7 +5,7 @@ Wolves, Crescent Syndicate).
 
 **World v3, Oct 27, 2026** (`WORLD_V3_PLAN.md`): four cities instead of three, on a 12 x 9 km state.
 - **Concordia** (the planned capital) and **Steelhaven** (the desolate motor city) are new.
-  Their names are *working names*, not approved yet.
+  Their names are approved (Sachin, Oct 27: "Keep Concordia and Steelhaven as the names").
 - **Porto Brisa becomes expansion 1** (Sachin, Oct 27: "Keep it as a fifth city, perhaps a
   later expansion. We will adding more cities in later expansions."). It lies south across
   the Gulf of Solvera, off the state map. Bellerive becomes the Florida-like city; Porto
@@ -78,7 +78,7 @@ Serena, the cruise port and the swamp park with airboats.
 | **Blackwater Bayou** | Swamp, stilt houses, airboats | Marrow Krewe | Hidden places, lore, boat chases |
 | **Brisa Beach** *(v3, phase 2)* | Pastel Art Deco hotels, beach, clubs; named by Porto Brisa's emigrants | Os Corvos (a club outpost) | Nightlife, the beach war with Comando Maré |
 
-### Concordia *(v3, working name; phase 5; Washington DC, Manhattan, San Francisco)*
+### Concordia *(v3, phase 5; Washington DC, Manhattan, San Francisco)*
 
 The planned state capital: radial avenues and circles, a monumental Mall, long
 Manhattan blocks, cable-car hills, and a red bridge over Sovereign Bay.
@@ -93,7 +93,7 @@ Prosperous, orderly and watched.
 | **Olive Hill** | Old town, trattorias | Castellane Family |
 | **Commons Park**, **Bayview Heights**, **Foggy Row** | Park, cable-car hills, painted row houses | Neutral |
 
-### Steelhaven *(v3, working name; phase 6; Detroit)*
+### Steelhaven *(v3, phase 6; Detroit)*
 
 The motor city that emptied: a gold Deco tower, glass HQs on the river, a vast
 dead plant, urban prairie, a reviving midtown. On Lake Corran, north-east.

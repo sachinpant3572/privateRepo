@@ -61,7 +61,7 @@ data, so a moved road or creek moves its crossings.
 
 Conditions drive everything below: transit, NPC density, police, prices, what is broken.
 
-### 2.1 Concordia *(working)*: the planned capital (Washington DC, Manhattan, San Francisco), phase 5
+### 2.1 Concordia: the planned capital (Washington DC, Manhattan, San Francisco), phase 5
 
 - **Vibe**: monumental, orderly, watched; marble and green. Prosperous.
 - **Plan**: L'Enfant-style radials and circles over a grid; a long Mall from the Capitol to
@@ -96,7 +96,7 @@ Conditions drive everything below: transit, NPC density, police, prices, what is
   - lift a painting from the State Museums for the Ledger;
   - a protest that turns into a riot on the Mall.
 
-### 2.2 Steelhaven *(working)*: the desolate motor city (Detroit), phase 6
+### 2.2 Steelhaven: the desolate motor city (Detroit), phase 6
 
 - **Vibe**: grit, rust, prairie silence; a comeback in a few streets. Decaying.
 - **Plan**: a radial street plan from a fire-era rebuild, the lake and a river in front,
@@ -339,8 +339,6 @@ Storm's closed bridges, a dock strike).
 
 ## 8. Open questions
 
-- The names Concordia and Steelhaven. Alternatives: Federal City or Capitola; Ironmouth or
-  Rustwater.
 - Whether trespass into Fort Granite gives 4 stars or 2-3 on a phone.
 - Where expansion 2 and later go (section 9 lists the open edges).
 

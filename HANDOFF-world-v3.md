@@ -63,7 +63,7 @@ Started 2026-10-27. Sachin's asks (verbatim in the session):
   the planned capital (DC radials and Mall, Manhattan blocks, SF bay, hills and red bridge), and
   **Steelhaven**, the desolate motor city on Lake Corran (Detroit). Porto Brisa becomes expansion 1
   (Sachin's call, below); its crews also work in Bellerive's beach and the Keys. The two new names
-  are working names: the bible's names were approved, these are not yet.
+  are approved (Sachin, Oct 27: "Keep Concordia and Steelhaven as the names").
   Rejected: Bellerive as the desolate city (it has no motor industry; its storm wards already give
   it a ruined edge).
 - **W-2 State size 12 x 9 km** (108 km² with the sea, about 75 km² of land), up from 8 x 6. Cities
@@ -129,5 +129,4 @@ Started 2026-10-27. Sachin's asks (verbatim in the session):
 
 ## Open questions for Sachin
 
-- The names Concordia and Steelhaven (alternatives in WORLD_V3_PLAN.md).
 - Tilt steering needs a check on a real phone.
