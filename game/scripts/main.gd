@@ -14,6 +14,7 @@ const Atmosphere = preload("res://scripts/atmosphere.gd")
 const MissionManager = preload("res://scripts/missions/mission_manager.gd")
 const Interiors = preload("res://scripts/interiors.gd")
 const Inventory = preload("res://scripts/inventory.gd")
+const Taxi = preload("res://scripts/taxi.gd")
 
 const RESPAWN_DELAY := 2.5
 
@@ -30,6 +31,7 @@ var hud
 var atmosphere
 var missions
 var interiors
+var taxi
 var inventory = Inventory.new()
 var respawning := false
 var cash := 0
@@ -101,6 +103,10 @@ func _ready() -> void:
 	interiors.game = self
 	add_child(interiors)
 
+	taxi = Taxi.new()
+	taxi.game = self
+	add_child(taxi)
+
 	hud = Hud.new()
 	hud.game = self
 	add_child(hud)
@@ -147,6 +153,8 @@ func map_markers() -> Array:
 		list.append({"pos": waypoint, "color": Color(0.85, 0.4, 0.95), "label": "Waypoint", "gps": true})
 	if missions:
 		list.append_array(missions.markers)
+	if taxi:
+		list.append_array(taxi.map_markers())
 	return list
 
 

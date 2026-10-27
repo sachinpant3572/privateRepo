@@ -65,7 +65,7 @@ func _ready() -> void:
 	add_child(root)
 
 	var map: Dictionary = MapImage.bake(game.city)
-	var state: Dictionary = StateMap.bake(game.city.map_origin)
+	var state: Dictionary = StateMap.bake(game.city.map_origin, game.city)
 	minimap = Minimap.new()
 	minimap.game = game
 	minimap.map = map
@@ -144,6 +144,8 @@ func _ready() -> void:
 		touch.exclusions.append(game.interiors.menu.frame)
 	root.add_child(touch)
 	touch.visible = DisplayServer.is_touchscreen_available() or OS.has_feature("mobile")
+	if game.taxi:
+		game.taxi.build_ui(root, touch)
 
 	full_map = FullMap.new()
 	full_map.game = game
@@ -179,13 +181,15 @@ func _process(delta: float) -> void:
 	_phone_button.visible = game.missions != null and game.missions.phone_unlocked
 	_phone_button.modulate = Color(1.0, 0.85, 0.3) if _phone_pulse and int(_blink * 3.0) % 2 == 0 else Color.WHITE
 	_update_dialogue(delta)
-	touch.set_mode(player.vehicle != null, Controls.scheme)
+	touch.set_mode(player.vehicle != null and not player.passenger, Controls.scheme, player.passenger)
 	var ride_id: int = player.vehicle.get_instance_id() if player.vehicle != null else 0
 	if ride_id != _ride_id:
 		_ride_id = ride_id
 		_ride_name_time = 2.5
 	_ride_name_time -= delta
-	if player.vehicle != null:
+	if player.passenger:
+		_prompt.text = "" # the taxi's own panel and ride bar
+	elif player.vehicle != null:
 		_prompt.text = "%d km/h" % int(absf(player.vehicle.speed) * 3.6)
 		if _ride_name_time > 0.0:
 			_prompt.text = player.vehicle.model_name() + "   " + _prompt.text
@@ -194,6 +198,11 @@ func _process(delta: float) -> void:
 	elif context_prompt.size() == 2:
 		_prompt.text = context_prompt[0]
 		touch.set_label("interact", context_prompt[1])
+		touch.set_label("sprint", "RUN")
+	elif game.taxi != null and not game.taxi.prompt().is_empty():
+		var cab_prompt: Array = game.taxi.prompt()
+		_prompt.text = cab_prompt[0]
+		touch.set_label("interact", cab_prompt[1])
 		touch.set_label("sprint", "RUN")
 	elif game.interiors != null and not game.interiors.prompt().is_empty():
 		var place_prompt: Array = game.interiors.prompt()

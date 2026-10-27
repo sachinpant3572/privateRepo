@@ -33,6 +33,8 @@ var exclusions: Array = []
 ## Set by the HUD: in a car, and which driving layout.
 var driving := false
 var scheme := "stick"
+## In the back of a cab: no stick or buttons (the taxi panel has its own).
+var seated := false
 var _stick_touch := -1
 var _stick_origin := Vector2.ZERO
 var _stick_pos := Vector2.ZERO
@@ -64,11 +66,12 @@ func set_label(action: String, text: String) -> void:
 
 ## Switches the layout; lets go of buttons the new one hasn't got (GAS
 ## held while getting out) and of the stick if it is gone.
-func set_mode(in_car: bool, layout: String) -> void:
-	if in_car == driving and layout == scheme:
+func set_mode(in_car: bool, layout: String, in_cab := false) -> void:
+	if in_car == driving and layout == scheme and in_cab == seated:
 		return
 	driving = in_car
 	scheme = layout
+	seated = in_cab
 	var keep: Array = buttons().map(func(b): return b.action)
 	for index in _button_touches.keys():
 		if not keep.has(_button_touches[index]):
@@ -80,13 +83,15 @@ func set_mode(in_car: bool, layout: String) -> void:
 
 
 func buttons() -> Array:
+	if seated:
+		return []
 	if not driving:
 		return BUTTONS
 	return DRIVE_BUTTONS + ARROWS if scheme == "arrows" else DRIVE_BUTTONS
 
 
 func stick_on() -> bool:
-	return not driving or scheme == "stick"
+	return not seated and (not driving or scheme == "stick")
 
 
 func _input(event: InputEvent) -> void:

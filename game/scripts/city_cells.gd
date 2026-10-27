@@ -271,7 +271,7 @@ static func _base(ctx: Ctx) -> void:
 
 
 ## The streets this cell owns: markings and furniture, their outer half
-## where water is on one side, the bridge, barricades at the window's edge.
+## where water is on one side, the bridge.
 static func _streets(ctx: Ctx, edges: PackedInt32Array) -> void:
 	for e in edges:
 		var cls: String = ctx.plan.edge_class(e)
@@ -281,8 +281,6 @@ static func _streets(ctx: Ctx, edges: PackedInt32Array) -> void:
 			if cls != "quay":
 				_street(ctx, e, cls)
 			_open_sides(ctx, e, cls)
-		if ctx.plan.drivable(e):
-			_barricade(ctx, e)
 
 
 ## Where a street's markings stop short of junction n (to clear the streets
@@ -583,38 +581,6 @@ static func _bridge(ctx: Ctx, e: int) -> void:
 		mb.box(Vector3(t, -0.9, 0), Vector3(3.0, 1.0, (deck + 0.6) * 2.0), CONCRETE.darkened(0.25))
 		t += 36.0
 	_done(ctx, local, false, ctx.out)
-
-
-## Striped "road closed" boards where street e leaves the playable window.
-static func _barricade(ctx: Ctx, e: int) -> void:
-	var plan = ctx.plan
-	var win: Rect2 = ctx.city.window
-	var a: Vector2 = plan.pos(plan.edge_a[e])
-	var b: Vector2 = plan.pos(plan.edge_b[e])
-	if win.has_point(a) == win.has_point(b):
-		return
-	var inside := a if win.has_point(a) else b
-	var outside := b if inside == a else a
-	var corners := [win.position, Vector2(win.end.x, win.position.y), win.end, Vector2(win.position.x, win.end.y)]
-	var hit = null
-	for k in 4:
-		hit = Geometry2D.segment_intersects_segment(inside, outside, corners[k], corners[(k + 1) % 4])
-		if hit != null:
-			break
-	if hit == null:
-		return
-	var dir := (outside - inside).normalized()
-	var p: Vector2 = hit - dir * 1.5
-	var w: float = plan.edge_width(e)
-	ctx.mb.xform = Transform3D(Basis(Vector3.UP, atan2(-dir.y, dir.x)), _v3(p))
-	var count := maxi(2, ceili(w / 4.0))
-	for k in count:
-		var z := -w * 0.5 + 1.6 + k * (w - 3.2) / maxf(count - 1, 1)
-		ctx.mb.box(Vector3(0, 1.0, z), Vector3(0.2, 0.3, 2.8), Color(0.95, 0.5, 0.1))
-		ctx.mb.box(Vector3(0, 0.65, z), Vector3(0.2, 0.3, 2.8), Color(0.95, 0.95, 0.92))
-		for s in [-1.2, 1.2]:
-			ctx.mb.box(Vector3(0, 0.45, z + s), Vector3(0.12, 0.9, 0.12), Color(0.3, 0.3, 0.3))
-	ctx.mb.xform = Transform3D.IDENTITY
 
 
 static func _boat(ctx: Ctx, p: Vector3, yaw: float) -> void:
@@ -1520,8 +1486,8 @@ static func _modern_street(ctx: Ctx, local: Array, clear: Array, half: float, do
 
 # --- Outside the window ----------------------------------------------------------
 
-## Cheap blocks past the edge of the playable area: right silhouettes, no
-## details or collisions.
+## Cheap blocks past the window (the plan's margin ring): right silhouettes
+## with plain box collisions, no details.
 static func _outer_block(ctx: Ctx) -> void:
 	var kind: String = ctx.city.district_style(ctx.face)
 	_flat_in_front(ctx, ctx.ff, ctx.lot, KERB + 0.01, _paved(LOT_GROUND.get(kind, PAVEMENT)))
@@ -1539,12 +1505,14 @@ static func _outer_parcel(ctx: Ctx, kind: String) -> void:
 	var hx := ctx.hx
 	var hz := ctx.hz
 	mb.xform = ctx.frame * Transform3D(Basis(), Vector3(0, KERB, 0))
+	var local: Array = []
 	match kind:
 		"downtown":
 			for x in [-hx * 0.5, hx * 0.5]:
 				var h := rng.randf_range(14.0, 28.0)
 				var glass: Color = Buildings.GLASS[rng.randi() % Buildings.GLASS.size()]
 				mb.box(Vector3(x, h * 0.5, 0), Vector3(hx - 2.0, h, hz * 2 - 4.0), glass)
+				local.append([Vector3(x, h * 0.5, 0), Vector3(hx - 2.0, h, hz * 2 - 4.0)])
 				mb.box(Vector3(x, h + 0.3, 0), Vector3(hx - 2.4, 0.6, hz * 2 - 4.4), glass.lightened(0.3))
 		"wards":
 			for z in ([-hz * 0.55, hz * 0.55] if hz > 9.0 else [0.0]):
@@ -1553,18 +1521,22 @@ static func _outer_parcel(ctx: Ctx, kind: String) -> void:
 					var col: Color = Buildings.WARDS[rng.randi() % Buildings.WARDS.size()]
 					var x := -hx + (k + 0.5) * hx * 2 / count
 					mb.box(Vector3(x, 1.85, z), Vector3(5.0, 3.4, minf(12.0, hz * 0.8)), col)
+					local.append([Vector3(x, 1.85, z), Vector3(5.0, 3.4, minf(12.0, hz * 0.8))])
 					mb.box(Vector3(x, 3.7, z), Vector3(5.4, 0.3, minf(12.4, hz * 0.8 + 0.4)), Color(0.36, 0.33, 0.33))
 		"docks":
 			mb.box(Vector3(0, 5.0, -hz * 0.3), Vector3(hx * 1.8, 10.0, hz), Color(0.55, 0.5, 0.45))
+			local.append([Vector3(0, 5.0, -hz * 0.3), Vector3(hx * 1.8, 10.0, hz)])
 		"heights", "bayou":
 			mb.box(Vector3(0, 4.0, 0), Vector3(minf(14.0, hx * 1.6), 8.0, minf(10.0, hz * 1.6)), Color(0.95, 0.93, 0.86))
+			local.append([Vector3(0, 4.0, 0), Vector3(minf(14.0, hx * 1.6), 8.0, minf(10.0, hz * 1.6))])
 			mb.box(Vector3(0, 8.2, 0), Vector3(minf(14.6, hx * 1.6 + 0.6), 0.4, minf(10.6, hz * 1.6 + 0.6)), Color(0.35, 0.3, 0.32))
 		_:
 			var col: Color = Buildings.CREOLE[rng.randi() % Buildings.CREOLE.size()]
 			var h := rng.randf_range(7.0, 10.5)
 			var d := minf(10.0, hz)
 			mb.box(Vector3(0, h * 0.5, hz - d * 0.5), Vector3(hx * 2, h, d), col)
+			local.append([Vector3(0, h * 0.5, hz - d * 0.5), Vector3(hx * 2, h, d)])
 			if hz > 12.0:
 				mb.box(Vector3(0, h * 0.5, -hz + d * 0.5), Vector3(hx * 2, h, d), col.darkened(0.08))
-	mb.xform = Transform3D.IDENTITY
-	ctx.buildings += 1
+				local.append([Vector3(0, h * 0.5, -hz + d * 0.5), Vector3(hx * 2, h, d)])
+	_done(ctx, local)

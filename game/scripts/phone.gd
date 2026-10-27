@@ -2,7 +2,8 @@ extends Control
 ## Jules's phone (unlocked by "Empty Rooms"). Opening it pauses the game.
 ## Apps: Messages and Contacts (filled in as the story goes), Map (the full
 ## map), Places (shops and diners, with a waypoint to each), Missions
-## (progress and replays) and Settings (graphics, weather, time, new game).
+## (progress and replays), Cab (call a taxi, taxi.gd) and Settings
+## (graphics, weather, time, new game).
 
 const Places = preload("res://scripts/places.gd")
 const BG := Color(0.07, 0.08, 0.11)
@@ -108,7 +109,7 @@ func _home() -> void:
 	grid.add_theme_constant_override("h_separation", 14)
 	grid.add_theme_constant_override("v_separation", 14)
 	_body.add_child(grid)
-	for app in [["Messages", _messages], ["Contacts", _contacts], ["Map", _map], ["Places", _places], ["Missions", _missions], ["Settings", _settings]]:
+	for app in [["Messages", _messages], ["Contacts", _contacts], ["Map", _map], ["Places", _places], ["Missions", _missions], ["Cab", _cab], ["Settings", _settings]]:
 		var b := _button(app[0], app[1])
 		b.custom_minimum_size = Vector2(170, 110)
 		grid.add_child(b)
@@ -221,6 +222,29 @@ func _missions() -> void:
 		_body.add_child(_text("%d. %s" % [n, name_], 22, Color(0.5, 0.5, 0.55)))
 		_body.add_child(_text("Not in this demo", 16, Color(0.45, 0.45, 0.5)))
 		n += 1
+
+
+## Calls a cab to the curb nearest you (or sends it away).
+func _cab() -> void:
+	_clear("Cab")
+	var taxi = game.taxi
+	_body.add_child(_text(taxi.phone_status(), 22, Color.WHITE))
+	_body.add_child(_text(taxi.price_text(), 17, Color(0.7, 0.72, 0.78)))
+	if taxi.state == taxi.State.PICKUP or taxi.state == taxi.State.WAITING:
+		_body.add_child(_button("SEND IT AWAY", func(): taxi.cancel_cab(); _cab()))
+		return
+	var why: String = taxi.call_reason()
+	if why != "":
+		_body.add_child(_text(why, 19, ACCENT))
+		return
+	var status := _text("", 19, ACCENT)
+	_body.add_child(_button("CALL A CAB", func():
+		var reason: String = taxi.call_cab()
+		if reason == "":
+			close()
+		else:
+			status.text = reason))
+	_body.add_child(status)
 
 
 func _settings() -> void:

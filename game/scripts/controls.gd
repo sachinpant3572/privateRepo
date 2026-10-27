@@ -11,6 +11,7 @@ const KEYS := {
 	"sprint": [KEY_SHIFT], # handbrake while driving
 	"attack": [KEY_SPACE, KEY_J],
 	"interact": [KEY_E, KEY_F],
+	"hail": [KEY_T], # hail a taxi (taxi.gd; the HUD's TAXI button)
 	# Pedals and steering buttons: the touch layouts and gamepad triggers.
 	# On a keyboard, W/S and A/D double as them in the arrows and tilt
 	# layouts (gas(), brake(), steer()).
@@ -23,6 +24,7 @@ const PAD_BUTTONS := {
 	"sprint": JOY_BUTTON_A,
 	"attack": JOY_BUTTON_X,
 	"interact": JOY_BUTTON_Y,
+	"hail": JOY_BUTTON_B,
 }
 const PAD_AXES := {
 	"move_left": [JOY_AXIS_LEFT_X, -1.0],

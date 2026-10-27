@@ -81,6 +81,22 @@ phone.
 - **Demo map**: about 1.3 km x 1.5 km of Bellerive on both banks of the
   Morrow, from the world map (`data/world_map.json`, the city's
   `demo_window`). You start outside **Union Station** in the Gilt District.
+  The window is open: its margin ring is drivable and the country carries on.
+- **Country round Bellerive** (phase 2 of `../WORLD_V3_PLAN.md`;
+  `scripts/country.gd`, `country_tiles.gd`, `kits/country_kit.gd`): the
+  suburbs (Magnolia Heights, Blackwater Bayou, the east side, the south shore,
+  Brisa Beach with Ocean Drive and Deco Row), Golden Flats (Wheaton, Ridley
+  Crossing, farms and grain elevators), Saltgrass (bayou, the Gator Farm,
+  airboats) and Verdant Hills (Larkspur, the vineyard). Suburb streets run
+  straight on from the city's; one road graph covers both, so traffic, the
+  GPS, police and taxis drive out. The play area ends in a fence and storm
+  closure barricades; banks, the coast and bridge parapets keep cars out of
+  the water. Built offline by `tools/build_country.py` into
+  `data/country.json` and streamed in 100 m tiles (load at 130 m, about
+  5 ms and 2k triangles each before the buildings).
+- **Taxis** (`scripts/taxi.gd`): hail a cab (TAXI / T) or call one from the
+  phone's Cab app, pick a landmark or town, then ride along or pay 1.5x to
+  skip there. $4 plus $3 a km.
 - **World map v3** (`data/world_map.json`, plan in `../WORLD_V3_PLAN.md`):
   - a 12 x 9 km state with four cities: Bellerive (Florida and New Orleans),
     Concordia (the planned capital), Steelhaven (the desolate motor city) and
@@ -205,6 +221,7 @@ phone.
 | Eat a snack from the bag | SNACK | H | |
 | Map | Tap the minimap | M | Back |
 | Phone | PHONE | P | |
+| Hail a cab (one passing within 15 m) | TAXI | T | B |
 | Skip a line of dialogue | Tap it | Enter | |
 
 Tab toggles the on-screen controls on desktop.
@@ -253,7 +270,19 @@ and night, the rooms, the shop menu, a diner meal and the Places app, and
 with `res://tests/control_shots.tscn` the touch controls on foot and in
 each driving layout, and with `res://tests/map_shots.tscn` the full map
 zoomed out to the state and on the countryside, a tap on a closed place,
-and the minimap past the city's edge.
+and the minimap past the city's edge, with `res://tests/country_shots.tscn`
+the country (suburbs, Brisa Beach, towns, farms, bridges, barricades, the
+fence, by day and night) and with `res://tests/taxi_shots.tscn` hailing,
+the fare panel, a ride and a skip.
+
+The country is generated, not hand-made. After changing `data/world_map.json`
+or the street plan, dump the plan and rebuild it (needs `pip install shapely`):
+
+```bash
+cd game && godot --headless -s res://tests/plan_dump.gd -- /tmp/plan.json
+python3 tools/build_country.py /tmp/plan.json
+python3 tools/country_preview.py /tmp/country.png /tmp/plan.json   # a quick look
+```
 
 `ONLY=test_a,test_b` before the test command runs just those tests.
 
@@ -276,8 +305,11 @@ cd game && godot --headless -s res://tests/plan_dump.gd -- /tmp/plan.json \
 | `scripts/city.gd` | Map data, road graph, sidewalks, landmark frames, cell streaming |
 | `scripts/street_plan.gd` | The street plan: district patches, seam and long roads, the street graph, blocks |
 | `scripts/city_cells.gd` | Builds one cell: streets by class, block layouts fitted to each block, landmarks, parks, street furniture |
-| `scripts/kits/` | Asset kits: `building_kit`, `prop_kit`, `vehicle_kit`, `character_kit`, `interior_kit` |
+| `scripts/kits/` | Asset kits: `building_kit`, `prop_kit`, `vehicle_kit`, `character_kit`, `interior_kit`, `country_kit` |
 | `data/world_map.json` | The world map: regions, cities, districts, routes, landmarks |
+| `scripts/country.gd`, `country_tiles.gd` | The country past the plan: data, road graph, tile streaming; one tile's build |
+| `data/country.json`, `tools/build_country.py` | The generated country (play area, roads, lots, walls) and its generator |
+| `scripts/taxi.gd` | Taxis: hail, phone call, destinations, fares, ride and skip |
 | `tools/render_map.py` | Renders the map data to `world_map.svg` and `bellerive_map.svg` |
 | `scripts/mesh_builder.gd` | Bakes coloured boxes into single meshes; surface codes, city shader, shared and x-ray materials |
 | `scripts/humanoid.gd` | Shared body: health, punches, combo kick, knockdowns |
@@ -304,7 +336,7 @@ cd game && godot --headless -s res://tests/plan_dump.gd -- /tmp/plan.json \
 
 Missions 4-13, weapons, the rest of the places and services in
 `INTERIORS_SERVICES_PLAN.md` (phases 1-6), businesses, audio, wanted levels
-3-5, drivable boats and streetcars, more bridges, Magnolia
-Heights and Blackwater Bayou, modelled characters (AI-generated models with a
+3-5, drivable boats and streetcars, people and parked cars in the country,
+the rest of the state (phase 3 on), modelled characters (AI-generated models with a
 standard animation set, which the skeleton is ready for) and final-quality
 art outside the Lantern Quarter.

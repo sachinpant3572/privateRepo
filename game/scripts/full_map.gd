@@ -116,7 +116,7 @@ func _tap(at: Vector2) -> void:
 		close()
 		return
 	var local := _to_world(at)
-	if not game.city.window.grow(60.0).has_point(Vector2(local.x, local.z)):
+	if not game.city.playable(Vector2(local.x, local.z)):
 		var place := _nearest_label(local)
 		var open_city: Array = state.labels.cities.filter(func(c): return c.playable) if not state.is_empty() else []
 		if not open_city.is_empty() and place == open_city[0].name:

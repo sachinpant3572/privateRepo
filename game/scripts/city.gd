@@ -21,6 +21,7 @@ const Cells = preload("res://scripts/city_cells.gd")
 const StreetPlan = preload("res://scripts/street_plan.gd")
 const L = preload("res://scripts/layers.gd")
 const Places = preload("res://scripts/places.gd")
+const Country = preload("res://scripts/country.gd")
 
 const MAP_PATH := "res://data/world_map.json"
 const CITY_ID := "bellerive"
@@ -44,6 +45,11 @@ const LOAD_RADIUS := 105.0
 const UNLOAD_RADIUS := 150.0
 const CELL_GRID := 50.0
 ## Map districts by street plan patch (patch ids start with these).
+## Country junction ids are offset by this in the road API below, so one
+## graph covers the street plan and the country (country.gd).
+const COUNTRY_BASE := 1_000_000
+## A town counts as the district round it this far out.
+const TOWN_RADIUS := 420.0
 const PATCH_DISTRICTS := {
 	"gilt": "gilt_district", "quarter": "lantern_quarter", "wards": "floodline_wards",
 	"docks": "ironwharf", "point": "morrow_point",
@@ -98,6 +104,15 @@ var _task_cell := 0
 var _task_result: Dictionary
 var _stream_tick := 0.0
 var _astar: AStar2D
+## The streamed country past the plan's edge (country.gd).
+var country
+## Map landmarks outside the window ({id, type, name, local}): built in the
+## country when it has a lot for them.
+var _outer_landmarks: Array = []
+## Phase 2 regions ({id, name, style, faction, poly (map metres)}) and the
+## country's towns ({id, name, style, faction, local}).
+var _regions: Array = []
+var _towns: Array = []
 
 
 func build(seed_v: int) -> void:
@@ -112,6 +127,12 @@ func build(seed_v: int) -> void:
 	for p in _river:
 		river.append(p - map_origin)
 	plan.build(window, MARGIN, seed_v, river, _river_half, spots, PARK_AT)
+	country = Country.new()
+	country.name = "Country"
+	country.load_data(seed_v)
+	add_child(country)
+	for t in country.towns:
+		_towns.append({"id": t.id, "name": t.name, "style": t.kind, "faction": "", "local": Vector2(t.pos[0], t.pos[1])})
 	for lm in _map_landmarks:
 		var f: int = plan.face_of(lm.local)
 		if plan.is_land(f) and not _landmarks.has(f) and not plan.is_park(f):
@@ -128,7 +149,6 @@ func build(seed_v: int) -> void:
 	_place_points()
 	_pick_parking()
 	_build_water()
-	_build_bounds()
 	stream_now(spawn_point)
 
 
@@ -156,6 +176,8 @@ func stream_now(pos: Vector3) -> void:
 	for cell in _cells_near(pos, LOAD_RADIUS):
 		if not _loaded.has(cell):
 			_add_cell(cell, Cells.build(self, cell))
+	if country != null:
+		country.stream_now(pos)
 
 
 func set_glow_visible(on: bool) -> void:
@@ -164,6 +186,8 @@ func set_glow_visible(on: bool) -> void:
 		var g: Node3D = _loaded[cell].get_node_or_null("Glow")
 		if g:
 			g.visible = on
+	if country != null:
+		country.set_glow_visible(on)
 
 
 func loaded_cells() -> Array:
@@ -192,20 +216,29 @@ func cell_of_face(f: int) -> int:
 ## them all).
 func district_at(pos: Vector3) -> Dictionary:
 	var local := Vector2(pos.x, pos.z)
-	var f: int = plan.face_of(local)
-	var patch: String = plan.face_patch(f) if f >= 0 else plan.patch_at(local)
-	if patch != "":
-		var id: String = PATCH_DISTRICTS.get(patch.get_slice("_", 0), "")
-		if _district_by_id.has(id):
-			return _district_by_id[id]
+	var inside: bool = plan.bounds.has_point(local)
+	if inside:
+		var f: int = plan.face_of(local)
+		var patch: String = plan.face_patch(f) if f >= 0 else plan.patch_at(local)
+		if patch != "":
+			var id: String = PATCH_DISTRICTS.get(patch.get_slice("_", 0), "")
+			if _district_by_id.has(id):
+				return _district_by_id[id]
 	var p := map_origin + local
 	var best := {}
 	var best_d := INF
 	for d in districts:
-		var r: Rect2 = d.rect
-		if r.has_point(p):
+		if (d.rect as Rect2).has_point(p):
 			return d
-		var dist := r.get_center().distance_to(p)
+	if not inside:
+		for t in _towns:
+			if (t.local as Vector2).distance_to(local) < TOWN_RADIUS:
+				return t
+		for r in _regions:
+			if Geometry2D.is_point_in_polygon(p, r.poly):
+				return r
+	for d in districts:
+		var dist: float = (d.rect as Rect2).get_center().distance_to(p)
 		if dist < best_d:
 			best_d = dist
 			best = d
@@ -241,6 +274,34 @@ func landmarks() -> Array:
 		list.append(lm)
 	if plan.park_face >= 0:
 		list.append({"id": "liberty_green", "type": "park", "name": "Liberty Green", "pos": block_center(plan.park_face)})
+	for lm in _outer_landmarks:
+		var at := _outer_landmark_pos(lm)
+		if at != Vector3.INF:
+			list.append({"id": lm.id, "type": lm.type, "name": lm.name, "pos": at})
+	return list
+
+
+## Where an outer landmark is: its lot in the country, else its map spot
+## when that is in the play area, else Vector3.INF (not built yet).
+func _outer_landmark_pos(lm: Dictionary) -> Vector3:
+	var lot: Dictionary = country.landmark(lm.id)
+	if not lot.is_empty():
+		return lot.pos
+	if country.in_play_area(lm.local):
+		return _v3(lm.local)
+	return Vector3.INF
+
+
+## Where a taxi can take you: every landmark on the maps (at its front) and
+## the country's towns. [{id, name, pos}]
+func taxi_destinations() -> Array:
+	var list: Array = []
+	for lm in landmarks():
+		var front := landmark_front(lm.id)
+		list.append({"id": lm.id, "name": lm.name, "pos": front if front != Vector3.INF else lm.pos})
+	for t in _towns:
+		var n := nearest_node(_v3(t.local))
+		list.append({"id": t.id, "name": t.name, "pos": node_pos(n) if n >= 0 else _v3(t.local)})
 	return list
 
 
@@ -268,7 +329,8 @@ func landmark_frame(id: String) -> Transform3D:
 func landmark_front(id: String) -> Vector3:
 	var f := landmark_block(id)
 	if f < 0:
-		return Vector3.INF
+		var lot: Dictionary = country.landmark(id) if country != null else {}
+		return lot.front if not lot.is_empty() else Vector3.INF
 	return front_frame(f).origin
 
 
@@ -277,7 +339,11 @@ func landmark_front(id: String) -> Vector3:
 func landmark_curb(id: String, along := 0.0) -> Vector3:
 	var f := landmark_block(id)
 	if f < 0:
-		return Vector3.INF
+		var lot: Dictionary = country.landmark(id) if country != null else {}
+		if lot.is_empty():
+			return Vector3.INF
+		var out: Vector3 = (lot.front - lot.pos).normalized()
+		return lot.front + out * 3.0 + Vector3(out.z, 0, -out.x) * along
 	return curb_point(f, along)
 
 
@@ -297,6 +363,12 @@ func curb_yaw(f: int) -> float:
 ## the window.
 func in_window(f: int) -> bool:
 	return f >= 0 and (plan.faces[f].bbox as Rect2).intersects(window)
+
+
+## Whether a local point is somewhere you can go: the street plan (its
+## margin ring included) or the country's play area.
+func playable(local: Vector2) -> bool:
+	return plan.bounds.has_point(local) or (country != null and country.in_play_area(local))
 
 
 ## A block with a sidewalk and a lot (not a traffic island).
@@ -345,29 +417,58 @@ static func _v3(p: Vector2) -> Vector3:
 # --- Road graph helpers used by traffic, police and spawning -------------------
 
 func node_pos(n: int) -> Vector3:
-	return _v3(plan.pos(n))
+	return _v3(_pos2(n))
 
 
-## A junction cars can use: on a drivable street, inside the window.
+func _pos2(n: int) -> Vector2:
+	return country.pos(n - COUNTRY_BASE) if n >= COUNTRY_BASE else plan.pos(n)
+
+
+## A junction cars can use: on a drivable street of the plan (the margin
+## past the window included) or any country road.
 func drive_node(n: int) -> bool:
-	return n >= 0 and plan.degree(n) > 0 and window.grow(2.0).has_point(plan.pos(n))
+	if n >= COUNTRY_BASE:
+		return country.degree(n - COUNTRY_BASE) > 0
+	return n >= 0 and plan.degree(n) > 0 and plan.bounds.grow(2.0).has_point(plan.pos(n))
+
+
+## Drivable junctions (plan and country ids) within r of p.
+func _nodes_near(p: Vector2, r: float) -> Array:
+	var out: Array = []
+	for n in plan.nodes_near(p, r):
+		if drive_node(n):
+			out.append(n)
+	if country != null:
+		for c in country.nodes_near(p, r):
+			out.append(COUNTRY_BASE + c)
+	return out
 
 
 func nearest_node(pos: Vector3) -> int:
 	var p := Vector2(pos.x, pos.z)
-	for r in [40.0, 100.0, 250.0, 700.0]:
+	for r in [40.0, 100.0, 250.0, 700.0, 2000.0]:
 		var best := -1
 		var best_d := INF
-		for n in plan.nodes_near(p, r):
-			if not drive_node(n):
-				continue
-			var d: float = plan.pos(n).distance_squared_to(p)
+		for n in _nodes_near(p, r):
+			var d: float = _pos2(n).distance_squared_to(p)
 			if d < best_d:
 				best_d = d
 				best = n
 		if best >= 0:
 			return best
 	return -1
+
+
+## Width of the street from junction a to b (ROAD for a link between the
+## plan and the country, or no street).
+func _edge_width(a: int, b: int) -> float:
+	if a >= COUNTRY_BASE and b >= COUNTRY_BASE:
+		var ce: int = country.edge_between(a - COUNTRY_BASE, b - COUNTRY_BASE)
+		return country.edge_width(ce) if ce >= 0 else ROAD
+	if a < COUNTRY_BASE and b < COUNTRY_BASE:
+		var e: int = plan.edge_between(a, b)
+		return plan.edge_width(e) if e >= 0 else ROAD
+	return ROAD
 
 
 ## Where a car driving from junction `from` to `to` should aim: the
@@ -378,18 +479,14 @@ func lane_point(from: int, to: int) -> Vector3:
 		return node_pos(to)
 	var seg := (node_pos(to) - node_pos(from)).normalized()
 	var right := Vector3(-seg.z, 0.0, seg.x)
-	var e: int = plan.edge_between(from, to)
-	var w: float = plan.edge_width(e) if e >= 0 else ROAD
-	return node_pos(to) + right * lane_offset(w)
+	return node_pos(to) + right * lane_offset(_edge_width(from, to))
 
 
 ## The right-hand lane at junction `at`, setting off towards `toward`.
 func lane_start(at: int, toward: int) -> Vector3:
 	var seg := (node_pos(toward) - node_pos(at)).normalized()
 	var right := Vector3(-seg.z, 0.0, seg.x)
-	var e: int = plan.edge_between(at, toward)
-	var w: float = plan.edge_width(e) if e >= 0 else ROAD
-	return node_pos(at) + right * lane_offset(w)
+	return node_pos(at) + right * lane_offset(_edge_width(at, toward))
 
 
 ## Distance from the centreline to the middle of the right-hand lane.
@@ -397,14 +494,25 @@ static func lane_offset(width: float) -> float:
 	return maxf(2.4, width * 0.22)
 
 
-## Drivable neighbours of junction n inside the window.
+## Drivable neighbours of junction n (across the links between the plan's
+## frame street and the country too).
 func next_nodes(n: int) -> Array:
 	var out: Array = []
+	if n >= COUNTRY_BASE:
+		var c := n - COUNTRY_BASE
+		for m in country.neighbours(c):
+			out.append(COUNTRY_BASE + m)
+		if country.links.has(c) and drive_node(country.links[c]):
+			out.append(country.links[c])
+		return out
 	for e in plan.edges_of(n):
 		if plan.drivable(e):
 			var m: int = plan.other(e, n)
 			if drive_node(m):
 				out.append(m)
+	if country != null:
+		for c in country.plan_links.get(n, []):
+			out.append(COUNTRY_BASE + c)
 	return out
 
 
@@ -413,13 +521,13 @@ func next_nodes(n: int) -> Array:
 func pick_turn(prev: int, cur: int, rand: RandomNumberGenerator) -> int:
 	var din := Vector2.ZERO
 	if prev >= 0 and prev != cur:
-		din = (plan.pos(cur) - plan.pos(prev)).normalized()
+		din = (_pos2(cur) - _pos2(prev)).normalized()
 	var options: Array = []
 	var sharp: Array = []
 	for m in next_nodes(cur):
 		if m == prev:
 			continue
-		var c := din.dot((plan.pos(m) - plan.pos(cur)).normalized())
+		var c := din.dot((_pos2(m) - _pos2(cur)).normalized())
 		if c < -0.6:
 			sharp.append(m)
 			continue
@@ -437,9 +545,9 @@ func random_node_between(center: Vector3, min_d: float, max_d: float, rand: Rand
 		accept := Callable()) -> int:
 	var c := Vector2(center.x, center.z)
 	var found: Array = []
-	for n in plan.nodes_near(c, max_d):
-		var d: float = plan.pos(n).distance_to(c)
-		if d >= min_d and d <= max_d and drive_node(n) and (accept.is_null() or accept.call(node_pos(n))):
+	for n in _nodes_near(c, max_d):
+		var d: float = _pos2(n).distance_to(c)
+		if d >= min_d and d <= max_d and (accept.is_null() or accept.call(node_pos(n))):
 			found.append(n)
 	if found.is_empty():
 		return -1
@@ -530,6 +638,18 @@ func _build_astar() -> void:
 		var b: int = plan.edge_b[e]
 		if plan.drivable(e) and drive_node(a) and drive_node(b) and plan.edge_between(a, b) == e:
 			_astar.connect_points(a, b)
+	if country == null:
+		return
+	for c in country.node_count():
+		_astar.add_point(COUNTRY_BASE + c, country.pos(c))
+	for e in country.edge_a.size():
+		var a: int = COUNTRY_BASE + country.edge_a[e]
+		var b: int = COUNTRY_BASE + country.edge_b[e]
+		if a != b and not _astar.are_points_connected(a, b):
+			_astar.connect_points(a, b)
+	for c in country.links:
+		if _astar.has_point(country.links[c]):
+			_astar.connect_points(COUNTRY_BASE + c, country.links[c])
 
 
 # --- Setup ---------------------------------------------------------------------
@@ -547,7 +667,7 @@ func _load_map() -> void:
 	map_origin = Vector2(win.origin[0], win.origin[1])
 	# Districts and landmarks of a later phase are planned, not built yet.
 	for d in city.districts:
-		if int(d.get("phase", 1)) > 1:
+		if int(d.get("phase", 1)) > 2:
 			continue
 		var entry := {
 			"id": d.id, "name": d.name, "style": d.style, "faction": d.faction,
@@ -556,11 +676,21 @@ func _load_map() -> void:
 		districts.append(entry)
 		_district_by_id[d.id] = entry
 	for lm in world.landmarks:
-		if int(lm.get("phase", 1)) > 1:
+		if int(lm.get("phase", 1)) > 2:
 			continue
 		var local := Vector2(lm.pos[0], lm.pos[1]) - map_origin
-		if window.has_point(local):
-			_map_landmarks.append({"id": lm.id, "type": lm.type, "name": lm.name, "local": local})
+		var entry := {"id": lm.id, "type": lm.type, "name": lm.name, "local": local}
+		if window.has_point(local) and int(lm.get("phase", 1)) == 1:
+			_map_landmarks.append(entry)
+		elif not window.has_point(local):
+			_outer_landmarks.append(entry)
+	for r in world.regions:
+		if int(r.get("phase", 1)) != 2:
+			continue
+		var poly := PackedVector2Array()
+		for q in r.polygon:
+			poly.append(Vector2(q[0], q[1]))
+		_regions.append({"id": r.id, "name": r.name, "style": r.type, "faction": "", "poly": poly})
 	for w in world.water:
 		if w.id == "morrow":
 			_river_half = w.width * 0.5
@@ -726,30 +856,13 @@ func _pick_parking() -> void:
 ## One water plane under the whole map; land is built on top of it.
 func _build_water() -> void:
 	var mb := MeshBuilder.new()
-	var r: Rect2 = plan.bounds.grow(300.0)
+	var r: Rect2 = country.bounds() if country != null else plan.bounds.grow(300.0)
 	mb.box(_v3(r.get_center()) + Vector3(0, -0.55, 0), Vector3(r.size.x, 0.1, r.size.y), Color(0.16, 0.36, 0.42))
 	var inst := mb.make_instance()
 	inst.name = "Water"
 	inst.material_override = MeshBuilder.water_material()
 	inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(inst)
-
-
-## Invisible walls along the window's edge (the cells put barricades where
-## streets cross it).
-func _build_bounds() -> void:
-	var body := StaticBody3D.new()
-	body.name = "Bounds"
-	body.collision_layer = L.WORLD
-	body.collision_mask = 0
-	add_child(body)
-	var w := window
-	var c := window.get_center()
-	for side in [[Vector2(c.x, w.position.y - 0.5), Vector2(w.size.x + 2.0, 1.0)], [Vector2(c.x, w.end.y + 0.5), Vector2(w.size.x + 2.0, 1.0)],
-			[Vector2(w.position.x - 0.5, c.y), Vector2(1.0, w.size.y + 2.0)], [Vector2(w.end.x + 0.5, c.y), Vector2(1.0, w.size.y + 2.0)]]:
-		var at: Vector2 = side[0]
-		var size: Vector2 = side[1]
-		_add_shape(body, Vector3(at.x, 3.0, at.y), Vector3(size.x, 6.0, size.y))
 
 
 # --- Streaming -----------------------------------------------------------------

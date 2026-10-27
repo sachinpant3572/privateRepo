@@ -15,6 +15,8 @@ const JULES := {
 }
 
 var vehicle = null
+## Riding in the back of a cab (taxi.gd), not driving it.
+var passenger := false
 var controllable := true
 
 
@@ -35,7 +37,11 @@ func _physics_process(delta: float) -> void:
 		global_position = vehicle.global_position
 		rotation.y = vehicle.rotation.y
 		if controllable and Controls.just_pressed("interact"):
-			exit_vehicle()
+			var game = get_tree().get_first_node_in_group("game") if passenger else null
+			if game != null and game.taxi != null:
+				game.taxi.request_exit() # the cab pulls up and you pay
+			else:
+				exit_vehicle()
 		return
 	super(delta)
 
@@ -78,6 +84,8 @@ func try_enter_vehicle() -> void:
 	if car == null:
 		return
 	var game = get_tree().get_first_node_in_group("game")
+	if game != null and game.taxi != null and game.taxi.board(car):
+		return # the cab that pulled over for us: in the back, not a carjacking
 	if car.rider != null:
 		# Knocking a mission rider off their scooter.
 		var rider = car.rider
@@ -110,17 +118,34 @@ func enter_vehicle(car) -> void:
 	collision_mask = 0
 
 
+## In the back of a cab: hidden and carried, the cab keeps its driver.
+func enter_as_passenger(car) -> void:
+	vehicle = car
+	passenger = true
+	riding = false
+	visible = false
+	velocity = Vector3.ZERO
+	collision_layer = 0
+	collision_mask = 0
+
+
 func exit_vehicle(thrown := false) -> void:
 	var car = vehicle
 	if car == null:
 		return
 	vehicle = null
 	riding = false
-	car.release_player()
-	global_position = _free_spot_beside(car)
+	var was_passenger := passenger
+	passenger = false
+	if not was_passenger:
+		car.release_player()
+	# Passengers step out on the curb side.
+	global_position = _free_spot_beside(car, was_passenger)
 	reset_physics_interpolation()
 	visible = true
 	_set_standing_layers()
+	if dead:
+		knock_down(0.0) # lie where they fell, out of the way
 	if thrown:
 		take_hit(null, 25.0, Vector3.ZERO)
 
@@ -132,7 +157,7 @@ func respawn(at: Vector3) -> void:
 	controllable = true
 
 
-func _free_spot_beside(car) -> Vector3:
+func _free_spot_beside(car, curb_first := false) -> Vector3:
 	var b: Basis = car.global_basis
 	var origin: Vector3 = car.global_position
 	var query := PhysicsShapeQueryParameters3D.new()
@@ -142,10 +167,11 @@ func _free_spot_beside(car) -> Vector3:
 	query.collision_mask = L.WORLD | L.PROPS | L.VEHICLES
 	query.exclude = [car.get_rid()]
 	var space := get_world_3d().direct_space_state
-	for offset in [-b.x * 1.8, b.x * 1.8, b.z * 3.0, -b.z * 3.0]:
+	var sides := [b.x * 1.8, -b.x * 1.8] if curb_first else [-b.x * 1.8, b.x * 1.8]
+	for offset in sides + [b.z * 3.0, -b.z * 3.0]:
 		var spot: Vector3 = origin + offset
 		spot.y = 0.0
 		query.transform = Transform3D(Basis(), spot + Vector3(0, 0.9, 0))
 		if space.intersect_shape(query, 1).is_empty():
 			return spot
-	return Vector3(origin.x, 0.0, origin.z) - b.x * 1.8
+	return Vector3(origin.x, 0.0, origin.z) + (b.x if curb_first else -b.x) * 1.8

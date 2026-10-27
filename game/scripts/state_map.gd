@@ -64,7 +64,7 @@ const TERRAIN := {
 
 ## {texture, origin (local metres at pixel 0,0), size (pixels), labels}.
 ## `map_origin` is the playable city's world origin (city.map_origin).
-static func bake(map_origin: Vector2) -> Dictionary:
+static func bake(map_origin: Vector2, city = null) -> Dictionary:
 	var world: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/world_map.json"))
 	var world_size := Vector2(world.size[0], world.size[1])
 	var px := Vector2i(ceili(world_size.x / PX_M), ceili(world_size.y / PX_M))
@@ -106,6 +106,8 @@ static func bake(map_origin: Vector2) -> Dictionary:
 				_dashed(img, o, _poly(r.line), 10.0, TRAIL, 20.0, 30.0)
 			"rail":
 				_line(img, o, _poly(r.line), 18.0, RAIL)
+	if city != null:
+		_streets(img, map_origin, city)
 	var labels := {"cities": [], "regions": [], "towns": [], "pins": [], "water": [], "peaks": []}
 	for c in world.cities:
 		var rect := _rect(c.rect)
@@ -124,9 +126,10 @@ static func bake(map_origin: Vector2) -> Dictionary:
 	for lm in world.landmarks:
 		if lm.type == "peak":
 			labels.peaks.append({"name": "%s  %d m" % [lm.name, int(lm.elev)], "pos": _local(Vector2(lm.pos[0], lm.pos[1]), map_origin)})
-		# The playable city's planned places (phase above 1) stay off the map,
-		# and so do the small bridges and fords where roads cross water.
-		var planned: bool = lm.get("city", "") == playable and int(lm.get("phase", 1)) > 1
+		# The playable city's planned places (phase above 2, the edges are
+		# built) stay off the map, and so do the small bridges and fords
+		# where roads cross water.
+		var planned: bool = lm.get("city", "") == playable and int(lm.get("phase", 1)) > 2
 		if PINS.has(lm.type) and not planned and not lm.get("minor", false):
 			labels.pins.append({"name": lm.name, "type": lm.type, "pos": _local(Vector2(lm.pos[0], lm.pos[1]), map_origin),
 				"large": lm.get("size", "") == "large"})
@@ -137,6 +140,29 @@ static func bake(map_origin: Vector2) -> Dictionary:
 	img.convert(Image.FORMAT_RGB8) # no alpha needed: a quarter less memory
 	return {"texture": ImageTexture.create_from_image(img), "origin": -map_origin, "size": Vector2(px),
 		"px_m": PX_M, "world_size": world_size, "labels": labels}
+
+
+## The streets you can drive past the playable window: the street plan's
+## margin ring and the country's roads (country.gd), at their real width
+## (a little wider so 6 m pixels show them).
+static func _streets(img: Image, map_origin: Vector2, city) -> void:
+	var plan = city.plan
+	for e in plan.edge_count():
+		var a: Vector2 = plan.pos(plan.edge_a[e])
+		var b: Vector2 = plan.pos(plan.edge_b[e])
+		if city.window.has_point((a + b) * 0.5) or not plan.drivable(e):
+			continue
+		_line(img, Vector2.ZERO, PackedVector2Array([a + map_origin, b + map_origin]), maxf(plan.edge_width(e) * 1.4, 9.0), ROAD)
+	var country = city.country
+	if country == null:
+		return
+	for road in country.roads:
+		var line := PackedVector2Array()
+		for n in road.nodes:
+			line.append(country.pos(n) + map_origin)
+		var cls: Dictionary = country.classes[road.cls]
+		var col := TRACK if cls.id == "track" else (HIGHWAY if cls.id == "highway" else ROAD)
+		_line(img, Vector2.ZERO, line, maxf(float(cls.w) * 1.4, 9.0), col)
 
 
 static func _local(p: Vector2, map_origin: Vector2) -> Vector3:

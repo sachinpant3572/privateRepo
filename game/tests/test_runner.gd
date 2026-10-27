@@ -57,6 +57,14 @@ func _run() -> void:
 		"test_shop_menu_leaves_touch_buttons_alone",
 		"test_thrown_out_of_a_room",
 		"test_hit_diner_leaves_the_booth",
+		"test_taxi_hail_ride_and_pay",
+		"test_taxi_phone_call_and_skip",
+		"test_taxi_refuses_wanted_and_broke",
+		"test_taxi_ride_ends_cleanly",
+		"test_country_joins_the_city",
+		"test_country_tiles_stream",
+		"test_country_walls_stop_cars",
+		"test_traffic_drives_into_the_country",
 	]
 	# ONLY=name1,name2 runs just those (handy while working on one test).
 	var only := OS.get_environment("ONLY")
@@ -1746,3 +1754,421 @@ func test_hit_diner_leaves_the_booth() -> void:
 		_check(ii._customers() == before - 1 and not ii._taken.values().has(other), "a knocked-out diner frees the seat")
 	Wanted.clear()
 	await _leave()
+
+
+# --- Taxis ----------------------------------------------------------------------
+
+## Hail a cab in the street: the TAXI button shows, the cab pulls over
+## beside the player, ENTER gets in the back (no carjacking), the list of
+## destinations comes up, the fare is shown, the cab drives the real streets
+## to the curb and the player gets out and pays.
+func test_taxi_hail_ride_and_pay() -> void:
+	await _new_game(false)
+	var taxi = game.taxi
+	var p = game.player
+	game.cash = 100
+	var cab = _taxi_in_traffic()
+	await _frames(2)
+	_check(taxi.hailable_cab() == cab, "a cab with a driver nearby can be hailed")
+	_check(taxi._hail_button.visible, "the TAXI button shows")
+	await _press("hail")
+	_check(taxi.state == taxi.State.PICKUP and cab.driver == Vehicle.Driver.SCRIPT, "T hails it: the cab pulls over")
+	await _until(func(): return taxi.state == taxi.State.WAITING, 900)
+	_check(taxi.state == taxi.State.WAITING, "the cab stops at the curb")
+	_check(cab.global_position.distance_to(p.global_position) < 16.0, "beside the player, %.1f m" % cab.global_position.distance_to(p.global_position))
+	await _taxi_board(cab)
+	_check(p.vehicle == cab and p.passenger and not p.visible, "ENTER gets in the back")
+	_check(cab.driver == Vehicle.Driver.SCRIPT and Wanted.level == 0, "the cabbie keeps driving: not a carjacking")
+	_check(p.focus_node() == cab, "the camera follows the cab")
+	await _frames(2)
+	_check(game.hud.touch.seated and game.hud.touch.buttons().is_empty(), "no driving controls in the back")
+	_check(taxi._panel.visible and taxi._panel_mode == "choose", "the destination list comes up")
+	var dests: Array = taxi.destinations()
+	_check(dests.size() >= 3, "destinations to pick from, got %d" % dests.size())
+	var dest := {}
+	for d in dests:
+		var plan: Dictionary = taxi.plan_ride(d.pos)
+		if not plan.is_empty() and plan.length > 150.0 and plan.length < 900.0:
+			dest = d
+			break
+	_check(not dest.is_empty(), "a destination a short ride away")
+	if dest.is_empty():
+		return
+	var trip: Dictionary = taxi.choose(dest)
+	_check(trip.fare == taxi.fare_for(trip.length) and trip.fare >= taxi.PRICES.bellerive.min, "fare from the route length: $%d for %.0f m" % [trip.fare, trip.length])
+	_check(taxi._panel_mode == "confirm" and _label_shows(taxi._panel, "$%d" % trip.fare), "the fare is shown before riding")
+	_check(game.cash == 100, "nothing paid yet")
+	_check(taxi.ride(), "RIDE starts the trip")
+	await _frames(2)
+	_check(taxi._bar.visible and not taxi._panel.visible, "the ride bar shows while riding")
+	_check(game.map_markers().any(func(m): return m.label == "Drop-off"), "the drop-off is on the maps")
+	await _until(func(): return taxi.state == taxi.State.IDLE, 4800)
+	_check(taxi.state == taxi.State.IDLE, "the ride ends (driven %.0f of %.0f m)" % [taxi.driven, trip.length])
+	_check(p.vehicle == null and not p.passenger and p.visible and p.controllable, "out on foot and in control")
+	var off: float = Vector2(p.global_position.x - trip.stop.x, p.global_position.z - trip.stop.z).length()
+	_check(off < 12.0, "dropped at the destination's curb, %.1f m off" % off)
+	_check(game.cash == 100 - trip.fare, "paid $%d on arrival, cash %d" % [trip.fare, game.cash])
+	await _frames(60)
+	_check(p.knocked_time <= 0.0 and p.health == p.max_health, "the cab doesn't clip you as you get out")
+	_check(cab.driver == Vehicle.Driver.SCRIPT and cab.speed == 0.0, "it waits while you stand beside it")
+	var away: Vector3 = p.global_position - cab.global_position
+	away.y = 0.0
+	_place_player_at(p.global_position + away.normalized() * 6.0)
+	await _frames(3)
+	_check(cab.driver == Vehicle.Driver.TRAFFIC, "then goes back to traffic")
+
+
+## The phone's Cab app calls a cab out of view; it drives to the player and
+## shows on the maps. With a waypoint set it goes there; SKIP fades to the
+## curb there at once and costs more than riding.
+func test_taxi_phone_call_and_skip() -> void:
+	await _new_game(false)
+	var taxi = game.taxi
+	var p = game.player
+	game.cash = 200
+	_place_player_at(game.city.spawn_point)
+	await _frames(2)
+	var phone = game.hud.phone
+	phone.open()
+	phone._cab()
+	var call_button = _find_button(phone._body, "CALL A CAB")
+	_check(call_button != null, "the phone has a Cab app with CALL A CAB")
+	if call_button == null:
+		return
+	call_button.pressed.emit()
+	_check(not phone.visible and not get_tree().paused, "calling closes the phone")
+	_check(taxi.state == taxi.State.PICKUP and taxi.called, "a cab is on its way")
+	var cab = taxi.cab
+	_check(game.population.out_of_view(cab.global_position), "it sets off out of view")
+	_check(game.map_markers().any(func(m): return m.label == "Your cab"), "the cab is on the maps")
+	await _until(func(): return taxi.state == taxi.State.WAITING, 3600)
+	_check(taxi.state == taxi.State.WAITING, "the called cab arrives")
+	var gap: float = cab.global_position.distance_to(p.global_position)
+	_check(gap < 16.0, "at the curb by the player, %.1f m" % gap)
+	var far: int = _taxi_far_node(500.0)
+	game.waypoint = game.city.node_pos(far)
+	await _taxi_board(cab)
+	_check(taxi.state == taxi.State.CHOOSING and taxi.trip.get("name") == "Waypoint", "with a waypoint set, that is where it goes")
+	var fare: int = taxi.trip.fare
+	var stop: Vector3 = taxi.trip.stop
+	_check(taxi.skip_fare(fare) > fare, "skipping costs more ($%d vs $%d)" % [taxi.skip_fare(fare), fare])
+	_check(taxi.skip(), "SKIP")
+	await _frames(5)
+	_check(taxi._fade.visible and not p.controllable, "the screen fades")
+	await _until(func(): return taxi.state == taxi.State.IDLE, 200)
+	var off: float = Vector2(p.global_position.x - stop.x, p.global_position.z - stop.z).length()
+	_check(p.vehicle == null and off < 6.0, "out at the waypoint's curb, %.1f m off" % off)
+	_check(game.cash == 200 - taxi.skip_fare(fare), "paid the skip fare, cash %d" % game.cash)
+	_check(p.controllable and taxi._fade_alpha == 0.0 and not taxi._fade.visible, "faded back in and in control")
+
+
+## Wanted: no cab stops, none comes by phone, and a cab you're in throws
+## you out. Not enough cash: the cabbie won't drive.
+func test_taxi_refuses_wanted_and_broke() -> void:
+	await _new_game(false)
+	var taxi = game.taxi
+	var p = game.player
+	var cab = _taxi_in_traffic()
+	Wanted.report_crime(1)
+	await _frames(2)
+	_check(taxi.hailable_cab() == null and not taxi._hail_button.visible, "no TAXI button while wanted")
+	_check(not taxi.hail() and cab.driver == Vehicle.Driver.TRAFFIC, "a hail is ignored while wanted")
+	_check(taxi.call_cab() != "" and taxi.state == taxi.State.IDLE, "no cab comes by phone while wanted")
+	Wanted.clear()
+	game.cash = 2
+	_check(taxi.hail(), "hailed once the heat is off")
+	await _until(func(): return taxi.state == taxi.State.WAITING, 900)
+	await _taxi_board(cab)
+	var dest: Dictionary = taxi.destinations()[0]
+	var trip: Dictionary = taxi.choose(dest)
+	_check(not trip.is_empty() and trip.fare > 2, "a fare the player can't pay")
+	_check(not taxi.ride() and not taxi.skip(), "no ride and no skip without the cash")
+	_check(taxi.state == taxi.State.CHOOSING and game.cash == 2, "still at the curb, nothing taken")
+	var ride_button = _find_button(taxi._panel_body, "RIDE")
+	_check(ride_button != null and ride_button.disabled, "RIDE is greyed out")
+	_check(_label_shows(taxi._panel, "Walk, friend"), "the cabbie says so")
+	game.cash = 100
+	_check(taxi.ride(), "rides once there is cash")
+	await _frames(90)
+	Wanted.report_crime(1)
+	await _frames(3)
+	_check(p.vehicle == null and not p.passenger and taxi.state == taxi.State.IDLE, "wanted: thrown out of the cab")
+	_check(game.cash == 100 and p.controllable, "no fare taken, in control")
+	Wanted.clear()
+
+
+## Getting out early pays the fare so far; a wreck drops you off free; a
+## mission starting or the player dying ends the ride and hands back control.
+func test_taxi_ride_ends_cleanly() -> void:
+	await _new_game(false)
+	var taxi = game.taxi
+	var p = game.player
+	game.cash = 100
+	# Out early: the cab pulls up, the meter is paid.
+	await _taxi_ride_far()
+	await _frames(240)
+	var fare: int = taxi.trip.fare
+	taxi.request_exit()
+	_check(taxi.state == taxi.State.STOPPING, "GET OUT: the cab pulls up")
+	await _until(func(): return taxi.state == taxi.State.IDLE, 300)
+	var paid: int = 100 - game.cash
+	_check(p.vehicle == null and p.controllable, "out early and in control")
+	_check(paid >= taxi.PRICES.bellerive.base and paid < fare, "paid the fare so far: $%d of $%d" % [paid, fare])
+	await _frames(60)
+	_check(p.knocked_time <= 0.0 and p.health == p.max_health, "stepping out of a cab that just pulled up is safe")
+	# A wreck: dropped off, no charge.
+	game.cash = 100
+	await _taxi_ride_far()
+	await _frames(60)
+	taxi.cab._damage(10000.0)
+	await _frames(2)
+	_check(p.vehicle == null and taxi.state == taxi.State.IDLE and game.cash == 100, "a wrecked cab drops you off free")
+	# A mission starting ends the ride.
+	await _taxi_ride_far()
+	await _frames(30)
+	var job := Node.new()
+	game.missions.active = job
+	await _frames(2)
+	_check(p.vehicle == null and taxi.state == taxi.State.IDLE and p.controllable, "a mission start ends the ride")
+	game.missions.active = null
+	job.free()
+	# Dying in the back: out, and back in control after the respawn.
+	await _taxi_ride_far()
+	await _frames(30)
+	p.take_hit(null, 999.0, Vector3.ZERO)
+	await _frames(3)
+	_check(p.dead and p.vehicle == null and taxi.state == taxi.State.IDLE, "death ends the ride")
+	await _frames(200)
+	_check(not p.dead and p.controllable and p.vehicle == null and not p.passenger, "respawned on foot and in control")
+	_check(game.cash == 100, "no fare for the dead")
+
+
+## A taxi in traffic on a long street near Union Station, coming up to the
+## player standing on the sidewalk about 12 m ahead of it.
+func _taxi_in_traffic():
+	var city = game.city
+	# Earlier cabs (and wrecks) out of the way.
+	for v in get_tree().get_nodes_in_group("vehicles"):
+		if v.kind == "taxi":
+			v.remove_from_group("vehicles")
+			v.queue_free()
+	var ends := _taxi_street()
+	var a: int = ends[0]
+	var b: int = ends[1]
+	var pa: Vector3 = city.node_pos(a)
+	var dir: Vector3 = (city.node_pos(b) - pa).normalized()
+	var side: Vector3 = (city.lane_point(a, b) - city.node_pos(b)).normalized()
+	var cab = Vehicle.new()
+	cab.kind = "taxi"
+	cab.city = city
+	cab.position = city.lane_start(a, b) + dir * 12.0
+	cab.rotation.y = atan2(-dir.x, -dir.z)
+	cab.start_traffic(city, a, b)
+	game.add_child(cab)
+	_place_player_at(pa + dir * 24.0 + side * 7.0)
+	return cab
+
+
+## A street of 70 m or more near the spawn: [from, to].
+func _taxi_street() -> Array:
+	var city = game.city
+	var near: Array = [_home()]
+	for n in city.next_nodes(_home()):
+		near.append(n)
+	for n in near.duplicate():
+		near.append_array(city.next_nodes(n))
+	for n in near:
+		for m in city.next_nodes(n):
+			if city.node_pos(n).distance_to(city.node_pos(m)) > 70.0:
+				return [n, m]
+	return [_home(), city.next_nodes(_home())[0]]
+
+
+## A junction about `dist` m (straight line) from the player.
+func _taxi_far_node(dist: float) -> int:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3
+	return game.city.random_node_between(game.player.global_position, dist, dist + 150.0, rng)
+
+
+## Steps up to the waiting cab and gets in.
+func _taxi_board(cab) -> void:
+	var p = game.player
+	p.global_position = cab.global_position + cab.global_basis.x * 2.4
+	p.reset_physics_interpolation()
+	await _frames(2)
+	await _press("interact")
+
+
+## Hails a fresh cab, boards it and sets off for a waypoint about 600 m away.
+func _taxi_ride_far() -> void:
+	var taxi = game.taxi
+	var cab = _taxi_in_traffic()
+	await _frames(2)
+	taxi.hail()
+	await _until(func(): return taxi.state == taxi.State.WAITING, 900)
+	game.waypoint = game.city.node_pos(_taxi_far_node(600.0))
+	await _taxi_board(cab)
+	game.waypoint = null
+	_check(taxi.ride() and game.player.vehicle == cab, "set off in a hailed cab")
+
+
+## Runs frames until `cond` holds (or `limit` frames pass).
+func _until(cond: Callable, limit: int) -> void:
+	for i in limit:
+		if cond.call():
+			return
+		await _frames(1)
+
+
+func _find_button(root: Node, prefix: String):
+	for c in root.find_children("*", "Button", true, false):
+		if c.text.begins_with(prefix):
+			return c
+	return null
+
+
+func _label_shows(root: Node, text: String) -> bool:
+	for c in root.find_children("*", "Label", true, false):
+		if text in c.text:
+			return true
+	return false
+
+
+# --- Country (phase 2) -----------------------------------------------------------
+
+## The country's roads join the street plan at its frame junctions and the
+## city's road API answers for both: the GPS drives from Union Station out
+## to Wheaton, landmarks and towns are on the maps and in the taxi list.
+func test_country_joins_the_city() -> void:
+	await _new_game(false)
+	var city = game.city
+	var c = city.country
+	_check(c != null and c.node_count() > 1000, "the country has a road graph")
+	_check(c.links.size() >= 20, "country roads join the plan at many junctions, got %d" % c.links.size())
+	var bad := 0
+	for n in c.links:
+		var pn: int = c.links[n]
+		if not city.drive_node(pn) or c.pos(n).distance_to(city.plan.pos(pn)) > 6.0 or not (city.COUNTRY_BASE + n) in city.next_nodes(pn) or not pn in city.next_nodes(city.COUNTRY_BASE + n):
+			bad += 1
+	_check(bad == 0, "every link joins a drivable plan junction within 6 m, both ways, %d bad" % bad)
+	var wheaton: Vector3 = city.taxi_destinations().filter(func(d): return d.id == "wheaton")[0].pos
+	var path: PackedInt64Array = city.route_nodes(city.spawn_point, wheaton)
+	_check(path.size() > 20, "a route runs from Union Station to Wheaton (%d junctions)" % path.size())
+	_check(not path.is_empty() and path[0] < city.COUNTRY_BASE and path[path.size() - 1] >= city.COUNTRY_BASE, "it starts in the plan and ends in the country")
+	var off_road := 0
+	for k in range(1, path.size()):
+		off_road += 0 if path[k] in city.next_nodes(path[k - 1]) else 1
+	_check(off_road == 0, "every step of the route follows a road, %d do not" % off_road)
+	_check(city.district_at(wheaton).name == "Wheaton", "Wheaton is a district on the banner")
+	_check(city.playable(Vector2(wheaton.x, wheaton.z)) and not city.playable(Vector2(-20000, 0)), "the play area holds Wheaton, not the far state")
+	var ids: Array = city.landmarks().map(func(l): return l.id)
+	for id in ["deco_row", "bellerive_general", "hollis_farm", "union_station"]:
+		_check(id in ids, "landmark %s is on the maps" % id)
+	_check(city.landmark_front("deco_row") != Vector3.INF, "a country landmark has a front for missions and taxis")
+
+
+## Country tiles stream in round the player, as one mesh plus collisions,
+## and go when the player leaves; the city's window walls are gone.
+func test_country_tiles_stream() -> void:
+	await _new_game(false)
+	var city = game.city
+	var c = city.country
+	_check(city.get_node_or_null("Bounds") == null, "no walls round the window")
+	var at: Vector3 = city.landmark_front("deco_row")
+	_place_player_at(at)
+	await _frames(240)
+	var key: Vector2i = c.tile_key(at)
+	var tile: Node3D = c.tile_node(key)
+	_check(tile != null, "the tile under the player streams in")
+	_check(c.loaded_tiles().size() >= 4, "tiles round the player are built, got %d" % c.loaded_tiles().size())
+	if tile != null:
+		var meshes := tile.get_children().filter(func(n): return n is MeshInstance3D and n.name != "Glow")
+		_check(meshes.size() == 1, "a tile draws as one mesh (plus its glow)")
+		_check(tile.get_children().any(func(n): return n is StaticBody3D), "a tile has collisions")
+	var built := 0
+	for k in c.loaded_tiles():
+		built += c.tile_node(k).get_meta("buildings", 0)
+	_check(built > 0, "Brisa Beach has buildings, got %d" % built)
+	_place_player_at(city.spawn_point)
+	await _frames(240)
+	_check(c.tile_node(key) == null, "far tiles are unloaded")
+
+
+## Banks, the coast and the play area's fence are walls: a car driven at
+## one stops on the land side.
+func test_country_walls_stop_cars() -> void:
+	await _new_game(false)
+	var city = game.city
+	var c = city.country
+	for kind in [0, 2]:
+		var w: Array = []
+		for cand in c.walls:
+			var a := Vector2(cand[0], cand[1])
+			var b := Vector2(cand[2], cand[3])
+			if int(cand[4]) == kind and a.distance_to(b) > 15.0 and c.road_distance((a + b) * 0.5, 60.0) > 25.0:
+				w = cand
+				break
+		_check(not w.is_empty(), "found a wall of kind %d" % kind)
+		if w.is_empty():
+			continue
+		var a := Vector2(w[0], w[1])
+		var b := Vector2(w[2], w[3])
+		var m := (a + b) * 0.5
+		var n := (b - a).normalized().orthogonal()
+		if c.in_play_area(m + n * 3.0):
+			n = -n # n points out of the play area
+		var start := Vector3(m.x - n.x * 14.0, 0.0, m.y - n.y * 14.0)
+		city.stream_now(start)
+		var car = Vehicle.new()
+		car.city = city
+		car.position = start
+		car.rotation.y = atan2(-n.x, -n.y)
+		game.add_child(car)
+		_place_player_at(start + Vector3(n.y, 0, -n.x) * 3.0)
+		await _frames(4)
+		await _press("interact")
+		_check(game.player.vehicle == car, "player gets in the car by wall %d" % kind)
+		Controls.override_vector = Vector2(n.x, n.y)
+		await _frames(240)
+		Controls.override_vector = null
+		var p: Vector3 = car.global_position
+		var past := (Vector2(p.x, p.z) - m).dot(n)
+		_check(past < 0.5, "the car stays on the land side of wall %d (%.1f m past)" % [kind, past])
+		_check(Vector2(p.x, p.z).distance_to(m) < 14.0, "and it drove up to the wall (%.1f m away)" % Vector2(p.x, p.z).distance_to(m))
+		await _press("interact")
+		car.queue_free()
+		await _frames(2)
+
+
+## Traffic drives from a frame junction out on to the country roads and
+## keeps to them.
+func test_traffic_drives_into_the_country() -> void:
+	await _new_game(false)
+	var city = game.city
+	var c = city.country
+	var cn: int = c.links.keys()[0]
+	var pn: int = c.links[cn]
+	var start_node: int = city.COUNTRY_BASE + cn
+	var nxt: int = city.next_nodes(start_node).filter(func(m): return m != pn)[0]
+	city.stream_now(city.node_pos(start_node))
+	var car = _spawn_car(start_node, Vector3.ZERO, 0.0)
+	car.position = city.lane_start(start_node, nxt)
+	var d: Vector3 = city.node_pos(nxt) - city.node_pos(start_node)
+	car.rotation.y = atan2(-d.x, -d.z)
+	car.start_traffic(city, start_node, nxt)
+	car.driver = Vehicle.Driver.TRAFFIC
+	_place_player_at(car.position + Vector3(0, 0, 20))
+	var worst := 0.0
+	var moved := 0.0
+	var last: Vector3 = car.global_position
+	for i in 20:
+		await _frames(30)
+		var q: Vector3 = car.global_position
+		moved += q.distance_to(last)
+		last = q
+		if not city.plan.bounds.has_point(Vector2(q.x, q.z)):
+			worst = maxf(worst, c.road_distance(Vector2(q.x, q.z), 60.0))
+	_check(moved > 60.0, "traffic car drives on (%.1f m in 10 s)" % moved)
+	_check(worst < 1.0, "it keeps to the country roads (worst %.1f m off the edge)" % worst)
+
