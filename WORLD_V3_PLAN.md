@@ -53,7 +53,9 @@ Roads thin out from city to wild, five kinds:
 - **trail** (steep 4x4 or hiking: Widow's Ridge, the Silver Train, the Devil's Staircase,
   the Headlands).
 
-Where a track crosses a creek there is a ford; a lane gets a bridge.
+Where a dirt track or trail crosses a creek there is a ford; every other crossing (any road
+over a river, any lane or highway over anything) gets a bridge. Both are computed from the
+data, so a moved road or creek moves its crossings.
 
 ## 2. The cities
 
@@ -67,7 +69,7 @@ Conditions drive everything below: transit, NPC density, police, prices, what is
   a red bridge (Crimson Gate) across Sovereign Bay to the Headlands.
 - **Architecture**: Beaux-Arts and Neoclassical civic buildings, an even skyline under a
   height limit, painted Victorian row houses on the hills, a modernist far airport.
-- **Districts**: Capitol Mall, Midtown, Market Seam (finance), Embarcadero (waterfront),
+- **Districts**: Capitol Mall, Midtown, Market Seam (finance), The Wharfline (waterfront),
   Olive Hill (old town), Commons Park, Bayview Heights, Foggy Row.
 - **Monuments and places**: the Capitol, Founders' Obelisk, Unity Memorial, the State
   Museums row, Union Station, the Ferry Building, the Painted Row, the Slant (the one
@@ -144,7 +146,8 @@ Conditions drive everything below: transit, NPC density, police, prices, what is
 - **NPCs**: very dense on the Blaze at night, empty by day in the heat; tourists, gamblers,
   showgirls, card sharps, casino workers, bikers; a hidden community in the tunnels.
 - **Factions**: Velvet Aces (casino skim), Dust Riders (bikers, guns and meth on Route 40),
-  the Skyward Fellowship cult near Fort Granite, casino workers' union.
+  the Skyward Fellowship cult near Fort Granite, Hospitality Workers Local 7 (casino and
+  hotel workers; a walkout darkens the Blaze).
 - **Characters**: Duke Calloway (bible); new *(working)*:
   - Lady Opal, a card counter banned from every casino;
   - Brother Halcyon, the Skyward Fellowship's smiling leader.
@@ -176,12 +179,12 @@ adding what Florida has and it lacked:
 - **Factions**: Marrow Krewe, High Water, Comando Maré (speedboat smugglers on the Keys),
   Os Corvos (beach club crew), Dockers' Brotherhood, Aurum.
 - **Missions**: Act 1 (`ACT1_MISSIONS.md`); later, speedboat runs through the Keys, a
-  hurricane evacuation with the bridges closing, and a 1980s-style drug-war story on the
-  beach.
+  hurricane evacuation with the bridges closing, and a smuggling war over the Keys.
 
 ## 3. The countryside
 
-Each region has one biome, one town, one landmark, one faction and one sentence of mood.
+Each region has one biome, one landmark, one faction and one sentence of mood, and most
+have a town (Fort Granite, a fenced base, has none).
 
 | Region (county) | Biome | Towns | Hook and places |
 |---|---|---|---|
@@ -193,9 +196,9 @@ Each region has one biome, one town, one landmark, one faction and one sentence 
 | Golden Flats County | Farmland | Wheaton, Ridley Crossing (truck stop) | Section-line lanes, Hollis Farm, grain elevators, crop-duster strip (rent planes), Solvera Line building sites |
 | Saltgrass Parish | Swamp | Cypress Bend, Gator Point | Black Bayou, Turtle Slough, levee road, the moonshine still, airboat tours, gator farm |
 | Verdant Hills | Hills and vineyards | Larkspur | Old Post Road, Larkspur Estate vineyard, Bluegill Lake |
-| Sovereign County | Parkland | Haverly | Estates, Signal Hill, the Headlands, Naval Air Station Headlands, the lighthouse trail |
-| Corran County | Rust belt lake country | Port Ash (ghost) | Shore Road, Camp Corran (State Guard), Corran County Airport |
-| The Keys and Isla Serena | Islands | Serena Town | Overseas Highway, Keys Fuel Dock, Coast Guard station, Serena Grand, Smugglers' Cove, the Sunken Casino (secret) |
+| Sovereign County | Parkland | Haverly | Estates, Signal Hill, Sovereign International |
+| Corran County | Rust belt lake country | Port Ash (ghost) | Shore Road, Camp Corran (State Guard), Corran County Airport, the Headlands with Naval Air Station Headlands and the lighthouse trail |
+| The Keys and Isla Serena | Islands | Serena Town | Serena Causeway, Keys Fuel Dock, Coast Guard station, Serena Grand, Smugglers' Cove, the Sunken Casino (secret) |
 
 **Military**:
 - **Fort Granite** is the one huge base: fenced, with its own airfield and jets, 4 stars on
@@ -242,10 +245,21 @@ Already planned in `INTERIORS_SERVICES_PLAN.md`; v3 sets where and how well:
 | Service | Concordia | Steelhaven | Las Brasas | Bellerive | Countryside |
 |---|---|---|---|---|---|
 | Police stations | many, fast | one, understaffed | strip-heavy | city PD | State Police posts |
-| Hospitals | two, best | one receiving hospital | one | one | county hospital in Wheaton |
+| Hospitals | two, best (Concordia General, Bayview Medical Center) | one, overrun (Steelhaven Municipal) | one (Sagebrush General) | Floodline Clinic now; Bellerive General planned | Golden Flats County Hospital near Wheaton |
 | Eateries | bistros, food trucks | diners, coney stands | buffets, 24-hour diners | Creole, Cuban, seafood | truck stops, gas-station food |
 | Vending machines | everywhere, work | rare, half broken | in every casino | common | at gas stations |
 | Torque & Tone (upgrades) | luxury | muscle and restorations | lowriders and neon | tuners | none; fuel and repair at gas stations |
+
+**Transit by city** (in `world_map.json`, each city's `transit`):
+
+| | Concordia | Steelhaven | Las Brasas | Bellerive |
+|---|---|---|---|---|
+| Condition | excellent | decaying | tourist-only | car-centric with showpieces |
+| Metro | Red and Blue lines | the Loop (elevated, nearly empty) | the Blaze Monorail | Skyline Metro, one elevated line to the airport (phase 2) |
+| Tram | Wharfline heritage tram | one new streetcar ("comeback corridor") | none: a car city | Lantern Line streetcar |
+| Bus | Concordia Coach Terminal | Steelhaven Bus Depot ("next bus: 40 min") | Old Town Bus Depot, the Doubler strip bus | Bellerive Bus Terminal (phase 2) |
+| Train | Concordia Union Station | a platform beside the ruined Central | Las Brasas Union, a shell until the Solvera Line opens | Union Station |
+| Airport | Sovereign International, Capital Downtown | City Airport closed; Corran County Airport | Brasas International | Bellerive International, Ironwharf Seaplane Base |
 
 ## 6. Vehicles, rides and travel
 
@@ -312,3 +326,6 @@ Storm's closed bridges, a dock strike).
   Act 2 ("the money route") then moves to Concordia and the Keys. Jules's backstory as a
   getaway driver in Porto Brisa becomes the Keys and Isla Serena.
 - Whether trespass into Fort Granite gives 4 stars or 2-3 on a phone.
+- Comando Maré and Os Corvos keep their approved Porto Brisa names. In a Florida setting
+  two Portuguese-named crews could read as an ethnic group cast as criminals, which the
+  bible forbids. Renaming them, or giving them mixed membership on screen, is Sachin's call.

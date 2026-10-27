@@ -86,7 +86,7 @@ Prosperous, orderly and watched.
 | **Capitol Mall** | Capitol, obelisk, memorial, museums | Police (Capitol Guard) |
 | **Midtown** | Long blocks, towers, the Slant's theatres | The Ledger |
 | **Market Seam** | Finance, the Exchange | Aurum Consortium |
-| **Embarcadero** | Ferry Building, piers | Dockers' Brotherhood |
+| **The Wharfline** | Ferry building, piers, heritage tram | Dockers' Brotherhood |
 | **Olive Hill** | Old town, trattorias | Castellane Family |
 | **Commons Park**, **Bayview Heights**, **Foggy Row** | Park, cable-car hills, painted row houses | Neutral |
 
@@ -132,8 +132,8 @@ Neon, heat, desert nights, excess. In the north-west desert.
 | **Fort Granite** | Army base, airfield, restricted | Jets, helicopters, the vault (late game) |
 | **Golden Flats** | Coastal farmland, highways | Truck stops, crop dusting |
 | **Verdant Hills** | Green hills and vineyards between Bellerive and Concordia *(v3)* | Larkspur, Old Post Road, Bluegill Lake |
-| **Sovereign County** *(v3)* | Parkland and estates around the capital | Haverly, the Headlands, Naval Air Station |
-| **Corran County** *(v3)* | Lake country around Steelhaven | Port Ash (ghost town), Camp Corran |
+| **Sovereign County** *(v3)* | Parkland and estates around the capital | Haverly, Signal Hill, Sovereign International |
+| **Corran County** *(v3)* | Lake country around Steelhaven | Port Ash (ghost town), Camp Corran, the Headlands with Naval Air Station Headlands |
 
 The full table (towns, ghost towns, military sites, roads down to dirt tracks
 and trails) is in `WORLD_V3_PLAN.md` section 3.
@@ -149,7 +149,7 @@ Smugglers' Cove, and the Sunken Casino offshore (secret dive).
 - **Highways**: Route 1 (Gulf Highway, coast to coast), Route 40 (Desert
   Highway, Las Brasas to Bellerive), Route 7 (Ridge Road over the mountains);
   *(v3)* Route 9 (River Road), Route 3 (Capital Turnpike), the Crimson Gate
-  Bridge and the Overseas Highway to the Keys. Below them: county lanes,
+  Bridge and the Serena Causeway to the Keys. Below them: county lanes,
   unpaved dirt tracks and 4x4 trails.
 - **Rail**: the **Solvera Line** (high-speed, being built during the story)
   and an old freight line from Ironwharf to Fort Granite.
@@ -175,6 +175,10 @@ Smugglers' Cove, and the Sunken Casino offshore (secret dive).
 | **High Water** | Crew born from the storm-wrecked wards; part gang, part neighbourhood watch | Keep their homes from being sold off | Floodline Wards |
 | **Comando Maré** | Disciplined speedboat smugglers | Control the Keys and the swamp routes | The Keys *(v3; was Morro Alto)* |
 | **Os Corvos** | Flashy beach-side rivals | Take Maré's routes and Aurum's money | Brisa Beach *(v3)* |
+
+Every crew recruits across backgrounds; a crew's name is its own history, never a
+people. Whether Comando Maré and Os Corvos keep their Porto Brisa names in Bellerive is
+open (`WORLD_V3_PLAN.md` section 8).
 | **Velvet Aces** | Showbiz crime family running the strip's back rooms | Launder Aurum's money for a cut | The Blaze |
 | **Dust Riders** | Desert biker gang | Run guns and parts along Route 40 | Dust Yards, Hollow Mesa |
 | **Police** (Bellerive PD, Solvera State Police) | Some honest, many bought | Order, or a paycheck | Everywhere; not joinable |

@@ -24,8 +24,19 @@ Started 2026-10-27. Sachin's asks (verbatim in the session):
 - SVGs carry terrain patterns.
 - In-game state map: full map zoomed out and minimap past the edge.
   `test_state_map_shows_the_whole_state`; `tests/map_shots.tscn`.
-- Suite 420/420. The plan dump equals the baseline (only its `ms` timing field differs).
-- Next: review, APK 0.9-world, commit, PR.
+- Commit 9fe65d0 pushed the world v3 work. The independent review then found:
+  - places in the water (Corran airport, Harlow);
+  - Dam Road through Lake Miravel;
+  - fords across the 160 m Morrow;
+  - the city bake's blue frame on the state map;
+  - missing county labels;
+  - no bus stands or trams in some cities;
+  - two real hospital names;
+  - the Portuguese-named crews risk.
+  All are fixed: data by scratchpad `fix_v3.py` then `add_detail.py`; the code in state_map.gd,
+  full_map.gd and minimap.gd (city texture clipped to the playable window, `label_pos`,
+  far-zoom pin filter); the crews' names are an open question.
+- The plan dump still equals the baseline. Next: suite, APK 0.9-world, commit, PR.
 
 ## Decisions (Sachin can overrule any of these)
 
@@ -63,14 +74,21 @@ Started 2026-10-27. Sachin's asks (verbatim in the session):
     - `lane`, a paved county road;
     - `track`, unpaved, drawn dashed;
     - `trail`, 4x4 or hiking, drawn dotted.
-  - Where a lane, track or trail crosses a river or creek, a bridge (lane) or ford
-    landmark is computed.
+  - Crossings are computed (W-8).
   - The new items carry `"detail": true` and a phase of 2 or more, and lie outside
     Bellerive's window (the generator asserts it).
   - Generator: scratchpad `add_detail.py` (one-off; the json is the source of truth now).
 - **W-7 State map bake at runtime** (about 0.1 s on the desktop, more on a phone)
   rather than a shipped PNG: it follows the json with no export step. Cheaper on load:
   cache the image to `user://` keyed by the json hash. Not done; not needed yet.
+
+- **W-8 Crossings:** a dirt track or trail over a creek gets a ford; every other crossing
+  (any road over a river, a lane or highway over anything) gets a bridge. Generated ones carry
+  `minor: true`: drawn as small dots, no label, hidden in the game's pin list.
+- **W-9 Every city has a bus station, a train station and an airport; metro and tram follow the
+  condition.** Las Brasas has no tram (a car city); Steelhaven's metro is the near-empty Loop;
+  Bellerive gains a one-line Skyline Metro and a bus terminal (phase 2). Table in
+  WORLD_V3_PLAN.md section 5.
 
 ## Traps and lessons
 
@@ -80,6 +98,12 @@ Started 2026-10-27. Sachin's asks (verbatim in the session):
   previous frame.
 - Image colours round to 8 bits: compare with a tolerance (`_same_color`), not
   `is_equal_approx`.
+- W-3 was not only a shift: 13 countryside landmarks were moved to new places, so their v2
+  coordinates plus (2000, 3000) are not where they are now.
+- A route vertex lying exactly on a river line hides the crossing from the segment test; keep
+  vertices off water lines.
+- The city bake is larger than the playable window: draw only the window's region of it (full map
+  `draw_texture_rect_region`, minimap `city_uv_rect`), or its sea shows as a frame.
 - `city.district_at` falls back to the nearest district: districts outside the playable window must
   be marked with a phase above 1 and skipped when loading, or they can win that fallback.
 
@@ -87,4 +111,5 @@ Started 2026-10-27. Sachin's asks (verbatim in the session):
 
 - The names Concordia and Steelhaven (alternatives in WORLD_V3_PLAN.md).
 - Retiring Porto Brisa (Rio).
+- Renaming Comando Maré and Os Corvos for the Florida setting (approved names).
 - Tilt steering needs a check on a real phone.

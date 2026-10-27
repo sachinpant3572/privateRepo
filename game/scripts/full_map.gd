@@ -164,12 +164,20 @@ func _to_world(at: Vector2) -> Vector3:
 
 
 func _draw() -> void:
+	if not state.is_empty():
+		# Keep some of the state on screen however far it is dragged.
+		var lo: Vector2 = (state.origin - map.origin) / MapImage.PX_M
+		pan = pan.clamp(lo, lo + state.world_size / MapImage.PX_M)
 	draw_rect(Rect2(Vector2.ZERO, size), Color(0.27, 0.5, 0.62))
 	if not state.is_empty():
 		var so := _to_screen(Vector3(state.origin.x, 0, state.origin.y))
 		draw_texture_rect(state.texture, Rect2(so, state.world_size / MapImage.PX_M * zoom), false)
-	var tl := _to_screen(Vector3(map.origin.x, 0, map.origin.y))
-	draw_texture_rect(map.texture, Rect2(tl, map.size * MapImage.PX_M * zoom / MapImage.PX_M), false)
+	# Only the playable window of the city's bake: past it the state shows.
+	var win_px := Rect2((game.city.window.position - map.origin) / MapImage.PX_M, game.city.window.size / MapImage.PX_M)
+	if state.is_empty():
+		win_px = Rect2(Vector2.ZERO, map.size)
+	var tl := _to_screen(Vector3(map.origin.x, 0, map.origin.y)) + win_px.position * zoom
+	draw_texture_rect_region(map.texture, Rect2(tl, win_px.size * zoom), win_px)
 	var font := ThemeDB.fallback_font
 	# Playable area outline.
 	var city = game.city
@@ -241,27 +249,33 @@ func _draw_state_labels(font: Font) -> void:
 		tri.append(tri[0])
 		draw_polyline(tri, Color.WHITE, 1.5)
 	for pin in labels.pins:
-		var ic: Array = state_pin(pin.type)
-		MapImage.draw_icon(self, _to_screen(pin.pos), ic[0], ic[1], 12.0 if pin.large else 9.0)
+		if _pin_shown(pin.type, close):
+			var ic: Array = state_pin(pin.type)
+			MapImage.draw_icon(self, _to_screen(pin.pos), ic[0], ic[1], 12.0 if pin.large else 9.0)
 	var placed: Array[Rect2] = []
 	for c in labels.cities:
 		var at := _to_screen(c.pos)
 		_label(font, at, c.name.to_upper(), 26, Color.WHITE if c.playable else Color(1, 1, 1, 0.8), 0.7, placed)
 		_label(font, at + Vector2(0, 22), c.note if c.playable else c.note + " · coming later", 13, Color(1, 0.9, 0.6), 0.7, placed)
+	for l in labels.regions:
+		_label(font, _to_screen(l.pos), l.name.to_upper(), 14, Color(1, 1, 1, 0.75), 0.45, placed)
+	for l in labels.water:
+		_label(font, _to_screen(l.pos), l.name, 15, Color(0.85, 0.93, 1.0), 0.5, placed)
 	for t in labels.towns:
 		var ghost: bool = t.kind == "ghost"
 		_label(font, _to_screen(t.pos) + Vector2(0, -9), t.name + (" (ghost town)" if ghost else ""), 13,
 			Color(0.6, 0.57, 0.52) if ghost else Color.WHITE, 0.6, placed)
-	for l in labels.water:
-		_label(font, _to_screen(l.pos), l.name, 15, Color(0.85, 0.93, 1.0), 0.5, placed)
-	for l in labels.regions:
-		_label(font, _to_screen(l.pos), l.name.to_upper(), 14, Color(1, 1, 1, 0.75), 0.45, placed)
 	for pin in labels.pins:
-		if close or pin.large:
+		if (close or pin.large) and _pin_shown(pin.type, close):
 			_label(font, _to_screen(pin.pos) + Vector2(0, 26), pin.name, 12, Color.WHITE, 0.6, placed)
 	if close:
 		for pk in labels.peaks:
 			_label(font, _to_screen(pk.pos) + Vector2(0, 22), pk.name, 12, Color(1, 0.95, 0.85), 0.6, placed)
+
+
+## Zoomed right out, only the pins that matter on a state scale.
+static func _pin_shown(type: String, close: bool) -> bool:
+	return close or type in ["airport", "military", "gas", "camp"]
 
 
 static func state_pin(type: String) -> Array:

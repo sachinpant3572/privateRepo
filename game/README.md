@@ -87,8 +87,9 @@ phone.
     Las Brasas (Vegas);
   - 15 regions with counties, 16 towns, villages and ghost towns, and military
     sites;
-  - 57 routes (highways down to trails, rail, metro, ferries, flights) and the
-    factions.
+  - 59 routes (highways down to trails, rail, metro, trams, ferries, flights),
+    147 landmarks (bus and train stations, airports, fords and bridges among them)
+    and 20 factions.
   The game reads only Bellerive's window. Items with `"phase"` above 1 inside
   it are planned, and are skipped when the city loads.
 - **Street plan** (`scripts/street_plan.gd`; research and rules in

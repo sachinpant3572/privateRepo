@@ -544,10 +544,10 @@ func test_state_map_shows_the_whole_state() -> void:
 		"zoomed out, the whole state fits the screen (%s in %s)" % [span, fm.size])
 	game.waypoint = null
 	var concordia: Dictionary = state.labels.cities.filter(func(c): return c.name == "Concordia")[0]
-	fm.pan = (Vector2(concordia.pos.x, concordia.pos.z) - fm.map.origin)
+	fm.pan = (Vector2(concordia.pos.x, concordia.pos.z) - fm.map.origin) / preload("res://scripts/map_image.gd").PX_M
 	fm._tap(fm.size * 0.5)
 	_check(game.waypoint == null and fm._note == "Concordia: not open yet", "a tap on Concordia says it is not open, got '%s'" % fm._note)
-	fm.pan = (Vector2(city.window.get_center().x, city.window.get_center().y) - fm.map.origin)
+	fm.pan = (city.window.get_center() - fm.map.origin) / preload("res://scripts/map_image.gd").PX_M
 	fm._tap(fm.size * 0.5)
 	_check(game.waypoint != null, "a tap inside Bellerive still sets a waypoint")
 	fm.close()

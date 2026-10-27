@@ -112,20 +112,28 @@ static func bake(map_origin: Vector2) -> Dictionary:
 			"pos": _local(rect.get_center(), map_origin), "playable": c.has("demo_window")})
 	for r in world.regions:
 		if r.type != "island" or r.has("hook"):
-			labels.regions.append({"name": r.name, "pos": _local(_centroid(_poly(r.polygon)), map_origin)})
+			var at := Vector2(r.label_pos[0], r.label_pos[1]) if r.has("label_pos") else _centroid(_poly(r.polygon))
+			labels.regions.append({"name": r.name, "pos": _local(at, map_origin)})
 	for t in world.towns:
 		labels.towns.append({"name": t.name, "kind": t.get("kind", "town"), "pos": _local(Vector2(t.pos[0], t.pos[1]), map_origin)})
+	var playable := ""
+	for c in world.cities:
+		if c.has("demo_window"):
+			playable = c.id
 	for lm in world.landmarks:
 		if lm.type == "peak":
 			labels.peaks.append({"name": "%s  %d m" % [lm.name, int(lm.elev)], "pos": _local(Vector2(lm.pos[0], lm.pos[1]), map_origin)})
-		# The playable city's planned places (phase above 1) stay off the map.
-		if PINS.has(lm.type) and not (lm.has("city") and int(lm.get("phase", 1)) > 1):
+		# The playable city's planned places (phase above 1) stay off the map,
+		# and so do the small bridges and fords where roads cross water.
+		var planned: bool = lm.get("city", "") == playable and int(lm.get("phase", 1)) > 1
+		if PINS.has(lm.type) and not planned and not lm.get("minor", false):
 			labels.pins.append({"name": lm.name, "type": lm.type, "pos": _local(Vector2(lm.pos[0], lm.pos[1]), map_origin),
 				"large": lm.get("size", "") == "large"})
 	for w in world.water:
 		if w.has("polygon") and w.type != "ocean":
 			labels.water.append({"name": w.name, "pos": _local(_centroid(_poly(w.polygon)), map_origin)})
 	labels.water.append({"name": "Gulf of Solvera", "pos": _local(Vector2(world_size.x * 0.3, world_size.y - 300.0), map_origin)})
+	img.convert(Image.FORMAT_RGB8) # no alpha needed: a quarter less memory
 	return {"texture": ImageTexture.create_from_image(img), "origin": -map_origin, "size": Vector2(px),
 		"px_m": PX_M, "world_size": world_size, "labels": labels}
 

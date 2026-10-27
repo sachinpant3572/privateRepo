@@ -40,7 +40,7 @@ LANDMARK_ICON = {"police": "#2c3e70", "hospital": "#d33", "airport": "#333", "le
                  "union": "#1f618d", "mafia": "#7b241c", "casino": "#c2185b", "gas": "#f39c12",
                  "camp": "#27ae60", "farm": "#a17a2b", "lookout": "#784212", "lighthouse": "#d4ac0d",
                  "mine": "#6e5a48", "motel": "#8e44ad", "tunnel": "#555", "pass": "#7f8c8d",
-                 "ford": "#5d6d7e", "bridge": "#b03a2e", "peak": "#5b4a3a"}
+                 "bus": "#e67e22", "ford": "#5d6d7e", "bridge": "#b03a2e", "peak": "#5b4a3a"}
 # Terrain texture drawn over each region: SVG pattern bodies, 1 unit = 1 px.
 TERRAIN = {
     "forest": (18, '<circle cx="5" cy="6" r="2.6" fill="#5f8a4f"/><circle cx="14" cy="14" r="2.2" fill="#6b9659"/>'),
@@ -126,7 +126,7 @@ def world_svg(world):
             out.append(f'<polygon points="{cx - 8:.1f},{cy + 6:.1f} {cx:.1f},{cy - 8:.1f} {cx + 8:.1f},{cy + 6:.1f}" fill="{color}" stroke="#fff" stroke-width="1.5"{tag("landmark", lm["id"], lm.get("phase", 3))}/>')
             out.append(text(cx, cy + 19, f'{lm["name"]} {lm["elev"]:,} m', 11, "600"))
             continue
-        if lm["type"] == "ford":
+        if lm["type"] == "ford" or lm.get("minor"):
             out.append(f'<circle cx="{x * s}" cy="{y * s}" r="3.5" fill="{color}" stroke="#fff" stroke-width="1"{tag("landmark", lm["id"], lm.get("phase", 3))}/>')
             continue
         radius = 9 if lm.get("size") == "large" else (5 if lm.get("detail") else 6)
@@ -137,7 +137,8 @@ def world_svg(world):
     for r in world["regions"]:
         xs = [p[0] for p in r["polygon"]]
         ys = [p[1] for p in r["polygon"]]
-        out.append(text(sum(xs) / len(xs) * s, sum(ys) / len(ys) * s, r["name"].upper(), 15, "700", "#4a4a3a"))
+        lx, ly = r.get("label_pos", (sum(xs) / len(xs), sum(ys) / len(ys)))
+        out.append(text(lx * s, ly * s, r["name"].upper(), 15, "700", "#4a4a3a"))
     for c in world["cities"]:
         x, y, cw, ch = c["rect"]
         out.append(text((x + cw / 2) * s, (y - 30) * s, f'{c["name"]} (phase {c["phase"]})', 20, "800", "#1d1d1d"))
@@ -201,7 +202,7 @@ def _legend(x, y0):
         dash_attr = f' stroke-dasharray="{dash}"' if dash else ""
         parts.append(f'{bg}<line x1="{lx}" y1="{y + 10}" x2="{lx + 50}" y2="{y + 10}" stroke="{color}" stroke-width="{width}"{dash_attr}/>')
         parts.append(text(lx + 58, y + 15, label, 14, "500", anchor="start"))
-    parts.append(text(x, y0 + 72, "? = secret / legend. Big grey dot = the large military base. Triangle = peak. Small grey dot = ford. Phase = build order (1 = playable now).", 14, "500", anchor="start"))
+    parts.append(text(x, y0 + 72, "? = secret / legend. Big grey dot = the large military base. Triangle = peak. Small grey dot = ford, small red dot = bridge. Phase = build order (1 = playable now).", 14, "500", anchor="start"))
     return "".join(parts)
 
 
