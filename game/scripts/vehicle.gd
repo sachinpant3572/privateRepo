@@ -16,7 +16,10 @@ signal path_done(car)
 enum Driver { NONE, PLAYER, TRAFFIC, POLICE, SCRIPT, CHASER }
 
 const COAST := 4.0
-const TRAFFIC_THROTTLE := 0.5
+## Corner assist: a turn the stick asks for that is too tight at this speed
+## slows the car to the speed at which it can turn on this radius (m).
+const CORNER_RADIUS := 5.0
+const TRAFFIC_THROTTLE := 0.6
 ## Traffic never cruises faster than this (m/s), whatever the model.
 const TRAFFIC_CRUISE := 13.0
 ## Traffic slows to this (m/s) within TRAFFIC_SLOW_ZONE (m) of a junction.
@@ -390,6 +393,7 @@ func _drive(delta: float) -> void:
 	var steer := 0.0
 	var yaw := 0.0
 	var pace := absf(speed)
+	var cornering := false
 	if desired_dir != Vector3.ZERO:
 		var angle := fwd.signed_angle_to(desired_dir, Vector3.UP)
 		# Traffic backs up only to get off a wall; a sharp turn it takes
@@ -401,6 +405,11 @@ func _drive(delta: float) -> void:
 		else:
 			# Ease off for sharp corners so the car can make the turn.
 			target = max_speed * throttle * lerpf(1.0, 0.45, absf(angle) / PI)
+			# Corner assist for the player only: AI drivers pick their own
+			# junction speeds.
+			if driver == Driver.PLAYER and not handbrake:
+				target = minf(target, lerpf(target, _corner_speed(), smoothstep(0.3, 0.9, absf(angle))))
+				cornering = target < pace
 		var grip_turn: float = clampf(pace / _spec.steer_low, 0.0, 1.0) * (1.0 - _spec.steer_fade * clampf(pace / max_speed, 0.0, 1.0))
 		steer = clampf(angle * 2.0, -1.0, 1.0)
 		yaw = steer * turn_rate * grip_turn * delta * (1.6 if handbrake else 1.0)
@@ -413,6 +422,8 @@ func _drive(delta: float) -> void:
 	elif signf(target) != signf(speed) and pace > 0.5:
 		rate = _spec.brake
 		_hard_brake = pace > 9.0
+	elif cornering:
+		rate = _spec.brake
 	elif absf(target) < pace:
 		rate = COAST * 2.0
 	speed = move_toward(speed, target, rate * delta)
@@ -421,7 +432,9 @@ func _drive(delta: float) -> void:
 
 	var want := -global_basis.z * speed
 	var grip: float = _spec.drift if handbrake else _spec.grip
-	grip *= 1.0 - _spec.slide * throttle * absf(steer) * clampf(pace / 10.0, 0.0, 1.0)
+	# Power slides need power: none while the corner assist brakes.
+	if not cornering:
+		grip *= 1.0 - _spec.slide * throttle * absf(steer) * clampf(pace / 10.0, 0.0, 1.0)
 	velocity = Vector3(velocity.x, 0.0, velocity.z).lerp(want, clampf(grip * delta, 0.0, 1.0))
 	var before := velocity
 	move_and_slide()
@@ -432,6 +445,13 @@ func _drive(delta: float) -> void:
 	_body_tilt(delta, moved * yaw / delta, (moved - _moved) / delta)
 	_moved = moved
 	_handle_collisions(before)
+
+
+## Speed (m/s) at which this model turns on a CORNER_RADIUS circle at full
+## lock: v = R * turn * (1 - steer_fade * v / max_speed), solved for v.
+func _corner_speed() -> float:
+	var k: float = CORNER_RADIUS * turn_rate
+	return k / (1.0 + k * _spec.steer_fade / max_speed)
 
 
 ## Tilts the model: cars roll out of turns and pitch back under power and
@@ -468,11 +488,10 @@ func _handle_collisions(before: Vector3) -> void:
 			elif impact > 2.0 and _reverse_time <= 0.0 and before.dot(-global_basis.z) > 0.0:
 				_reverse_time = 1.2 if _since_reverse > 3.0 else minf(_last_reverse + 0.8, 3.2)
 				_last_reverse = _reverse_time
-				# A floating body keeps its velocity into the wall, which would
-				# count the same crash again for several frames; for traffic
-				# the crash is one hit.
-				if velocity.dot(col.get_normal()) < 0.0:
-					velocity = velocity.slide(col.get_normal())
+		# A floating body keeps its velocity into a wall, which would count
+		# the same crash again every frame it stays pressed in: it is one hit.
+		if not (other != null and other.has_method("bump")) and velocity.dot(col.get_normal()) < 0.0:
+			velocity = velocity.slide(col.get_normal())
 		if impact < 4.0 or struck.has(other):
 			continue
 		struck.append(other)
@@ -488,7 +507,8 @@ func _handle_collisions(before: Vector3) -> void:
 			_damage(impact * 1.2 * (1.0 - mine))
 			other.bump(before * 1.2 * mine)
 		else:
-			speed *= 0.5
+			# Head-on halves the speed; a scrape along a wall costs little.
+			speed *= 1.0 - 0.5 * clampf(impact / maxf(before.length(), 0.01), 0.0, 1.0)
 			_damage(impact * 0.6)
 
 

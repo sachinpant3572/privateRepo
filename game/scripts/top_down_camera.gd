@@ -10,7 +10,7 @@ const L = preload("res://scripts/layers.gd")
 
 const DISTANCE := 60.0
 const FOOT_SIZE := 26.0
-const DRIVE_SIZE := 38.0
+const DRIVE_SIZE := 48.0
 ## Degrees below the horizon. 90 would be straight down with no fronts at all.
 const PITCH := 60.0
 ## Size of the see-through hole when a building blocks the view of the player.
@@ -41,8 +41,8 @@ func _process(delta: float) -> void:
 	var lead := Vector3.ZERO
 	if node != target:
 		var v: Vector3 = node.velocity
-		lead = v * 0.35
-		want_size = lerpf(FOOT_SIZE, DRIVE_SIZE, clampf(v.length() / 24.0, 0.0, 1.0))
+		lead = v * 0.55
+		want_size = lerpf(FOOT_SIZE, DRIVE_SIZE, clampf(v.length() / 20.0, 0.0, 1.0))
 	_focus = _focus.lerp(pos + lead, 1.0 - exp(-6.0 * delta))
 	size = lerpf(size, want_size, 1.0 - exp(-2.0 * delta))
 	global_position = _focus + global_basis.z * DISTANCE
