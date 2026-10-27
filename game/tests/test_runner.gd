@@ -2243,15 +2243,21 @@ func test_traffic_turns_round_at_barricades() -> void:
 	await _new_game(false)
 	var city = game.city
 	var c = city.country
-	var Country = preload("res://scripts/country.gd")
-	var cut_ok := true
-	for b in c.barricades:
-		var p := Vector2(b[0], b[1])
-		var d := Vector2(b[2], b[3])
-		var hit: Vector2 = p + (d if not c.in_play_area(p + d * 9.0) else -d) * Country.BARRICADE_IN
-		for n in c.nodes_near(hit, Country.BARRICADE_CUT - 0.5):
-			cut_ok = cut_ok and c.usable[n] == 0
-	_check(cut_ok, "no junction traffic uses lies past or just short of a barricade")
+	# Every barricade has a cut-off road end just behind it, and no junction
+	# traffic uses is within a car's turning room of it.
+	var bad: Array = []
+	for bi in c.barricades.size():
+		var p := Vector2(c.barricades[bi][0], c.barricades[bi][1])
+		var stub := false
+		for n in c.nodes_near(p, 12.0):
+			stub = stub or (c.degree(n) == 1 and c.usable[n] == 0)
+		var room := INF
+		for n in c.nodes_near(p, 30.0):
+			if c.usable[n] == 1:
+				room = minf(room, c.pos(n).distance_to(p))
+		if not stub or room < 6.0:
+			bad.append("#%d (stub %s, nearest usable %.1f m)" % [bi, stub, room])
+	_check(bad.is_empty(), "every barricade's road end is cut off with room to turn: %s" % ", ".join(bad))
 	var from: Vector3 = city.node_pos(city.COUNTRY_BASE + c.links.keys()[0])
 	var unrouted := 0
 	var tried := 0
@@ -2265,7 +2271,7 @@ func test_traffic_turns_round_at_barricades() -> void:
 		if city.route_nodes(from, city.node_pos(city.COUNTRY_BASE + n)).is_empty():
 			unrouted += 1
 	_check(unrouted == 0, "routes reach usable country junctions (%d of %d did not)" % [unrouted, tried])
-	for bi in 2:
+	for bi in [0, 4]: # 4 sits under 10 m from the simplified area outline
 		var b: Array = c.barricades[bi]
 		var bp := Vector2(b[0], b[1])
 		# The new dead end nearest the barricade, and the junction before it.

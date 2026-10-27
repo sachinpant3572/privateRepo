@@ -23,8 +23,8 @@ const UNLOAD_RADIUS := 210.0
 const LOOKAHEAD := 1.2
 const NODE_GRID := 50.0
 ## Barricades stand BARRICADE_IN m inside the play area where a road leaves
-## it; the road's junctions within BARRICADE_CUT of the edge are cut off for
-## traffic, which could never reach them to turn round.
+## it; the road's junctions within BARRICADE_CUT of its end at the edge are
+## cut off for traffic, which could never reach them to turn round.
 const BARRICADE_IN := 8.0
 const BARRICADE_CUT := 14.0
 
@@ -154,10 +154,18 @@ func load_data(seed_v := 1234) -> void:
 func _find_usable() -> void:
 	var blocked := {}
 	for b in barricades:
+		# The road's end at the edge: the dead end nearest the barricade
+		# (the area outline is simplified, so which side is "out" can't be
+		# told from it this close).
 		var p := Vector2(b[0], b[1])
-		var d := Vector2(b[2], b[3])
-		var out := d if not in_play_area(p + d * (BARRICADE_IN + 1.0)) else -d
-		for n in nodes_near(p + out * BARRICADE_IN, BARRICADE_CUT):
+		var end := -1
+		for n in nodes_near(p, BARRICADE_IN * 2.0):
+			if degree(n) == 1 and (end < 0 or node_pos[n].distance_to(p) < node_pos[end].distance_to(p)):
+				end = n
+		if end < 0:
+			push_warning("barricade at %s has no road end behind it" % p)
+			continue
+		for n in nodes_near(node_pos[end], BARRICADE_CUT):
 			blocked[n] = true
 	usable.resize(node_pos.size())
 	usable.fill(0)

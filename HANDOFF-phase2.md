@@ -60,7 +60,8 @@ the window, the first countryside roads and towns, taxis. Estimated 6-8 sessions
 
 - **P-16 Review fixes**: the road stub behind each storm barricade (within 14 m of the
   edge) and Ember Canyon Drive (cut off between two barricades) are out of the drive
-  graph (`Country.usable`), so traffic turns round short of a barricade instead of
+  graph (`Country.usable`, cut round the road's dead end nearest each barricade, not
+  from the 4 m-simplified area outline), so traffic turns round short of a barricade instead of
   ramming it forever; tiles stream ahead of the car, not the seated player; the cab's
   destination list fills in 8 rows a frame (48 rows took ~96 ms at once); "Ocean Drive"
   and "Collins Row" (real Miami streets) are now Seabreeze Drive and Palmetto Row.
