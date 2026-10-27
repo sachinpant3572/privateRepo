@@ -1,5 +1,43 @@
 # TODO
 
+## Tuesday, Oct 27, 2026: Solvera feature wishlist (GTA 6-scale content)
+
+Status: **not started**. Sachin shared a post listing what GTA 6 packs in and said: "I want all
+these things, note them down in the TODO list and we will take them up later."
+
+Everything below is our own and fictional (WORLD_BIBLE: no real brands, apps, people or
+institutions). Before starting an item, check what Solvera already has (the phone, interiors,
+cars and bikes, police and wanted levels, pedestrians, missions) and build on it.
+
+- High-quality textures and realistic visuals across a large open world.
+- A large number of game mechanics.
+- Fully modelled planes, cars, helicopters, motorcycles and the like.
+- Lots of customisation (player look, clothes, vehicles, weapons).
+- Wide NPC variety, wildlife and pets.
+- Detailed weapons.
+- A large amount of dialogue.
+- Mini-games (see the arcades entry below).
+- Random events in the world.
+- Radio stations.
+- TV shows, and a fictional short-video app, for the in-game phone.
+- A big map: GTA 6's is said to be twice the size of Los Santos. Ours is the 12 x 9 km world map (Bellerive, Concordia, Steelhaven, Las Brasas).
+- Detailed interiors.
+- A very large animation set for NPCs (the post cites over 600,000 for GTA 6), with voice lines to match.
+- Keep the install small, as the post praises GTA 6 for: Solvera ships as a mobile APK, so size matters even more.
+
+## Tuesday, Oct 27, 2026: Solvera arcades (game stores) with our own mini-games
+
+Status: **not started** (Sachin: "keep this in TODO"; we build these ourselves later).
+
+- Game stores in the city that the player can walk into and play mini-games.
+- Every mini-game is our own, built for Solvera; no licensed or copied games.
+- Ideas named so far:
+  - a one-on-one fighting game in the style of Street Fighter or Tekken;
+  - racing;
+  - ping pong / table tennis;
+  - "multiple sucu games": read as sudoku and similar puzzles. Confirm with Sachin.
+- Fits the interiors system (`INTERIORS_SERVICES_PLAN.md`: places, doors, interior manager), as a new place type, "arcade".
+
 ## Tuesday, Oct 27, 2026, 1:00 PM IST: Civilization Tech game idea
 
 Status: **not started**. Research is on hold until the weekly usage limit resets on Tuesday.
