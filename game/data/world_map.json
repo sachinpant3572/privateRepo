@@ -50,13 +50,14 @@
      "rect": [3550, 3550, 2000, 1250],
      "districts": [
        {"id": "lantern_quarter", "name": "Lantern Quarter", "style": "quarter", "faction": "neutral", "rect": [4150, 4150, 650, 520]},
-       {"id": "ironwharf", "name": "Ironwharf", "style": "docks", "faction": "marrow", "rect": [4800, 4500, 600, 200]},
+       {"id": "ironwharf", "name": "Ironwharf", "style": "docks", "faction": "marrow", "rect": [4800, 4500, 650, 300]},
        {"id": "gilt_district", "name": "Gilt District", "style": "downtown", "faction": "aurum", "rect": [4150, 3650, 650, 500]},
        {"id": "magnolia_heights", "name": "Magnolia Heights", "style": "heights", "faction": "aurum", "rect": [3600, 3550, 550, 650]},
        {"id": "floodline_wards", "name": "Floodline Wards", "style": "wards", "faction": "highwater", "rect": [4800, 3600, 700, 900]},
-       {"id": "blackwater_bayou", "name": "Blackwater Bayou", "style": "bayou", "faction": "marrow", "rect": [3550, 4200, 600, 550]}
+       {"id": "blackwater_bayou", "name": "Blackwater Bayou", "style": "bayou", "faction": "marrow", "rect": [3550, 4200, 600, 550]},
+       {"id": "morrow_point", "name": "Morrow Point", "style": "wards", "faction": "neutral", "rect": [4040, 4840, 1420, 400]}
      ],
-     "demo_window": {"origin": [4150, 3650], "blocks": [25, 22], "pitch": 52}},
+     "demo_window": {"origin": [4150, 3650], "blocks": [25, 28], "pitch": 52}},
     {"id": "porto_brisa", "name": "Porto Brisa", "inspired_by": "Rio de Janeiro", "phase": 2,
      "rect": [6300, 1800, 1200, 1500],
      "districts": [
