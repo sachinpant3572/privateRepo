@@ -105,3 +105,42 @@ the government buildings and the outskirts patterns from v3 carry over.
   - **Open:** towers up to 150 m hide the streets north of them under the 60-degree camera; the
     cutaway clears the player only. If it reads badly in play, cap Gilt at `highrise_mid` near the
     player's usual routes, or fade towers near the camera.
+- C-9 **Streets end to end, joined to highways** (Sachin: "Ensure most of the roads are reaching the city end
+  to end and then joining the highways, parallelly or non parallelly, they should not end abruptly or should
+  not be short. This is critical for traffic management and easier navigation + driving."):
+  - **Measured before** (scratch `ends/ends.py`, plan + country graph, a "line" = edges chained straight on
+    through junctions): core 59 lines, 7% of length with both ends on a major road (most stop at the frame
+    street on the plan's edge, few carry on out); outskirts 90 lines, 25%, 23 dead ends, 33 under 150 m
+    (eastside cul-de-sacs, Brisa's inland stubs, Blackwater Bayou's streets dead at the river).
+  - **Approach:** every plan street that reaches the frame carries on into the outskirts (a link) and on to
+    the Beltway or a major road. Eastside: a tract street from each east frame junction to Sunvale
+    Boulevard and on to the Beltway, no bulbs, crossing the routes at grade. Shore: Levittown loops become
+    a grid: a street from each south junction to Seabreeze Drive, cross streets the whole width. Brisa:
+    cross streets end at Palmetto Row (an avenue). Bayou: a riverside drive the streets end on. Heights:
+    showcase streets carry on west as the estate roads. Fringe: more of the core's streets carry on north.
+  - **As built** (`build_country.py`, `street_plan.gd`):
+    - `_carry_on`: every frame junction still unlinked after the zone patterns carries straight on out to the
+      first road it meets (400 m at most), unless it would cross water, civic grounds or a landmark, run
+      alongside another road or meet one at a glancing angle. 72 of 75 frame junctions now carry on (was 54);
+      the 3 left are two levee/quay ends at the water and one east street (y 621) whose way out
+      runs into civic grounds.
+    - The Ironwharf quay is a drivable 10 m concrete apron (`quay` class: drive, rank 3, `QUAY_SET` 6 m back
+      from the water); it was a 3 m walkway, so every docks street south of Wharf Street dead-ended at the
+      water. Cranes, bollards and the rail stay; it carries on east to Sunvale Boulevard.
+    - `trim_route_stubs`: Serena Causeway (phase 4) began on the river bank on nothing; it now starts at
+      Palmetto Row. Its far end runs off the play area over the Gulf (the world edge, as before).
+    - `join_ends` also snaps a road ending under 4 m short of another at the play area's edge.
+    - Brisa cross streets past Seabreeze Drive's end are dropped; tract rows may cross Brisa's corner to
+      reach the Beltway.
+  - **Measured after** (seed 1234; `ends.py`): no dead ends round the city (was 24; the causeway's end at
+    the world edge aside); outskirts lines with both ends on a major road 55% of length (was 28%), 86%
+    with each end on a major road or on a street that is (was 33%); 3 lines under 150 m (was 40): two
+    between two major roads, one a 76 m link from Palmetto Avenue to the first heights street. Every minor line crosses or meets a major road. Core lines under 150 m: 8,
+    all the City Hall ring (Capitol Drive) and the old town's seam connectors, kept as set pieces.
+  - **Test:** `test_country_joins_the_city` now also requires 90% of frame junctions carried on and no
+    dead end within 750 m of the plan.
+  - **Rejected:** making the plan's frame street an avenue so core streets "end on a major road". It would
+    pass the metric without changing the drive. Also rejected: running the heights' carry-on streets on
+    to the Beltway (they would cut the estates in half; they meet the first heights street instead).
+  - **Cost options:** done, about 4 hours. Bigger, about 3 more hours: re-cut the civic superblock so
+    the streets stopping at City Hall's grounds run through (moves the government buildings).

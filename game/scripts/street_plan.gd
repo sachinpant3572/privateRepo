@@ -38,6 +38,7 @@ const MERGE := 8.0
 const STEP := 26.0
 ## The River Road and Levee Road run this far out from the water's edge.
 const RIVER_ROAD := 9.0
+const QUAY_SET := 6.0 # the quay's centreline back from the water
 ## Founders Circle's ring (centreline radius), the Esplanade's width between
 ## its drives, and Moreau Square (middle, half side).
 const CIRCLE_R := 46.0
@@ -87,12 +88,12 @@ const CLASSES := {
 	"street": {"width": 11.0, "drive": true, "rank": 2},
 	"quarter": {"width": 9.0, "drive": true, "rank": 1},
 	"lane": {"width": 7.0, "drive": false, "rank": 0},
-	"quay": {"width": 3.0, "drive": false, "rank": 0},
+	"quay": {"width": 10.0, "drive": true, "rank": 3},
 }
 const ROAD_NAMES := {
 	"lantern": "Lantern Boulevard", "crescent": "Crescent Boulevard", "rampart": "Rampart Avenue",
 	"liberty": "Liberty Avenue", "magnolia": "Magnolia Avenue", "wharf": "Wharf Street", "river_road": "River Road",
-	"levee": "Levee Road", "bridge": "Morrow Bridge", "point_ave": "Point Avenue",
+	"levee": "Levee Road", "bridge": "Morrow Bridge", "point_ave": "Point Avenue", "quay": "Ironwharf Quay",
 	"founders": "Founders Circle", "civic": "Capitol Drive", "esplanade": "Esplanade", "moreau": "Moreau Square",
 	"palmetto": "Palmetto Avenue", "cypress": "Cypress Avenue", "aurum": "Aurum Boulevard", "basin": "Basin Street",
 	"harbor": "Harbor Way", "morrow": "Morrow Boulevard",
@@ -457,7 +458,9 @@ func _layout(src: Array) -> void:
 	var band89 := _band(_river_half + RIVER_ROAD)
 	var road_line := _extend(_chain(band89, box, true), 3.0)
 	var levee := _extend(_chain(band89, box, false), 3.0)
-	var bank := _extend(_chain(band80, box, true), 3.0)
+	# The quay: a concrete apron along the water the docks streets end on,
+	# drivable, so none of them stops dead at the wharf.
+	var bank := _extend(_chain(_band(_river_half + QUAY_SET), box, true), 3.0)
 	var north := _piece(Geometry2D.clip_polygons(box, band80), Vector2(300, 300))
 	var south := _piece(Geometry2D.clip_polygons(box, band89), Vector2(300, bounds.end.y - 20.0))
 	var top := bounds.position.y - 30.0

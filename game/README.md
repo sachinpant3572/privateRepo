@@ -88,8 +88,11 @@ phone.
   Brisa Beach with Seabreeze Drive and Deco Row), Golden Flats (Wheaton, Ridley
   Crossing, farms and grain elevators), Saltgrass (bayou, the Gator Farm,
   airboats) and Verdant Hills (Larkspur, the vineyard). Suburb streets run
-  straight on from the city's; one road graph covers both, so traffic, the
-  GPS, police and taxis drive out. The play area ends in a fence and storm
+  straight on from the city's: nearly every city street that reaches the
+  edge carries on out to the Beltway, Sunvale Boulevard, Seabreeze Drive or
+  Bayou Drive, and no road round the city stops dead. The Ironwharf quay is
+  a drivable apron the docks streets end on. One road graph covers both, so
+  traffic, the GPS, police and taxis drive out. The play area ends in a fence and storm
   closure barricades; banks, the coast and bridge parapets keep cars out of
   the water. Built offline by `tools/build_country.py` into
   `data/country.json` and streamed in 100 m tiles (load at 130 m, about

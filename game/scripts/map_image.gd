@@ -119,7 +119,7 @@ static func bake(city) -> Dictionary:
 		for sgn in [-1.0, 1.0]:
 			if plan.face_of(mid + side * sgn * (w + 2.5)) < 0:
 				var s: Vector2 = side * sgn * (w + 1.0)
-				_poly(img, origin, PackedVector2Array([a, b, b + s, a + s]), ROAD if cls != "quay" else SIDEWALK)
+				_poly(img, origin, PackedVector2Array([a, b, b + s, a + s]), ROAD)
 		# Neutral grounds on the boulevards, pavers on pedestrian lanes.
 		if cls == "boulevard" or cls == "lane":
 			var half := 3.0 if cls == "boulevard" else 3.5

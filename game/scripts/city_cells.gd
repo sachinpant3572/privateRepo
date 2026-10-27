@@ -316,8 +316,7 @@ static func _streets(ctx: Ctx, edges: PackedInt32Array) -> void:
 		if cls == "bridge":
 			_bridge(ctx, e)
 		else:
-			if cls != "quay":
-				_street(ctx, e, cls)
+			_street(ctx, e, cls)
 			_open_sides(ctx, e, cls)
 
 
@@ -389,7 +388,7 @@ static func _street(ctx: Ctx, e: int, cls: String) -> void:
 				mb.box(Vector3(mid, 0.01, z), Vector3(run, 0.02, 0.12), MARKING)
 			for side in [-1.0, 1.0]:
 				_dashes(mb, s0, run, side * w * 0.25, WHITE_LINE)
-		"street":
+		"street", "quay":
 			_dashes(mb, s0, run, 0.0, MARKING)
 		"quarter":
 			# Old pavers between the curbs, no markings.
@@ -420,7 +419,7 @@ static func _street(ctx: Ctx, e: int, cls: String) -> void:
 			Props.crosswalk(mb, Vector3(s0 + 1.6, 0.0, 0), Vector3.RIGHT, w - 1.5)
 		if s1 > 0.0:
 			Props.crosswalk(mb, Vector3(s0 + run - 1.6, 0.0, 0), Vector3.RIGHT, w - 1.5)
-	if cls in ["boulevard", "avenue", "river", "street"] and run > 10.0:
+	if cls in ["boulevard", "avenue", "river", "street", "quay"] and run > 10.0:
 		# Traffic keeps right: towards b on the +z side, towards a on -z.
 		var gap := 3.6 if zebra else 1.0
 		if s1 > 0.0:
@@ -552,22 +551,21 @@ static func _open_sides(ctx: Ctx, e: int, cls: String) -> void:
 		var ext1 := 1.0 if t1 < 0.0 else 0.0
 		var outer := w + 1.2
 		var strip := PackedVector2Array([a - dir * ext0, b + dir * ext1, b + dir * ext1 + side * outer, a - dir * ext0 + side * outer])
-		ctx.mb.prism(strip, -SLAB, 0.0 if cls != "quay" else KERB, MeshBuilder.glow(ASPHALT, MeshBuilder.ASPHALT) if cls != "quay" else MeshBuilder.glow(CONCRETE, MeshBuilder.CONCRETE), CONCRETE.darkened(0.3))
+		ctx.mb.prism(strip, -SLAB, 0.0, MeshBuilder.glow(ASPHALT, MeshBuilder.ASPHALT) if cls != "quay" else MeshBuilder.glow(CONCRETE, MeshBuilder.CONCRETE), CONCRETE.darkened(0.3))
 		if not plan.is_water_point(mid + side * (w + 6.0)):
 			continue
 		var r0: Vector2 = a + dir * (t0 if t0 >= 0.0 else -ext0) + side * (outer - 0.3)
 		var r1: Vector2 = b - dir * (t1 if t1 >= 0.0 else -ext1) + side * (outer - 0.3)
 		if (r1 - r0).dot(dir) < 1.0:
 			continue
-		var y := KERB if cls == "quay" else 0.0
-		Props.fence(ctx.mb, [], _v3(r0, y), _v3(r1, y), RAIL_WHITE, 0.9)
+		Props.fence(ctx.mb, [], _v3(r0, 0.0), _v3(r1, 0.0), RAIL_WHITE, 0.9)
 		var m: Vector2 = (r0 + r1) * 0.5
 		ctx.out.append([_v3(m, 2.0), Vector3(r0.distance_to(r1) + 0.6, 4.0, 0.8), atan2(-(r1 - r0).y, (r1 - r0).x)])
 		if cls == "quay":
 			# Mooring bollards along the wharf edge.
 			var t := 6.0
 			while t < r0.distance_to(r1) - 3.0:
-				ctx.mb.cylinder(_v3(r0 + dir * t - side * 0.8, KERB), 0.25, 0.6, Color(0.15, 0.15, 0.16), 6)
+				ctx.mb.cylinder(_v3(r0 + dir * t - side * 0.8, 0.0), 0.25, 0.6, Color(0.15, 0.15, 0.16), 6)
 				t += 14.0
 
 

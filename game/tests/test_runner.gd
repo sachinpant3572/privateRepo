@@ -2277,6 +2277,42 @@ func test_country_joins_the_city() -> void:
 		if not city.drive_node(pn) or c.pos(n).distance_to(city.plan.pos(pn)) > 6.0 or not (city.COUNTRY_BASE + n) in city.next_nodes(pn) or not pn in city.next_nodes(city.COUNTRY_BASE + n):
 			bad += 1
 	_check(bad == 0, "every link joins a drivable plan junction within 6 m, both ways, %d bad" % bad)
+	# Streets run on out of the city to a major road (Sachin: "most of the
+	# roads are reaching the city end to end and then joining the highways
+	# ... they should not end abruptly"): the city's streets that meet the
+	# frame street carry on out, and no road round the city stops dead
+	# short of the play area's edge.
+	var plan = city.plan
+	var on_frame := {}
+	var inward := {}
+	for e in plan.edge_count():
+		for n in [plan.edge_a[e], plan.edge_b[e]]:
+			if plan.edge_road[e] == "frame":
+				on_frame[n] = on_frame.get(n, 0) + 1
+			elif plan.drivable(e):
+				inward[n] = true
+	var linked_to := {}
+	for n in c.links:
+		linked_to[c.links[n]] = true
+	var meets := 0
+	var carried := 0
+	for n in on_frame:
+		if on_frame[n] == 2 and inward.has(n):
+			meets += 1
+			carried += 1 if linked_to.has(n) else 0
+	_check(meets > 40 and carried >= meets * 0.9, "the city's streets carry on out past the frame (%d of %d)" % [carried, meets])
+	var near_city: Rect2 = plan.bounds.grow(750.0)
+	var dead: Array = []
+	for n in c.node_count():
+		var p: Vector2 = c.pos(n)
+		if c.degree(n) != 1 or c.links.has(n) or not near_city.has_point(p):
+			continue
+		var inside := true
+		for d in [Vector2(25, 0), Vector2(-25, 0), Vector2(0, 25), Vector2(0, -25)]:
+			inside = inside and c.in_play_area(p + d)
+		if inside:
+			dead.append(Vector2i(p))
+	_check(dead.is_empty(), "no road round the city stops dead (%s)" % [dead])
 	var wheaton: Vector3 = city.taxi_destinations().filter(func(d): return d.id == "wheaton")[0].pos
 	var path: PackedInt64Array = city.route_nodes(city.spawn_point, wheaton)
 	_check(path.size() > 20, "a route runs from Union Station to Wheaton (%d junctions)" % path.size())
