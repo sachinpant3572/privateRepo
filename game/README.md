@@ -165,16 +165,25 @@ phone.
     leftover corners get trees, planters or barrels.
 - Each block takes its layout from the map district it falls in:
   - **Gilt District**: mid-rise glass towers on stone plazas, street lights,
-    traffic lights, rooftop helipads and gardens.
-  - **Midtown**: the same towers, taller, with LED towers among them.
+    traffic lights, rooftop helipads and gardens; about a third of its lots
+    are skyscrapers, 30 to 150 m (`kits/skyline_kit.gd`: setback glass,
+    an art-deco crown, flat-roof helipad towers, a finned slab), and some
+    plazas carry an abstract statue on a plinth.
+  - **Midtown**: the same towers, taller, with LED towers and more
+    skyscrapers (twin towers with a sky bridge among them).
   - **Morrow Point**: brownstone rows; the blocks on Moreau Square have
     painted Victorian rows.
   - **Lantern Quarter**: rings of Creole townhouses with cast-iron galleries
     round shady courtyards, gas lamps, crepe myrtles.
   - **Floodline Wards**: rows of shotgun houses with porches and backyards,
-    storm-damaged houses with blue tarps, empty lots, power lines.
+    storm-damaged houses with blue tarps, empty lots, power lines; barred
+    bungalows, a housing project here and there, burned lots, and run-down
+    strips on its avenues and boulevards: motels, liquor stores, pawn
+    shops, check cashers and SRO hotels (`kits/shady_kit.gd`).
   - **Ironwharf**: warehouses, container yards and gantry cranes over the
-    river.
+    river; inland, chop shops, scrapyards, and abandoned warehouses with a
+    row of tents along the sidewalk.
+  - **The Esplanade** ends in a memorial arch at its west end.
   - **The Morrow River** curves along the south with a river road on its
     bank: animated water, railings, moored boats.
   - **Landmarks** from the map get their own blocks: Union Station, Aurum
@@ -302,7 +311,11 @@ and the minimap past the city's edge, with `res://tests/country_shots.tscn`
 the country (suburbs, Brisa Beach, towns, farms, bridges, barricades, the
 fence, estates, villages, a farmyard and fields, by day and night; `ONLY=c17_hale_estate,...`
 shoots just those views) and with `res://tests/taxi_shots.tscn` hailing,
-the fare panel, a ride and a skip.
+the fare panel, a ride and a skip. `res://tests/civic_gallery.tscn`,
+`res://tests/skyline_gallery.tscn` and `res://tests/shady_gallery.tscn`
+render every kind of the civic, skyline and shady kits; the screenshots
+include aerial views of Gilt, Midtown, the Wards, Ironwharf and the
+Esplanade's arch (shots 37 to 41).
 
 The country is generated, not hand-made. After changing `data/world_map.json`
 or the street plan, dump the plan and rebuild it (needs `pip install shapely`):

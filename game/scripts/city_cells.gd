@@ -17,15 +17,22 @@ extends RefCounted
 ##   merged blocks hold several buildings; a landmark takes a parcel of its
 ##   own in the middle of the front. Each parcel gets one layout:
 ##   - Lantern Quarter: Creole townhouse rings, shops and gardens;
-##   - Floodline Wards and Morrow Point: shotgun rows, chapels, pocket parks;
-##   - Gilt District: towers, plazas and parking; Midtown taller, with LED
-##     towers;
+##   - Floodline Wards and Morrow Point: shotgun rows, chapels, pocket parks,
+##     barred bungalows, a housing project, burned lots, and run-down
+##     strips (motels, liquor, pawn, check cashing, SROs; kits/shady_kit.gd)
+##     on their avenues and boulevards;
+##   - Gilt District: towers, plazas (a fountain or a statue on a plinth)
+##     and parking, a third of it skyscrapers (kits/skyline_kit.gd); Midtown
+##     taller, with LED towers and more skyscrapers;
 ##   - Morrow Point: brownstone rows round green block cores (Brooklyn);
 ##   - round Moreau Square: painted Victorian rows (SF's Alamo Square);
 ##   - Ironwharf: warehouses and container yards, cranes on the quay;
+##     inland, chop shops, scrapyards, and abandoned warehouses with a tent
+##     row along the sidewalk (skid row);
 ##   - landmarks, the government buildings among them (kits/civic_kit.gd);
 ##   - the civic centre's set pieces: City Hall's grounds, the Esplanade
-##     with its reflecting pool, Founders Circle with the obelisk.
+##     with its reflecting pool and the memorial arch at its west end,
+##     Founders Circle with the obelisk.
 ##   The rest of the lot (corners of odd-shaped blocks) gets trees,
 ##   planters or barrels.
 
@@ -33,6 +40,8 @@ const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const Buildings = preload("res://scripts/kits/building_kit.gd")
 const Props = preload("res://scripts/kits/prop_kit.gd")
 const Civic = preload("res://scripts/kits/civic_kit.gd")
+const Skyline = preload("res://scripts/kits/skyline_kit.gd")
+const Shady = preload("res://scripts/kits/shady_kit.gd")
 const StreetPlan = preload("res://scripts/street_plan.gd")
 
 ## Road and block slabs reach down into the water so quays have walls.
@@ -88,6 +97,16 @@ const CIVIC_LANDMARKS := {
 }
 ## The set pieces whose blocks are lawn rather than lots.
 const LAWNS := ["green", "esplanade", "circle", "square"]
+## Skyscrapers (skyline_kit.gd) per district, repeats weighting the draw:
+## Gilt is the older financial core (helipad roofs, granite slabs, an
+## art-deco crown), Midtown the newer glass towers.
+const GILT_TOWERS := ["skyscraper_glass", "skyscraper_helipad", "skyscraper_helipad", "skyscraper_crown", "skyscraper_slab", "highrise_mid", "highrise_mid"]
+const MIDTOWN_TOWERS := ["skyscraper_glass", "skyscraper_glass", "skyscraper_crown", "skyscraper_twin", "skyscraper_helipad", "highrise_mid"]
+## Shady storefronts (shady_kit.gd) along the Wards' avenues and boulevards,
+## like LA's Figueroa or Western: motels, liquor, pawn, check cashing, SROs.
+const STRIP_SHOPS := ["liquor_store", "pawn_shop", "check_cashing", "motel", "sro_hotel", "liquor_store", "pawn_shop"]
+## The run-down yards of inland Ironwharf.
+const DOCKS_SHADY := ["chop_shop", "scrapyard", "abandoned_warehouse"]
 
 
 class Ctx:
@@ -123,6 +142,8 @@ class Ctx:
 	var open := {"+x": true, "-x": true, "+z": true, "-z": true}
 	## Parcels used so far, as world polygons (the filler keeps out).
 	var used: Array = []
+	## Class of the street along the parcel's front (+z), or "".
+	var front_cls := ""
 
 
 static func build(city, cell: int) -> Dictionary:
@@ -191,6 +212,8 @@ static func _use_parcel(ctx: Ctx, r: Rect2, flipped := false, ff = null) -> void
 				best_k = k
 		var cls: String = ctx.plan.side_class(ctx.face, best_k) if best_k >= 0 else ""
 		ctx.open[key] = best < StreetPlan.SIDEWALK + 3.5 and cls != "" and cls != "quay"
+		if key == "+z":
+			ctx.front_cls = cls if ctx.open[key] else ""
 	ctx.open["+z"] = ctx.open["+z"] or (not flipped and r.end.y > ctx.rect.end.y - 0.5 and ff == null)
 
 
@@ -784,10 +807,12 @@ static func _district_parcel(ctx: Ctx, district: String) -> void:
 	var roll := ctx.rng.randf()
 	match district:
 		"midtown":
-			if roll < 0.12 and ctx.hx >= 11.0 and ctx.hz >= 9.0:
+			if roll < 0.1 and ctx.hx >= 11.0 and ctx.hz >= 9.0:
 				_civic(ctx, "led_tower", PLAZA)
-			elif roll < 0.18:
+			elif roll < 0.16:
 				_plaza(ctx)
+			elif roll < 0.55 and ctx.hx >= 15.0 and ctx.hz >= 15.0:
+				_kit(ctx, Skyline, MIDTOWN_TOWERS[ctx.rng.randi() % MIDTOWN_TOWERS.size()], PLAZA)
 			else:
 				_downtown(ctx, 1.4)
 		"brownstone":
@@ -802,18 +827,34 @@ static func _district_parcel(ctx: Ctx, district: String) -> void:
 				_plaza(ctx)
 			elif roll < 0.18:
 				_parking(ctx)
+			elif roll < 0.5 and ctx.hx >= 15.0 and ctx.hz >= 15.0:
+				_kit(ctx, Skyline, GILT_TOWERS[ctx.rng.randi() % GILT_TOWERS.size()], PLAZA)
 			else:
 				_downtown(ctx)
 		"wards":
-			if roll < 0.08:
+			if ctx.front_cls in ["avenue", "boulevard"] and roll < 0.75:
+				_strip(ctx)
+			elif roll < 0.06:
 				_pocket_park(ctx)
-			elif roll < 0.14 and ctx.hx < 30.0:
+			elif roll < 0.11 and ctx.hx < 30.0:
 				_chapel(ctx)
+			elif roll < 0.2 and ctx.hx >= 20.0 and ctx.hz >= 13.0:
+				_kit(ctx, Shady, "housing_project", GRASS.darkened(0.1), 1.0)
+			elif roll < 0.32:
+				_bungalows(ctx)
+			elif roll < 0.36:
+				_kit(ctx, Shady, "burned_lot", MUD, 1.5)
 			else:
 				_wards(ctx, "")
 		"docks":
-			if roll < 0.12:
+			if roll < 0.1:
 				_parking(ctx)
+			elif roll < 0.36:
+				var kind: String = DOCKS_SHADY[ctx.rng.randi() % DOCKS_SHADY.size()]
+				if kind == "abandoned_warehouse" and ctx.hz >= 16.0:
+					_skid_row(ctx)
+				else:
+					_kit(ctx, Shady, kind, YARD)
 			else:
 				_docks(ctx, -1)
 		_:
@@ -1042,6 +1083,90 @@ static func _chapel(ctx: Ctx) -> void:
 	_done(ctx, props, false, ctx.props)
 
 
+## A kit building (`kit`: Skyline or Shady) on the parcel, front to the
+## street, as big as the parcel but no more than `grow` times the kit's own
+## lot, set at the front.
+static func _kit(ctx: Ctx, kit, kind: String, ground: Color, grow := 1.3) -> void:
+	_ground(ctx, ground)
+	var size: Vector2 = kit.default_size(kind) * grow
+	size = Vector2(minf(size.x, ctx.hx * 2.0), minf(size.y, ctx.hz * 2.0))
+	var local := _at(ctx, Vector3(0, KERB, ctx.hz - size.y * 0.5), PI)
+	kit.build(kind, ctx.mb, local, size, ctx.rng)
+	_done(ctx, local)
+
+
+## A run-down commercial strip on a Wards avenue or boulevard: liquor
+## store, pawn shop, check casher, motel and SRO side by side along the
+## front, each at its own width, a burned lot in a gap too narrow for a
+## shop, and shotguns on the back street.
+static func _strip(ctx: Ctx) -> void:
+	var rng := ctx.rng
+	var hx := ctx.hx
+	var hz := ctx.hz
+	_ground(ctx, Shady.SIDEWALK)
+	var back: bool = ctx.open["-z"] and hz >= 22.0
+	var deep := hz if back else hz * 2.0
+	var x := -hx
+	while x < hx - 6.0:
+		var kind: String = STRIP_SHOPS[rng.randi() % STRIP_SHOPS.size()]
+		var size: Vector2 = Shady.default_size(kind)
+		if size.x > hx - x:
+			kind = "burned_lot"
+			size = Vector2(hx - x, minf(20.0, deep))
+		var w := size.x
+		if hx - x - w < 8.0:
+			w = hx - x
+		var d := minf(size.y, deep)
+		var local := _at(ctx, Vector3(x + w * 0.5, KERB, hz - d * 0.5), PI)
+		Shady.build(kind, ctx.mb, local, Vector2(w - 0.4, d), rng)
+		_done(ctx, local)
+		x += w
+	if back:
+		var slots := maxi(2, int(hx * 2 / 6.8))
+		var slot_w := hx * 2 / slots
+		for k in slots:
+			if rng.randf() < 0.15:
+				continue
+			var d := minf(12.0, hz - 2.0)
+			var local := _at(ctx, Vector3(-hx + slot_w * (k + 0.5), KERB, -hz + d * 0.5), 0.0)
+			Buildings.shotgun(ctx.mb, local, minf(5.4, slot_w - 0.6), d, rng, rng.randf() < 0.3)
+			_done(ctx, local)
+
+
+## A row of barred bungalows (LA's flatlands): small stucco houses behind
+## chain-link, one per 12 m lot, on each street side of the parcel.
+static func _bungalows(ctx: Ctx) -> void:
+	var hx := ctx.hx
+	var hz := ctx.hz
+	_ground(ctx, GRASS.darkened(0.08))
+	var both: bool = ctx.open["-z"] and hz >= 14.0
+	var slots := maxi(1, int(hx * 2 / 12.0))
+	var slot_w := hx * 2 / slots
+	for side in [1.0, -1.0]:
+		if not ctx.open["+z" if side > 0 else "-z"] or (side < 0 and not both):
+			continue
+		var d := minf(22.0, hz if both else hz * 2.0)
+		for k in slots:
+			var local := _at(ctx, Vector3(-hx + slot_w * (k + 0.5), KERB, side * (hz - d * 0.5)), PI if side > 0 else 0.0)
+			Shady.build("bungalow_barred", ctx.mb, local, Vector2(slot_w - 0.3, d), ctx.rng)
+			_done(ctx, local)
+
+
+## Skid row: an abandoned warehouse at the back of the lot and a line of
+## tents and tarps along the sidewalk in front of it.
+static func _skid_row(ctx: Ctx) -> void:
+	_ground(ctx, YARD)
+	var tents := 6.0
+	var d := minf(30.0, ctx.hz * 2.0 - tents - 1.0)
+	var w := minf(40.0, ctx.hx * 2.0)
+	var local := _at(ctx, Vector3(0, KERB, -ctx.hz + d * 0.5), PI)
+	Shady.build("abandoned_warehouse", ctx.mb, local, Vector2(w, d), ctx.rng)
+	_done(ctx, local)
+	var row := _at(ctx, Vector3(0, KERB, ctx.hz - tents * 0.5), PI)
+	Shady.build("tent_row", ctx.mb, row, Vector2(ctx.hx * 2.0 - 1.0, tents), ctx.rng)
+	_done(ctx, row, false, ctx.props)
+
+
 ## Gilt District: towers on a stone plaza, sized to the block. Kept mid-rise
 ## so roofs don't swallow the street under the 3/4 camera.
 ## `tall` scales the heights (Midtown stands taller).
@@ -1072,17 +1197,27 @@ static func _tower(ctx: Ctx, pos: Vector3, w: float, d: float, h: float) -> void
 	_done(ctx, local)
 
 
-## A Gilt plaza: paving, a fountain, palms and benches.
+## A Gilt plaza: paving, a fountain or a monument (an abstract statue on
+## a plinth), palms and benches.
 static func _plaza(ctx: Ctx) -> void:
 	_ground(ctx, PLAZA.lightened(0.08))
 	var mb = ctx.mb
+	var statue := ctx.rng.randf() < 0.45 and minf(ctx.hx, ctx.hz) >= 10.0
+	if statue:
+		var s := minf(20.0, minf(ctx.hx, ctx.hz) * 2.0 - 8.0)
+		var monument := _at(ctx, Vector3(0, KERB, 0), PI)
+		Skyline.build("statue_plinth", mb, monument, Vector2(s, s), ctx.rng)
+		_done(ctx, monument, false)
 	var local := _at(ctx, Vector3(0, KERB, 0), 0.0)
 	for k in 5:
-		mb.box(Vector3(0, 0.02, -ctx.hz + (k + 0.5) * ctx.hz * 0.4), Vector3(ctx.hx * 2, 0.02, 0.15), PLAZA.darkened(0.08))
-	mb.cylinder(Vector3(0, 0, 0), 3.2, 0.6, Buildings.STONE, 12)
-	mb.cylinder(Vector3(0, 0.05, 0), 2.9, 0.6, Color(0.35, 0.6, 0.75), 12)
-	mb.cylinder(Vector3(0, 0.6, 0), 0.4, 2.0, Buildings.STONE.lightened(0.1), 6)
-	local.append([Vector3(0, 0.5, 0), Vector3(6.4, 1.0, 6.4)])
+		var z := -ctx.hz + (k + 0.5) * ctx.hz * 0.4
+		if not statue or absf(z) > 10.5:
+			mb.box(Vector3(0, 0.02, z), Vector3(ctx.hx * 2, 0.02, 0.15), PLAZA.darkened(0.08))
+	if not statue:
+		mb.cylinder(Vector3(0, 0, 0), 3.2, 0.6, Buildings.STONE, 12)
+		mb.cylinder(Vector3(0, 0.05, 0), 2.9, 0.6, Color(0.35, 0.6, 0.75), 12)
+		mb.cylinder(Vector3(0, 0.6, 0), 0.4, 2.0, Buildings.STONE.lightened(0.1), 6)
+		local.append([Vector3(0, 0.5, 0), Vector3(6.4, 1.0, 6.4)])
 	for q in [Vector3(-1, 0, -1), Vector3(1, 0, -1), Vector3(-1, 0, 1), Vector3(1, 0, 1)]:
 		Props.palm(mb, local, Vector3(q.x * ctx.hx * 0.65, 0, q.z * ctx.hz * 0.65), ctx.rng)
 		Props.bench(mb, local, Vector3(q.x * 6.0, 0, q.z * 4.5), 0.0 if q.z < 0 else PI)
@@ -1402,9 +1537,19 @@ static func _esplanade(ctx: Ctx) -> void:
 	var mb = ctx.mb
 	var hx := ctx.hx
 	var hz := ctx.hz
-	var pool := _at(ctx, Vector3(0, KERB, 0), PI / 2)
-	Civic.build("reflecting_pool", mb, pool, Vector2(minf(24.0, hz * 2.0 - 16.0), minf(120.0, hx * 2.0 - 24.0)), ctx.rng)
+	# The Veterans Arch closes the west end of the pool when there is room
+	# (the Mall's memorial at the end of its reflecting pool).
+	var arch := hx * 2.0 >= 150.0 and hz * 2.0 >= 30.0
+	var arch_w := 34.0 if arch else 0.0
+	var pool_len := minf(120.0, hx * 2.0 - 24.0 - arch_w)
+	var pool := _at(ctx, Vector3(arch_w * 0.5, KERB, 0), PI / 2)
+	Civic.build("reflecting_pool", mb, pool, Vector2(minf(24.0, hz * 2.0 - 16.0), pool_len), ctx.rng)
 	_done(ctx, pool, false, ctx.props)
+	var ax := arch_w * 0.5 - pool_len * 0.5 - 16.0
+	if arch:
+		var monument := _at(ctx, Vector3(ax, KERB, 0), PI / 2)
+		Skyline.build("memorial_arch", mb, monument, Vector2(minf(36.0, hz * 2.0 - 14.0), 28.0), ctx.rng)
+		_done(ctx, monument)
 	var local := _at(ctx, Vector3(0, KERB, 0), 0.0)
 	for z in [-hz + 6.0, hz - 6.0]:
 		mb.box(Vector3(0, 0.03, z), Vector3(hx * 2.0 - 4.0, 0.04, 3.0), PLAZA.lightened(0.08))
@@ -1412,7 +1557,7 @@ static func _esplanade(ctx: Ctx) -> void:
 	while x <= hx - 6.0:
 		for z in [-hz + 2.5, hz - 2.5]:
 			Props.oak(mb, local, Vector3(x, 0, z), ctx.rng)
-		if absf(x) > 8.0 and int((x + hx) / 12.0) % 2 == 0:
+		if absf(x) > 8.0 and int((x + hx) / 12.0) % 2 == 0 and not (arch and absf(x + 6.0 - ax) < 16.0):
 			Props.bench(mb, local, Vector3(x + 6.0, 0, hz - 8.2), 0.0)
 			Props.bench(mb, local, Vector3(x + 6.0, 0, -hz + 8.2), PI)
 		x += 12.0

@@ -100,6 +100,39 @@ func _run() -> void:
 		game.camera.snap()
 		await _frames(90)
 		await _shot(stop[0] + ".png")
+	# Bellerive CA: the skyline kit's towers and monuments and the shady
+	# kit's strips, bungalows and yards, from above and from the street.
+	var esplanade := Vector2.ZERO
+	for sp in game.city.plan.set_pieces:
+		if sp.id == "esplanade":
+			esplanade = sp.at
+	var aerials := [
+		["37_gilt_skyline", Vector3(150, 0, 230), 170.0],
+		["38_midtown_skyline", Vector3(500, 0, 180), 170.0],
+		["39_wards_from_above", Vector3(1080, 0, 620), 130.0],
+		["40_ironwharf_from_above", Vector3(1000, 0, 930), 130.0],
+		["41_esplanade_arch", Vector3(esplanade.x - 50.0, 0, esplanade.y), 110.0],
+	]
+	for stop in aerials:
+		var pos: Vector3 = stop[1]
+		game.city.stream_now(pos)
+		game.player.global_position = pos
+		game.player.reset_physics_interpolation()
+		game.camera.fixed_focus = pos
+		game.camera.room_size = stop[2]
+		game.camera.snap()
+		await _frames(90)
+		await _shot(stop[0] + ".png")
+	game.camera.fixed_focus = null
+	game.camera.room_size = 0.0
+	for stop in [["42_gilt_street", _road_spot(game, "", Vector2(150, 260))], ["43_wards_strip", _road_spot(game, "cypress", Vector2(1010, 650))]]:
+		var pos: Vector3 = stop[1]
+		game.city.stream_now(pos)
+		game.player.global_position = pos
+		game.player.reset_physics_interpolation()
+		game.camera.snap()
+		await _frames(90)
+		await _shot(stop[0] + ".png")
 	for mood in MOODS:
 		var pos: Vector3 = game.city.landmark_frame(mood[1]) * mood[2]
 		game.atmosphere.hour = mood[3]

@@ -87,3 +87,21 @@ the government buildings and the outskirts patterns from v3 carry over.
   - **Cost options:**
     - done: this pass, about 3 hours;
     - bigger, about 4-6 more hours: per-superblock block counts (more variety, but streets would offset at boulevards) or a second rotated district.
+- C-8 **Skyline and shady kits placed in the core** (`city_cells.gd _district_parcel`; outskirts by the
+  country pipeline, `build_country.py`):
+  - **Gilt:** 32% of parcels of at least 30 x 30 m are skyscrapers (`GILT_TOWERS`, helipad-heavy, the older
+    core). **Midtown:** 39% (`MIDTOWN_TOWERS`, glass-heavy, twin towers). Kit footprint up to 1.3x its
+    own lot, set at the front.
+  - **Wards:** a parcel fronting an avenue or boulevard (`ctx.front_cls`, set in `_use_parcel`) is a
+    run-down strip 75% of the time (`_strip`: liquor, pawn, check cashing, motel, SRO side by side,
+    shotguns on the back street). Elsewhere: housing project 9% on big parcels, barred bungalows 12%,
+    burned lot 4%, the shotgun rows the rest.
+  - **Ironwharf inland:** 26% chop shop, scrapyard or abandoned warehouse; an abandoned warehouse on a
+    deep parcel gets a tent row along the sidewalk (`_skid_row`). Quay blocks are unchanged.
+  - **Monuments:** 45% of Gilt plazas get `statue_plinth` instead of the fountain; the Esplanade gets
+    `memorial_arch` at its west end when it is 150 m or longer (the pool shortens by 34 m).
+  - **Rejected:** a flag in the plan for "commercial frontage". Reading the class of the street at the
+    parcel's front was enough.
+  - **Open:** towers up to 150 m hide the streets north of them under the 60-degree camera; the
+    cutaway clears the player only. If it reads badly in play, cap Gilt at `highrise_mid` near the
+    player's usual routes, or fade towers near the camera.
