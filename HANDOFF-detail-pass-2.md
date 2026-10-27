@@ -52,13 +52,15 @@ Follows HANDOFF-modern-look.md (surface codes, shader, traps live there).
      across that line held them there for good: the review found it at
      the works, and a sweep of every sidewalk segment found about 140
      such spots from earlier passes too.
-   - Fix: pedestrians held up for 0.3 s step sideways (and a little back)
-     for 0.8 s, and try the other side when that side is blocked too
-     (pedestrian.gd). `test_people_walk_past_sidewalk_props` walks
-     pedestrians past each downtown sidewalk prop, both sides first, in
-     front of a building wall; 7 of its 10 checks fail without the detour.
-     In the live city, wandering pedestrians standing still for 6 s fell
-     from 79 of 213 to 10 of 212.
+   - Fix (pedestrian.gd): held up for 0.3 s, a pedestrian steps sideways
+     (and a little back, out of pockets) for 0.8 s: building side first,
+     the street side when that is blocked, never more than 0.6 m off the
+     line toward the curb (1.2 m away). The first version picked a random
+     side and walked a quarter of them into the road (second review).
+   - `test_people_walk_past_sidewalk_props` walks two pedestrians past
+     each downtown sidewalk prop in front of a building wall and checks
+     they stay on the curb. Without the detour, 5 of its 10 checks fail:
+     the roadworks and shelter rows only guard their placement.
 7. Triangle cost, measured over all 655 cells:
    - mean 2.7k -> 3.5k per cell; p90 5.7k -> 7.1k; max 12k -> 17.1k (one
      120 x 205 m downtown block);
@@ -81,8 +83,9 @@ Follows HANDOFF-modern-look.md (surface codes, shader, traps live there).
    9 m ahead on the lane, slow near junctions, choose the turn on the
    approach, take sharp turns forward, back off after wall hits.
 
-9. Review fixes: body roll, pitch and bike lean follow the real velocity,
-   so a vehicle pinned against a wall stays level. Green (sedum) roofs
+9. Review fixes: body roll, pitch and bike lean follow
+   `get_real_velocity()`, so a vehicle pinned against a wall stays level.
+   The bus stop sign stands at the curb, in front of the shelter. Green (sedum) roofs
    also get the leaf shading, since they are code 7 above 0.7 m; they read
    as planted roofs, so it stays.
 

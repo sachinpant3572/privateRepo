@@ -989,19 +989,25 @@ func test_people_walk_past_sidewalk_props() -> void:
 		add_child(front)
 		nodes.append(front)
 		city.sidewalk_loops.append(PackedVector3Array([origin + Vector3(-6, 0, 0.75), origin + Vector3(30, 0, 0.75), origin + Vector3(30, 0, -20)]))
-		for side in 2:
+		for n in 2:
 			var ped = Pedestrian.new()
 			ped.setup(city, rng, i, 1)
 			ped.step = 1
-			ped._detour_side = 1.0 if side == 0 else -1.0
-			ped.position = city.sidewalk_loops[i][0] - Vector3(side * 1.5, 0, 0)
+			ped.position = city.sidewalk_loops[i][0] - Vector3(n * 1.5, 0, 0)
 			add_child(ped)
 			nodes.append(ped)
 			peds.append(ped)
-	await _frames(900)
+	# The curb is at frame z -0.45; nobody steps off it to get round.
+	var lowest := []
+	lowest.resize(peds.size())
+	lowest.fill(INF)
+	for f in 900:
+		await _frames(1)
+		for k in peds.size():
+			lowest[k] = minf(lowest[k], peds[k].position.z - 500.0)
 	for i in names.size():
-		for side in 2:
-			var x: float = peds[i * 2 + side].position.x - i * 40.0
-			_check(x > 4.0, "a pedestrian gets past the %s, trying side %d first (x %.1f)" % [names[i], side, x])
+		for k in [i * 2, i * 2 + 1]:
+			var x: float = peds[k].position.x - i * 40.0
+			_check(x > 4.0 and lowest[k] > -0.45, "pedestrian %d gets past the %s on the sidewalk (x %.1f, nearest the street z %.2f)" % [k % 2 + 1, names[i], x, lowest[k]])
 	for n in nodes:
 		n.queue_free()

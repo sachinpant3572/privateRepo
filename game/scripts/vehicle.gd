@@ -428,7 +428,7 @@ func _drive(delta: float) -> void:
 	global_position.y = 0.0
 	# Tilt follows how the body really moves, so a car pinned against a
 	# wall with the throttle down stays level.
-	var moved := velocity.dot(-global_basis.z)
+	var moved := get_real_velocity().dot(-global_basis.z)
 	_body_tilt(delta, moved * yaw / delta, (moved - _moved) / delta)
 	_moved = moved
 	_handle_collisions(before)

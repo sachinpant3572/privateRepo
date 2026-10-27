@@ -104,10 +104,11 @@ static func bus_shelter(mb, out: Array, p: Vector3, rng: RandomNumberGenerator) 
 	mb.box(p + Vector3(1.85, 1.3, 0.35), Vector3(0.18, 1.5, 0.8), MeshBuilder.glow(ad, MeshBuilder.GLOW_NEON))
 	mb.box(p + Vector3(-0.3, 0.48, 0.55), Vector3(2.4, 0.08, 0.45), steel)
 	mb.box(p + Vector3(-0.8, 2.0, 0.84), Vector3(1.2, 0.5, 0.06), MeshBuilder.glow(Color(0.15, 0.2, 0.35), MeshBuilder.GLOW_NEON))
-	mb.cylinder(p + Vector3(-2.4, 0.15, -0.3), 0.05, 2.8, STEEL, 4)
-	mb.box(p + Vector3(-2.4, 2.75, -0.3), Vector3(0.5, 0.5, 0.05), Color(0.15, 0.35, 0.75))
+	# The stop sign stands at the curb, 1.45 m in front of the shelter.
+	mb.cylinder(p + Vector3(-2.4, 0.15, -1.45), 0.05, 2.8, STEEL, 4)
+	mb.box(p + Vector3(-2.4, 2.75, -1.45), Vector3(0.5, 0.5, 0.05), Color(0.15, 0.35, 0.75))
 	out.append([p + Vector3(0, 1.2, 0.6), Vector3(3.8, 2.4, 0.6)])
-	out.append([p + Vector3(-2.4, 1.2, -0.3), Vector3(0.2, 2.4, 0.2)])
+	out.append([p + Vector3(-2.4, 1.2, -1.45), Vector3(0.2, 2.4, 0.2)])
 
 
 ## Electric-vehicle charging post with a lit status ring and a holstered
