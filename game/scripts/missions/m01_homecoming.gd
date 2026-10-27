@@ -80,6 +80,9 @@ func run() -> void:
 		if lost > LOST_TIME:
 			fail("The thief got away.")
 			return
+		if getaway.wrecked:
+			fail("The thief's scooter is wrecked. He needs to lead you to his crew.")
+			return
 		if crew.is_empty() and getaway.global_position.distance_to(square) < 140.0:
 			# His crew waits at the Square, with their car.
 			for i in Cast.CREW.size():

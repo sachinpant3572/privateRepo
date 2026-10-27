@@ -42,11 +42,7 @@ diagonal avenue. Research goes into reference/MAP_BUILDING.md section 6.
     the neighbour that best improves the fit of the lot rect in the front
     frame (LANDMARK_LOTS, default 22 x 22). Rejected: joining by
     compactness (made a 34 x 399 m strip).
-12. Thinning caps the joined block per patch (max extent along U and V and
-    an area cap), with union-find over faces. `_hugs` drops patch lines that
-    run alongside a region edge (they made slivers by the seams).
-13. Magnolia Avenue: a curved avenue through Gilt west, so Gilt isn't one
-    tilted grid. A frame street round bounds.grow(-4) closes outer blocks.
+12-13. Thinning caps, _hugs, Magnolia, frame street: see the archive.
 14. Fan and cross-bend per patch (after a re-check against Watch Dogs'
     "too straight, too many right angles"): u-lines splay from the patch
     middle (`fan`) and curve (`bend_u`); `bend` is 2-3x stronger. Gilt
@@ -72,7 +68,7 @@ diagonal avenue. Research goes into reference/MAP_BUILDING.md section 6.
 20. Jogged cross streets (`jog` per patch, review 1 said Wards and Morrow
     Point still read as turned grids): a v-street piece between two
     u-streets steps 28-42% of the spacing sideways, so crossroads become
-    offset T-junctions (T:X was 240:355 before jogs, TEEX after all of
+    offset T-junctions (T:X was 240:355 before jogs, 497:233 after all of
     map v2). A step only goes between two u-streets that made it into the
     plan (the hug filter drops some), with both its ends inside the
     district. The first try jogged towards dropped u-streets: those
@@ -108,7 +104,7 @@ diagonal avenue. Research goes into reference/MAP_BUILDING.md section 6.
     is a seam: the Wards south of it stay at -25 deg (jog 0.45 -> 0.3),
     a new patch `wards_n` north of it runs at +12 deg with a fan and
     cross-bend. Wards share in their best 30 deg band (both street
-    families): 97% -> WARDSBAND. Rejected: only lowering the jog (the
+    families): 97% -> about 51% (50-52% on seeds 1, 7, 42, 99, 2024). Rejected: only lowering the jog (the
     angle is what reads as a grid) and a second diagonal through the
     Wards (Liberty already crosses them).
 26. _trim_close: a district street stretch within half a street gap of
@@ -126,6 +122,11 @@ diagonal avenue. Research goes into reference/MAP_BUILDING.md section 6.
     stub, and checks every remaining end of the dropped links is joined
     to the others (a stub's far end went unchecked when the junction
     between them emptied). _joined searches from the end in the window.
+28. Homecoming: the chase fails (with retry) if the thief's scooter is
+    wrecked; before, the mission waited for it forever. The test skips to
+    the chase end along the last street leg (the very last leg is the hop
+    to the curb; stepping back along it put the scooter in a building).
+    Bigger option not taken: the thief runs on foot to the Square.
 
 ## Port of the game and API mapping
 Done; notes in `HANDOFF-map-v2-archive.md`.
@@ -144,5 +145,5 @@ Done; notes in `HANDOFF-map-v2-archive.md`.
   landmark points, so its plan differs a little. Check the game's plan.
 - Tests that teleport along "x" assumed east-west streets; place things
   along the route or street instead.
-- Build time: BUILDT s on desktop (blocks ~0.2 s is the big step; thin
+- Build time: 0.65-0.9 (up to 1.1 under load) s on desktop (blocks ~0.2 s is the big step; thin
   was 0.25 s before _joined). Watch this on phones.

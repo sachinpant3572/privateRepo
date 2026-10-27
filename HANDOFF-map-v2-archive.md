@@ -63,3 +63,8 @@ lines. The port is done; this is for reading old code or old notes.
 18. Parked cars face the way traffic runs in the near lane (curb_yaw was
     reversed). Homecoming's getaway parks at -34 so it pulls away from the
     other parked cars.
+12. Thinning caps the joined block per patch (max extent along U and V and
+    an area cap), with union-find over faces. `_hugs` drops patch lines that
+    run alongside a region edge (they made slivers by the seams).
+13. Magnolia Avenue: a curved avenue through Gilt west, so Gilt isn't one
+    tilted grid. A frame street round bounds.grow(-4) closes outer blocks.

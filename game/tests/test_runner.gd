@@ -452,13 +452,15 @@ func test_homecoming_runs_start_to_finish() -> void:
 	await _talk_until(func(): return mm.objective_text == "Follow the thief", 120)
 	await _frames(60)
 	_check(m.getaway.speed > 3.0, "the thief drives his route")
-	# Skip to the end of the chase: both scooters near the Square.
-	# Back along the route's last leg, so both stay in the street.
-	var end: Vector3 = m.getaway.path[m.getaway.path.size() - 1]
-	var leg: Vector3 = (end - m.getaway.path[m.getaway.path.size() - 2]).normalized()
+	# Skip to the end of the chase: both scooters near the Square, back
+	# along the route's last street leg so both stay in the street (the
+	# very last leg is the hop from the lane to the curb).
+	var stops: int = m.getaway.path.size()
+	var end: Vector3 = m.getaway.path[stops - 2]
+	var leg: Vector3 = (end - m.getaway.path[stops - 3]).normalized()
 	m.getaway.global_position = end - leg * 12.0
 	m.getaway.rotation.y = atan2(-leg.x, -leg.z)
-	m.getaway.path_index = m.getaway.path.size() - 1
+	m.getaway.path_index = stops - 2
 	m.spare.global_position = end - leg * 20.0
 	m.spare.rotation.y = atan2(-leg.x, -leg.z)
 	game.city.stream_now(end)

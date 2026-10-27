@@ -208,21 +208,22 @@ Measured in the game's own build (seed 1234), inside the playable window.
 
 | Measure | Map 0.3 | Map v2 |
 |---|---|---|
-| Blocks that are not plain rectangles | none | 42% (226 of 530): not four-cornered, a corner more than 12° off square, or bent sides |
-| Junctions | all crossroads | 498 T-junctions, 242 crossroads, 13 with five or more streets |
-| Drivable street length within 10° of the compass | most | 30% |
-| Block area (10th / 50th / 90th percentile) | one size | 1,530 / 3,050 / 5,900 m² |
+| Blocks that are not plain rectangles | none | 44% (233 of 521): not four-cornered, a corner more than 12° off square, or bent sides |
+| Junctions | all crossroads | 497 T-junctions, 233 crossroads, 1 with five streets (Crescent, Liberty and Rampart) |
+| Drivable street length within 10° of the compass | most | 32% |
+| Floodline Wards street length in its best 30° band (both street directions) | 100% | 52% |
+| Block area (10th / 50th / 90th percentile) | one size | 1,580 / 3,090 / 5,910 m² |
 
 - **Streets in the window:**
-  - 816 ordinary street segments and 342 Quarter street segments;
-  - 108 avenue, 51 boulevard and 50 river road segments;
-  - 57 pedestrian lanes, 7 quay walls and the bridge.
+  - 745 ordinary street segments and 333 Quarter street segments;
+  - 125 avenue, 49 boulevard and 50 river road segments;
+  - 53 pedestrian lanes, 7 quay walls and the bridge.
 - **No holes:** every street has a block on at least one side, except the
-  bridge, and every point of land in the window is in a block (the river
-  banks run on to the map's edge).
+  bridge, and land sampled every 10 m across the window is all in blocks
+  (the river banks run on to the map's edge); lots keep their corners.
 - **Other seeds:** seeds 1, 2, 3, 7, 42, 99 and 2024 also place all 13
   landmarks on their streets, with no holes.
-- **Build time:** 0.6-0.8 s on a desktop CPU (blocks about 0.2 s, the
+- **Build time:** 0.65-0.9 s on a desktop CPU (up to 1.1 s under load) (blocks about 0.2 s, the
   rest under 0.1 s each); it may be 2-4x slower on a phone.
 - **Both of Sachin's asks:**
   - Morrow Bridge reaches Morrow Point, a new district on the far bank;
