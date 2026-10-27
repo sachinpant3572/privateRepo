@@ -11,7 +11,7 @@ extends RefCounted
 
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const Props = preload("res://scripts/kits/prop_kit.gd")
-const Kit = preload("res://tests/stub_kit.gd") # PROBE
+const Kit = preload("res://scripts/kits/country_kit.gd")
 
 const GROUND_Y := -0.04
 const ROAD_Y := 0.0

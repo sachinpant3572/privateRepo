@@ -88,6 +88,9 @@ var _yield_time := -1.0
 ## wedged against a median end gets the room to turn past it.
 var _last_reverse := 0.0
 var _since_reverse := 10.0
+## The last wall or prop the car pressed against (its normal, flat): a
+## scripted driver that backed off it drives along it for a moment.
+var _wall_normal := Vector3.ZERO
 var _deployed := false
 var _light_time := 0.0
 var _lights: Array[MeshInstance3D] = []
@@ -191,6 +194,9 @@ func drive_path(points: PackedVector3Array, throttle_amount := 0.6) -> void:
 	path_index = 0
 	script_throttle = throttle_amount
 	driver = Driver.SCRIPT
+	_stuck_time = 0.0
+	_reverse_time = 0.0
+	_since_reverse = 10.0
 	# Skip the junction just behind us; drive on to the next one.
 	var fwd := -global_basis.z
 	while path_index < path.size() - 1:
@@ -213,8 +219,52 @@ func _script_ai() -> void:
 			path_done.emit(self)
 		return
 	desired_dir = to.normalized()
+	if path_index > 0:
+		# Follow the line from the last point a few metres ahead, as traffic
+		# does, so a car that ran wide out of a corner comes back to its lane
+		# instead of scraping along the kerb props toward the next point.
+		var a := path[path_index - 1]
+		var ab := target - a
+		ab.y = 0.0
+		if ab.length() > TRAFFIC_LOOKAHEAD:
+			var t := clampf((global_position - a).dot(ab) / ab.length_squared(), 0.0, 1.0)
+			var aim := a + ab * minf(1.0, t + TRAFFIC_LOOKAHEAD / ab.length())
+			aim.y = global_position.y
+			if aim.distance_to(global_position) > 0.5:
+				desired_dir = (aim - global_position).normalized()
 	throttle = script_throttle
+	var dt := get_physics_process_delta_time()
+	if _reverse_time > 0.0:
+		# Pinned on a kerb prop after cutting a corner: back off as traffic
+		# does, nose swinging toward the path (right, if it is dead ahead),
+		# then carry on.
+		_reverse_time -= dt
+		_since_reverse = 0.0
+		var side := signf((-global_basis.z).signed_angle_to(desired_dir, Vector3.UP))
+		if side == 0.0:
+			side = -1.0
+		desired_dir = global_basis.z.rotated(Vector3.UP, 0.6 * side)
+		throttle = 0.7
+		return
+	_since_reverse += dt
+	if _since_reverse < 1.0 and _wall_normal != Vector3.ZERO:
+		# Just backed off: go round the obstacle, along its face and a little
+		# away (to the left of a face that is dead ahead).
+		var along := desired_dir - _wall_normal * desired_dir.dot(_wall_normal)
+		if along.length() < 0.3:
+			along = _wall_normal.cross(Vector3.UP)
+		desired_dir = (along.normalized() + _wall_normal * 0.5).normalized()
 	braking = _ahead.is_colliding() and _ahead.get_collider() != null and _ahead.get_collider().get("driver") != Driver.PLAYER
+	# Going nowhere under power (wheels turning against a wall) is stuck;
+	# a second time soon after backs off further.
+	if not braking and get_real_velocity().length() < 1.0:
+		_stuck_time += dt
+	else:
+		_stuck_time = 0.0
+	if _stuck_time > 1.2:
+		_stuck_time = 0.0
+		_reverse_time = 1.2 if _since_reverse > 3.0 else minf(_last_reverse + 0.8, 3.2)
+		_last_reverse = _reverse_time
 
 
 ## Keeps a scooter's rider in the saddle and passengers inside. Riders on
@@ -549,6 +599,8 @@ func _handle_collisions(before: Vector3) -> void:
 			other.hit_by_vehicle(self, before.length())
 			continue
 		var impact := absf(before.dot(col.get_normal()))
+		if not (other != null and other.has_method("bump")):
+			_wall_normal = Vector3(col.get_normal().x, 0.0, col.get_normal().z).normalized()
 		if driver == Driver.TRAFFIC:
 			if other != null and other.has_method("bump"):
 				if _yield_time < -1.0:

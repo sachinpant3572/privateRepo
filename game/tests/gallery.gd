@@ -2,6 +2,10 @@ extends Node3D
 ## Asset gallery: every kit piece lined up under the game's 3/4 camera, for
 ## art review. Needs a real renderer:
 ##   xvfb-run godot --rendering-driver opengl3 res://tests/gallery.tscn -- <out_dir>
+## Add a second argument to render only the countryside kit (country_kit):
+##   ... -- <out_dir> country       its seven gallery pages
+##   ... -- <out_dir> country_each  one shot per kind at 0.7x, 1x and 1.3x
+##                                  (optional third argument: a kind filter)
 
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const Buildings = preload("res://scripts/kits/building_kit.gd")
@@ -12,6 +16,18 @@ const Rig = preload("res://scripts/rig.gd")
 const Player = preload("res://scripts/player.gd")
 const Cop = preload("res://scripts/cop.gd")
 const Cast = preload("res://scripts/missions/cast.gd")
+const CountryKit = preload("res://scripts/kits/country_kit.gd")
+
+## Gallery pages of the countryside kit: [file, row width, kinds].
+const COUNTRY_PAGES := [
+	["country_1_rural.png", 90.0, ["farmhouse", "barn", "silos", "machine_shed", "trailer_home", "shack", "stilt_house", "water_tower", "windpump"]],
+	["country_2_roadside.png", 130.0, ["gas_station", "diner", "motel", "general_store", "truck_stop", "garage"]],
+	["country_3_town.png", 130.0, ["town_hall", "bar", "shopfront", "shopfront", "shopfront", "house", "house", "mansion", "garden_apartments", "strip_mall"]],
+	["country_4_civic_beach.png", 120.0, ["police_station", "county_hospital", "airboat_dock", "airstrip_hangar", "deco_hotel", "condo_tower", "beach_bar", "lifeguard_tower"]],
+	["country_5_landmarks.png", 165.0, ["grain_elevators", "hollis_farm", "larkspur_vineyard", "gator_farm", "moonshine_still"]],
+	["country_6_landmarks.png", 180.0, ["bellerive_general", "bus_terminal", "seaplane_base", "torque_tone"]],
+	["country_7_landmarks.png", 200.0, ["cruise_terminal", "aurum_hangar"]],
+]
 
 var out_dir := "user://"
 var rng := RandomNumberGenerator.new()
@@ -28,6 +44,9 @@ func _ready() -> void:
 		out_dir = args[0]
 	rng.seed = 7
 	_setup_world()
+	if args.size() > 1 and args[1].begins_with("country"):
+		_run_country.call_deferred(args[1] == "country_each", args[2] if args.size() > 2 else "")
+		return
 	_run.call_deferred()
 
 
@@ -44,7 +63,95 @@ func _run() -> void:
 	await _people()
 	await _shot(_props(), Vector3(0, 0, 897), 30.0, "gallery_5_props.png", true)
 	await _shot(_trees(), Vector3(0, 0, 962), 18.0, "gallery_6_trees.png", true)
+	await _country_pages()
 	get_tree().quit()
+
+
+func _run_country(each: bool, only: String) -> void:
+	if each:
+		await _country_each(only)
+	else:
+		await _country_pages()
+	get_tree().quit()
+
+
+## Countryside kit pages, from z 1300 on (each page well apart).
+func _country_pages() -> void:
+	var z := 1300.0
+	for page in COUNTRY_PAGES:
+		var kinds: Array = page[2]
+		var lots: Array = []
+		for kind: String in kinds:
+			lots.append([kind, CountryKit.footprint(kind)])
+		var shot := _country_layout(lots, page[1], Vector3(0, 0, z))
+		await _shot(shot[0], shot[1], shot[2], page[0], true)
+		z += 450.0
+
+
+## One shot per kind (filtered by `only` if given): the kind at 0.7x, 1x and
+## 1.3x of its footprint side by side, for close review.
+func _country_each(only: String) -> void:
+	var z := 1300.0
+	for kind: String in CountryKit.KINDS:
+		if only != "" and not kind.contains(only):
+			continue
+		var f := CountryKit.footprint(kind)
+		var lots := [[kind, f * 0.7], [kind, f], [kind, f * 1.3]]
+		var shot := _country_layout(lots, INF, Vector3(0, 0, z))
+		await _shot(shot[0], shot[1], shot[2], "country_each_%s.png" % kind, true)
+		z += 350.0
+
+
+## Lays lots ([kind, size]) out in rows up to `row_width` wide around
+## `origin`, each turned to face the camera and outlined, and returns
+## [mesh, centre, view size] for _shot.
+func _country_layout(lots: Array, row_width: float, origin: Vector3) -> Array:
+	var mb := MeshBuilder.new()
+	var out: Array = []
+	const GAP := 5.0
+	var rows: Array = [[]]
+	var x := 0.0
+	for lot in lots:
+		var size: Vector2 = lot[1]
+		if x > 0.0 and x + size.x > row_width:
+			rows.append([])
+			x = 0.0
+		rows[-1].append(lot)
+		x += size.x + GAP
+	var widest := 0.0
+	var depth := 0.0
+	for row: Array in rows:
+		var w := -GAP
+		var d := 0.0
+		for lot in row:
+			w += lot[1].x + GAP
+			d = maxf(d, lot[1].y)
+		widest = maxf(widest, w)
+		depth += d + GAP
+	depth -= GAP
+	# Rows run from the back (-Z on screen top) to the front.
+	var z := origin.z - depth * 0.5
+	var r := RandomNumberGenerator.new()
+	for row: Array in rows:
+		var w := -GAP
+		var d := 0.0
+		for lot in row:
+			w += lot[1].x + GAP
+			d = maxf(d, lot[1].y)
+		x = origin.x - w * 0.5
+		for lot in row:
+			var size: Vector2 = lot[1]
+			var c := Vector3(x + size.x * 0.5, 0, z + d * 0.5)
+			mb.xform = Transform3D.IDENTITY
+			mb.box(Vector3(c.x, 0.0, c.z), Vector3(size.x + 1.2, 0.02, size.y + 1.2), Color(0.25, 0.25, 0.27))
+			mb.xform = Transform3D(Basis(Vector3.UP, PI), c)
+			r.seed = hash(lot[0]) + 11
+			CountryKit.build(lot[0], mb, out, size, r)
+			x += size.x + GAP
+		z += d + GAP
+	mb.xform = Transform3D.IDENTITY
+	var view := maxf(depth * 0.87 + 10.0, (widest + 8.0) / 1.78)
+	return [mb, origin + Vector3(0, 0, 3.0), view]
 
 
 func _buildings() -> MeshBuilder:
@@ -295,6 +402,7 @@ func _setup_world() -> void:
 	add_child(world_env)
 	var ground := MeshBuilder.new()
 	ground.box(Vector3(0, -0.1, 450), Vector3(400, 0.2, 1200), Color(0.58, 0.56, 0.52))
+	ground.box(Vector3(0, -0.1, 9060), Vector3(500, 0.2, 16000), Color(0.5, 0.56, 0.42))
 	add_child(ground.make_instance())
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	camera.rotation_degrees = Vector3(-60.0, 0.0, 0.0)

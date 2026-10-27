@@ -49,6 +49,13 @@ the window, the first countryside roads and towns, taxis. Estimated 6-8 sessions
   (`StateMap.bake(origin, city)`, +25 ms at start), so the minimap past the window shows
   the drivable roads. Phase 2 pins now show on the state map (planned = phase above 2).
 
+- **P-14 Country kit look**: no text or brand on any building; the hospital reads by a
+  white H on blue, shops by awnings and colour. 41 kinds, one `build(kind, mb, rng)`.
+
+- **P-15 Scripted drivers (taxis, getaways) follow the line between path points** with
+  traffic's 9 m look-ahead, and back off and slide along a wall they are pinned on. A
+  car running wide out of a corner used to scrape along kerb props forever.
+
 ## Moved landmarks
 
 The plan cannot take new landmarks, so phase 2 landmarks that sat inside the window moved
@@ -66,6 +73,10 @@ deco_row (7777,8345), brisa_promenade (7924,8335) on the Brisa coast; cruise_ter
 - Wheaton's grid is axis-aligned, not turned to the diagonal Route 9.
 - The Gulfline Metro is drawn only outside the plan; no airport yet (phase 4).
 - No LOD for the country: tiles load inside 130 m (worker thread, ~5 ms each).
+- Water-facing kit lots (cruise_terminal quay, seaplane_base pond) expect water at the
+  lot's +Z; the generator does not yet turn those lots to face the water, so the quay
+  faces the beach and the seaplane pond sits inland. Fix in build_country.py (yaw lots
+  toward the nearest coast).
 
 ## Traps
 

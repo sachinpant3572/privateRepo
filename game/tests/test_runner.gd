@@ -45,7 +45,7 @@ func _run() -> void:
 		"test_player_driving_assists",
 		"test_driving_layouts",
 		"test_touch_driving_layouts",
-		"test_heavy_vehicle_pushes_harder",
+		"test_scripted_car_gets_unstuck", "test_heavy_vehicle_pushes_harder",
 		"test_vehicle_handling_differs",
 		"test_traffic_drives_every_kind",
 		"test_people_walk_past_sidewalk_props",
@@ -65,6 +65,7 @@ func _run() -> void:
 		"test_country_tiles_stream",
 		"test_country_walls_stop_cars",
 		"test_traffic_drives_into_the_country",
+		"test_country_kit_builds_every_kind",
 	]
 	# ONLY=name1,name2 runs just those (handy while working on one test).
 	var only := OS.get_environment("ONLY")
@@ -1167,6 +1168,49 @@ func _player_car(kind: String, pos: Vector3, speed: float, yaw := 0.0):
 	return car
 
 
+## A scripted driver (taxis, mission getaways) pinned on a wall backs off and
+## finds its way on, and one that ran wide comes back to the line it follows.
+func test_scripted_car_gets_unstuck() -> void:
+	await _free_game()
+	# A post (a kerb prop) right on its line.
+	var L = preload("res://scripts/layers.gd")
+	var post := StaticBody3D.new()
+	post.collision_layer = L.WORLD
+	var shape := CollisionShape3D.new()
+	shape.shape = BoxShape3D.new()
+	shape.shape.size = Vector3(2, 4, 2)
+	post.add_child(shape)
+	post.position = Vector3(0.3, 2.0, -8.0)
+	add_child(post)
+	var car = _track_car("sedan", Vector3.ZERO, 0.0)
+	car.drive_path(PackedVector3Array([Vector3(0, 0, -40)]), 0.6)
+	var done := [false]
+	car.path_done.connect(func(_c): done[0] = true)
+	var backed := false
+	for f in 600:
+		await _frames(1)
+		backed = backed or car.speed < -1.0
+		if done[0]:
+			break
+	_check(backed, "the scripted car pinned on a post backs off")
+	_check(done[0], "and gets round it to its point (ended at %s)" % car.global_position)
+	car.queue_free()
+	post.queue_free()
+	# Running wide 7 m off a 60 m leg, it closes on the line well before the
+	# leg's end (aiming straight at the end, it would meet it only there).
+	car = _track_car("sedan", Vector3(0, 0, -47.0), -PI / 2.0)
+	car.drive_path(PackedVector3Array([Vector3(-20, 0, -40), Vector3(0, 0, -40), Vector3(60, 0, -40)]), 0.6)
+	car.path_index = 2
+	var back_at := INF
+	for f in 300:
+		await _frames(1)
+		if absf(car.global_position.z + 40.0) < 1.0:
+			back_at = car.global_position.x
+			break
+	_check(back_at < 40.0, "a car run wide is back on its line by x %.0f" % back_at)
+	car.queue_free()
+
+
 ## A box truck rolling into a parked sedan shoves it much harder than the
 ## sedan rolling into a parked truck; the lighter car takes the damage.
 func test_heavy_vehicle_pushes_harder() -> void:
@@ -2172,3 +2216,55 @@ func test_traffic_drives_into_the_country() -> void:
 	_check(moved > 60.0, "traffic car drives on (%.1f m in 10 s)" % moved)
 	_check(worst < 1.0, "it keeps to the country roads (worst %.1f m off the edge)" % worst)
 
+
+## Every countryside kind builds at its footprint and on lots 30% smaller and
+## bigger: it draws something within budget, stays on its lot, and its
+## colliders sit on the lot (1 m slack) with positive, finite sizes.
+func test_country_kit_builds_every_kind() -> void:
+	var Kit = preload("res://scripts/kits/country_kit.gd")
+	var MB = preload("res://scripts/mesh_builder.gd")
+	_check(Kit.KINDS.size() >= 41, "country kit lists its kinds, got %d" % Kit.KINDS.size())
+	var problems: Array[String] = []
+	for kind: String in Kit.KINDS:
+		var f: Vector2 = Kit.footprint(kind)
+		if not (f.x > 0.0 and f.y > 0.0):
+			problems.append("%s: footprint %s" % [kind, f])
+			continue
+		for scale: float in [1.0, 0.7, 1.3]:
+			var size := f * scale
+			var mb = MB.new()
+			var out: Array = []
+			var rng := RandomNumberGenerator.new()
+			rng.seed = 99
+			Kit.build(kind, mb, out, size, rng)
+			var tris: int = mb.triangle_count()
+			var tag := "%s x%.1f" % [kind, scale]
+			if tris <= 0 or tris > 5000:
+				problems.append("%s: %d triangles" % [tag, tris])
+			var hx := size.x * 0.5 + 1.0
+			var hz := size.y * 0.5 + 1.0
+			for col in out:
+				var c: Vector3 = col[0]
+				var s: Vector3 = col[1]
+				var yaw: float = col[2] if col.size() > 2 else 0.0
+				if not (c.is_finite() and s.is_finite() and is_finite(yaw)):
+					problems.append("%s: NaN collider %s" % [tag, col])
+				elif s.x <= 0.0 or s.y <= 0.0 or s.z <= 0.0:
+					problems.append("%s: collider size %s" % [tag, s])
+				elif absf(c.x) > hx or absf(c.z) > hz:
+					problems.append("%s: collider at %s off the lot" % [tag, c])
+			for v: Vector3 in mb.verts:
+				if not v.is_finite() or absf(v.x) > hx or absf(v.z) > hz:
+					problems.append("%s: vertex %s off the lot" % [tag, v])
+					break
+	for p in problems.slice(0, 10):
+		print("  " + p)
+	_check(problems.is_empty(), "every country kind builds on its lot (%d problems)" % problems.size())
+	var rng := RandomNumberGenerator.new()
+	var a = MB.new()
+	var b = MB.new()
+	rng.seed = 5
+	Kit.build("hollis_farm", a, [], Kit.footprint("hollis_farm"), rng)
+	rng.seed = 5
+	Kit.build("hollis_farm", b, [], Kit.footprint("hollis_farm"), rng)
+	_check(a.verts == b.verts, "country kinds are deterministic from the rng")
