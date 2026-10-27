@@ -164,12 +164,14 @@ static func _gate(mb, out: Array, w: float) -> void:
 		mb.box(Vector3(x, 2.45, 0), Vector3(1.2, 0.1, 1.2), COPING)
 		mb.ball(Vector3(x, 2.75, 0), Vector3(0.28, 0.28, 0.28), lamp, 6, 3)
 		out.append([Vector3(x, 1.2, 0), Vector3(1.0, 2.4, 1.0)])
-		# A leaf of iron bars, swung in.
+		# A leaf of iron bars, swung in and back against the wall, clear of the drive.
 		var hinge := Vector3(s * (w * 0.5 - 0.4), 0, 0.5)
 		var leaf := w * 0.45
-		var dir := Vector3(-s * 0.34, 0, 0.94)
+		var dir := Vector3(s * 0.26, 0, 0.97)
+		var leaf_yaw := atan2(-dir.z, dir.x)
+		out.append([hinge + dir * leaf * 0.5 + Vector3(0, 1.0, 0), Vector3(leaf, 2.0, 0.12), leaf_yaw])
 		var saved: Transform3D = mb.xform
-		mb.xform = saved * Transform3D(Basis(Vector3.UP, atan2(-dir.z, dir.x)), hinge)
+		mb.xform = saved * Transform3D(Basis(Vector3.UP, leaf_yaw), hinge)
 		mb.box(Vector3(leaf * 0.5, 1.75, 0), Vector3(leaf, 0.08, 0.06), IRON)
 		mb.box(Vector3(leaf * 0.5, 0.25, 0), Vector3(leaf, 0.08, 0.06), IRON)
 		for k in int(leaf / 0.3):

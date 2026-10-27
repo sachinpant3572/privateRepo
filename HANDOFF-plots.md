@@ -81,6 +81,13 @@ Checked through search summaries only: the research tools could not open any pri
   on curves. Limits are lots < 4°, plots < 5°, and the Hollis farm < 4°. On the old data the test
   fails at 76°.
 
+- D-12 **Review fixes (review 1).**
+  - A tennis court goes behind the house when it does not fit beside it. The front garden shrinks to 12 m at the least to make room. 11 of 21 estates now have a court; the rest are only 64 m deep.
+  - Inside an estate, the mansion kit no longer draws its own street hedge and gate piers (`in_grounds`).
+  - A plot lot's `front` and its curb point are at the plot's front edge, not inside the walls.
+  - Gate leaves on mirrored plots swing inward and stand clear of the drive, with colliders.
+  - The tests now check lot corners against their plot, wall colliders on the plot edge, and grounds colliders placed away from the origin.
+
 ## Results
 
 2530 lots; plots: 21 estates, 91 clusters, 17 farmyards, 2072 field cells. Worst lot 2.2°, worst
@@ -105,4 +112,6 @@ now follow their landmark ids, because the landmarks moved when they were square
 - Street plan must dump identical (seed 1234); the country only reads it.
 - Lot yaw follows Godot `Basis(UP, yaw)`: local x -> (cos, -sin), local z -> (sin, cos);
   `yaw_facing(nx, ny) = atan2(nx, ny)` with (nx, ny) pointing from the road to the lot.
-- The `mansion` kit draws its own lawn pad, forecourt loop, drive and gate piers inside its lot.
+- The `mansion` kit draws its own lawn pad, forecourt loop, drive and pool inside its lot. Inside
+  an estate it skips its street hedge and gate piers.
+- Per tile, plots about double the triangles: a mean of 1.8k against 0.8k without them, and 12k at the worst (two Heights estates). Most of a farmyard tile's 9k is windbreak oaks. Not yet measured on a device.

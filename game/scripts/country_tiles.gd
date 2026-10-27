@@ -484,7 +484,7 @@ static func _lot(ctx: Ctx, i: int) -> void:
 	rng.seed = hash([c.seed_value, "lot", i])
 	ctx.mb.xform = Transform3D(Basis(Vector3.UP, float(l[2])), Vector3(l[0], 0.0, l[1]))
 	var local: Array = []
-	Kit.build(kind, ctx.mb, local, Vector2(l[3], l[4]), rng)
+	Kit.build(kind, ctx.mb, local, Vector2(l[3], l[4]), rng, l.size() > 8 and int(l[8]) >= 0 and c.plot_types[int(c.plots[int(l[8])][5])] == "estate")
 	_done(ctx, local, ctx.out)
 	ctx.buildings += 1
 

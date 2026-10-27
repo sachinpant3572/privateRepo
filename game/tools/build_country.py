@@ -105,6 +105,7 @@ CLUSTER_JITTER = {"village": 8.0, "bayou_town": 16.0, "bayou_village": 26.0, "ca
 CLUSTER_LOT = {"house": (11, 12), "stilt_house": (10, 10), "shack": (8, 9)}
 # Estate house lot (the mansion kit draws house, forecourt and pool in it).
 ESTATE_HOUSE = 40.0
+TENNIS_BACK = 21.0      # depth behind an estate house for a tennis court across the plot
 # Field cells: 44 m wide on a 50 m pitch (the gaps are the field edges).
 FIELD_CELL = 44.0
 FIELD_PITCH = 50.0
@@ -1523,7 +1524,9 @@ def _mirror(parts):
     for p in parts:
         q = list(p)
         q[1] = -p[1]
-        q[5] = math.pi - p[5] if p[0] in LINE_PARTS else -p[5]
+        # A line keeps its run (pi - rot); a gate, symmetric along its run,
+        # takes -rot instead so its leaves still swing inward.
+        q[5] = math.pi - p[5] if p[0] in LINE_PARTS and p[0] != "gate" else -p[5]
         out.append(q)
     return out
 
@@ -1545,6 +1548,12 @@ def estate_layout(W, D, turn, style, rng, grand=False):
     if turn == 0.0:
         hs = min(hs, D - m - 16.0)
         front = min(max((D - hs) * 0.45, 12.0), 30.0)
+        side = W * 0.5 - m - hs * 0.5 - 2.0
+        # No room for a tennis court beside the house: shorten the front
+        # garden, down to 12 m, to fit one behind it (court 18.3 m + margin).
+        court_back = side < 18.5 and D - m - hs - TENNIS_BACK >= 12.0
+        if court_back:
+            front = min(front, D - m - hs - TENNIS_BACK)
         zf = z0 + front
         parts += _boundary(bound, W, D, 0.0)
         parts.append(part("drive", 0.0, (z0 + zf) * 0.5, 6.0, front))
@@ -1554,7 +1563,6 @@ def estate_layout(W, D, turn, style, rng, grand=False):
         if pw >= 10.0 and pd >= 8.0:
             for s in (-1.0, 1.0):
                 parts.append(part("parterre", s * (9.5 + pw * 0.5), z0 + m + 2.0 + pd * 0.5, pw, pd))
-        side = W * 0.5 - m - hs * 0.5 - 2.0
         run = z1 - m - zf
         sx = hs * 0.5 + 2.0 + side * 0.5
         if side >= 18.5 and run >= 37.0:
@@ -1562,10 +1570,25 @@ def estate_layout(W, D, turn, style, rng, grand=False):
             parts.append(part("tennis", t * sx, z1 - m - 18.5, 18.3, 36.6))
             parts.append(part("orchard", -t * sx, z1 - m - 18.5, 18.3, 36.6, 0.0, TREE_KINDS.index("fruit")))
         elif side >= 8.0:
-            ol = min(run - 2.0, 40.0)
-            for s in (-1.0, 1.0):
-                parts.append(part("orchard", s * sx, z1 - m - 1.0 - ol * 0.5, side - 1.0, ol, 0.0, TREE_KINDS.index("fruit")))
+            # Beside the house, in front of a rear tennis court if there is one.
+            end = z1 - m - (TENNIS_BACK + 1.0 if court_back else 1.0)
+            ol = min(end - zf - 1.0, 40.0)
+            if ol >= 8.0:
+                for s in (-1.0, 1.0):
+                    parts.append(part("orchard", s * sx, end - ol * 0.5, side - 1.0, ol, 0.0, TREE_KINDS.index("fruit")))
         back = z1 - m - (zf + hs)
+        if court_back:
+            # Across the back of the plot: tennis in one rear corner and an
+            # orchard of the same size in the other, or tennis on the axis.
+            zc = z1 - m - 1.0 - 18.3 * 0.5
+            cx = W * 0.5 - m - 2.0 - 36.6 * 0.5
+            if cx >= 36.6 * 0.5 + 2.0:
+                t = 1.0 if rng.random() < 0.5 else -1.0
+                parts.append(part("tennis", t * cx, zc, 18.3, 36.6, math.pi * 0.5))
+                parts.append(part("orchard", -t * cx, zc, 36.6, 18.3, 0.0, TREE_KINDS.index("fruit")))
+            else:
+                parts.append(part("tennis", 0.0, zc, 18.3, 36.6, math.pi * 0.5))
+            return parts, (0.0, zf + hs * 0.5, hs), (0.0, z0 + 0.5)
         if back >= 16.0:
             parts.append(part("parterre", 0.0, zf + hs + back * 0.5, min(W - 2 * m - 12.0, 40.0), back - 6.0))
         if back >= 6.0:

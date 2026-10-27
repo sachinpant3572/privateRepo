@@ -2456,17 +2456,18 @@ func test_country_plots_square_to_their_roads() -> void:
 		var turn := absf(wrapf(float(l[2]) - float(p[2]), -PI, PI))
 		if turn > 0.02 and not ty in ["estate", "cluster"]:
 			turned_outside += 1
-		# Its centre inside the plot, its corners within a metre of it.
-		var r := Vector2(l[0], l[1]) - Vector2(p[0], p[1])
-		var cs := cos(float(p[2]))
-		var sn := sin(float(p[2]))
-		var lx := r.x * cs - r.y * sn
-		var lz := r.x * sn + r.y * cs
-		var reach := Vector2(l[3], l[4]).length() * 0.5 * (1.0 if turn > 0.02 else 0.0)
-		var hx := float(p[3]) * 0.5 - (0.0 if turn > 0.02 else float(l[3]) * 0.5) + 1.0
-		var hz := float(p[4]) * 0.5 - (0.0 if turn > 0.02 else float(l[4]) * 0.5) + 1.0
-		if absf(lx) > hx or absf(lz) > hz or reach > Vector2(p[3], p[4]).length() * 0.5:
-			outside += 1
+		# Every corner of the lot within a metre of the plot's edge.
+		var py := float(p[2])
+		var ly := float(l[2])
+		for sx: float in [-0.5, 0.5]:
+			for sz: float in [-0.5, 0.5]:
+				var cx := sx * float(l[3])
+				var cz := sz * float(l[4])
+				var r := Vector2(float(l[0]) - float(p[0]) + cx * cos(ly) + cz * sin(ly), float(l[1]) - float(p[1]) - cx * sin(ly) + cz * cos(ly))
+				var lx := r.x * cos(py) - r.y * sin(py)
+				var lz := r.x * sin(py) + r.y * cos(py)
+				if absf(lx) > float(p[3]) * 0.5 + 1.0 or absf(lz) > float(p[4]) * 0.5 + 1.0:
+					outside += 1
 	_check(turned_outside == 0, "only estates and clusters hold turned buildings, %d others" % turned_outside)
 	_check(outside == 0, "every plot's lots stand inside it, %d do not" % outside)
 
@@ -2482,6 +2483,7 @@ func test_estates_and_clusters() -> void:
 	var estates := 0
 	var turned := 0
 	var hale := -1
+	var tennis := 0
 	for i in c.plots.size():
 		var p: Array = c.plots[i]
 		var ty: String = c.plot_types[int(p[5])]
@@ -2494,6 +2496,7 @@ func test_estates_and_clusters() -> void:
 				homes.append(l)
 		if ty == "estate":
 			estates += 1
+			tennis += 1 if kinds.has("tennis") else 0
 			var grounds := kinds.has("parterre") or kinds.has("tennis") or kinds.has("court") or kinds.has("orchard")
 			if not ((kinds.has("wall") or kinds.has("hedge")) and kinds.has("gate") and kinds.has("drive") and grounds and homes.size() == 1):
 				bare += 1
@@ -2507,6 +2510,7 @@ func test_estates_and_clusters() -> void:
 				bare += 1
 	_check(estates >= 10 and bare == 0, "%d estates and every cluster are laid out, %d bare" % [estates, bare])
 	_check(turned >= 1, "an estate house turns to its view, got %d" % turned)
+	_check(tennis * 3 >= estates, "a third of the estates have a tennis court, %d of %d" % [tennis, estates])
 	_check(hale >= 0, "the Hale Estate stands in grounds of its own")
 	var spread := 0.0
 	for l: Array in c.lots:
@@ -2521,9 +2525,19 @@ func test_estates_and_clusters() -> void:
 		var cols: Array = built.colliders
 		var bad := cols.filter(func(col): return not (col[0].is_finite() and col[1].is_finite() and is_finite(col[2])))
 		_check(bad.is_empty() and cols.size() > 20, "the Hale Estate's tile builds with %d sound colliders" % cols.size())
-		# The boundary wall: a long collider along the plot's edge.
-		var wall := cols.filter(func(col): return col[1].x > 20.0 and col[1].y > 1.5 and col[1].y < 2.0)
-		_check(wall.size() >= 4, "its boundary walls are solid, got %d" % wall.size())
+		# The boundary wall: long colliders lying along the plot's edges, square to it.
+		var py := float(p[2])
+		var on_edge := func(col) -> bool:
+			if not (col[1].x > 20.0 and col[1].y > 1.5 and col[1].y < 2.0):
+				return false
+			var r := Vector2(col[0].x - float(p[0]), col[0].z - float(p[1]))
+			var lx := r.x * cos(py) - r.y * sin(py)
+			var lz := r.x * sin(py) + r.y * cos(py)
+			var edge := minf(absf(absf(lx) - float(p[3]) * 0.5), absf(absf(lz) - float(p[4]) * 0.5))
+			var turn := absf(wrapf(float(col[2]) - py, -PI * 0.25, PI * 0.25))
+			return edge < 1.5 and turn < 0.02
+		var wall := cols.filter(on_edge)
+		_check(wall.size() >= 4, "its boundary walls are solid and on its edges, got %d" % wall.size())
 
 
 ## Every grounds part builds with triangles and sound colliders inside its
@@ -2544,7 +2558,9 @@ func test_grounds_kit_builds_every_part() -> void:
 			var rng := RandomNumberGenerator.new()
 			rng.seed = 7 + v
 			var size: Array = sizes[kind]
-			var p := [0, 3.0, -2.0, size[0], size[1], 0.5, v]
+			# Well away from the origin, turned, so a collider left in the
+			# part's own frame or at the wrong yaw shows.
+			var p := [0, 60.0, -40.0, size[0], size[1], 0.5, v]
 			Grounds.draw(kind, p, trees, mb, out, rng)
 			var tag := "%s v%d" % [kind, v]
 			if mb.triangle_count() <= 0:
@@ -2554,6 +2570,8 @@ func test_grounds_kit_builds_every_part() -> void:
 				var cc: Vector3 = col[0]
 				if not (cc.is_finite() and col[1].is_finite() and is_finite(col[2])):
 					problems.append("%s: NaN collider" % tag)
-				elif Vector2(cc.x - 3.0, cc.z + 2.0).length() > reach:
+				elif Vector2(cc.x - 60.0, cc.z + 40.0).length() > reach:
 					problems.append("%s: collider at %s off the part" % [tag, cc])
+				elif kind in ["wall", "hedge", "fence"] and absf(wrapf(float(col[2]) - 0.5, -PI * 0.5, PI * 0.5)) > 0.01:
+					problems.append("%s: collider turned %.2f, not along the part" % [tag, col[2]])
 	_check(problems.is_empty(), "every grounds part builds soundly: %s" % ", ".join(problems.slice(0, 6)))

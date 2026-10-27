@@ -317,7 +317,14 @@ func lot_info(i: int) -> Dictionary:
 	var yaw: float = l[2]
 	var front := Vector3(-sin(yaw), 0, -cos(yaw))
 	var c := Vector3(l[0], 0, l[1])
-	return {"pos": c, "front": c + front * (float(l[4]) * 0.5 + 2.0), "yaw": yaw, "kind": kinds[int(l[5])],
+	var reach := float(l[4]) * 0.5 + 2.0
+	if l.size() > 8 and int(l[8]) >= 0:
+		# Inside a plot the way in is the plot's own front edge, straight out
+		# from the lot: the house may be turned or set far back in its grounds.
+		var p: Array = plots[int(l[8])]
+		front = Vector3(-sin(float(p[2])), 0, -cos(float(p[2])))
+		reach = (Vector3(p[0], 0, p[1]) - c).dot(front) + float(p[4]) * 0.5 + 2.0
+	return {"pos": c, "front": c + front * reach, "yaw": yaw, "kind": kinds[int(l[5])],
 			"id": l[6], "size": Vector2(l[3], l[4])}
 
 

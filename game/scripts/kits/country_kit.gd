@@ -97,7 +97,9 @@ static func footprint(kind: String) -> Vector2:
 
 ## Builds `kind` on a lot of `size` (x along the street, y deep). See the
 ## header for the frame and the collision format.
-static func build(kind: String, mb, out: Array, size: Vector2, rng: RandomNumberGenerator) -> void:
+## `in_grounds`: the lot stands inside an estate plot, whose wall and gate
+## take the place of the house's own street front.
+static func build(kind: String, mb, out: Array, size: Vector2, rng: RandomNumberGenerator, in_grounds := false) -> void:
 	var w := maxf(size.x, 3.0)
 	var d := maxf(size.y, 3.0)
 	match kind:
@@ -120,7 +122,7 @@ static func build(kind: String, mb, out: Array, size: Vector2, rng: RandomNumber
 		"bar": bar(mb, out, w, d, rng)
 		"shopfront": shopfront(mb, out, w, d, rng)
 		"house": house(mb, out, w, d, rng)
-		"mansion": mansion(mb, out, w, d, rng)
+		"mansion": mansion(mb, out, w, d, rng, in_grounds)
 		"garden_apartments": garden_apartments(mb, out, w, d, rng)
 		"strip_mall": strip_mall(mb, out, w, d, rng)
 		"police_station": police_station(mb, out, w, d, rng)
@@ -1704,8 +1706,9 @@ static func house(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator
 
 ## Magnolia Heights mansion: a white Greek Revival house with a two-storey
 ## columned portico and pediment, wings, chimneys, a gravel loop round a
-## fountain, gate piers in a street hedge, oaks, a pool and a carriage house.
-static func mansion(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator) -> void:
+## fountain, gate piers in a street hedge (not inside estate grounds), oaks, a
+## pool and a carriage house.
+static func mansion(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator, in_grounds := false) -> void:
 	var bw := clampf(w * 0.46, 16.0, 32.0)
 	var bd := clampf(d * 0.26, 10.0, 18.0)
 	var fz := -d * 0.5 + clampf(d * 0.42, 13.0, 26.0)
@@ -1770,7 +1773,7 @@ static func mansion(mb, out: Array, w: float, d: float, rng: RandomNumberGenerat
 	mb.cylinder(rc, 0.3, 1.8, MeshBuilder.glow(CONCRETE.lightened(0.15), MeshBuilder.CONCRETE), 6)
 	mb.cylinder(rc + Vector3(0, 1.8, 0), 0.8, 0.15, MeshBuilder.glow(CONCRETE.lightened(0.15), MeshBuilder.CONCRETE), 8)
 	_col(out, rc + Vector3(0, 0.5, 0), Vector3(fr * 1.6, 1.0, fr * 1.6))
-	for s: float in [-1.0, 1.0]:
+	for s: float in ([] if in_grounds else [-1.0, 1.0]):
 		_solid(mb, out, Vector3(s * 2.3, 1.1, -d * 0.5 + 0.7), Vector3(0.9, 2.2, 0.9), MeshBuilder.glow(BRICKS[0], MeshBuilder.BRICK))
 		mb.ball(Vector3(s * 2.3, 2.5, -d * 0.5 + 0.7), Vector3(0.3, 0.3, 0.3), MeshBuilder.glow(Color(1.0, 0.9, 0.6), MeshBuilder.GLOW_LAMP), 6, 3)
 		_hedge(mb, out, Vector3(s * 3.2, 0, -d * 0.5 + 0.7), Vector3(s * (w * 0.5 - 0.6), 0, -d * 0.5 + 0.7), 1.3)
