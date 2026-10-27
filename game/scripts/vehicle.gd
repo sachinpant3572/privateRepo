@@ -15,12 +15,15 @@ signal path_done(car)
 ## SCRIPT drives a mission path; CHASER hunts the player like police do.
 enum Driver { NONE, PLAYER, TRAFFIC, POLICE, SCRIPT, CHASER }
 
-const REVERSE_SPEED := 8.0
-const BRAKE := 32.0
 const COAST := 4.0
-const GRIP := 8.0
-const DRIFT_GRIP := 1.5
 const TRAFFIC_THROTTLE := 0.5
+## Traffic never cruises faster than this (m/s), whatever the model.
+const TRAFFIC_CRUISE := 13.0
+## Traffic slows to this (m/s) within TRAFFIC_SLOW_ZONE (m) of a junction.
+const TRAFFIC_TURN_SPEED := 6.5
+const TRAFFIC_SLOW_ZONE := 16.0
+## Traffic steers for the point this far (m) ahead along its lane.
+const TRAFFIC_LOOKAHEAD := 9.0
 const POLICE_XRAY := Color(0.3, 0.55, 1.0, 0.6)
 
 var driver := Driver.NONE
@@ -31,6 +34,9 @@ var body_color := Color(0.8, 0.15, 0.15)
 var city
 var occupant = null
 var health := 100.0
+var max_health := 100.0
+## Tonnes (VehicleKit.HANDLING); collisions share speed and damage by it.
+var mass := 1.5
 var wrecked := false
 var speed := 0.0 # signed, along the car's forward axis
 
@@ -56,8 +62,19 @@ var turn_rate := 2.4
 ## Traffic drives from junction _prev_node to _next_node (plan node ids).
 var _prev_node := -1
 var _next_node := -1
+## The street after _next_node, chosen on the approach, so a right turn onto
+## a wide street can start at that street's lane, short of the junction.
+var _after_node := -1
 var _stuck_time := 0.0
 var _reverse_time := 0.0
+## Traffic that touched another vehicle waits this long (random, so one of
+## two cars nosing at each other goes first); below -1 it may yield again.
+var _yield_time := -1.0
+## Traffic backing off a wall: how long the last back-off was and the time
+## since it ended. Hitting a wall again soon backs off further, so a car
+## wedged against a median end gets the room to turn past it.
+var _last_reverse := 0.0
+var _since_reverse := 10.0
 var _deployed := false
 var _light_time := 0.0
 var _lights: Array[MeshInstance3D] = []
@@ -72,6 +89,12 @@ var _smoke_time := 0.0
 var _splash_time := 0.0
 var _hard_brake := false
 var _game
+## Handling of this kind: VehicleKit.spec(kind).
+var _spec: Dictionary
+## Body roll (x) and pitch (y) shown on the model, smoothed.
+var _tilt := Vector2.ZERO
+## Riders leaned with a two-wheeler last frame (straightened when they leave).
+var _leaning: Array = []
 
 
 func _ready() -> void:
@@ -81,12 +104,15 @@ func _ready() -> void:
 	collision_mask = L.WORLD | L.PROPS | L.VEHICLES | L.CHARACTERS
 	if is_police:
 		kind = "police"
-	var spec: Dictionary = VehicleKit.KINDS.get(kind, VehicleKit.KINDS.sedan)
-	max_speed = spec.max_speed
-	accel = spec.accel
-	turn_rate = spec.turn
-	shows_rider = spec.get("rider", false)
-	var size: Vector3 = spec.size
+	_spec = VehicleKit.spec(kind)
+	max_speed = _spec.max_speed
+	accel = _spec.accel
+	turn_rate = _spec.turn
+	mass = _spec.mass
+	max_health = _spec.health
+	health = max_health
+	shows_rider = _spec.rider
+	var size: Vector3 = _spec.size
 	_size = size
 	_game = get_tree().get_first_node_in_group("game")
 	var shape := CollisionShape3D.new()
@@ -164,7 +190,9 @@ func _script_ai() -> void:
 	braking = _ahead.is_colliding() and _ahead.get_collider() != null and _ahead.get_collider().get("driver") != Driver.PLAYER
 
 
-## Keeps a scooter's rider in the saddle and passengers inside.
+## Keeps a scooter's rider in the saddle and passengers inside. Riders on
+## two-wheelers (the player too) lean with the bike; anyone who got off
+## since last frame is stood up straight.
 func _carry() -> void:
 	if rider != null and is_instance_valid(rider):
 		rider.global_position = global_position
@@ -172,11 +200,27 @@ func _carry() -> void:
 	for p in passengers:
 		if is_instance_valid(p):
 			p.global_position = global_position
+	var leaning := []
+	if shows_rider:
+		for r in [rider, occupant]:
+			if r != null and is_instance_valid(r):
+				r.rotation.z = _tilt.x
+				leaning.append(r)
+	for r in _leaning:
+		if is_instance_valid(r) and not leaning.has(r):
+			r.rotation.z = 0.0
+	_leaning = leaning
+
+
+## The model's display name, e.g. "Vesper GT".
+func model_name() -> String:
+	return _spec.get("name", kind.capitalize())
 
 
 ## Everyone riding gets out (wrecks, mission ends).
 func unload_all() -> void:
 	if rider != null and is_instance_valid(rider):
+		rider.rotation.z = 0.0
 		rider.dismount(global_position - global_basis.x * 1.4)
 	rider = null
 	for p in passengers:
@@ -198,6 +242,8 @@ func take_player(p) -> void:
 
 
 func release_player() -> void:
+	if occupant != null and is_instance_valid(occupant):
+		occupant.rotation.z = 0.0
 	occupant = null
 	driver = Driver.NONE
 	if not wrecked:
@@ -210,6 +256,7 @@ func start_traffic(c, from: int, to: int) -> void:
 	driver = Driver.TRAFFIC
 	_prev_node = from
 	_next_node = to
+	_after_node = -1
 
 
 ## Hands a police car (or a stolen car left behind) back to normal traffic.
@@ -229,11 +276,14 @@ func join_traffic_here() -> void:
 	driver = Driver.TRAFFIC
 	_prev_node = behind
 	_next_node = ahead
+	_after_node = -1
 
 
+## Hit by another vehicle: `push` is already scaled by the two masses (see
+## _handle_collisions); a hard shove costs up to 40% of our speed.
 func bump(push: Vector3) -> void:
 	velocity += push
-	speed *= 0.6
+	speed *= lerpf(1.0, 0.6, clampf(push.length() / 6.0, 0.0, 1.0))
 	_damage(push.length())
 
 
@@ -250,16 +300,51 @@ func _traffic_ai() -> void:
 		throttle = 0.0
 		return
 	var target: Vector3 = city.lane_point(_prev_node, _next_node)
-	if Vector2(target.x - global_position.x, target.z - global_position.z).length() < 5.0:
-		var nxt: int = city.pick_turn(_prev_node, _next_node, rng)
+	var near := Vector2(target.x - global_position.x, target.z - global_position.z).length()
+	if near < TRAFFIC_SLOW_ZONE and _after_node < 0:
+		_after_node = city.pick_turn(_prev_node, _next_node, rng)
+	var turn_in := false
+	if _after_node >= 0:
+		var ls: Vector3 = city.lane_start(_next_node, _after_node)
+		turn_in = Vector2(ls.x - global_position.x, ls.z - global_position.z).length() < 4.0
+	if near < 5.0 or turn_in:
+		var nxt: int = _after_node if _after_node >= 0 else city.pick_turn(_prev_node, _next_node, rng)
 		_prev_node = _next_node
 		_next_node = nxt
+		_after_node = -1
 		target = city.lane_point(_prev_node, _next_node)
 	var to := target - global_position
 	to.y = 0.0
-	desired_dir = to.normalized()
-	throttle = TRAFFIC_THROTTLE
-	braking = _ahead.is_colliding()
+	# Follow the lane line a few metres ahead rather than aiming straight at
+	# the far junction, so a car that turned wide finds its own side of a
+	# boulevard median again instead of cutting across it.
+	var a: Vector3 = city.lane_start(_prev_node, _next_node) if _prev_node >= 0 else global_position
+	var ab := target - a
+	ab.y = 0.0
+	var aim := target
+	if ab.length() > TRAFFIC_LOOKAHEAD:
+		var t := clampf((global_position - a).dot(ab) / ab.length_squared(), 0.0, 1.0)
+		aim = a + ab * minf(1.0, t + TRAFFIC_LOOKAHEAD / ab.length())
+	aim.y = global_position.y
+	desired_dir = (aim - global_position).normalized() if aim.distance_to(global_position) > 0.5 else to.normalized()
+	throttle = minf(TRAFFIC_THROTTLE, TRAFFIC_CRUISE / max_speed)
+	if to.length() < TRAFFIC_SLOW_ZONE:
+		# Slow for the junction, so heavy, understeering models still make
+		# the turn instead of running wide (onto a boulevard median).
+		throttle = minf(throttle, TRAFFIC_TURN_SPEED / max_speed)
+	var dt := get_physics_process_delta_time()
+	if _reverse_time > 0.0:
+		# Ran into a wall or kerb prop (a wide model missing a corner): back
+		# off, swinging the nose toward the lane, then carry on.
+		_reverse_time -= dt
+		_since_reverse = 0.0
+		var side := signf((-global_basis.z).signed_angle_to(desired_dir, Vector3.UP))
+		desired_dir = global_basis.z.rotated(Vector3.UP, 0.6 * side)
+		throttle = 0.7
+		return
+	_since_reverse += dt
+	_yield_time = maxf(_yield_time - dt, -2.0)
+	braking = _ahead.is_colliding() or _yield_time > 0.0
 
 
 func _police_ai(delta: float) -> void:
@@ -292,44 +377,76 @@ func _police_ai(delta: float) -> void:
 		_reverse_time = 1.0
 
 
+## Handling, all from the kind's spec (VehicleKit.HANDLING): the power
+## curve fades acceleration toward top speed, steering needs rolling wheels
+## (steer_low) and fades at speed (steer_fade), grip sets how fast the
+## velocity follows the heading (lower slides more, and rear-drive cars
+## lose some under power), and brake and reverse are per model.
 func _drive(delta: float) -> void:
 	var fwd := -global_basis.z
 	var target := 0.0
+	var steer := 0.0
+	var yaw := 0.0
+	var pace := absf(speed)
 	if desired_dir != Vector3.ZERO:
 		var angle := fwd.signed_angle_to(desired_dir, Vector3.UP)
-		if absf(angle) > deg_to_rad(120.0) and speed < 3.0:
-			target = -REVERSE_SPEED * throttle
+		# Traffic backs up only to get off a wall; a sharp turn it takes
+		# forward (reversing to it, it would back down the whole street).
+		var backs := driver != Driver.TRAFFIC or _reverse_time > 0.0
+		if absf(angle) > deg_to_rad(120.0) and speed < 3.0 and backs:
+			target = -_spec.reverse * throttle
 			angle = (-fwd).signed_angle_to(desired_dir, Vector3.UP)
 		else:
 			# Ease off for sharp corners so the car can make the turn.
 			target = max_speed * throttle * lerpf(1.0, 0.45, absf(angle) / PI)
-		var grip_turn := clampf(absf(speed) / 5.0, 0.0, 1.0)
-		var turn := clampf(angle * 2.0, -1.0, 1.0) * turn_rate * grip_turn * delta
-		rotate_y(turn * (1.6 if handbrake else 1.0))
+		var grip_turn: float = clampf(pace / _spec.steer_low, 0.0, 1.0) * (1.0 - _spec.steer_fade * clampf(pace / max_speed, 0.0, 1.0))
+		steer = clampf(angle * 2.0, -1.0, 1.0)
+		yaw = steer * turn_rate * grip_turn * delta * (1.6 if handbrake else 1.0)
+		rotate_y(yaw)
 
-	var rate := accel
+	var rate: float = accel * (1.0 - _spec.power_fade * clampf(pace / max_speed, 0.0, 1.0))
 	_hard_brake = false
 	if desired_dir == Vector3.ZERO:
 		rate = COAST
-	elif signf(target) != signf(speed) and absf(speed) > 0.5:
-		rate = BRAKE
-		_hard_brake = absf(speed) > 9.0
-	elif absf(target) < absf(speed):
+	elif signf(target) != signf(speed) and pace > 0.5:
+		rate = _spec.brake
+		_hard_brake = pace > 9.0
+	elif absf(target) < pace:
 		rate = COAST * 2.0
+	var was := speed
 	speed = move_toward(speed, target, rate * delta)
 	if braking or handbrake:
-		speed = move_toward(speed, 0.0, (BRAKE if braking else 10.0) * delta)
+		speed = move_toward(speed, 0.0, (_spec.brake if braking else 10.0) * delta)
 
 	var want := -global_basis.z * speed
-	var grip := DRIFT_GRIP if handbrake else GRIP
+	var grip: float = _spec.drift if handbrake else _spec.grip
+	grip *= 1.0 - _spec.slide * throttle * absf(steer) * clampf(pace / 10.0, 0.0, 1.0)
 	velocity = Vector3(velocity.x, 0.0, velocity.z).lerp(want, clampf(grip * delta, 0.0, 1.0))
 	var before := velocity
 	move_and_slide()
 	global_position.y = 0.0
+	_body_tilt(delta, speed * yaw / delta, (speed - was) / delta)
 	_handle_collisions(before)
 
 
+## Tilts the model: cars roll out of turns and pitch back under power and
+## forward under braking, tall ones more; two-wheelers lean into turns.
+## `lateral` is the sideways acceleration (m/s², positive turning left).
+func _body_tilt(delta: float, lateral: float, forward: float) -> void:
+	var roll: float = clampf(-lateral * _spec.roll, -0.09, 0.09)
+	var pivot := Vector3(0, 0.45, 0) # about the axles
+	if _spec.lean > 0.0:
+		roll = clampf(atan(lateral / 9.8) * _spec.lean, -0.5, 0.5)
+		pivot = Vector3.ZERO # about the tyres' contact line
+	var pitch: float = clampf(forward * _spec.pitch, -0.06, 0.05)
+	_tilt = _tilt.lerp(Vector2(roll, pitch), 1.0 - exp(-7.0 * delta))
+	var b := Basis.from_euler(Vector3(_tilt.y, 0.0, _tilt.x))
+	_model.transform = Transform3D(b, pivot - b * pivot)
+
+
 func _handle_collisions(before: Vector3) -> void:
+	# move_and_slide can report one body several times a frame; it is one hit.
+	var struck := []
 	for i in get_slide_collision_count():
 		var col := get_slide_collision(i)
 		var other := col.get_collider()
@@ -339,14 +456,35 @@ func _handle_collisions(before: Vector3) -> void:
 			other.hit_by_vehicle(self, before.length())
 			continue
 		var impact := absf(before.dot(col.get_normal()))
-		if impact < 4.0:
+		if driver == Driver.TRAFFIC:
+			if other != null and other.has_method("bump"):
+				if _yield_time < -1.0:
+					_yield_time = rng.randf_range(0.3, 2.0)
+			elif impact > 2.0 and _reverse_time <= 0.0 and before.dot(-global_basis.z) > 0.0:
+				_reverse_time = 1.2 if _since_reverse > 3.0 else minf(_last_reverse + 0.8, 3.2)
+				_last_reverse = _reverse_time
+				# A floating body keeps its velocity into the wall, which would
+				# count the same crash again for several frames; for traffic
+				# the crash is one hit.
+				if velocity.dot(col.get_normal()) < 0.0:
+					velocity = velocity.slide(col.get_normal())
+		if impact < 4.0 or struck.has(other):
 			continue
+		struck.append(other)
 		var players: bool = driver == Driver.PLAYER or (other != null and other.get("driver") == Driver.PLAYER)
 		Fx.crash(col.get_position(), impact, players)
-		speed *= 0.5
-		_damage(impact * 0.6)
 		if other != null and other.has_method("bump"):
-			other.bump(before * 0.6)
+			# Share by mass (equal masses: half the speed kept, 0.6 of the
+			# impact as damage and push, as for walls): the lighter vehicle
+			# loses more speed, takes more damage and is shoved further.
+			var m: float = other.mass
+			var mine := mass / (mass + m)
+			speed *= mine
+			_damage(impact * 1.2 * (1.0 - mine))
+			other.bump(before * 1.2 * mine)
+		else:
+			speed *= 0.5
+			_damage(impact * 0.6)
 
 
 func _damage(amount: float) -> void:
@@ -400,7 +538,7 @@ func _effects(delta: float) -> void:
 		if _splash_time <= 0.0:
 			_splash_time = 0.16
 			Fx.splash(global_transform * Vector3(_size.x * 0.45 * (1.0 if randf() < 0.5 else -1.0), 0.1, _size.z * 0.3))
-	if health < 45.0:
+	if health < max_health * 0.45:
 		_smoke_time -= delta
 		if _smoke_time <= 0.0:
 			_smoke_time = 0.35 if not wrecked else 0.2
@@ -443,7 +581,7 @@ func _build_model() -> void:
 			mat.albedo_color = Color(0.9, 0.1, 0.1) if i == 0 else Color(0.1, 0.3, 1.0)
 			light.material_override = mat
 			light.position = Vector3(-0.31 if i == 0 else 0.31, 1.465, 0.35)
-			add_child(light)
+			_model.add_child(light) # rolls with the body
 			_lights.append(light)
 
 

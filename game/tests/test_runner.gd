@@ -5,6 +5,8 @@ extends Node
 const MainScene = preload("res://main.tscn")
 const Vehicle = preload("res://scripts/vehicle.gd")
 const Npc = preload("res://scripts/npc.gd")
+const VehicleKit = preload("res://scripts/kits/vehicle_kit.gd")
+const Population = preload("res://scripts/population.gd")
 
 var game
 var passed := 0
@@ -38,6 +40,11 @@ func _run() -> void:
 		"test_empty_rooms_phone_and_clues",
 		"test_lantern_lights_ambush",
 		"test_people_wear_modern_clothes",
+		"test_vehicle_roster_and_parking",
+		"test_vehicle_speed_ranks",
+		"test_heavy_vehicle_pushes_harder",
+		"test_vehicle_handling_differs",
+		"test_traffic_drives_every_kind",
 	]
 	for name in tests:
 		var before := failed
@@ -708,3 +715,222 @@ func test_people_wear_modern_clothes() -> void:
 		hand_y.append(skel.get_bone_global_pose(skel.find_bone("RightHand")).origin.y)
 		skel.free()
 	_check(hand_y[1] > hand_y[0] + 0.15, "texting brings the phone hand up (%.2f -> %.2f)" % hand_y)
+
+
+# --- Vehicle roster and handling ---------------------------------------------
+
+## Every model is named and categorised, the story's keys exist, and curb
+## spots never get a vehicle too long for them (traffic gets no bikes,
+## since it has no rider to show).
+func test_vehicle_roster_and_parking() -> void:
+	await _free_game()
+	var cats := {}
+	for kind in VehicleKit.KINDS:
+		var spec: Dictionary = VehicleKit.spec(kind)
+		_check(spec.get("name", "") != "" and spec.has("category"), "%s has a model name and category" % kind)
+		cats[spec.category] = true
+	_check(cats.size() >= 14, "at least 14 categories, got %d" % cats.size())
+	for kind in ["sedan", "taxi", "police", "pickup", "van", "sports", "scooter"]:
+		_check(VehicleKit.KINDS.has(kind), "kind '%s' still exists for missions and main.gd" % kind)
+	var long := VehicleKit.PARKED.filter(func(k): return VehicleKit.size_of(k).z > VehicleKit.PARKED_MAX_LENGTH)
+	_check(long.is_empty(), "parked list holds nothing longer than %.1f m, got %s" % [VehicleKit.PARKED_MAX_LENGTH, long])
+	_check(not VehicleKit.PARKED.has("box_truck") and VehicleKit.CIVILIAN.has("box_truck"), "box trucks drive in traffic only")
+	_check(VehicleKit.CIVILIAN.all(func(k): return not VehicleKit.spec(k).rider), "no riderless bikes in traffic")
+	var pop = Population.new()
+	pop.rng.seed = 11
+	var parked := {}
+	var traffic := {}
+	for i in 400:
+		for p in [true, false]:
+			var car = pop._new_car(p)
+			if p:
+				parked[car.kind] = true
+			else:
+				traffic[car.kind] = true
+			car.free()
+	pop.free()
+	var too_long: Array = parked.keys().filter(func(k): return VehicleKit.size_of(k).z > VehicleKit.PARKED_MAX_LENGTH)
+	_check(too_long.is_empty() and parked.size() >= 10, "400 parked picks: %d kinds, none too long %s" % [parked.size(), too_long])
+	_check(traffic.has("box_truck") and traffic.size() >= 10, "400 traffic picks: %d kinds incl. box trucks" % traffic.size())
+
+
+## Each kind floors it from rest down a long empty straight (no city, so
+## nothing in the way). Top speeds and 0-20 m/s times, measured from the
+## distance covered each frame, must rank as designed.
+func test_vehicle_speed_ranks() -> void:
+	await _free_game()
+	var kinds: Array = VehicleKit.KINDS.keys()
+	var cars := []
+	for i in kinds.size():
+		var car = _track_car(kinds[i], Vector3(i * 14.0, 0, 0), 0.0)
+		var path := PackedVector3Array([Vector3(i * 14.0, 0, -4000.0)])
+		car.drive_path(path, 1.0)
+		cars.append(car)
+	var last := []
+	var top := {}
+	var t20 := {}
+	for car in cars:
+		last.append(car.global_position)
+	for f in 600:
+		await _frames(1)
+		for i in cars.size():
+			var v: float = cars[i].global_position.distance_to(last[i]) * 60.0
+			last[i] = cars[i].global_position
+			top[kinds[i]] = maxf(top.get(kinds[i], 0.0), v)
+			if v >= 20.0 and not t20.has(kinds[i]):
+				t20[kinds[i]] = (f + 1) / 60.0
+	for car in cars:
+		car.queue_free()
+	for kind in kinds:
+		var want: float = VehicleKit.KINDS[kind].max_speed
+		_check(absf(top[kind] - want) < want * 0.03, "%s reaches its top speed %.1f m/s, got %.1f" % [kind, want, top[kind]])
+	var by_top := ["super", "motorbike", "sports", "muscle", "police", "ev", "luxury", "sedan", "crossover", "suv",
+		"compact", "van", "scooter", "box_truck"]
+	for i in by_top.size() - 1:
+		_check(top[by_top[i]] > top[by_top[i + 1]], "top speed: %s %.1f > %s %.1f" % [by_top[i], top[by_top[i]], by_top[i + 1], top[by_top[i + 1]]])
+	var by_launch := ["super", "motorbike", "ev", "sports", "muscle", "police", "sedan", "luxury", "crossover", "compact",
+		"suv", "pickup"]
+	for i in by_launch.size() - 1:
+		var a: String = by_launch[i]
+		var b: String = by_launch[i + 1]
+		_check(t20.get(a, 99.0) < t20.get(b, 99.0), "0-20 m/s: %s %.2f s < %s %.2f s" % [a, t20.get(a, 99.0), b, t20.get(b, 99.0)])
+	_check(t20.ev < t20.sedan * 0.7, "electric torque: EV 0-20 %.2f s well under the sedan's %.2f s" % [t20.ev, t20.sedan])
+	for kind in ["box_truck", "scooter"]:
+		_check(not t20.has(kind), "%s never reaches 20 m/s" % kind)
+
+
+## A box truck rolling into a parked sedan shoves it much harder than the
+## sedan rolling into a parked truck; the lighter car takes the damage.
+func test_heavy_vehicle_pushes_harder() -> void:
+	await _free_game()
+	var runs := []
+	for r in 2:
+		var hitter_kind := "box_truck" if r == 0 else "sedan"
+		var target_kind := "sedan" if r == 0 else "box_truck"
+		var x := r * 100.0
+		var hitter = _track_car(hitter_kind, Vector3(x, 0, 0), 0.0)
+		var gap: float = (VehicleKit.size_of(hitter_kind).z + VehicleKit.size_of(target_kind).z) * 0.5 + 4.0
+		var target = _track_car(target_kind, Vector3(x, 0, -gap), 0.0)
+		hitter.speed = 12.0
+		hitter.velocity = Vector3(0, 0, -12.0)
+		runs.append([hitter, target])
+	var shove := [0.0, 0.0]
+	for f in 90:
+		await _frames(1)
+		for r in 2:
+			var t = runs[r][1]
+			shove[r] = maxf(shove[r], Vector2(t.velocity.x, t.velocity.z).length())
+	var sedan_hit: float = runs[0][1].max_health - runs[0][1].health # truck hit the sedan
+	var truck_hit: float = runs[1][1].max_health - runs[1][1].health # sedan hit the truck
+	_check(shove[1] > 0.3, "the sedan does nudge the truck (%.2f m/s)" % shove[1])
+	_check(shove[0] > shove[1] * 2.0, "truck shoves the sedan to %.1f m/s, the sedan the truck only to %.1f" % [shove[0], shove[1]])
+	_check(sedan_hit > truck_hit * 3.0, "the sedan takes more damage being hit (%.1f) than the truck (%.1f)" % [sedan_hit, truck_hit])
+	var sedan_driving: float = runs[1][0].max_health - runs[1][0].health
+	var truck_driving: float = runs[0][0].max_health - runs[0][0].health
+	_check(sedan_driving > truck_driving * 3.0, "and more when it does the hitting (%.1f vs %.1f)" % [sedan_driving, truck_driving])
+	for run in runs:
+		for car in run:
+			car.queue_free()
+
+
+## From 14 m/s, every kind is told to turn hard right under full throttle.
+## The muscle car slides far more than the supercar, the truck turns more
+## slowly than the sedan, the tall SUV rolls out of the turn more than the
+## low supercar, and the motorbike leans into it (with its rider).
+func test_vehicle_handling_differs() -> void:
+	await _free_game()
+	var kinds := ["sedan", "muscle", "super", "suv", "box_truck", "motorbike"]
+	var cars := {}
+	for i in kinds.size():
+		var car = _track_car(kinds[i], Vector3(i * 30.0, 0, 0), 0.0)
+		car.speed = 14.0
+		car.velocity = Vector3(0, 0, -14.0)
+		car.drive_path(PackedVector3Array([Vector3(i * 30.0 + 400.0, 0, -20.0)]), 1.0)
+		cars[kinds[i]] = car
+	var rider := Node3D.new() # stands in for the player on the bike
+	add_child(rider)
+	cars.motorbike.occupant = rider
+	var slip := {}
+	var roll := {}
+	var yaw20 := {}
+	for f in 90:
+		await _frames(1)
+		for kind in kinds:
+			var car = cars[kind]
+			var v := Vector3(car.velocity.x, 0, car.velocity.z)
+			if v.length() > 3.0:
+				slip[kind] = maxf(slip.get(kind, 0.0), absf((-car.global_basis.z).signed_angle_to(v, Vector3.UP)))
+			roll[kind] = car._tilt.x if absf(car._tilt.x) > absf(roll.get(kind, 0.0)) else roll.get(kind, 0.0)
+			if f == 19:
+				yaw20[kind] = -car.rotation.y
+		if f == 30:
+			_check(absf(rider.rotation.z - cars.motorbike._tilt.x) < 0.001 and rider.rotation.z < -0.05, "the rider leans with the bike (%.2f rad)" % rider.rotation.z)
+	_check(slip.muscle > slip.super * 1.8, "muscle car slides (%.2f rad) far more than the supercar (%.2f)" % [slip.muscle, slip.super])
+	_check(yaw20.box_truck < yaw20.sedan * 0.75, "box truck understeers: turned %.2f rad in 1/3 s vs the sedan's %.2f" % [yaw20.box_truck, yaw20.sedan])
+	_check(roll.suv > roll.super * 2.0 and roll.super >= 0.0, "SUV rolls out of the turn (%.3f rad) more than the supercar (%.3f)" % [roll.suv, roll.super])
+	_check(roll.motorbike < -0.15, "motorbike leans into the right turn (%.2f rad)" % roll.motorbike)
+	cars.motorbike.release_player()
+	_check(absf(rider.rotation.z) < 0.001, "the rider stands up straight after getting off")
+	rider.queue_free()
+	for kind in kinds:
+		cars[kind].queue_free()
+
+
+## Every traffic kind, the box truck included, drives junction to junction
+## through the streets around the spawn without getting stuck or wrecked.
+func test_traffic_drives_every_kind() -> void:
+	await _new_game(false)
+	var city = game.city
+	var kinds := []
+	for k in VehicleKit.CIVILIAN:
+		if not kinds.has(k):
+			kinds.append(k)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var used := {}
+	var cars := []
+	var center: Vector3 = city.spawn_point
+	for kind in kinds:
+		var n := -1
+		for attempt in 100:
+			n = city.random_node_between(center, 15.0, 160.0, rng)
+			# Start apart, so cars don't set off into each other.
+			var clear: bool = used.keys().all(func(u): return city.node_pos(u).distance_to(city.node_pos(n)) > 25.0) if n >= 0 else false
+			if clear and not city.next_nodes(n).is_empty():
+				break
+		used[n] = true
+		var options: Array = city.next_nodes(n)
+		var to: int = options[rng.randi() % options.size()]
+		var car = Vehicle.new()
+		car.kind = kind
+		car.city = city
+		car.position = city.lane_start(n, to)
+		var heading: Vector3 = city.node_pos(to) - city.node_pos(n)
+		car.rotation.y = atan2(-heading.x, -heading.z)
+		car.rng.seed = rng.randi()
+		car.start_traffic(city, n, to)
+		game.add_child(car)
+		cars.append(car)
+	var passed := {}
+	var prev := {}
+	for car in cars:
+		prev[car] = car._next_node
+		passed[car] = 0
+	for f in 1800:
+		await _frames(1)
+		for car in cars:
+			if car._next_node != prev[car]:
+				prev[car] = car._next_node
+				passed[car] += 1
+	for car in cars:
+		_check(passed[car] >= 3 and not car.wrecked, "traffic %s passed %d junctions in 30 s (wrecked: %s)" % [car.kind, passed[car], car.wrecked])
+
+
+## A vehicle on the empty test track (no game loaded).
+func _track_car(kind: String, pos: Vector3, yaw: float):
+	var car = Vehicle.new()
+	car.kind = kind
+	car.position = pos
+	car.rotation.y = yaw
+	add_child(car)
+	return car

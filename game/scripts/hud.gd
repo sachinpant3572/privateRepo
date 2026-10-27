@@ -49,6 +49,10 @@ var _card_tween: Tween
 var _retry: PanelContainer
 var _phone_button: Button
 var _phone_pulse := false
+## The vehicle the player last sat in (instance id) and how long its model
+## name still shows beside the speed.
+var _ride_id := 0
+var _ride_name_time := 0.0
 
 
 func _ready() -> void:
@@ -152,8 +156,15 @@ func _process(delta: float) -> void:
 	_phone_button.visible = game.missions != null and game.missions.phone_unlocked
 	_phone_button.modulate = Color(1.0, 0.85, 0.3) if _phone_pulse and int(_blink * 3.0) % 2 == 0 else Color.WHITE
 	_update_dialogue(delta)
+	var ride_id: int = player.vehicle.get_instance_id() if player.vehicle != null else 0
+	if ride_id != _ride_id:
+		_ride_id = ride_id
+		_ride_name_time = 2.5
+	_ride_name_time -= delta
 	if player.vehicle != null:
 		_prompt.text = "%d km/h" % int(absf(player.vehicle.speed) * 3.6)
+		if _ride_name_time > 0.0:
+			_prompt.text = player.vehicle.model_name() + "   " + _prompt.text
 		touch.set_label("interact", "EXIT")
 		touch.set_label("sprint", "BRAKE")
 	elif context_prompt.size() == 2:

@@ -18,6 +18,8 @@ var rng := RandomNumberGenerator.new()
 var camera := Camera3D.new()
 ## Paint and glass of the gallery cars (drawn glossy, as in the game).
 var vehicle_gloss := MeshBuilder.new()
+## Riders on the gallery bikes: [rig, state, pose] like _person returns.
+var vehicle_riders: Array = []
 
 
 func _ready() -> void:
@@ -36,7 +38,9 @@ func _run() -> void:
 	var shell := vehicle_gloss.make_instance()
 	shell.material_override = MeshBuilder.gloss_material()
 	add_child(shell)
-	await _shot(cars, Vector3(0, 0, 598), 22.0, "gallery_3_vehicles.png")
+	await _shot(cars, Vector3(0, 0, 598), 28.0, "gallery_3_vehicles.png")
+	for r in vehicle_riders:
+		r[0].skeleton.get_parent().queue_free()
 	await _people()
 	await _shot(_props(), Vector3(0, 0, 897), 30.0, "gallery_5_props.png", true)
 	await _shot(_trees(), Vector3(0, 0, 962), 18.0, "gallery_6_trees.png", true)
@@ -92,14 +96,32 @@ func _landmarks() -> MeshBuilder:
 	return mb
 
 
+## Every model in three rows (cars; utility; performance and two-wheelers),
+## each in a paint from its own palette, with Jules riding the bikes.
 func _vehicles() -> MeshBuilder:
 	var mb := MeshBuilder.new()
-	var kinds := VehicleKit.KINDS.keys()
-	for i in kinds.size():
-		var row := i / 5
-		mb.xform = Transform3D(Basis(Vector3.UP, PI * 0.15), Vector3(-12.0 + (i % 5) * 6.0, 0, 594 + row * 8.0))
-		vehicle_gloss.xform = mb.xform
-		VehicleKit.build(mb, kinds[i], VehicleKit.PAINTS[i % VehicleKit.PAINTS.size()], vehicle_gloss)
+	var rows := [["compact", "sedan", "ev", "luxury", "taxi", "police"],
+		["crossover", "suv", "pickup", "van", "box_truck"],
+		["sports", "muscle", "super", "motorbike", "scooter"]]
+	var listed := 0
+	var yaw := PI * 0.15
+	for r in rows.size():
+		for i in rows[r].size():
+			var kind: String = rows[r][i]
+			var pos := Vector3(-16.0 + i * 6.5, 0, 589.0 + r * 9.0)
+			mb.xform = Transform3D(Basis(Vector3.UP, yaw), pos)
+			vehicle_gloss.xform = mb.xform
+			var palette: Array = VehicleKit.PALETTES.get(kind, VehicleKit.PAINTS)
+			VehicleKit.build(mb, kind, palette[(i * 3 + r) % palette.size()], vehicle_gloss)
+			listed += 1
+			if VehicleKit.KINDS[kind].get("rider", false):
+				var rider := _person(Player.JULES, "ride", pos)
+				rider[0].skeleton.get_parent().rotation.y = yaw
+				vehicle_riders.append(rider)
+	assert(listed == VehicleKit.KINDS.size(), "every vehicle kind is in the gallery")
+	for frame in 40:
+		for rider in vehicle_riders:
+			rider[0].pose(rider[1], 1.0 / 60.0)
 	mb.xform = Transform3D.IDENTITY
 	return mb
 
