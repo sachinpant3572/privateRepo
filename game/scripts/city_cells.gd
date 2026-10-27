@@ -35,6 +35,8 @@ const KERB := 0.15
 
 const ASPHALT := Color(0.2, 0.2, 0.23)
 const PAVEMENT := Color(0.58, 0.56, 0.52)
+## Granite kerb faces.
+const CURB := Color(0.66, 0.65, 0.63)
 const PAVERS := Color(0.5, 0.38, 0.32)
 const MARKING := Color(0.92, 0.8, 0.3)
 const WHITE_LINE := Color(0.9, 0.9, 0.88)
@@ -207,17 +209,45 @@ static func _patch(ctx: Ctx, center: Vector3, size: Vector2, color: Color) -> vo
 	if size.x <= 0.5 or size.y <= 0.5:
 		return
 	var local := _at(ctx, center, 0.0)
-	ctx.mb.box(Vector3(0, KERB + 0.02, 0), Vector3(size.x, 0.04, size.y), color)
+	ctx.mb.box(Vector3(0, KERB + 0.02, 0), Vector3(size.x, 0.04, size.y), _paved(color))
 	_done(ctx, local, false)
 
 
-## The whole parcel in one colour.
+## The whole parcel in one colour (paved, grassed or tarmacked to match).
 static func _ground(ctx: Ctx, color: Color) -> void:
 	var poly := PackedVector2Array()
-	for q in [Vector3(-ctx.hx - 0.2, 0, -ctx.hz - 0.2), Vector3(ctx.hx + 0.2, 0, -ctx.hz - 0.2), Vector3(ctx.hx + 0.2, 0, ctx.hz + 0.2), Vector3(-ctx.hx - 0.2, 0, ctx.hz + 0.2)]:
-		var w: Vector3 = ctx.frame * q
-		poly.append(Vector2(w.x, w.z))
-	ctx.mb.flat(poly, KERB + 0.02, color)
+	for q in [Vector2(-ctx.hx - 0.2, -ctx.hz - 0.2), Vector2(ctx.hx + 0.2, -ctx.hz - 0.2), Vector2(ctx.hx + 0.2, ctx.hz + 0.2), Vector2(-ctx.hx - 0.2, ctx.hz + 0.2)]:
+		poly.append(q)
+	ctx.mb.xform = ctx.frame
+	ctx.mb.flat(poly, KERB + 0.02, _paved(color))
+	ctx.mb.xform = Transform3D.IDENTITY
+
+
+## Ground colour with the surface it reads as: lawn, tarmac, plaza pavers,
+## concrete, or bare (mud).
+static func _paved(color: Color) -> Color:
+	var code := MeshBuilder.CONCRETE
+	if color.g > color.r * 1.25 and color.g > color.b * 1.2:
+		code = MeshBuilder.GRASS
+	elif color.v < 0.3:
+		code = MeshBuilder.ASPHALT
+	elif color.b < color.r * 0.8 and color.v < 0.5:
+		code = 1.0
+	elif color.v > 0.6:
+		code = MeshBuilder.PAVING
+	return MeshBuilder.glow(color, code)
+
+
+## `poly` (world) drawn flat at y in the block's front frame, so its
+## pattern lines up with the front street.
+static func _flat_in_front(ctx: Ctx, ff: Transform2D, poly: PackedVector2Array, y: float, color: Color, y0 := INF, side := Color(0, 0, 0, 0)) -> void:
+	ctx.mb.xform = Transform3D(Basis(Vector3(ff.x.x, 0, ff.x.y), Vector3.UP, Vector3(ff.y.x, 0, ff.y.y)), Vector3(ff.origin.x, 0, ff.origin.y))
+	var local := ff.affine_inverse() * poly
+	if y0 == INF:
+		ctx.mb.flat(local, y, color)
+	else:
+		ctx.mb.prism(local, y0, y, color, side)
+	ctx.mb.xform = Transform3D.IDENTITY
 
 
 # --- Streets -------------------------------------------------------------------
@@ -225,10 +255,14 @@ static func _ground(ctx: Ctx, color: Color) -> void:
 ## Asphalt under the whole block (to the centre of its streets) and the
 ## sidewalk slab inside them.
 static func _base(ctx: Ctx) -> void:
-	ctx.mb.prism(ctx.plan.face_poly(ctx.face), -SLAB, 0.0, ASPHALT)
+	ctx.mb.prism(ctx.plan.face_poly(ctx.face), -SLAB, 0.0, MeshBuilder.glow(ASPHALT, MeshBuilder.ASPHALT), ASPHALT.darkened(0.15))
 	var inner: PackedVector2Array = ctx.plan.inner(ctx.face)
 	if inner.size() >= 3:
-		ctx.mb.prism(inner, -0.3, KERB, PAVEMENT, PAVEMENT.darkened(0.25))
+		var slab := MeshBuilder.glow(PAVEMENT, MeshBuilder.CONCRETE)
+		if ctx.plan.is_land(ctx.face):
+			_flat_in_front(ctx, ctx.plan.front_frame2d(ctx.face), inner, KERB, slab, -0.3, CURB)
+		else:
+			ctx.mb.prism(inner, -0.3, KERB, slab, CURB)
 
 
 ## The streets this cell owns: markings and furniture, their outer half
@@ -316,13 +350,11 @@ static func _street(ctx: Ctx, e: int, cls: String) -> void:
 			_dashes(mb, s0, run, 0.0, MARKING)
 		"quarter":
 			# Old pavers between the curbs, no markings.
-			mb.box(Vector3(mid, 0.005, 0), Vector3(run + 1.0, 0.02, w - 0.4), PAVERS)
-			for k in int(run / 3.0):
-				mb.box(Vector3(s0 + 1.5 + k * 3.0, 0.012, 0), Vector3(0.06, 0.02, w - 0.6), PAVERS.darkened(0.12))
+			mb.box(Vector3(mid, 0.005, 0), Vector3(run + 1.0, 0.02, w - 0.4), MeshBuilder.glow(PAVERS, MeshBuilder.PAVING))
 		"lane":
 			# Pedestrian lane: paved over, bollards at each end, lights strung
 			# across.
-			mb.box(Vector3(length * 0.5, 0.08, 0), Vector3(length, 0.16, w), PAVERS.lightened(0.1))
+			mb.box(Vector3(length * 0.5, 0.08, 0), Vector3(length, 0.16, w), MeshBuilder.glow(PAVERS.lightened(0.1), MeshBuilder.PAVING))
 			var local: Array = []
 			for x in [s0 + 0.5, length - s1 - 0.5]:
 				for z in [-2.0, 0.0, 2.0]:
@@ -424,7 +456,7 @@ static func _open_sides(ctx: Ctx, e: int, cls: String) -> void:
 		var ext1 := 1.0 if t1 < 0.0 else 0.0
 		var outer := w + 1.2
 		var strip := PackedVector2Array([a - dir * ext0, b + dir * ext1, b + dir * ext1 + side * outer, a - dir * ext0 + side * outer])
-		ctx.mb.prism(strip, -SLAB, 0.0 if cls != "quay" else KERB, ASPHALT if cls != "quay" else CONCRETE, CONCRETE.darkened(0.3))
+		ctx.mb.prism(strip, -SLAB, 0.0 if cls != "quay" else KERB, MeshBuilder.glow(ASPHALT, MeshBuilder.ASPHALT) if cls != "quay" else MeshBuilder.glow(CONCRETE, MeshBuilder.CONCRETE), CONCRETE.darkened(0.3))
 		if not plan.is_water_point(mid + side * (w + 6.0)):
 			continue
 		var r0: Vector2 = a + dir * (t0 if t0 >= 0.0 else -ext0) + side * (outer - 0.3)
@@ -457,7 +489,7 @@ static func _bridge(ctx: Ctx, e: int) -> void:
 	var side := Vector2(-dir.y, dir.x)
 	var w: float = plan.edge_width(e) * 0.5
 	var deck := w + 1.4
-	mb.prism(PackedVector2Array([a - side * deck, b - side * deck, b + side * deck, a + side * deck]), -1.4, 0.0, ASPHALT, CONCRETE.darkened(0.15))
+	mb.prism(PackedVector2Array([a - side * deck, b - side * deck, b + side * deck, a + side * deck]), -1.4, 0.0, MeshBuilder.glow(ASPHALT, MeshBuilder.ASPHALT), CONCRETE.darkened(0.15))
 	var frame := Transform3D(Basis(Vector3.UP, atan2(-dir.y, dir.x)), _v3(a))
 	mb.xform = frame
 	var s0 := _setback(ctx, na, e)
@@ -561,7 +593,7 @@ static func _split(r: Rect2, size: Vector2) -> Array:
 static func _land_block(ctx: Ctx, style: String) -> void:
 	var city = ctx.city
 	var district: String = city.district_style(ctx.face)
-	ctx.mb.flat(ctx.lot, KERB + 0.01, LOT_GROUND.get("green" if style == "green" else district, PAVEMENT))
+	_flat_in_front(ctx, ctx.ff, ctx.lot, KERB + 0.01, _paved(LOT_GROUND.get("green" if style == "green" else district, PAVEMENT)))
 	if style == "green":
 		_use_parcel(ctx, ctx.rect)
 		_liberty_green(ctx)
@@ -1317,7 +1349,7 @@ static func _furniture(ctx: Ctx, kind: String) -> void:
 ## details or collisions.
 static func _outer_block(ctx: Ctx) -> void:
 	var kind: String = ctx.city.district_style(ctx.face)
-	ctx.mb.flat(ctx.lot, KERB + 0.01, LOT_GROUND.get(kind, PAVEMENT))
+	_flat_in_front(ctx, ctx.ff, ctx.lot, KERB + 0.01, _paved(LOT_GROUND.get(kind, PAVEMENT)))
 	for p in _split(ctx.rect, PARCEL_MAX.get(kind, PARCEL_DEFAULT)):
 		_use_parcel(ctx, p[0], p[1])
 		if ctx.hx < 4.0 or ctx.hz < 4.0:

@@ -13,17 +13,36 @@ const FACES := [
 ]
 
 static var _material: StandardMaterial3D
+static var _gloss_material: StandardMaterial3D
 static var _xray_materials := {}
 static var _cutaway_material: ShaderMaterial
 static var _water_material: ShaderMaterial
 
-## Vertex alpha marks surfaces that glow after dark (the city has no real
+## Vertex alpha is a surface code, in sixteenths (the city has no real
 ## lights; lamps, windows and signs light themselves in the shader):
 ## GLOW_WINDOW windows lit at night, GLOW_LAMP lamp heads, GLOW_NEON signs that
-## glow a little by day and fully at night.
+## glow a little by day and fully at night. The rest set the material:
+## GLASS reflects the sky and glints (some panels lit at night), GLOSS is
+## painted metal or plastic, METAL bare metal, ASPHALT and CONCRETE get
+## their grain, cracks and stains. Anything else (alpha 1) is matte.
 const GLOW_WINDOW := 0.25
 const GLOW_LAMP := 0.5
 const GLOW_NEON := 0.75
+const GLASS := 0.125
+const GLOSS := 0.875
+const METAL := 0.9375
+const ASPHALT := 0.0625
+const CONCRETE := 0.1875
+## Patterned surfaces, drawn along the mesh's pattern coordinates (uvs):
+## PAVING plaza pavers, ROOF membrane with seams, GRASS mown lawn, SOLAR
+## panels, SIDING lap boards, SEAM_ROOF standing-seam metal, BRICK.
+const PAVING := 0.3125
+const ROOF := 0.375
+const GRASS := 0.4375
+const SOLAR := 0.5625
+const SIDING := 0.625
+const SEAM_ROOF := 0.6875
+const BRICK := 0.8125
 
 ## Shared shader code: grain noise, wet ground and the glow codes. The
 ## globals `night`, `wet` and `sky_tint` are set by Atmosphere.
@@ -48,12 +67,103 @@ float vnoise(vec2 p) {
 }
 
 // Grain so flat colours read as stone, asphalt and plaster; wet ground with
-// puddles that mirror the sky; emission for the glow codes.
-void surface(vec3 base, float code, vec3 wpos, vec3 wnormal, float time, out vec3 albedo, out vec3 emission) {
+// puddles that mirror the sky; emission for the glow codes; roughness and
+// sheen for the material codes (alpha in sixteenths, see MeshBuilder).
+// Dark joint lines on a grid of `cell` (soft-edged, `w` wide).
+float joints(vec2 p, vec2 cell, float w) {
+	vec2 f = abs(fract(p / cell + 0.5) - 0.5) * cell;
+	return 1.0 - smoothstep(w * 0.5, w, min(f.x, f.y));
+}
+
+// Patterns along the pattern coordinates uv (see MeshBuilder.uvs).
+vec3 pattern(int c, vec3 col, vec2 uv, vec3 wpos, inout float rough, inout float spec) {
+	if (c == 3) {
+		col *= 1.0 - 0.28 * joints(uv, vec2(1.5), 0.05);
+	} else if (c == 5) {
+		vec2 b = uv / vec2(0.6, 0.3);
+		b.x += step(1.0, mod(floor(b.y), 2.0)) * 0.5;
+		col *= 0.88 + 0.2 * hash(floor(b) + 7.0);
+		col *= 1.0 - 0.3 * joints(fract(b) * vec2(0.6, 0.3), vec2(0.6, 0.3), 0.025);
+	} else if (c == 6) {
+		col *= 0.95 + 0.07 * hash(vec2(floor(uv.x / 1.0), 3.0));
+		col *= 1.0 - 0.18 * (1.0 - smoothstep(0.0, 0.04, abs(fract(uv.x) - 0.5) - 0.46));
+		col *= mix(0.88, 1.0, vnoise(uv * 0.7));
+	} else if (c == 7) {
+		col *= 0.93 + 0.12 * step(0.5, fract(uv.x / 4.0));
+		col *= 0.85 + 0.25 * hash(floor(wpos.xz * 6.0));
+	} else if (c == 9) {
+		vec2 cell = abs(fract(uv / vec2(0.16, 0.16)) - 0.5);
+		col *= 1.0 - 0.25 * step(0.42, max(cell.x, cell.y));
+		vec2 frame = abs(fract(uv / vec2(1.0, 1.65)) - 0.5);
+		col = mix(col, vec3(0.75, 0.77, 0.8), step(0.47, max(frame.x, frame.y)));
+		rough = 0.12;
+		spec = 0.85;
+	} else if (c == 10) {
+		float lap = fract(uv.y / 0.22);
+		col *= 0.86 + 0.14 * smoothstep(0.0, 0.85, lap);
+	} else if (c == 11) {
+		col *= 1.0 - 0.22 * (1.0 - smoothstep(0.0, 0.03, abs(fract(uv.x / 0.5) - 0.5) - 0.44));
+		rough = 0.35;
+		spec = 0.6;
+	} else if (c == 13) {
+		vec2 b = uv / vec2(0.24, 0.08);
+		b.x += step(1.0, mod(floor(b.y), 2.0)) * 0.5;
+		col *= 0.85 + 0.25 * hash(floor(b) + 3.0);
+		col = mix(col, vec3(0.78, 0.76, 0.72), joints(fract(b) * vec2(0.24, 0.08), vec2(0.24, 0.08), 0.014) * 0.6);
+	}
+	return col;
+}
+
+void surface(vec3 base, float code, vec3 wpos, vec3 wnormal, vec3 view_dir, vec2 uv, float time, out vec3 albedo, out vec3 emission, out float rough, out float spec, out float metal) {
+	int c = int(code * 16.0 + 0.5);
 	vec3 col = base;
+	rough = 0.9;
+	spec = 0.25;
+	metal = 0.0;
 	if (detail > 0.5) {
-		float grain = vnoise(wpos.xz * 2.1 + wpos.y * 1.7) * 0.55 + vnoise(wpos.xz * 0.3 + wpos.y * 0.2) * 0.45;
-		col *= 0.92 + 0.12 * grain;
+		col = pattern(c, col, uv, wpos, rough, spec);
+	} else if (c == 9) {
+		rough = 0.12;
+		spec = 0.85;
+	}
+	if (detail > 0.5) {
+		float grain = vnoise(wpos.xz * 2.1 + wpos.y * 1.7) * 0.7 + vnoise(wpos.xz * 0.3 + wpos.y * 0.2) * 0.3;
+		col *= 0.94 + 0.08 * grain;
+		if (c == 1) {
+			// Asphalt: fine aggregate, darker patched squares, sealed cracks.
+			col *= 0.9 + 0.2 * hash(floor(wpos.xz * 9.0));
+			vec2 pc = floor(wpos.xz / 3.5);
+			float patch = step(0.96, hash(pc + 17.0));
+			col = mix(col, col * 0.86, patch);
+			float crack = abs(vnoise(wpos.xz * 0.55) * 2.0 - 1.0);
+			col *= mix(0.72, 1.0, smoothstep(0.0, 0.02, crack) + step(0.28, vnoise(wpos.xz * 0.09 + 3.0)));
+		} else if (c == 3) {
+			// Concrete: speckle and the odd stain.
+			col *= 0.94 + 0.1 * hash(floor(wpos.xz * 14.0));
+			col *= mix(0.93, 1.0, smoothstep(0.6, 0.8, 1.0 - vnoise(wpos.xz * 0.45 + 9.0)));
+		}
+	}
+	if (c == 1) {
+		rough = 0.85;
+		spec = 0.3;
+	} else if (c == 2) {
+		// Glass: dark tint mirroring the sky above the horizon and the
+		// street below it, with a bright edge where it faces away.
+		vec3 r = reflect(-view_dir, wnormal);
+		vec3 sky = mix(sky_tint.rgb * 1.05, vec3(0.75, 0.82, 0.9), 0.35) * mix(1.0, 0.18, night);
+		vec3 refl = mix(base * 0.6, sky, smoothstep(-0.15, 0.35, r.y));
+		float fres = pow(1.0 - clamp(dot(view_dir, wnormal), 0.0, 1.0), 3.0);
+		col = mix(base * 0.55, refl, 0.55 + 0.4 * fres);
+		rough = 0.08;
+		spec = 0.9;
+		metal = 0.25;
+	} else if (c == 14) {
+		rough = 0.28;
+		spec = 0.6;
+	} else if (c == 15) {
+		rough = 0.4;
+		spec = 0.7;
+		metal = 0.7;
 	}
 	if (wet > 0.01 && wnormal.y > 0.9 && wpos.y < 0.35 && detail < 0.5) {
 		col *= mix(1.0, 0.7, wet);
@@ -66,17 +176,22 @@ void surface(vec3 base, float code, vec3 wpos, vec3 wnormal, float time, out vec
 		float ring = smoothstep(0.03, 0.0, abs(length(local) - t * 0.45)) * (1.0 - t) * step(0.7, hash(cell + floor(time * 1.3 + hash(cell))));
 		col = mix(col, sky_tint.rgb * mix(0.9, 0.35, night), puddle * wet * 0.5);
 		col += vec3(ring * puddle * wet * 0.25);
+		rough = mix(rough, 0.15, wet * (0.4 + 0.6 * puddle));
+		spec = mix(spec, 0.8, wet);
 	}
 	emission = vec3(0.0);
-	if (code < 0.95) {
-		if (abs(code - 0.25) < 0.08) {
-			col = mix(col, col * 0.5, night);
-			emission = mix(col, vec3(1.0, 0.78, 0.45), 0.7) * night * 1.3;
-		} else if (abs(code - 0.5) < 0.08) {
-			emission = base * night * 1.2;
-		} else if (abs(code - 0.75) < 0.08) {
-			emission = base * mix(0.35, 2.0, night);
-		}
+	if (c == 4) {
+		col = mix(col, col * 0.5, night);
+		emission = mix(col, vec3(1.0, 0.78, 0.45), 0.7) * night * 1.3;
+	} else if (c == 8) {
+		emission = base * night * 1.2;
+	} else if (c == 12) {
+		emission = base * mix(0.35, 2.0, night);
+	} else if (c == 2) {
+		// Offices and flats behind the glass: a few panels lit after dark.
+		vec2 pane = floor(vec2(wpos.x + wpos.z, wpos.y) / vec2(2.2, 3.4));
+		float lit = step(0.62, hash(pane + 5.0));
+		emission = mix(vec3(1.0, 0.86, 0.62), vec3(0.75, 0.88, 1.0), hash(pane)) * lit * night * 0.9;
 	}
 	albedo = col;
 }
@@ -87,7 +202,7 @@ void surface(vec3 base, float code, vec3 wpos, vec3 wnormal, float time, out vec
 ## hide what happens around them. The camera updates the uniforms each frame.
 const CUTAWAY_SHADER := """
 shader_type spatial;
-render_mode diffuse_toon, specular_disabled;
+render_mode diffuse_burley, specular_schlick_ggx;
 #include_common
 
 uniform vec3 focus = vec3(0.0);
@@ -107,10 +222,16 @@ void vertex() {
 void fragment() {
 	vec3 albedo;
 	vec3 emission;
-	surface(COLOR.rgb, COLOR.a, world_pos, world_normal, TIME, albedo, emission);
+	float rough;
+	float spec;
+	float metal;
+	vec3 view_dir = normalize(CAMERA_POSITION_WORLD - world_pos);
+	surface(COLOR.rgb, COLOR.a, world_pos, world_normal, view_dir, UV, TIME, albedo, emission, rough, spec, metal);
 	ALBEDO = albedo;
 	EMISSION = emission;
-	ROUGHNESS = 1.0;
+	ROUGHNESS = rough;
+	SPECULAR = spec;
+	METALLIC = metal;
 	vec3 rel = world_pos - focus;
 	if (world_pos.y > 0.4 && dot(rel, cam_back) > 1.0) {
 		float d = length(vec2(dot(rel, cam_right), dot(rel, cam_up))) / cut_radius;
@@ -171,6 +292,10 @@ static var _glow_material: ShaderMaterial
 var verts := PackedVector3Array()
 var normals := PackedVector3Array()
 var colors := PackedColorArray()
+## Pattern coordinates: the point in the space it was built in (before
+## xform), on the ground plane for flat faces and (along, up) on walls, so
+## paving, joints, seams and siding line up with what they are drawn on.
+var uvs := PackedVector2Array()
 var indices := PackedInt32Array()
 ## Placement applied to everything added; asset kits build in local space and
 ## the caller sets this to position and rotate them (rotation and translation
@@ -192,10 +317,23 @@ static func material() -> StandardMaterial3D:
 		_material = StandardMaterial3D.new()
 		_material.vertex_color_use_as_albedo = true
 		_material.vertex_color_is_srgb = true
-		_material.diffuse_mode = BaseMaterial3D.DIFFUSE_TOON
-		_material.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
-		_material.roughness = 1.0
+		_material.diffuse_mode = BaseMaterial3D.DIFFUSE_BURLEY
+		_material.roughness = 0.62
+		_material.metallic_specular = 0.35
 	return _material
+
+
+## Glossy material for car glass and paint shells: vertex colour, sharp
+## highlights.
+static func gloss_material() -> StandardMaterial3D:
+	if _gloss_material == null:
+		_gloss_material = StandardMaterial3D.new()
+		_gloss_material.vertex_color_use_as_albedo = true
+		_gloss_material.vertex_color_is_srgb = true
+		_gloss_material.roughness = 0.16
+		_gloss_material.metallic = 0.35
+		_gloss_material.metallic_specular = 0.8
+	return _gloss_material
 
 
 ## The same material, drawn as a flat silhouette in `color` wherever the mesh
@@ -238,7 +376,7 @@ static func glow_material() -> ShaderMaterial:
 	return _glow_material
 
 
-## `color` marked with a glow code (see GLOW_WINDOW and friends).
+## `color` marked with a surface code (see GLOW_WINDOW and friends).
 static func glow(color: Color, code: float) -> Color:
 	return Color(color.r, color.g, color.b, code)
 
@@ -253,6 +391,7 @@ func light_pool(center: Vector3, radius: Vector2, color: Color, sides := 10) -> 
 		for p in [center, center + Vector3(cos(a0) * radius.x, 0, sin(a0) * radius.y), center + Vector3(cos(a1) * radius.x, 0, sin(a1) * radius.y)]:
 			verts.append(xform * p)
 			normals.append(Vector3.UP)
+			uvs.append(Vector2.ZERO)
 		colors.append_array([color, Color.BLACK, Color.BLACK])
 		indices.append_array([base, base + 2, base + 1])
 
@@ -264,6 +403,7 @@ func light_beam(from: Vector3, dir: Vector3, length: float, spread: float, color
 	for p in [from - side * 0.3, from + side * 0.3, from + dir * length + side * spread, from + dir * length - side * spread]:
 		verts.append(xform * p)
 		normals.append(Vector3.UP)
+		uvs.append(Vector2.ZERO)
 	colors.append_array([color, color, Color.BLACK, Color.BLACK])
 	indices.append_array([base, base + 2, base + 1, base, base + 3, base + 2])
 
@@ -295,6 +435,7 @@ func box(center: Vector3, size: Vector3, color: Color, skip_bottom := true) -> v
 			verts.append(xform * p)
 			normals.append(xform.basis * n)
 			colors.append(color)
+			uvs.append(_uv(p, n))
 		# Godot treats clockwise triangles as front-facing.
 		indices.append_array([base, base + 2, base + 1, base, base + 3, base + 2])
 
@@ -310,7 +451,15 @@ func tri(a: Vector3, b: Vector3, c: Vector3, n: Vector3, color: Color) -> void:
 		verts.append(xform * p)
 		normals.append((xform.basis * n).normalized())
 		colors.append(color)
+		uvs.append(_uv(p, n))
 	indices.append_array([base, base + 1, base + 2])
+
+
+static func _uv(p: Vector3, n: Vector3) -> Vector2:
+	if absf(n.y) > 0.7:
+		return Vector2(p.x, p.z)
+	var t := Vector3(-n.z, 0.0, n.x).normalized()
+	return Vector2(p.dot(t), p.y)
 
 
 ## A flat quad through four corners (in order around its edge) facing `n`.
@@ -439,6 +588,7 @@ func primitive(mesh: PrimitiveMesh, xform: Transform3D, color: Color) -> void:
 		verts.append(full * src_verts[i])
 		normals.append((full.basis * src_normals[i]).normalized())
 		colors.append(color)
+		uvs.append(_uv(xform * src_verts[i], xform.basis * src_normals[i]))
 	for index in arrays[Mesh.ARRAY_INDEX]:
 		indices.append(base + index)
 
@@ -449,6 +599,7 @@ func commit() -> ArrayMesh:
 	arrays[Mesh.ARRAY_VERTEX] = verts
 	arrays[Mesh.ARRAY_NORMAL] = normals
 	arrays[Mesh.ARRAY_COLOR] = colors
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
 	arrays[Mesh.ARRAY_INDEX] = indices
 	if not _bone_marks.is_empty():
 		var bones := PackedInt32Array()
