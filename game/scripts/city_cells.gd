@@ -1343,7 +1343,8 @@ static func _docks(ctx: Ctx, number: int) -> void:
 					Props.container(mb, local, p + Vector3(0, 2.6 * s, 0), Props.CONTAINERS[rng.randi() % Props.CONTAINERS.size()])
 		_done(ctx, local, false)
 		var crane := _at(ctx, Vector3(rng.randf_range(-hx * 0.5, hx * 0.5), KERB, -hz + 3.5), PI)
-		Props.crane(mb, crane, Vector3.ZERO)
+		# Over the quay road and its sidewalk to the water.
+		Props.crane(mb, crane, Vector3.ZERO, 21.0 + StreetPlan.QUAY_SET + StreetPlan.CLASSES.quay.width * 0.5 + StreetPlan.SIDEWALK)
 		_done(ctx, crane, false)
 		return
 	if number >= 0 or rng.randf() < 0.5:
@@ -1628,7 +1629,7 @@ static func _furniture(ctx: Ctx, kind: String) -> void:
 	var n := inner.size()
 	for k in n:
 		var cls: String = plan.side_class(ctx.face, k)
-		if cls == "" or cls == "quay":
+		if cls == "":
 			continue
 		var a := inner[k]
 		var e := inner[(k + 1) % n]

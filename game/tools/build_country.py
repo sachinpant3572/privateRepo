@@ -676,7 +676,7 @@ class Country:
         if self.gulf.contains(drive.interpolate(0.5, normalized=True)):
             drive = coast.offset_curve(-90.0, join_style="round")
         drive = LineString(fillet(list(drive.coords), 80.0, 8.0))
-        drive = drive.intersection(box(west - 0.5, -1000, east + 300, 2100)).difference(self.P.buffer(60.0))
+        drive = drive.intersection(box(west - 0.5, -1000, east + 0.5, 2100)).difference(self.P.buffer(60.0))
         for piece in lines_of(drive):
             if piece.length > 60:
                 self.add(list(piece.coords), "avenue", "Seabreeze Drive", "seabreeze")
@@ -705,10 +705,10 @@ class Country:
         self.palmetto = unary_union(self._clip_add(back, bt, "avenue", "Palmetto Row", "brisa"))
         self.brisa_dirs = (d, inland)
         # The Beltway round the suburbs, from Seabreeze Drive in the west to
-        # Palmetto Row in the east.
-        shore_line = unary_union([self.ocean_drive, self.palmetto])
+        # Seabreeze Drive in the east (across Palmetto Row), so the coast
+        # road ends on it at both ends.
         w_end = self._first_hit((west, north), (west, by1 + 600.0), self.ocean_drive) or (west, by1 + 30.0)
-        e_end = self._first_hit((east, north), (east, by1 + 600.0), shore_line) or (east, 700.0)
+        e_end = self._first_hit((east, north), (east, by1 + 600.0), self.ocean_drive) or (east, 700.0)
         belt = [w_end, (west, north), (east, north), e_end]
         for piece in lines_of(LineString(fillet(belt, 60.0, 8.0)).intersection(self.A.difference(self.P))):
             self.add(list(piece.coords), "avenue", "Bellerive Beltway", "beltway")
@@ -1075,11 +1075,15 @@ class Country:
                     continue
                 if roads.intersection(seg.buffer(16.0, cap_style="flat")).length > 45.0:
                     continue
-                g = min(drivable, key=lambda r: r.distance(Point(h)))
-                sh = g.project(Point(h))
-                a, b = g.interpolate(max(0.0, sh - 3.0)).coords[0], g.interpolate(min(g.length, sh + 3.0)).coords[0]
-                t = (b[0] - a[0], b[1] - a[1])
-                if abs(t[0] * o[0] + t[1] * o[1]) / (math.hypot(*t) or 1.0) > 0.85:
+                # The squarest of the roads met there (a junction may hold several).
+                square = 1.0
+                for g in drivable:
+                    if g.distance(Point(h)) < 0.5:
+                        sh = g.project(Point(h))
+                        a, b = g.interpolate(max(0.0, sh - 3.0)).coords[0], g.interpolate(min(g.length, sh + 3.0)).coords[0]
+                        t = (b[0] - a[0], b[1] - a[1])
+                        square = min(square, abs(t[0] * o[0] + t[1] * o[1]) / (math.hypot(*t) or 1.0))
+                if square > 0.85:
                     continue
                 mid = seg.interpolate(0.5, normalized=True)
                 zone = next((z for z, zp in self.zones if zp.contains(mid)), "")

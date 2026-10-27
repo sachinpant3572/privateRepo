@@ -428,18 +428,19 @@ static func container(mb, out: Array, p: Vector3, color: Color, along_z := false
 	out.append([p + Vector3(0, size.y * 0.5, 0), size])
 
 
-## Dockside gantry crane: four legs, a boom along X reaching over the water.
-static func crane(mb, out: Array, p: Vector3) -> void:
+## Dockside gantry crane: four legs, a boom along +Z reaching over the
+## water, `reach` metres from the legs' centre to its tip.
+static func crane(mb, out: Array, p: Vector3, reach := 21.0) -> void:
 	var yellow := Color(0.95, 0.72, 0.15)
 	for x in [-4.0, 4.0]:
 		for z in [-3.0, 3.0]:
 			mb.box(p + Vector3(x, 7.0, z), Vector3(0.6, 14.0, 0.6), yellow)
 			out.append([p + Vector3(x, 2.0, z), Vector3(0.8, 4.0, 0.8)])
 	mb.box(p + Vector3(0, 14.4, 0), Vector3(9.0, 0.8, 7.0), yellow.darkened(0.15))
-	mb.box(p + Vector3(0, 15.4, 8.0), Vector3(1.4, 1.0, 26.0), yellow)
+	mb.box(p + Vector3(0, 15.4, (reach - 5.0) * 0.5), Vector3(1.4, 1.0, reach + 5.0), yellow)
 	mb.box(p + Vector3(0, 16.4, -2.0), Vector3(3.0, 2.0, 3.0), Color(0.3, 0.32, 0.35))
-	mb.box(p + Vector3(0, 11.0, 14.0), Vector3(0.08, 8.0, 0.08), Color(0.1, 0.1, 0.1))
-	mb.box(p + Vector3(0, 7.0, 14.0), Vector3(2.4, 0.4, 1.2), Color(0.2, 0.2, 0.22))
+	mb.box(p + Vector3(0, 11.0, reach - 7.0), Vector3(0.08, 8.0, 0.08), Color(0.1, 0.1, 0.1))
+	mb.box(p + Vector3(0, 7.0, reach - 7.0), Vector3(2.4, 0.4, 1.2), Color(0.2, 0.2, 0.22))
 
 
 ## Bellerive streetcar: green body, red trim, window band and trolley pole.

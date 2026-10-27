@@ -124,9 +124,12 @@ the government buildings and the outskirts patterns from v3 carry over.
       alongside another road or meet one at a glancing angle. 72 of 75 frame junctions now carry on (was 54);
       the 3 left are two levee/quay ends at the water and one east street (y 621) whose way out
       runs into civic grounds.
-    - The Ironwharf quay is a drivable 10 m concrete apron (`quay` class: drive, rank 3, `QUAY_SET` 6 m back
+    - The Ironwharf quay is a drivable 10 m road (`quay` class: drive, rank 3, `QUAY_SET` 6 m back
       from the water); it was a 3 m walkway, so every docks street south of Wharf Street dead-ended at the
-      water. Cranes, bollards and the rail stay; it carries on east to Sunvale Boulevard.
+      water. Bollards, lamps and the rail line it; the cranes' booms are longer by the quay's width, so
+      they still reach over the water; it carries on east to Sunvale Boulevard.
+    - Seabreeze Drive ran 200 m past the Beltway in the west and 500 m past it in the east, onto nothing;
+      it now ends on the Beltway at both ends (the Beltway's east leg runs on across Palmetto Row to it).
     - `trim_route_stubs`: Serena Causeway (phase 4) began on the river bank on nothing; it now starts at
       Palmetto Row. Its far end runs off the play area over the Gulf (the world edge, as before).
     - `join_ends` also snaps a road ending under 4 m short of another at the play area's edge.
@@ -138,7 +141,7 @@ the government buildings and the outskirts patterns from v3 carry over.
     between two major roads, one a 76 m link from Palmetto Avenue to the first heights street. Every minor line crosses or meets a major road. Core lines under 150 m: 8,
     all the City Hall ring (Capitol Drive) and the old town's seam connectors, kept as set pieces.
   - **Test:** `test_country_joins_the_city` now also requires 90% of frame junctions carried on and no
-    dead end within 750 m of the plan.
+    dead end within 1100 m of the plan (farm lanes and tracks aside).
   - **Rejected:** making the plan's frame street an avenue so core streets "end on a major road". It would
     pass the metric without changing the drive. Also rejected: running the heights' carry-on streets on
     to the Beltway (they would cut the estates in half; they meet the first heights street instead).
