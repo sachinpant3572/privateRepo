@@ -53,8 +53,10 @@ the window, the first countryside roads and towns, taxis. Estimated 6-8 sessions
   white H on blue, shops by awnings and colour. 41 kinds, one `build(kind, mb, rng)`.
 
 - **P-15 Scripted drivers (taxis, getaways) follow the line between path points** with
-  traffic's 9 m look-ahead, and back off and slide along a wall they are pinned on. A
-  car running wide out of a corner used to scrape along kerb props forever.
+  traffic's 9 m look-ahead, back off and slide along a wall they are pinned on, and pass
+  (on the left) anything that blocks their lane for 3 s (`SCRIPT_WAIT`). Before, a car
+  running wide out of a corner scraped kerb props forever and one behind a stalled car
+  waited forever (the cause of the intermittent population-test failure).
 
 ## Moved landmarks
 

@@ -1209,6 +1209,23 @@ func test_scripted_car_gets_unstuck() -> void:
 			break
 	_check(back_at < 40.0, "a car run wide is back on its line by x %.0f" % back_at)
 	car.queue_free()
+	# A stalled car in its lane: it waits a moment, then passes it.
+	var stalled = _track_car("sedan", Vector3(0, 0, -100.0), 0.0)
+	car = _track_car("sedan", Vector3(0, 0, -80.0), 0.0)
+	car.drive_path(PackedVector3Array([Vector3(0, 0, -90), Vector3(0, 0, -160)]), 0.6)
+	done[0] = false
+	car.path_done.connect(func(_c): done[0] = true)
+	var waited := 0
+	for f in 900:
+		await _frames(1)
+		if car.braking and car.global_position.z > -100.0:
+			waited += 1
+		if done[0]:
+			break
+	_check(waited > 60, "it waits behind a stalled car (%.1f s)" % (waited / 60.0))
+	_check(done[0] and stalled.global_position.distance_to(Vector3(0, 0, -100.0)) < 1.5, "then goes round it, not through it (ended at %s, the stalled car moved %.1f m)" % [car.global_position, stalled.global_position.distance_to(Vector3(0, 0, -100.0))])
+	car.queue_free()
+	stalled.queue_free()
 
 
 ## A box truck rolling into a parked sedan shoves it much harder than the

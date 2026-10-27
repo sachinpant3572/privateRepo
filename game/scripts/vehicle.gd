@@ -31,6 +31,9 @@ const TRAFFIC_TURN_SPEED := 6.5
 const TRAFFIC_SLOW_ZONE := 16.0
 ## Traffic steers for the point this far (m) ahead along its lane.
 const TRAFFIC_LOOKAHEAD := 9.0
+## Seconds a scripted driver (taxi, getaway) waits behind something that
+## does not move off before it goes round.
+const SCRIPT_WAIT := 3.0
 const POLICE_XRAY := Color(0.3, 0.55, 1.0, 0.6)
 
 var driver := Driver.NONE
@@ -247,22 +250,30 @@ func _script_ai() -> void:
 		throttle = 0.7
 		return
 	_since_reverse += dt
-	if _since_reverse < 1.0 and _wall_normal != Vector3.ZERO:
+	var escaping := _since_reverse < 1.0 and _wall_normal != Vector3.ZERO
+	if escaping:
 		# Just backed off: go round the obstacle, along its face and a little
-		# away (to the left of a face that is dead ahead).
+		# away (to the left of a face that is dead ahead, so a car stopped in
+		# the lane is passed on the left).
 		var along := desired_dir - _wall_normal * desired_dir.dot(_wall_normal)
 		if along.length() < 0.3:
 			along = _wall_normal.cross(Vector3.UP)
 		desired_dir = (along.normalized() + _wall_normal * 0.5).normalized()
-	braking = _ahead.is_colliding() and _ahead.get_collider() != null and _ahead.get_collider().get("driver") != Driver.PLAYER
+	var blocker: Object = _ahead.get_collider() if _ahead.is_colliding() else null
+	braking = not escaping and blocker != null and blocker.get("driver") != Driver.PLAYER
 	# Going nowhere under power (wheels turning against a wall) is stuck;
-	# a second time soon after backs off further.
-	if not braking and get_real_velocity().length() < 1.0:
-		_stuck_time += dt
+	# so is waiting SCRIPT_WAIT behind something that does not move off (a
+	# stalled car, a body in the road). A second time soon after backs off
+	# further.
+	if get_real_velocity().length() < 1.0:
+		_stuck_time += dt * (1.2 / SCRIPT_WAIT if braking else 1.0)
 	else:
 		_stuck_time = 0.0
 	if _stuck_time > 1.2:
 		_stuck_time = 0.0
+		if braking and blocker is Node3D:
+			var away: Vector3 = global_position - blocker.global_position
+			_wall_normal = Vector3(away.x, 0.0, away.z).normalized()
 		_reverse_time = 1.2 if _since_reverse > 3.0 else minf(_last_reverse + 0.8, 3.2)
 		_last_reverse = _reverse_time
 
