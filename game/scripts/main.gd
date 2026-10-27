@@ -123,6 +123,7 @@ func restart_story() -> void:
 	city.stream_now(city.spawn_point)
 	player.respawn(city.spawn_point)
 	camera.snap()
+	population.refill()
 	if missions_enabled:
 		missions.start("m01_homecoming")
 
@@ -155,4 +156,5 @@ func _respawn(text: String, point: Vector3) -> void:
 	city.stream_now(point)
 	player.respawn(point)
 	camera.snap()
+	population.refill()
 	respawning = false

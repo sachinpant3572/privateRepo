@@ -120,10 +120,20 @@ func _ready() -> void:
 	var size: Vector3 = _spec.size
 	_size = size
 	_game = get_tree().get_first_node_in_group("game")
+	# A box with its corners cut, so clipping a post or a building corner
+	# glances the car aside instead of stopping it as a head-on hit.
 	var shape := CollisionShape3D.new()
-	var box := BoxShape3D.new()
-	box.size = Vector3(size.x + 0.1, 1.2, size.z + 0.1)
-	shape.shape = box
+	var hx := size.x * 0.5 + 0.05
+	var hz := size.z * 0.5 + 0.05
+	var cut := minf(0.45, hx * 0.5)
+	var points := PackedVector3Array()
+	for y in [-0.6, 0.6]:
+		for c in [Vector2(hx - cut, -hz), Vector2(hx, -hz + cut), Vector2(hx, hz - cut), Vector2(hx - cut, hz),
+				Vector2(cut - hx, hz), Vector2(-hx, hz - cut), Vector2(-hx, cut - hz), Vector2(cut - hx, -hz)]:
+			points.append(Vector3(c.x, y, c.y))
+	var hull := ConvexPolygonShape3D.new()
+	hull.points = points
+	shape.shape = hull
 	shape.position.y = 0.6
 	add_child(shape)
 	_ahead = RayCast3D.new()
@@ -412,8 +422,8 @@ func _drive(delta: float) -> void:
 				var mix := smoothstep(0.3, 0.9, absf(angle))
 				var assisted := lerpf(target, _corner_speed(), mix)
 				if assisted < target and assisted < pace:
-					target = assisted
 					corner = mix
+				target = minf(target, assisted)
 		var grip_turn: float = clampf(pace / _spec.steer_low, 0.0, 1.0) * (1.0 - _spec.steer_fade * clampf(pace / max_speed, 0.0, 1.0))
 		steer = clampf(angle * 2.0, -1.0, 1.0)
 		yaw = steer * turn_rate * grip_turn * delta * (1.6 if handbrake else 1.0)
@@ -496,13 +506,15 @@ func _handle_collisions(before: Vector3) -> void:
 				_last_reverse = _reverse_time
 		# A floating body keeps its velocity into a wall, which would count
 		# the same crash again every frame it stays pressed in: it is one hit.
-		# What the car keeps of its speed is what is left along its heading
-		# (plus the lag of the velocity behind it under power), so a head-on
-		# stop is a stop and a scrape costs little; pinned against a wall,
-		# `speed` stays low instead of winding up.
+		# The car loses the speed the wall took off along its heading, but
+		# keeps no more than is left along it (plus the lag of the velocity
+		# behind it under power): a head-on stop is a stop, a scrape or a
+		# drift into a wall costs little, and pinned, `speed` stays low.
 		if not (other != null and other.has_method("bump")) and velocity.dot(col.get_normal()) < 0.0:
+			var along := absf(velocity.dot(-global_basis.z))
 			velocity = velocity.slide(col.get_normal())
-			var kept: float = absf(velocity.dot(-global_basis.z)) + accel / _spec.grip + 0.5
+			var left := absf(velocity.dot(-global_basis.z))
+			var kept: float = maxf(left + accel / _spec.grip + 0.5, absf(speed) - (along - left))
 			speed = signf(speed) * minf(absf(speed), kept)
 		if impact < 4.0 or struck.has(other):
 			continue

@@ -374,12 +374,17 @@ func test_city_runs_with_population() -> void:
 	_place_player(_home(), Vector3.ZERO)
 	await _press("interact")
 	# Weave around for a while to exercise traffic, pedestrians and collisions.
-	# Nothing new may appear on screen (the driving camera sees ~60 m out).
+	# Nothing may appear or vanish on screen (the driving camera sees ~60 m
+	# out on a wide phone screen).
+	var window_size := get_window().size
+	get_window().size = Vector2i(2340, 1080)
 	var pop = game.population
 	var seen := {}
 	for p in pop.peds + pop.cars + pop._parked.values():
-		seen[p] = true
-	var counts := [0, 0] # spawned, of them in view
+		seen[p] = pop._in_view(p.global_position, 0.0)
+	# spawned, spawned in view, vanished in view, frames, people alive,
+	# people on screen, traffic on screen
+	var counts := [0, 0, 0, 0, 0, 0, 0]
 	for i in 12:
 		Controls.override_vector = Vector2.from_angle(i * 1.3)
 		await _watch_spawns(60, seen, counts)
@@ -408,28 +413,47 @@ func test_city_runs_with_population() -> void:
 	await _watch_spawns(480, seen, counts, car, fastest)
 	var spawned: int = counts[0]
 	var popped: int = counts[1]
+	var frames: float = counts[3]
+	print("  fast run: %.1f people alive, %.1f on screen, %.1f traffic on screen" % [counts[4] / frames, counts[5] / frames, counts[6] / frames])
+	get_window().size = window_size
 	await _frames(120) # let the bubble refill around wherever the drive ended
 	_check(game.population.peds.size() >= 10, "pedestrians spawned, got %d" % game.population.peds.size())
 	_check(game.population.cars.size() >= 5, "traffic spawned, got %d" % game.population.cars.size())
 	_check(fastest[0] > 15.0, "the run gets up to speed (%.1f m/s)" % fastest[0])
 	_check(spawned > 10 and popped == 0, "%d spawned while driving, %d of them in view" % [spawned, popped])
+	_check(counts[2] == 0, "%d people or cars vanished in view" % counts[2])
+	_check(counts[4] / frames > 12.0, "the fast run keeps people around (%.1f alive on average)" % (counts[4] / frames))
 	_check(is_instance_valid(car), "player car still exists")
 
 
-## Counts people and cars new to `seen` over `frames`, and how many of
-## them showed up on screen; tracks the fastest speed of `car`.
+## Over `frames`, counts into `counts` (see the caller) the people and cars
+## that appear or vanish on screen; `seen` maps each to whether it was on
+## screen last frame. Tracks the fastest speed of `car`.
 func _watch_spawns(frames: int, seen: Dictionary, counts: Array, car = null, fastest := [0.0]) -> void:
 	var pop = game.population
 	for f in frames:
 		await _frames(1)
 		if car != null:
 			fastest[0] = maxf(fastest[0], absf(car.speed))
+		for p in seen.keys():
+			if not is_instance_valid(p):
+				if seen[p]:
+					counts[2] += 1
+				seen.erase(p)
 		for p in pop.peds + pop.cars + pop._parked.values():
+			if not is_instance_valid(p):
+				continue
+			var shown: bool = pop._in_view(p.global_position, 0.0)
 			if not seen.has(p):
-				seen[p] = true
 				counts[0] += 1
-				if pop._in_view(p.global_position):
+				if shown:
 					counts[1] += 1
+			seen[p] = shown
+		if car != null:
+			counts[3] += 1
+			counts[4] += pop.peds.size()
+			counts[5] += pop.peds.filter(func(p): return is_instance_valid(p) and pop._in_view(p.global_position, 0.0)).size()
+			counts[6] += pop.cars.filter(func(c): return is_instance_valid(c) and c != car and pop._in_view(c.global_position, 0.0)).size()
 
 
 func test_camera_is_classic_top_down() -> void:
@@ -852,29 +876,30 @@ func test_vehicle_speed_ranks() -> void:
 ## roads felt too small to drive "without hitting anything").
 func test_player_driving_assists() -> void:
 	await _free_game()
-	var cam = Controls.camera
 	Controls.camera = null # the stick maps straight onto the ground
 	# Easing the thumb off on a straight coasts; it does not brake.
-	var car = _player_car("sedan", Vector3(0, 0, 0), 20.0)
+	var car = _player_car("sedan", Vector3(-100.0, 0, 0), 20.0)
 	Controls.override_vector = Vector2(0, -0.7)
 	await _frames(30)
 	_check(car.speed > 15.5, "easing off to 0.7 stick on a straight coasts (20 -> %.1f m/s in 0.5 s)" % car.speed)
 	car.queue_free()
 	# A swerve (stick 30 degrees off for a moment) costs about 1 m/s.
-	car = _player_car("sedan", Vector3(0, 0, 0), 20.0)
+	car = _player_car("sedan", Vector3(-80.0, 0, 0), 20.0)
 	Controls.override_vector = Vector2(0.5, -0.866)
 	await _frames(15)
 	_check(car.speed > 18.5, "a swerve at 20 m/s keeps %.1f m/s" % car.speed)
 	car.queue_free()
 	# A 90-degree snap at top speed: the car slows for the turn and runs on
 	# much less than the 13.5-19.5 m it did without the assist.
-	for kind in ["sedan", "suv", "super"]:
-		car = _player_car(kind, Vector3(0, 0, 0), VehicleKit.KINDS[kind].max_speed)
+	var kinds := ["sedan", "suv", "super"]
+	for k in kinds.size():
+		var kind: String = kinds[k]
+		car = _player_car(kind, Vector3(-60.0 + k * 20.0, 0, k * 40.0), VehicleKit.KINDS[kind].max_speed)
 		Controls.override_vector = Vector2(1, 0)
 		var run_on := 0.0
 		for f in 120:
 			await _frames(1)
-			run_on = maxf(run_on, -car.global_position.z)
+			run_on = maxf(run_on, k * 40.0 - car.global_position.z)
 		_check(run_on < 11.0, "%s at top speed turning 90 degrees runs on %.1f m" % [kind, run_on])
 		car.queue_free()
 	# A wall along x = 3 for the scrape and the pin.
@@ -894,6 +919,13 @@ func test_player_driving_assists() -> void:
 	_check(car.speed > 15.0, "a 15-degree wall scrape at 20 m/s keeps %.1f m/s" % car.speed)
 	_check(car.max_health - car.health < 10.0, "and costs %.1f health" % (car.max_health - car.health))
 	car.queue_free()
+	# Sliding sideways into it, as out of a drift, keeps the car's speed.
+	car = _player_car("sedan", Vector3(0, 0, -40.0), 18.0)
+	car.velocity = Vector3(18.0, 0, 0)
+	Controls.override_vector = Vector2(0, -1)
+	await _frames(40)
+	_check(car.speed > 15.0, "sliding sideways into the wall keeps %.1f m/s" % car.speed)
+	car.queue_free()
 	# Pinned nose-first against it, the car's speed does not wind up.
 	car = _player_car("sedan", Vector3(-1.0, 0, -20.0), 0.0, -PI / 2.0)
 	Controls.override_vector = Vector2(1, 0)
@@ -906,8 +938,25 @@ func test_player_driving_assists() -> void:
 	_check(car.max_health - car.health < 15.0, "and the crash counts once (%.1f health)" % (car.max_health - car.health))
 	car.queue_free()
 	wall.queue_free()
+	# Clipping a post with the front corner by 10 cm glances off it.
+	var post := StaticBody3D.new()
+	post.collision_layer = L.PROPS
+	var post_shape := CollisionShape3D.new()
+	post_shape.shape = BoxShape3D.new()
+	post_shape.shape.size = Vector3(0.3, 2, 0.3)
+	post.add_child(post_shape)
+	var hw: float = VehicleKit.size_of("sedan").x * 0.5 + 0.05
+	post.position = Vector3(hw + 0.15 - 0.1, 1.0, -15.0)
+	add_child(post)
+	car = _player_car("sedan", Vector3(0, 0, 0), 15.0)
+	Controls.override_vector = Vector2(0, -1)
+	await _frames(90)
+	_check(car.global_position.z < -20.0 and car.speed > 10.0,
+		"clipping a post by 10 cm glances off (%.1f m on, %.1f m/s)" % [-car.global_position.z, car.speed])
+	car.queue_free()
+	post.queue_free()
 	Controls.override_vector = null
-	Controls.camera = cam if is_instance_valid(cam) else null
+	# The game that set it is gone; the next _new_game sets it again.
 
 
 ## A player-driven `kind` at `pos` heading -z turned by `yaw`, at `speed`.

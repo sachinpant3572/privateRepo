@@ -73,14 +73,16 @@ func _active_cars() -> int:
 
 
 func _spawn_cop_nearby(center: Vector3) -> void:
-	var spot: Array = game.city.random_sidewalk_between(center, 30.0, 55.0, rng)
+	var spot: Array = game.city.random_sidewalk_between(center, 30.0, 55.0 * game.population.reach(), rng,
+		game.population.out_of_view)
 	if spot.is_empty():
 		return
 	spawn_cop_at(game.city.sidewalk_loops[spot[0]][spot[1]])
 
 
 func _spawn_car_nearby(center: Vector3) -> void:
-	var n: int = game.city.random_node_between(center, 35.0, 60.0, rng)
+	var n: int = game.city.random_node_between(center, 35.0, 60.0 * game.population.reach(), rng,
+		game.population.out_of_view)
 	if n < 0:
 		return
 	var pos: Vector3 = game.city.node_pos(n)
@@ -122,11 +124,13 @@ func _anyone_sees(player) -> bool:
 func _retire(player) -> void:
 	var center: Vector3 = player.global_position
 	for cop in cops:
-		var gone: bool = (not cop.active and cop.global_position.distance_to(center) > RETIRE_DISTANCE) or cop.dead_time > 15.0
+		var far: bool = cop.global_position.distance_to(center) > RETIRE_DISTANCE and game.population.out_of_view(cop.global_position)
+		var gone: bool = (not cop.active and far) or cop.dead_time > 15.0
 		if gone:
 			cop.queue_free()
 	for car in cars:
 		if car == player.vehicle or car.driver == Vehicle.Driver.POLICE:
 			continue
-		if Wanted.level == 0 and car.global_position.distance_to(center) > RETIRE_DISTANCE + 20.0:
+		if Wanted.level == 0 and car.global_position.distance_to(center) > RETIRE_DISTANCE + 20.0 \
+				and game.population.out_of_view(car.global_position):
 			car.queue_free()

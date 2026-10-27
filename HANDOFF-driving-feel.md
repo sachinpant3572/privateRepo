@@ -36,16 +36,23 @@ handled correctly?"
 3. Camera: zooms out further with speed (38 -> 48 m) and leads further
    (0.35 -> 0.55 s of travel).
 4. Wall hits: the velocity into the wall is slid off, so a hit counts
-   once, and `speed` drops to what is left along the heading (plus the
-   accel/grip lag), so head-on stops and a scrape costs little. Police
-   "stuck" now reads real movement, since a pinned car's speed sits ~2.
+   once; `speed` loses what the wall took along the heading but keeps no
+   more than is left along it (plus the accel/grip lag): head-on stops,
+   a scrape or a sideways slide costs little, pinned speed sits ~2.
+   Police "stuck" reads real movement for that reason.
 5. Roads stay as they are (widening moves every block and landmark).
 6. TRAFFIC_THROTTLE 0.5 -> 0.6 keeps traffic cruise speed about where it
    was after the x0.85 (sedan 12 -> 12.3 m/s).
-7. Spawns (population.gd `_in_view`): people, traffic and parked cars no
-   longer appear on screen. The 48 m camera sees up to ~60 m ahead, inside
-   the old bands. Parked cars appear anywhere out of view within 90 m (the
-   55 m floor would leave curbs empty that were in view on the way in).
+7. Spawns (population.gd `_in_view`): people, traffic, parked cars and
+   police neither appear nor are removed on screen. Spawn spots are drawn
+   only from out-of-view candidates (city.gd helpers take an `accept`
+   filter), and the bands reach 1-1.6x further as the camera zooms out
+   (`reach()`). Parked cars appear anywhere out of view within 90 m,
+   never on a spot something already stands on, and refill after a
+   respawn.
+8. Vehicle collision shape: a box with its corners cut (up to 0.45 m), so
+   clipping a post or building corner glances off instead of stopping
+   the car (10 cm clip at 15 m/s: 1.8 -> 16.4 m/s kept).
 
 ## Review (one run) and fixes
 - Assist braked on any partial stick on a straight (20 -> 14.3 m/s in
@@ -55,14 +62,29 @@ handled correctly?"
 - Pinned on a wall, `speed` wound up to top speed (HUD 68 km/h, police
   never reversing): fixed by decision 4.
 - Spawns in view at the wider zoom: decision 7.
+- Traps: the test viewport shows only ~37-50 m out, so a despawn rule that
+  is wrong for wider screens can still pass; two test cars spawned on the
+  same spot in one frame shove each other (give each its own spot).
 - No tests for the new behaviour: added below.
+
+## Review 2 and fixes (cap reached; nothing blocking)
+- The clamp cost drifts their speed (sliding into a wall 17 -> 9.5 m/s):
+  fixed by keeping speed less what the wall removed (decision 4).
+- In-view rejection thinned pedestrians on a phone screen (alive 16 -> 10,
+  lowest 0): fixed by out-of-view candidates and wider bands; fast run on
+  2340x1080 now averages 17.8 alive, 3.4 on screen, 1.2 traffic on screen.
+- A parked car could spawn on a car standing in its spot; police popped
+  in and out; the test used a square screen and the margin rectangle.
+- Assist speed chattered in a held turn: target always takes the assist.
+- Clipping a corner stopped the car dead: decision 8.
 
 ## Results
 - Corner run-on past the turn point, stick snapped from north to east
   after a 70 m run from rest (m), before -> after: sedan 13.5 -> 8.7,
   SUV 17.6 -> 9.7, muscle 19.5 -> 12.5; after: compact 7.2, EV 9.2,
   sports 9.5, super 9.9, motorbike 9.4, scooter 5.5. From exactly top
-  speed (the test): sedan 8.2, SUV 10.8, super 10.8. What is left is
+  speed (the test): sedan 9.7, SUV 10.8, super 10.8 (an 8.2 for the sedan
+  came from two test cars overlapping for a frame). What is left is
   braking to corner speed plus the time to rotate 90 degrees.
 - Swerve (stick 30 degrees off, 0.25 s at 20 m/s) costs about 1 m/s.
 - 15-degree scrape at 20 m/s: keeps 20.5 m/s, 3.2 health (was 9.5 m/s,
@@ -76,11 +98,13 @@ handled correctly?"
   a pinned car's speed stays low and its crash counts once.
 - `test_city_runs_with_population` also drives flat out along the
   straightest streets and checks nothing new appears in view (without
-  the fix 3 of 57 did). 296 checks pass.
+  the fix 3 of 57 did) or vanishes in view on a 2340x1080 window, and
+  that people stay around (average alive > 12). The sliding and post-clip
+  cases are in the assists test. 300 checks pass.
 
 ## Open questions
 - At top speed most models still run on past the ~8 m a junction gives
-  (sedan 8.2, SUV and super 10.8). A player who brakes or turns earlier
+  (sedan 9.7, SUV and super 10.8). A player who brakes or turns earlier
   makes it; a stronger assist would take control away. Next levers if it
   still feels tight: turn rate, then a smaller CORNER_RADIUS.
 - The drawn area is ~1.6x larger at full zoom; phone FPS not measured.

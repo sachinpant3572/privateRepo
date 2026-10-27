@@ -420,21 +420,23 @@ func pick_turn(prev: int, cur: int, rand: RandomNumberGenerator) -> int:
 	return options[rand.randi() % options.size()]
 
 
-func random_node_between(center: Vector3, min_d: float, max_d: float, rand: RandomNumberGenerator) -> int:
+func random_node_between(center: Vector3, min_d: float, max_d: float, rand: RandomNumberGenerator,
+		accept := Callable()) -> int:
 	var c := Vector2(center.x, center.z)
 	var found: Array = []
 	for n in plan.nodes_near(c, max_d):
 		var d: float = plan.pos(n).distance_to(c)
-		if d >= min_d and d <= max_d and drive_node(n):
+		if d >= min_d and d <= max_d and drive_node(n) and (accept.is_null() or accept.call(node_pos(n))):
 			found.append(n)
 	if found.is_empty():
 		return -1
 	return found[rand.randi() % found.size()]
 
 
-## Returns [loop index, point index] of a sidewalk point in the distance band,
-## or an empty array if none was found.
-func random_sidewalk_between(center: Vector3, min_d: float, max_d: float, rand: RandomNumberGenerator) -> Array:
+## Returns [loop index, point index] of a sidewalk point in the distance band
+## (and passing `accept`, given the point), or an empty array if none was found.
+func random_sidewalk_between(center: Vector3, min_d: float, max_d: float, rand: RandomNumberGenerator,
+		accept := Callable()) -> Array:
 	var near: Array = []
 	for f in plan.faces_near(Vector2(center.x, center.z), max_d):
 		if _loop_of_block.has(f):
@@ -446,7 +448,7 @@ func random_sidewalk_between(center: Vector3, min_d: float, max_d: float, rand: 
 		var loop := sidewalk_loops[li]
 		var pi := rand.randi() % loop.size()
 		var d := loop[pi].distance_to(center)
-		if d >= min_d and d <= max_d:
+		if d >= min_d and d <= max_d and (accept.is_null() or accept.call(loop[pi])):
 			return [li, pi]
 	return []
 

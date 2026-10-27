@@ -31,21 +31,41 @@ func _physics_process(delta: float) -> void:
 		return
 	_tick = 0.25
 	var center: Vector3 = game.player.global_position
+	var r := reach()
 	peds = peds.filter(func(p): return is_instance_valid(p))
 	cars = cars.filter(func(c): return is_instance_valid(c))
 	for ped in peds:
-		if ped.global_position.distance_to(center) > PED_DESPAWN or ped.dead_time > 20.0:
+		if _gone(ped, center, PED_DESPAWN * r) or ped.dead_time > 20.0:
 			ped.queue_free()
 	for car in cars:
-		if car != game.player.vehicle and car.global_position.distance_to(center) > CAR_DESPAWN:
+		if car != game.player.vehicle and _gone(car, center, CAR_DESPAWN * r):
 			car.queue_free()
 	if peds.size() < PED_COUNT:
-		var spot: Array = game.city.random_sidewalk_between(center, PED_SPAWN.x, PED_SPAWN.y, rng)
-		if not spot.is_empty() and not _in_view(game.city.sidewalk_loops[spot[0]][spot[1]]):
+		var spot: Array = game.city.random_sidewalk_between(center, PED_SPAWN.x, PED_SPAWN.y * r, rng, out_of_view)
+		if not spot.is_empty():
 			_add_ped(spot[0], spot[1])
 	if cars.size() < TRAFFIC_COUNT:
-		_spawn_traffic(center)
+		_spawn_traffic(center, r)
 	_update_parked(center)
+
+
+## How much further out than on foot people and cars come and go: the
+## driving camera zooms out to see about 1.8x as far.
+func reach() -> float:
+	var cam = game.camera
+	if cam == null:
+		return 1.0
+	return clampf(cam.size / 30.0, 1.0, 1.6)
+
+
+## Far enough to remove: beyond `dist` and off screen, or far beyond it.
+func _gone(node: Node3D, center: Vector3, dist: float) -> bool:
+	var d := node.global_position.distance_to(center)
+	return d > dist * 1.5 or (d > dist and out_of_view(node.global_position))
+
+
+func out_of_view(pos: Vector3) -> bool:
+	return not _in_view(pos)
 
 
 func spawn_ped_at(pos: Vector3):
@@ -64,19 +84,16 @@ func _add_ped(loop: int, point: int):
 	return ped
 
 
-func _spawn_traffic(center: Vector3) -> void:
-	var n: int = game.city.random_node_between(center, CAR_SPAWN.x, CAR_SPAWN.y, rng)
+func _spawn_traffic(center: Vector3, r: float) -> void:
+	var n: int = game.city.random_node_between(center, CAR_SPAWN.x, CAR_SPAWN.y * r, rng, out_of_view)
 	if n < 0:
 		return
 	var options: Array = game.city.next_nodes(n)
 	if options.is_empty():
 		return
 	var to: int = options[rng.randi() % options.size()]
-	var start: Vector3 = game.city.lane_start(n, to)
-	if _in_view(start):
-		return
 	var car = _new_car()
-	car.position = start
+	car.position = game.city.lane_start(n, to)
 	var heading: Vector3 = game.city.node_pos(to) - game.city.node_pos(n)
 	car.rotation.y = atan2(-heading.x, -heading.z)
 	car.rng.seed = rng.randi()
@@ -100,7 +117,7 @@ func _update_parked(center: Vector3) -> void:
 		if _parked.has(idx):
 			continue
 		var d: float = spots[idx][0].distance_to(center)
-		if d < PARK_SPAWN and (_first_pass or not _in_view(spots[idx][0])):
+		if d < PARK_SPAWN and (_first_pass or not _in_view(spots[idx][0])) and not _occupied(spots[idx][0]):
 			var car = _new_car(true)
 			car.city = game.city
 			car.position = spots[idx][0]
@@ -110,14 +127,30 @@ func _update_parked(center: Vector3) -> void:
 	_first_pass = false
 
 
-## Whether `pos` is on screen or within a margin of it. The driving camera
-## sees up to about 60 m ahead, inside the spawn bands.
-func _in_view(pos: Vector3) -> bool:
+## Fills the curb spots in view too on the next pass, as at the start (after
+## a respawn, while the message is up).
+func refill() -> void:
+	_first_pass = true
+
+
+## Whether a vehicle or the player already stands on a curb spot.
+func _occupied(spot: Vector3) -> bool:
+	if game.player.global_position.distance_to(spot) < 4.0:
+		return true
+	for v in get_tree().get_nodes_in_group("vehicles"):
+		if v.global_position.distance_to(spot) < 4.0:
+			return true
+	return false
+
+
+## Whether `pos` is on screen or within `margin` (of the screen width) of
+## it. The driving camera sees up to about 60 m ahead on a wide phone.
+func _in_view(pos: Vector3, margin := 0.1) -> bool:
 	var cam = game.camera
 	if cam == null or not cam.is_inside_tree():
 		return false
 	var screen: Rect2 = cam.get_viewport().get_visible_rect()
-	return screen.grow(screen.size.x * 0.1).has_point(cam.unproject_position(pos))
+	return screen.grow(screen.size.x * margin).has_point(cam.unproject_position(pos))
 
 
 ## A civilian vehicle with a model from the traffic mix, or from the curb
