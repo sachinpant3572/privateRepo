@@ -54,13 +54,16 @@ static func hydrant(mb, out: Array, p: Vector3) -> void:
 	out.append([p + Vector3(0, 0.5, 0), Vector3(0.45, 1.0, 0.45)])
 
 
+## Park bench facing -Z after turning by `yaw`.
 static func bench(mb, out: Array, p: Vector3, yaw: float) -> void:
-	var b := Basis(Vector3.UP, yaw)
-	mb.box(p + b * Vector3(0, 0.5, 0), _rot(yaw, Vector3(1.8, 0.1, 0.5)), Color(0.45, 0.3, 0.18))
-	mb.box(p + b * Vector3(0, 0.85, 0.22), _rot(yaw, Vector3(1.8, 0.5, 0.08)), Color(0.45, 0.3, 0.18))
+	var saved: Transform3D = mb.xform
+	mb.xform = saved * Transform3D(Basis(Vector3.UP, yaw), p)
+	mb.box(Vector3(0, 0.5, 0), Vector3(1.8, 0.1, 0.5), Color(0.45, 0.3, 0.18))
+	mb.box(Vector3(0, 0.85, 0.22), Vector3(1.8, 0.5, 0.08), Color(0.45, 0.3, 0.18))
 	for side in [-0.8, 0.8]:
-		mb.box(p + b * Vector3(side, 0.32, 0), _rot(yaw, Vector3(0.08, 0.35, 0.5)), IRON)
-	out.append([p + Vector3(0, 0.5, 0), _rot(yaw, Vector3(1.8, 1.0, 0.6))])
+		mb.box(Vector3(side, 0.32, 0), Vector3(0.08, 0.35, 0.5), IRON)
+	mb.xform = saved
+	out.append([p + Vector3(0, 0.5, 0), Vector3(1.8, 1.0, 0.6), yaw])
 
 
 static func trash_can(mb, out: Array, p: Vector3) -> void:
@@ -103,19 +106,24 @@ static func planter(mb, out: Array, p: Vector3) -> void:
 	out.append([p + Vector3(0, 0.5, 0), Vector3(1.4, 1.0, 1.4)])
 
 
-## Picket or chain-link style fence between two points (posts plus rails).
+## Picket or chain-link style fence between two points (posts plus rails),
+## at any angle.
 static func fence(mb, out: Array, a: Vector3, b: Vector3, color: Color, height := 1.2) -> void:
 	var dir := b - a
 	var length := dir.length()
+	if length < 0.1:
+		return
+	var yaw := atan2(-dir.z, dir.x)
+	var mid := (a + b) * 0.5
+	var saved: Transform3D = mb.xform
+	mb.xform = saved * Transform3D(Basis(Vector3.UP, yaw), mid)
 	var posts := maxi(2, int(length / 2.5) + 1)
 	for i in posts:
-		var p := a.lerp(b, float(i) / (posts - 1))
-		mb.box(p + Vector3(0, height * 0.5, 0), Vector3(0.1, height, 0.1), color)
-	var mid := (a + b) * 0.5
-	var size := Vector3(absf(dir.x) + 0.06, 0.07, absf(dir.z) + 0.06)
-	mb.box(mid + Vector3(0, height * 0.85, 0), size, color)
-	mb.box(mid + Vector3(0, height * 0.35, 0), size, color)
-	out.append([mid + Vector3(0, height * 0.5, 0), Vector3(absf(dir.x) + 0.15, height, absf(dir.z) + 0.15)])
+		mb.box(Vector3(-length * 0.5 + length * i / (posts - 1), height * 0.5, 0), Vector3(0.1, height, 0.1), color)
+	mb.box(Vector3(0, height * 0.85, 0), Vector3(length + 0.06, 0.07, 0.06), color)
+	mb.box(Vector3(0, height * 0.35, 0), Vector3(length + 0.06, 0.07, 0.06), color)
+	mb.xform = saved
+	out.append([mid + Vector3(0, height * 0.5, 0), Vector3(length + 0.15, height, 0.15), yaw])
 
 
 ## Wooden power pole; wires to `next` are drawn as thin sagless lines.
@@ -124,10 +132,12 @@ static func power_pole(mb, out: Array, p: Vector3, next = null) -> void:
 	mb.box(p + Vector3(0, 7.2, 0), Vector3(1.6, 0.12, 0.12), BARK)
 	if next != null:
 		var q: Vector3 = next
-		var mid := (p + q) * 0.5
 		var d := q - p
+		var saved: Transform3D = mb.xform
+		mb.xform = saved * Transform3D(Basis(Vector3.UP, atan2(-d.z, d.x)), (p + q) * 0.5)
 		for off in [-0.7, 0.7]:
-			mb.box(mid + Vector3(0, 7.3, 0) + Vector3(off, 0, 0) * absf(d.normalized().z) + Vector3(0, 0, off) * absf(d.normalized().x), Vector3(absf(d.x) + 0.08, 0.06, absf(d.z) + 0.08), Color(0.06, 0.06, 0.06))
+			mb.box(Vector3(0, 7.3, off), Vector3(d.length() + 0.08, 0.06, 0.06), Color(0.06, 0.06, 0.06))
+		mb.xform = saved
 	out.append([p + Vector3(0, 2.0, 0), Vector3(0.3, 4.0, 0.3)])
 
 
@@ -232,6 +242,7 @@ static func festoon(mb, a: Vector3, b: Vector3, rng: RandomNumberGenerator) -> v
 
 ## Café set on the sidewalk: round table, two chairs and a parasol.
 static func cafe_table(mb, out: Array, p: Vector3, parasol: Color) -> void:
+	# Chairs sit either side along local X.
 	mb.cylinder(p + Vector3(0, 0.15, 0), 0.05, 0.6, IRON, 4)
 	mb.cylinder(p + Vector3(0, 0.75, 0), 0.4, 0.05, Color(0.92, 0.9, 0.85), 8)
 	for side in [-0.7, 0.7]:
@@ -240,6 +251,25 @@ static func cafe_table(mb, out: Array, p: Vector3, parasol: Color) -> void:
 	mb.cylinder(p + Vector3(0, 0.8, 0), 0.03, 1.4, Color(0.9, 0.9, 0.88), 4)
 	mb.ball(p + Vector3(0, 2.3, 0), Vector3(1.2, 0.3, 1.2), parasol, 8, 2)
 	out.append([p + Vector3(0, 0.5, 0), Vector3(1.6, 1.0, 0.8)])
+
+
+## A bollard (pedestrian lanes, plazas).
+static func bollard(mb, out: Array, p: Vector3) -> void:
+	mb.cylinder(p + Vector3(0, 0.15, 0), 0.14, 0.8, IRON, 5)
+	mb.box(p + Vector3(0, 0.75, 0), Vector3(0.3, 0.06, 0.3), Color(0.85, 0.7, 0.3))
+	out.append([p + Vector3(0, 0.45, 0), Vector3(0.3, 0.9, 0.3)])
+
+
+## A palm (Gilt District plazas and the boulevard).
+static func palm(mb, out: Array, p: Vector3, rng: RandomNumberGenerator) -> void:
+	var h := rng.randf_range(5.0, 7.0)
+	mb.cylinder(p + Vector3(0, 0.15, 0), 0.18, h, BARK.lightened(0.25), 5)
+	for i in 6:
+		var a := TAU * i / 6.0 + rng.randf()
+		var d := Vector3(cos(a), 0, sin(a))
+		mb.box(p + Vector3(0, h + 0.1, 0) + d * 1.1, Vector3(absf(d.x) * 2.0 + 0.5, 0.12, absf(d.z) * 2.0 + 0.5), LEAF.lightened(0.15))
+	mb.ball(p + Vector3(0, h + 0.2, 0), Vector3(0.5, 0.4, 0.5), LEAF, 5, 2)
+	out.append([p + Vector3(0, 1.5, 0), Vector3(0.4, 3.0, 0.4)])
 
 
 ## Oil stain, crack or patch on the asphalt (pure decoration).

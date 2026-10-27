@@ -19,6 +19,7 @@ func _run() -> void:
 	var tests := [
 		"test_city_streams_cells",
 		"test_city_follows_world_map",
+		"test_street_plan_is_not_a_grid",
 		"test_wanted_level_decays_out_of_sight",
 		"test_player_walks",
 		"test_punching_civilian_gives_one_star",
@@ -89,6 +90,57 @@ func test_city_follows_world_map() -> void:
 		for j in city.blocks.y + 1:
 			wet += 0 if city.in_grid(Vector2i(i, j)) else 1
 	_check(wet > 10, "the river takes out road nodes, got %d" % wet)
+
+
+func test_street_plan_is_not_a_grid() -> void:
+	await _new_game(false)
+	var city = game.city
+	var plan = city.plan
+	var counts := {}
+	var tilted := 0
+	var lengths: Array = []
+	for i in city.blocks.x:
+		for j in city.blocks.y:
+			var n := Vector2i(i, j)
+			for d in [Vector2i(1, 0), Vector2i(0, 1)]:
+				var cls: String = plan.edge_class(n, d)
+				counts[cls] = counts.get(cls, 0) + 1
+				var v: Vector3 = city.node_pos(n + d) - city.node_pos(n)
+				var off := absf(atan2(v.z, v.x)) if d.x != 0 else absf(atan2(v.x, v.z))
+				if off > deg_to_rad(5.0):
+					tilted += 1
+				if cls != "closed":
+					lengths.append(v.length())
+	for cls in ["boulevard", "avenue", "street", "quarter", "lane", "closed"]:
+		_check(counts.get(cls, 0) > 0, "street class '%s' is used" % cls)
+	_check(tilted > 100, "streets follow the crescent, not the compass (%d tilted)" % tilted)
+	lengths.sort()
+	_check(lengths[lengths.size() * 9 / 10] > lengths[lengths.size() / 10] * 1.3, "blocks come in different sizes")
+	_check(plan.park_node.x >= 0, "Liberty Green park superblock exists")
+	# Every drivable junction can be reached from the spawn.
+	var start: Vector2i = city.nearest_node(city.spawn_point)
+	var seen := {start: true}
+	var todo: Array = [start]
+	while not todo.is_empty():
+		var n: Vector2i = todo.pop_back()
+		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			if plan.drivable(n, d) and city.in_grid(n + d) and not seen.has(n + d):
+				seen[n + d] = true
+				todo.append(n + d)
+	var stranded := 0
+	for i in city.blocks.x + 1:
+		for j in range(0, 16):
+			var n := Vector2i(i, j)
+			if city.in_grid(n) and city._degree(n) > 0 and not seen.has(n):
+				stranded += 1
+	_check(stranded == 0, "no stranded junctions north of the river, got %d" % stranded)
+	for id in ["union_station", "lantern_square", "blue_lantern", "bpd_lantern", "floodline_clinic", "moreau_house", "teo_apartment"]:
+		var b: Vector2i = city.landmark_block(id)
+		_check(b.x >= 0, "landmark %s is placed" % id)
+		if b.x >= 0:
+			var lot: PackedVector2Array = plan.lot(b)
+			var span := minf(lot[0].distance_to(lot[1]), lot[1].distance_to(lot[2]))
+			_check(span > 33.0, "%s has room (%.0f m)" % [id, span])
 
 
 func test_wanted_level_decays_out_of_sight() -> void:
@@ -356,9 +408,8 @@ func test_empty_rooms_phone_and_clues() -> void:
 	await _talk_until(func(): return mm.objective_text == "Meet Nia at the door", 120)
 	_place_player_at(m.front("teo_apartment"))
 	await _talk_until(func(): return mm.objective_text.begins_with("Search for clues"), 900)
-	var center: Vector3 = game.city.block_center(game.city.landmark_block("teo_apartment"))
 	for c in m.CLUES:
-		_place_player_at(center + c[0])
+		_place_player_at(m.near("teo_apartment", c[0]))
 		await _frames(2)
 		await _press("interact")
 		await _frames(int(m.SEARCH_TIME * 60.0) + 10)

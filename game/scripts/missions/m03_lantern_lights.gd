@@ -28,9 +28,9 @@ func run() -> void:
 	var club := front("blue_lantern")
 	if not await card("LANTERN LIGHTS", "Act 1  ·  Mission 3"):
 		return
-	var celeste = npc("Celeste", Cast.CELESTE, club + Vector3(1.8, 0, -0.5))
+	var celeste = npc("Celeste", Cast.CELESTE, near("blue_lantern", Vector3(1.8, 0, -0.5)))
 	celeste.gesture = "talk"
-	if not await reach(club + Vector3(0.2, 0, 0), "Meet Celeste at the Blue Lantern", 3.0, true, "Celeste"):
+	if not await reach(near("blue_lantern", Vector3(0.2, 0, 0)), "Meet Celeste at the Blue Lantern", 3.0, true, "Celeste"):
 		return
 	if not await say([
 		["Celeste", "Jules Moreau. Your mother's eyes and your father's timing."],
@@ -42,8 +42,8 @@ func run() -> void:
 
 	# The precinct.
 	var station := front("bpd_lantern")
-	var reyes = npc("Reyes", Cast.REYES, station + Vector3(-1.6, 0, -0.4))
-	marcel = npc("Marcel", Cast.MARCEL, station + Vector3(1.6, 0, -0.4))
+	var reyes = npc("Reyes", Cast.REYES, near("bpd_lantern", Vector3(-1.6, 0, -0.4)))
+	marcel = npc("Marcel", Cast.MARCEL, near("bpd_lantern", Vector3(1.6, 0, -0.4)))
 	marcel.max_health = 160.0
 	marcel.health = 160.0
 	fail_if(func(): return marcel.dead, "Marcel didn't make it.")
@@ -55,7 +55,7 @@ func run() -> void:
 		["Marcel", "Bless you. Let's go before she changes her mind."],
 	], true):
 		return
-	reyes.walk_to(station + Vector3(-1.6, 0, -6.0))
+	reyes.walk_to(near("bpd_lantern", Vector3(-1.6, 0, -6.0)))
 	marcel.mode = Npc.Mode.FOLLOW
 	marcel.show_marker(BLUE)
 
@@ -89,9 +89,9 @@ func run() -> void:
 
 	# Home safe.
 	game.player.vehicle.speed = 0.0
-	marcel.dismount(club + Vector3(1.0, 0, 0))
+	marcel.dismount(near("blue_lantern", Vector3(1.0, 0, 0)))
 	marcel.hide_marker()
-	celeste.global_position = club + Vector3(-1.5, 0, 0)
+	celeste.global_position = near("blue_lantern", Vector3(-1.5, 0, 0))
 	celeste.reset_physics_interpolation()
 	await say([
 		["Celeste", "Marcel! Look at you. Not a scratch."],

@@ -16,25 +16,25 @@ func _ready() -> void:
 
 ## Sidewalk spots in front of landmarks, for the district tour shots.
 const TOUR := [
-	["4_lantern_square", "lantern_square", Vector3(0, 0, 18.8)],
-	["5_blue_lantern", "blue_lantern", Vector3(0, 0, 18.8)],
-	["6_aurum_tower", "aurum_tower", Vector3(0, 0, 18.8)],
-	["7_floodline_wards", "moreau_house", Vector3(0, 0, 18.8)],
-	["8_ironwharf", "wharfside_courts", Vector3(30, 0, 26.0)],
-	["9_drowned_streetcar", "drowned_streetcar", Vector3(0, 0, 18.8)],
-	["10_streetcar_depot", "streetcar_depot", Vector3(0, 0, 18.8)],
-	["11_lantern_line", "union_station", Vector3(-26, 0, 30.0)],
+	["4_lantern_square", "lantern_square", Vector3(0, 0, 0)],
+	["5_blue_lantern", "blue_lantern", Vector3(0, 0, 0)],
+	["6_aurum_tower", "aurum_tower", Vector3(0, 0, 0)],
+	["7_floodline_wards", "moreau_house", Vector3(0, 0, 0)],
+	["8_ironwharf", "wharfside_courts", Vector3(30, 0, 7.0)],
+	["9_drowned_streetcar", "drowned_streetcar", Vector3(0, 0, 0)],
+	["10_streetcar_depot", "streetcar_depot", Vector3(0, 0, 0)],
+	["11_lantern_line", "union_station", Vector3(-26, 0, 11.0)],
 ]
 
 
 ## [file, landmark, offset, hour, weather] shots of the Lantern Quarter at
 ## night and in the rain.
 const MOODS := [
-	["13_quarter_night", "blue_lantern", Vector3(0, 0, 22.0), 21.5, "clear"],
-	["14_square_night", "lantern_square", Vector3(0, 0, 21.0), 22.0, "clear"],
-	["15_quarter_rain_night", "blue_lantern", Vector3(18, 0, 24.0), 21.0, "storm"],
-	["16_quarter_rain_day", "lantern_square", Vector3(-20, 0, 24.0), 13.0, "rain"],
-	["17_quarter_dusk", "lantern_square", Vector3(20, 0, 22.0), 19.2, "clear"],
+	["13_quarter_night", "blue_lantern", Vector3(0, 0, 3.0), 21.5, "clear"],
+	["14_square_night", "lantern_square", Vector3(0, 0, 2.0), 22.0, "clear"],
+	["15_quarter_rain_night", "blue_lantern", Vector3(18, 0, 5.0), 21.0, "storm"],
+	["16_quarter_rain_day", "lantern_square", Vector3(-20, 0, 5.0), 13.0, "rain"],
+	["17_quarter_dusk", "lantern_square", Vector3(20, 0, 3.0), 19.2, "clear"],
 ]
 
 
@@ -53,20 +53,32 @@ func _run() -> void:
 	for i in 4:
 		await get_tree().process_frame
 	await _shot("12_full_map.png")
+	var fm = game.hud.full_map
+	fm.zoom = minf(fm.size.x / fm.map.size.x, (fm.size.y - 56.0) / fm.map.size.y)
+	fm.pan = fm.map.size * 0.5 - Vector2(0, 28.0) / fm.zoom
+	fm.queue_redraw()
+	for i in 3:
+		await get_tree().process_frame
+	await _shot("12b_full_map_all.png")
 	game.hud.full_map.close()
 	var home: Vector3 = game.player.global_position
 	for stop in TOUR:
-		var b: Vector2i = game.city.landmark_block(stop[1])
-		var pos: Vector3 = game.city.block_center(b) + stop[2]
+		var pos: Vector3 = game.city.landmark_frame(stop[1]) * stop[2]
 		game.city.stream_now(pos)
 		game.player.global_position = pos
 		game.player.reset_physics_interpolation()
 		game.camera.snap()
 		await _frames(90)
 		await _shot(stop[0] + ".png")
+	var green: Vector3 = game.city.node_pos(game.city.plan.park_node) + Vector3(0, 0, 14.0)
+	game.city.stream_now(green)
+	game.player.global_position = green
+	game.player.reset_physics_interpolation()
+	game.camera.snap()
+	await _frames(90)
+	await _shot("19_liberty_green.png")
 	for mood in MOODS:
-		var b: Vector2i = game.city.landmark_block(mood[1])
-		var pos: Vector3 = game.city.block_center(b) + mood[2]
+		var pos: Vector3 = game.city.landmark_frame(mood[1]) * mood[2]
 		game.atmosphere.hour = mood[3]
 		game.atmosphere.set_weather(mood[4], true)
 		game.city.stream_now(pos)

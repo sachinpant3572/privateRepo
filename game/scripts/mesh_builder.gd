@@ -396,6 +396,27 @@ func limb(a: Vector3, b: Vector3, ra: float, rb: float, color: Color, sides := 6
 		tri(a, a + d1 * ra, a + d0 * ra, -axis, color)
 
 
+## A flat convex polygon (x, z points, clockwise on screen) at height y,
+## facing up.
+func flat(poly: PackedVector2Array, y: float, color: Color) -> void:
+	for k in range(1, poly.size() - 1):
+		tri(Vector3(poly[0].x, y, poly[0].y), Vector3(poly[k].x, y, poly[k].y), Vector3(poly[k + 1].x, y, poly[k + 1].y), Vector3.UP, color)
+
+
+## A convex polygon extruded from y0 up to y1 (top and sides, no bottom):
+## block slabs, sidewalks, medians.
+func prism(poly: PackedVector2Array, y0: float, y1: float, color: Color, side_color := Color(0, 0, 0, 0)) -> void:
+	flat(poly, y1, color)
+	var sc := side_color if side_color.a > 0.0 else color.darkened(0.15)
+	var n := poly.size()
+	for k in n:
+		var a := poly[k]
+		var b := poly[(k + 1) % n]
+		var dir := (b - a).normalized()
+		var out := Vector3(dir.y, 0, -dir.x) # left of the direction: outward for clockwise-on-screen polygons
+		quad(Vector3(a.x, y0, a.y), Vector3(b.x, y0, b.y), Vector3(b.x, y1, b.y), Vector3(a.x, y1, a.y), out, sc)
+
+
 ## Number of triangles collected so far (for budgets and tests).
 func triangle_count() -> int:
 	return indices.size() / 3

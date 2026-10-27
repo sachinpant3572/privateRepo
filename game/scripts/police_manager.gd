@@ -73,11 +73,10 @@ func _active_cars() -> int:
 
 
 func _spawn_cop_nearby(center: Vector3) -> void:
-	var n: Vector2i = game.city.random_node_between(center, 30.0, 55.0, rng)
-	if n.x < 0:
+	var spot: Array = game.city.random_sidewalk_between(center, 30.0, 55.0, rng)
+	if spot.is_empty():
 		return
-	var corner := Vector3(7.5 if rng.randf() < 0.5 else -7.5, 0, 7.5 if rng.randf() < 0.5 else -7.5)
-	spawn_cop_at(game.city.node_pos(n) + corner)
+	spawn_cop_at(game.city.sidewalk_loops[spot[0]][spot[1]])
 
 
 func _spawn_car_nearby(center: Vector3) -> void:

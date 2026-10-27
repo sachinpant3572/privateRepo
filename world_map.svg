@@ -10,7 +10,7 @@
 <polygon points="0.0,920.0 300.0,840.0 670.0,710.0 710.0,960.0 720.0,1140.0 520.0,1070.0 240.0,1050.0 0.0,1120.0" fill="#7fa37a" stroke="#fff" stroke-width="1.5" stroke-opacity="0.6" data-kind="region" data-id="saltgrass" data-phase="3"/>
 <polygon points="0.0,1120.0 240.0,1050.0 520.0,1070.0 720.0,1140.0 1120.0,1130.0 1280.0,1000.0 1380.0,840.0 1460.0,600.0 1520.0,300.0 1600.0,160.0 1600.0,1200.0 0.0,1200.0" fill="#6fa8d6"/>
 <polygon points="620.0,340.0 700.0,290.0 820.0,310.0 860.0,390.0 790.0,470.0 680.0,460.0" fill="#6fa8d6"/>
-<polyline points="740.0,460.0 700.0,600.0 670.0,740.0 680.0,860.0 740.0,940.0 860.0,960.0 980.0,944.0 1080.0,1020.0 1140.0,1130.0" fill="none" stroke="#6fa8d6" stroke-width="32.0" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="740.0,460.0 700.0,600.0 670.0,740.0 680.0,860.0 760.0,1004.6 790.0,989.2 820.0,976.8 850.0,967.2 880.0,960.0 910.0,955.0 940.0,952.4 970.0,952.2 1000.0,954.0 1030.0,958.0 1060.0,964.4 1090.0,973.4 1140.0,1130.0" fill="none" stroke="#6fa8d6" stroke-width="32.0" stroke-linejoin="round" stroke-linecap="round"/>
 <polygon points="1320.0,1020.0 1420.0,990.0 1510.0,1030.0 1520.0,1110.0 1420.0,1160.0 1330.0,1120.0" fill="#e9dca8" stroke="#fff" stroke-width="1.5" stroke-opacity="0.6" data-kind="region" data-id="isla_serena" data-phase="4"/>
 <rect x="710.0" y="710.0" width="400.0" height="250.0" fill="#ffffff" fill-opacity="0.35" rx="6" data-kind="city" data-id="bellerive" data-phase="1"/>
 <rect x="830.0" y="830.0" width="130.0" height="104.0" fill="#f2a65a" stroke="#fff" stroke-width="1" data-kind="district" data-id="lantern_quarter" data-phase="1"/>

@@ -6,11 +6,11 @@ extends "res://scripts/missions/mission.gd"
 
 const Cast = preload("res://scripts/missions/cast.gd")
 
-## [offset from the apartment block centre, what it is]
+## [point in the apartment's street frame (see Mission.near), what it is]
 const CLUES := [
-	[Vector3(2.5, 0, 17.6), "A torn shipping label: \"IRONWHARF - W9\"."],
-	[Vector3(9.6, 0, 12.0), "A gold cufflink, engraved with an A."],
-	[Vector3(-9.5, 0, 13.5), "A Blue Lantern matchbook. \"Ask for C.\" in Teo's writing."],
+	[Vector3(2.5, 0, -1.0), "A torn shipping label: \"IRONWHARF - W9\"."],
+	[Vector3(9.8, 0, -6.8), "A gold cufflink, engraved with an A."],
+	[Vector3(-9.5, 0, -5.3), "A Blue Lantern matchbook. \"Ask for C.\" in Teo's writing."],
 ]
 const SEARCH_RANGE := 2.2
 const SEARCH_TIME := 1.4
@@ -26,11 +26,10 @@ func start_point() -> Vector3:
 
 
 func run() -> void:
-	var home := front("moreau_house")
 	if not await card("EMPTY ROOMS", "Act 1  ·  Mission 2"):
 		return
-	var nia = npc("Nia", Cast.NIA, home + Vector3(18.0, 0, 0))
-	nia.walk_to(home + Vector3(1.6, 0, 0))
+	var nia = npc("Nia", Cast.NIA, near("moreau_house", Vector3(18.0, 0, 0)))
+	nia.walk_to(near("moreau_house", Vector3(1.6, 0, 0)))
 	await until(func(): return nia.arrived, 12.0)
 	if ended:
 		return
@@ -56,16 +55,14 @@ func run() -> void:
 		["Nia", "Meet me at his apartment. Bring your eyes."],
 	]):
 		return
-	nia.walk_to(home + Vector3(30.0, 0, 0))
+	nia.walk_to(near("moreau_house", Vector3(30.0, 0, 0)))
 
 	# Teo's apartment.
 	if not await reach(curb("teo_apartment"), "Go to Teo's apartment", 8.0, false, "Teo's apartment"):
 		return
-	var apt := front("teo_apartment")
-	var center: Vector3 = game.city.block_center(game.city.landmark_block("teo_apartment"))
 	nia.queue_free()
-	nia = npc("Nia", Cast.NIA, apt + Vector3(-2.0, 0, 0))
-	if not await reach(apt + Vector3(-0.5, 0, 0), "Meet Nia at the door", 2.5, true, "Nia"):
+	nia = npc("Nia", Cast.NIA, near("teo_apartment", Vector3(-2.0, 0, 0)))
+	if not await reach(near("teo_apartment", Vector3(-0.5, 0, 0)), "Meet Nia at the door", 2.5, true, "Nia"):
 		return
 	if not await say([["Nia", "Look around outside. Whoever did this was looking for something, and they were sloppy."]]):
 		return
@@ -73,7 +70,7 @@ func run() -> void:
 	var found := 0
 	var left: Array = []
 	for c in CLUES:
-		var at: Vector3 = center + c[0]
+		var at: Vector3 = near("teo_apartment", c[0])
 		left.append({"pos": at, "text": c[1], "mark": mark(at, "Clue", BLUE)})
 	while not left.is_empty():
 		objective("Search for clues (%d/%d)" % [found, CLUES.size()])
@@ -113,10 +110,10 @@ func run() -> void:
 	if not await reach(curb("floodline_clinic"), "Go to the Floodline Clinic", 8.0, false, "Floodline Clinic"):
 		return
 	var clinic := front("floodline_clinic")
-	var remy = npc("Remy", Cast.REMY, clinic + Vector3(1.2, 0, 0))
+	var remy = npc("Remy", Cast.REMY, near("floodline_clinic", Vector3(1.2, 0, 0)))
 	remy.gesture = "cower"
 	remy.max_health = 30.0
-	nia.global_position = clinic + Vector3(-2.2, 0, 0)
+	nia.global_position = near("floodline_clinic", Vector3(-2.2, 0, 0))
 	nia.reset_physics_interpolation()
 	nia.mode = Npc.Mode.IDLE
 	if not await reach(clinic, "Talk to Remy", 2.6, true, "Remy"):

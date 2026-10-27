@@ -27,8 +27,6 @@ func start_hour() -> float:
 
 
 func run() -> void:
-	var station := front("union_station")
-	var road := curb("union_station")
 	game.player.controllable = false
 	if not await card("HOMECOMING", "Act 1  ·  Mission 1"):
 		return
@@ -37,17 +35,17 @@ func run() -> void:
 	game.player.controllable = false
 
 	# The snatch.
-	kid = npc("Kid", Cast.THIEF, station + Vector3(-9.0, 0, 0.3), true)
+	kid = npc("Kid", Cast.THIEF, near("union_station", Vector3(-9.0, 0, 0.3)), true)
 	kid.run_speed = 6.3
 	kid.max_health = 45.0
-	getaway = car("scooter", Color(0.2, 0.6, 0.35), road + Vector3(34.0, 0, 0), -PI / 2)
-	spare = car("scooter", Color(0.95, 0.8, 0.25), road + Vector3(-6.0, 0, 0), -PI / 2)
+	getaway = car("scooter", Color(0.2, 0.6, 0.35), curb("union_station", 34.0), street_yaw("union_station"))
+	spare = car("scooter", Color(0.95, 0.8, 0.25), curb("union_station", -6.0), street_yaw("union_station"))
 	kid.walk_to(game.player.global_position + Vector3(-0.6, 0, 0.4), true)
 	await until(func(): return kid.arrived, 4.0)
 	if ended:
 		return
 	game.player.take_hit(null, 0.0, Vector3.RIGHT * 0.5)
-	kid.walk_to(getaway.global_position + Vector3(0, 0, -1.6), true)
+	kid.walk_to(near("union_station", Vector3(34.0, 0, 0.6)), true)
 	game.player.controllable = true
 	line("Jules", "Hey! That's my bag!")
 	objective("Catch the thief!")
@@ -84,19 +82,19 @@ func run() -> void:
 			return
 		if crew.is_empty() and getaway.global_position.distance_to(square) < 140.0:
 			# His crew waits at the Square, with their car.
-			var meet := front("lantern_square")
 			for i in Cast.CREW.size():
-				var thug = npc("Crew", Cast.CREW[i], meet + Vector3(-3.0 + i * 6.0, 0, -1.0), true)
+				var thug = npc("Crew", Cast.CREW[i], near("lantern_square", Vector3(-3.0 + i * 6.0, 0, -1.0)), true)
 				thug.gesture = "talk"
 				thug.max_health = 55.0
 				thug.health = 55.0
 				thug.punch_damage = 6.0
 				crew.append(thug)
-			crew_car = car("pickup", Color(0.38, 0.14, 0.18), square + Vector3(-14.0, 0, 0), -PI / 2)
+			crew_car = car("pickup", Color(0.38, 0.14, 0.18), curb("lantern_square", -14.0), street_yaw("lantern_square"))
 
 	# Showdown at Lantern Square.
 	unmark(thief_mark)
-	kid.dismount(getaway.global_position + Vector3(0, 0, -2.5))
+	var inward: Vector3 = -game.city.landmark_frame("lantern_square").basis.z
+	kid.dismount(getaway.global_position + inward * 2.5)
 	kid.health = kid.max_health
 	crew.append(kid)
 	line("Kid", "You followed me? Big mistake, tourist.")

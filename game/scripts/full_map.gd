@@ -121,11 +121,19 @@ func _draw() -> void:
 	var tl := _to_screen(Vector3(map.origin.x, 0, map.origin.y))
 	draw_texture_rect(map.texture, Rect2(tl, map.size * MapImage.PX_M * zoom / MapImage.PX_M), false)
 	var font := ThemeDB.fallback_font
-	# Playable area outline.
+	# Playable area outline, along the edge streets.
 	var city = game.city
-	var a := _to_screen(Vector3(-city.ROAD * 0.5, 0, -city.ROAD * 0.5))
-	var b := _to_screen(Vector3(city.blocks.x * city.PITCH + city.ROAD * 0.5, 0, city.blocks.y * city.PITCH + city.ROAD * 0.5))
-	draw_rect(Rect2(a, b - a), Color(1, 1, 1, 0.8), false, 3.0)
+	var ring := PackedVector2Array()
+	for i in city.blocks.x + 1:
+		ring.append(_to_screen(city.node_pos(Vector2i(i, 0))))
+	for j in range(1, city.blocks.y + 1):
+		ring.append(_to_screen(city.node_pos(Vector2i(city.blocks.x, j))))
+	for i in range(city.blocks.x - 1, -1, -1):
+		ring.append(_to_screen(city.node_pos(Vector2i(i, city.blocks.y))))
+	for j in range(city.blocks.y - 1, -1, -1):
+		ring.append(_to_screen(city.node_pos(Vector2i(0, j))))
+	ring.append(ring[0])
+	draw_polyline(ring, Color(1, 1, 1, 0.8), 3.0)
 	# District names.
 	for d in city.districts:
 		var r: Rect2 = d.rect

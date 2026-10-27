@@ -63,8 +63,8 @@ func _ready() -> void:
 	home.position = city.parked_spots[0][0]
 	home.rotation.y = city.parked_spots[0][1]
 	if start != city.spawn_point:
-		home.position = start + Vector3(8.0, 0, city.WALK_INSET + city.ROAD * 0.5 - city.CURB_PARKING)
-		home.rotation.y = -PI / 2
+		home.position = city.landmark_curb("moreau_house", 8.0)
+		home.rotation.y = city.curb_yaw(city.landmark_block("moreau_house"))
 	add_child(home)
 
 	player = Player.new()

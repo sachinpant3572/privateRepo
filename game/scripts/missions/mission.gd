@@ -213,9 +213,21 @@ func front(id_: String) -> Vector3:
 	return game.city.landmark_front(id_)
 
 
-## The middle of the road in front of a landmark (where cars stop).
-func curb(id_: String) -> Vector3:
-	return game.city.landmark_front(id_) + Vector3(0, 0, game.city.WALK_INSET + game.city.ROAD * 0.5 - game.city.CURB_PARKING)
+## In the near lane of the street in front of a landmark, `along` metres to
+## the right (where cars stop).
+func curb(id_: String, along := 0.0) -> Vector3:
+	return game.city.landmark_curb(id_, along)
+
+
+## A point in a landmark's street frame: x along the street (right as seen
+## from it), z out towards the street (negative is into the block).
+func near(id_: String, local: Vector3) -> Vector3:
+	return game.city.landmark_frame(id_) * local
+
+
+## Yaw for a car parked in front of a landmark, facing along the street.
+func street_yaw(id_: String) -> float:
+	return game.city.curb_yaw(game.city.landmark_block(id_))
 
 
 func player_pos() -> Vector3:

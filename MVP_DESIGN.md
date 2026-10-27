@@ -253,6 +253,13 @@ device.
     effects;
   - **still missing**: the random event set and a playtest.
 
+  **Map overhaul (Oct 27)**: the first demo map read as a chessboard.
+  Following the research in `reference/MAP_BUILDING.md`, Bellerive's streets
+  now follow the river's crescent, with a road hierarchy (boulevards with
+  neutral grounds, avenues, a river road, narrow Quarter streets and
+  pedestrian lanes), uneven blocks, T-junctions and a park superblock. The
+  Morrow was reshaped near the city to match.
+
   The extra night, rain and effects work costs about 0.3-0.6 ms of CPU per
   frame on desktop. A Detail LOW setting and a shadows toggle are in the
   phone for weak devices. See `game/README.md`.

@@ -47,10 +47,28 @@ phone.
   animated in code: idle, walk, run, punch, kick, guard, flinch, knockdown,
   riding, and gestures for cutscenes (phone, talk, search, cower...).
   Outfits: tee, jacket, hoodie, dress, tank, suit, uniform.
-- **Demo map**: 1.3 km x 1.1 km of Bellerive, 25 x 22 blocks, from the world
-  map (`data/world_map.json`, the city's `demo_window`). You start outside
-  **Union Station** in the Gilt District. Each block takes its layout from
-  the map district it falls in:
+- **Demo map**: about 1.3 km x 1.1 km of Bellerive, from the world map
+  (`data/world_map.json`, the city's `demo_window`). You start outside
+  **Union Station** in the Gilt District.
+- **Street plan** (`scripts/street_plan.gd`; research and rules in
+  `reference/MAP_BUILDING.md`):
+  - **Layout**: streets follow the Morrow's crescent like New Orleans.
+    Streets parallel to the river curve with it and cross streets fan out.
+    Blocks are bigger in Gilt, tighter in the Quarter, and long and
+    staggered in the Wards, with T-junctions.
+  - **Street classes**:
+    - **Lantern Boulevard** (the streetcar) and **Crescent Boulevard** have
+      neutral grounds with oaks or palms;
+    - **Rampart Avenue**;
+    - a river road along the bank;
+    - ordinary streets;
+    - narrow Quarter streets paved with old pavers;
+    - pedestrian lanes with bollards and string lights.
+  - **Liberty Green** is a park made of four joined blocks, with a bandstand.
+  - Some downtown blocks are plazas or car parks, and some Ward blocks are
+    pocket parks or a chapel.
+  - Buildings line each block's real shape and face their street.
+- Each block takes its layout from the map district it falls in:
   - **Gilt District**: mid-rise glass towers on stone plazas, street lights,
     traffic lights, rooftop helipads and gardens.
   - **Lantern Quarter**: rings of Creole townhouses with cast-iron galleries
@@ -59,8 +77,8 @@ phone.
     storm-damaged houses with blue tarps, empty lots, power lines.
   - **Ironwharf**: warehouses, container yards and gantry cranes over the
     river.
-  - **The Morrow River** cuts across the south: animated water, railings,
-    moored boats; roads stop at the water.
+  - **The Morrow River** curves along the south with a river road on its
+    bank: animated water, railings, moored boats.
   - **Landmarks** from the map get their own blocks: Union Station, Aurum
     Tower, The Blue Lantern, Lantern Square, the precinct (BUSTED respawn),
     Floodline Clinic (WASTED respawn), Wharfside Courts, Moreau House, Teo's
@@ -159,8 +177,9 @@ FPS in screenshots is meaningless: the container renders without a GPU.
 | Path | Purpose |
 |---|---|
 | `scripts/main.gd` | Entry point; wires systems, BUSTED/WASTED |
-| `scripts/city.gd` | Map data, road graph, sidewalks, cell streaming |
-| `scripts/city_cells.gd` | Builds one cell: roads, district block layouts, landmarks, street furniture |
+| `scripts/city.gd` | Map data, road graph, sidewalks, landmark frames, cell streaming |
+| `scripts/street_plan.gd` | The street plan: crescent layout, spacing, street classes, block polygons |
+| `scripts/city_cells.gd` | Builds one cell: streets by class, block layouts fitted to each block, landmarks, parks, street furniture |
 | `scripts/kits/` | Asset kits: `building_kit`, `prop_kit`, `vehicle_kit`, `character_kit` |
 | `data/world_map.json` | The world map: regions, cities, districts, routes, landmarks |
 | `tools/render_map.py` | Renders the map data to `world_map.svg` and `bellerive_map.svg` |
