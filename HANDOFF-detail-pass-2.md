@@ -59,8 +59,11 @@ Follows HANDOFF-modern-look.md (surface codes, shader, traps live there).
      side and walked a quarter of them into the road (second review).
    - `test_people_walk_past_sidewalk_props` walks two pedestrians past
      each downtown sidewalk prop in front of a building wall and checks
-     they stay on the curb. Without the detour, 5 of its 10 checks fail:
-     the roadworks and shelter rows only guard their placement.
+     they stay on the curb. Without the detour, 4 of its 10 checks fail
+     (dock and wayfinding); the other rows guard placement.
+   - Live sample (about 190 pedestrians round 8 centres, 25 s each):
+     stuck 6 s went from 102 to 5; past the curb went from 0 to 1 (one
+     pedestrian, 1 m into the road near a corner after 6 detours).
 7. Triangle cost, measured over all 655 cells:
    - mean 2.7k -> 3.5k per cell; p90 5.7k -> 7.1k; max 12k -> 17.1k (one
      120 x 205 m downtown block);
@@ -90,6 +93,8 @@ Follows HANDOFF-modern-look.md (surface codes, shader, traps live there).
    as planted roofs, so it stays.
 
 ## Open questions
+- One pedestrian in about 190 still steps off the curb near a corner,
+  where the next street's curb is closer than the 0.6 m guard assumes.
 - Player wall crashes still count over several frames (about 30 hp at
   10 m/s), as before; traffic counts each crash once.
 - The traffic test needs 3 junctions in 30 s; the box truck sits right at
