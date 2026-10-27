@@ -32,3 +32,34 @@ lines. The port is done; this is for reading old code or old notes.
 - lane_point(n,dir) -> lane_point(from,to).
 - pick_turn(n,dir,rng) -> pick_turn(prev,cur,rng) -> next node.
 - rail_lines -> [{nodes: PackedInt32Array, rusty}].
+
+## Decisions moved from the handoff
+3. Morrow Bridge carries Lantern Blvd's line over the river to Morrow
+   Point. Morrow Point is a new far-bank district: wards style and a
+   levee road (a ferry landing is not built). demo_window grows to
+   25 x 28 blocks.
+4. Blocks are faces of the graph, found by half-edge traversal.
+   - inner = the face minus a strip for each road (Clipper).
+   - lot = inner offset in by the sidewalk.
+   - Building layouts still run in a rectangle: the largest one aligned
+     with the front street that fits the lot. The leftover corners get
+     trees and filler.
+   - Slivers (too small for a rect) become small plazas or greens.
+5. Minor streets are removed per patch to make T-junctions and long
+   blocks. Each removal is kept only if the graph stays connected and no
+   dead ends appear.
+6. Traffic moves node to node (from, to) instead of along a Vector2i
+   heading. pick_turn prefers going straight on, by angle.
+7. Streaming: a cell is a land face, or an edge cell for an edge with no
+   land face beside it (the bridge). Cells are found through a spatial
+   hash of their centres.
+8. Docks keep wharves on the water: their bank edges have class "quay" (a
+   wall, not a road). Everywhere else the river road runs along the bank.
+9. Bounds are the window rectangle, with barricades where roads cross it.
+   A block is playable (full build with collisions) when it touches the
+   window.
+17. _drop_overlaps after _simplify: a patch line almost in line with the
+    frame street, straightened, overlapped it and a block went missing.
+18. Parked cars face the way traffic runs in the near lane (curb_yaw was
+    reversed). Homecoming's getaway parks at -34 so it pulls away from the
+    other parked cars.

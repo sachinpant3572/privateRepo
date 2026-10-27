@@ -208,6 +208,22 @@ func test_street_plan_is_not_a_grid() -> void:
 			x += 10.0
 		y += 10.0
 	_check(bare.is_empty(), "all land in the window is in a block (%d bare points, first %s)" % [bare.size(), bare.slice(0, 3)])
+	# Tidying a lot's outline drops only spare points, never a corner (a
+	# lost corner leaves bare ground between the sidewalk and the lot).
+	var cut_lots := 0
+	for f in plan.faces.size():
+		var lot: PackedVector2Array = plan.faces[f].lot
+		if plan.faces[f].kind != "land" or lot.size() < 3 or not city.in_window(f):
+			continue
+		var full := 0.0
+		for piece in Geometry2D.offset_polygon(plan.faces[f].inner, -plan.SIDEWALK, Geometry2D.JOIN_MITER):
+			full = maxf(full, absf(plan.area(piece)))
+		if absf(plan.area(lot)) < full - 50.0:
+			cut_lots += 1
+	_check(cut_lots == 0, "lots keep their corners (%d cut short)" % cut_lots)
+	# A corner 0.2 m past a point in line with it once went with that point.
+	var tidied: PackedVector2Array = plan._tidy(PackedVector2Array([Vector2(0, 0), Vector2(10, 0), Vector2(10.2, 0), Vector2(10.2, 10), Vector2(0, 10)]))
+	_check(absf(plan.area(tidied)) > 100.0, "tidying an outline keeps a corner next to a spare point (area %.1f)" % absf(plan.area(tidied)))
 	for id in ["union_station", "aurum_tower", "lantern_square", "blue_lantern", "bpd_lantern", "floodline_clinic", "wharfside_courts", "moreau_house", "teo_apartment", "warehouse_9", "the_pit", "streetcar_depot", "drowned_streetcar"]:
 		var f: int = city.landmark_block(id)
 		_check(f >= 0, "landmark %s is placed" % id)

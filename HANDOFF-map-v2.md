@@ -30,30 +30,8 @@ diagonal avenue. Research goes into reference/MAP_BUILDING.md section 6.
      bridge), Liberty Avenue (the diagonal from Aurum Tower through the
      Crescent/Rampart junction to Ironwharf), and the river road, curved
      along the bank.
-3. Morrow Bridge carries Lantern Blvd's line over the river to Morrow
-   Point. Morrow Point is a new far-bank district: wards style and a
-   levee road (a ferry landing is not built). demo_window grows to
-   25 x 28 blocks.
-4. Blocks are faces of the graph, found by half-edge traversal.
-   - inner = the face minus a strip for each road (Clipper).
-   - lot = inner offset in by the sidewalk.
-   - Building layouts still run in a rectangle: the largest one aligned
-     with the front street that fits the lot. The leftover corners get
-     trees and filler.
-   - Slivers (too small for a rect) become small plazas or greens.
-5. Minor streets are removed per patch to make T-junctions and long
-   blocks. Each removal is kept only if the graph stays connected and no
-   dead ends appear.
-6. Traffic moves node to node (from, to) instead of along a Vector2i
-   heading. pick_turn prefers going straight on, by angle.
-7. Streaming: a cell is a land face, or an edge cell for an edge with no
-   land face beside it (the bridge). Cells are found through a spatial
-   hash of their centres.
-8. Docks keep wharves on the water: their bank edges have class "quay" (a
-   wall, not a road). Everywhere else the river road runs along the bank.
-9. Bounds are the window rectangle, with barricades where roads cross it.
-   A block is playable (full build with collisions) when it touches the
-   window.
+3-9. Bridge, faces and lots, thinning, traffic, streaming, quays,
+   bounds: see the archive.
 
 10. Liberty Green is a designed park: a 120 x 80 m quad on the north side
     of Liberty Avenue (nearest point to PARK_AT), with a street round its
@@ -84,11 +62,7 @@ diagonal avenue. Research goes into reference/MAP_BUILDING.md section 6.
     few blocks). A count of reachable nodes fell whenever a curved street
     went (its bend points went too); a whole-map count per candidate was
     the slowest part of the build.
-17. _drop_overlaps after _simplify: a patch line almost in line with the
-    frame street, straightened, overlapped it and a block went missing.
-18. Parked cars face the way traffic runs in the near lane (curb_yaw was
-    reversed). Homecoming's getaway parks at -34 so it pulls away from the
-    other parked cars.
+17-18. _drop_overlaps, parked cars: see the archive.
 19. Landmark rect on its street: _landmark_rect tries each street side of
     a landmark block and keeps the rect whose middle lies on that side
     (largest_rect `reach`) with its top on the sidewalk; that side becomes
@@ -97,11 +71,13 @@ diagonal avenue. Research goes into reference/MAP_BUILDING.md section 6.
     spot landed mid-block (Drowned Streetcar shot in backyards).
 20. Jogged cross streets (`jog` per patch, review 1 said Wards and Morrow
     Point still read as turned grids): a v-street piece between two
-    u-streets steps 28-42% of the spacing sideways (a 9 m step let thinning join two blocks by a neck), so crossroads become
-    offset T-junctions (T:X went 240:355 -> about 440:240). Jogs only
-    between u-streets that survived the hug filter, with both ends inside
-    the district; otherwise the piece dead-ends, is pruned, and a 280 m
-    strip block appears (seen in the first try).
+    u-streets steps 28-42% of the spacing sideways, so crossroads become
+    offset T-junctions (T:X was 240:355 before jogs, TEEX after all of
+    map v2). A step only goes between two u-streets that made it into the
+    plan (the hug filter drops some), with both its ends inside the
+    district. The first try jogged towards dropped u-streets: those
+    pieces dead-ended, were pruned, and left 280 m strip blocks. A 9 m
+    step let thinning join two blocks by a neck, hence 28% minimum.
 21. Bank chains run on to where the river band leaves the box. The band's
     vertices are 100 m+ apart; stopping at the last vertex inside left
     land east of Ironwharf and Morrow Point with no closing edge, so no
@@ -126,6 +102,31 @@ diagonal avenue. Research goes into reference/MAP_BUILDING.md section 6.
     street a metre from a district street). Bridge bends are always
     straightened (a merge nudged its end; 16 deg kink).
 
+25. Bayou Road (review 2: the Wards were still one turned grid, 69% of
+    their street length in one 30 deg band). A curved avenue east from
+    Rampart, between Moreau House and Teo's Apartment (~140 m from each),
+    is a seam: the Wards south of it stay at -25 deg (jog 0.45 -> 0.3),
+    a new patch `wards_n` north of it runs at +12 deg with a fan and
+    cross-bend. Wards share in their best 30 deg band (both street
+    families): 97% -> WARDSBAND. Rejected: only lowering the jog (the
+    angle is what reads as a grid) and a second diagonal through the
+    Wards (Liberty already crosses them).
+26. _trim_close: a district street stretch within half a street gap of
+    its district edge is cut out, unless it is an end that gets clear in
+    under 2.5x that (meets the edge at more than ~24 deg). Bayou Road
+    first had two 6-way junctions where curved Wards streets touched it
+    at a tangent. _hugs still drops whole lines that run alongside.
+    _ease_crowds: a junction of 5+ streets loses district links,
+    shortest first, through _drop_links, down to 4 (a 7-way formed at
+    Liberty Green's corner). Left: only Crescent/Liberty/Rampart (5).
+27. Review 2 fixes: _tidy drops near-duplicates against the last kept
+    point, then in-line points against kept neighbours until stable (it
+    compared against dropped points and cut lot corners off, leaving bare
+    triangles). _drop_links never drops a named road or the bridge as a
+    stub, and checks every remaining end of the dropped links is joined
+    to the others (a stub's far end went unchecked when the junction
+    between them emptied). _joined searches from the end in the window.
+
 ## Port of the game and API mapping
 Done; notes in `HANDOFF-map-v2-archive.md`.
 
@@ -143,5 +144,5 @@ Done; notes in `HANDOFF-map-v2-archive.md`.
   landmark points, so its plan differs a little. Check the game's plan.
 - Tests that teleport along "x" assumed east-west streets; place things
   along the route or street instead.
-- Build time: 0.6-0.8 s on desktop (blocks ~0.2 s is the big step; thin
+- Build time: BUILDT s on desktop (blocks ~0.2 s is the big step; thin
   was 0.25 s before _joined). Watch this on phones.

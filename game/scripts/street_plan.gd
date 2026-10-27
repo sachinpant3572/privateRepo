@@ -53,7 +53,7 @@ const CLASSES := {
 const ROAD_NAMES := {
 	"lantern": "Lantern Boulevard", "crescent": "Crescent Boulevard", "rampart": "Rampart Avenue",
 	"liberty": "Liberty Avenue", "magnolia": "Magnolia Avenue", "wharf": "Wharf Street", "river_road": "River Road",
-	"levee": "Levee Road", "bridge": "Morrow Bridge", "point_ave": "Point Avenue",
+	"levee": "Levee Road", "bridge": "Morrow Bridge", "point_ave": "Point Avenue", "bayou": "Bayou Road",
 }
 
 ## District grids. `seed` is a point inside the patch's region (regions are
@@ -77,8 +77,10 @@ const PATCHES := [
 		"su": [44.0, 52.0], "sv": [40.0, 48.0], "fam": "uv", "cls": "quarter", "jog": 0.25, "cut": [0.1, 0.08], "lane": 0.1, "max": [105.0, 100.0, 4500.0]},
 	{"id": "quarter_e", "bank": "north", "seed": Vector2(520, 750), "origin": Vector2(480, 830), "angle": -6.0, "bend": 0.0006, "fan": -0.0008, "bend_u": 0.0003,
 		"su": [46.0, 54.0], "sv": [42.0, 50.0], "fam": "uv", "cls": "quarter", "jog": 0.25, "cut": [0.1, 0.08], "lane": 0.1, "max": [105.0, 100.0, 4500.0]},
-	{"id": "wards", "bank": "north", "seed": Vector2(1000, 400), "origin": Vector2(940, 225), "angle": -25.0, "bend": 0.0003, "fan": -0.00025,
-		"su": [84.0, 104.0], "sv": [38.0, 46.0], "fam": "uv", "cls": "street", "jog": 0.45, "cut": [0.3, 0.04], "lane": 0.0, "max": [215.0, 60.0, 9000.0]},
+	{"id": "wards", "bank": "north", "seed": Vector2(1000, 600), "origin": Vector2(940, 225), "angle": -25.0, "bend": 0.0003, "fan": -0.00025,
+		"su": [84.0, 104.0], "sv": [38.0, 46.0], "fam": "uv", "cls": "street", "jog": 0.3, "cut": [0.3, 0.04], "lane": 0.0, "max": [215.0, 60.0, 9000.0]},
+	{"id": "wards_n", "bank": "north", "seed": Vector2(1000, 150), "origin": Vector2(900, 120), "angle": 30.0, "bend": -0.0003, "fan": 0.0003, "bend_u": 0.0002,
+		"su": [76.0, 92.0], "sv": [42.0, 50.0], "fam": "uv", "cls": "street", "jog": 0.3, "cut": [0.3, 0.04], "lane": 0.0, "max": [200.0, 60.0, 9000.0]},
 	{"id": "docks", "bank": "north", "seed": Vector2(1000, 960), "origin": Vector2(1050, 960), "angle": 9.0, "bend": 0.0,
 		"su": [100.0, 125.0], "sv": [80.0, 95.0], "fam": "uv", "cls": "street", "cut": [0.25, 0.25], "lane": 0.0, "max": [260.0, 200.0, 40000.0]},
 	{"id": "point_w", "bank": "south", "seed": Vector2(150, 1420), "origin": Vector2(200, 1420), "angle": 16.0, "bend": 0.0004, "fan": 0.0004,
@@ -114,6 +116,8 @@ var _river := PackedVector2Array()
 var _park_at := Vector2.ZERO
 ## Liberty Green's outline, roads included (empty when there's no park).
 var _park_poly := PackedVector2Array()
+## The district being laid out, shrunk by half its street gap.
+var _inner: Array[PackedVector2Array] = []
 var _river_half := 80.0
 var _adj: Array = [] # node -> Array of edge ids, sorted by direction
 var _dead := PackedByteArray()
@@ -145,6 +149,7 @@ func build(win: Rect2, margin: float, seed_v: int, river_line: PackedVector2Arra
 	_find_faces()
 	t = _lap("graph", t)
 	_thin()
+	_ease_crowds()
 	_simplify()
 	_compact()
 	_find_faces()
@@ -346,6 +351,9 @@ func _layout(src: Array) -> void:
 	var crescent := _spline([Vector2(-140, 595), Vector2(120, 540), Vector2(333, 505), Vector2(520, 495), Vector2(690, 500), Vector2(700, 501)])
 	var liberty := _spline([Vector2(318, 296), Vector2(690, 500), Vector2(1290, 877)])
 	var magnolia := _spline([Vector2(-140, 90), Vector2(30, 230), Vector2(140, 400), Vector2(185, 560)])
+	# Bayou Road: east from Rampart across the Wards, along the old bayou
+	# bank; the Wards streets either side of it run at different angles.
+	var bayou := _spline([Vector2(665, 388), Vector2(880, 412), Vector2(1060, 392), Vector2(1250, 330), Vector2(1560, 262)])
 	var p4 := _cross(rampart, road_line)
 	var b0 := _cross(lantern, road_line)
 	# River Road: along the bank up to Rampart. Past it the wharves have the
@@ -375,7 +383,7 @@ func _layout(src: Array) -> void:
 	if not park_ring.is_empty():
 		src.append({"pts": _resample(_extend(park_ring, 2.0), STEP), "cls": "street", "road": "park", "patch": -1, "fam": -1})
 	for r in [[lantern, "boulevard", "lantern"], [crescent, "boulevard", "crescent"], [rampart, "avenue", "rampart"],
-			[liberty, "avenue", "liberty"], [magnolia, "avenue", "magnolia"], [wharf, "avenue", "wharf"], [river_road, "river", "river_road"],
+			[liberty, "avenue", "liberty"], [magnolia, "avenue", "magnolia"], [bayou, "avenue", "bayou"], [wharf, "avenue", "wharf"], [river_road, "river", "river_road"],
 			[levee, "river", "levee"], [quay, "quay", "quay"], [PackedVector2Array([b0, b1]), "bridge", "bridge"],
 			[point_ave, "avenue", "point_ave"]]:
 		src.append({"pts": _resample(r[0], STEP), "cls": r[1], "road": r[2], "patch": -1, "fam": -1})
@@ -390,7 +398,7 @@ func _layout(src: Array) -> void:
 		if p.x <= 700.0:
 			liberty_gilt.append(p)
 	var north_parts: Array = [north]
-	for seam in [lantern, crescent, rampart, road_cut, liberty_gilt, wharf]:
+	for seam in [lantern, crescent, rampart, road_cut, liberty_gilt, wharf, bayou]:
 		north_parts = _cut(north_parts, seam)
 	var south_parts := _cut([south], PackedVector2Array([b1 - across * 5.0, b1 + across * 450.0]))
 	# A street round the edge of the scenery closes off the outermost blocks.
@@ -440,6 +448,7 @@ func _patch_lines(src: Array, k: int, region: PackedVector2Array) -> void:
 	var mid := (lo + hi) * 0.5
 	var spare := absf(fan) * (hi.x - lo.x) * (hi.y - lo.y) * 0.25 + absf(bend_u) * pow((hi.y - lo.y) * 0.5, 2)
 	var gap: float = minf(p.su[0], p.sv[0]) * 0.55
+	_inner = Geometry2D.offset_polygon(region, -gap * 0.5)
 	var u_lines: Array = [] # [u, tilt] of the u-streets that made it
 	if "u" in p.fam:
 		for u in _positions(rng, lo.x - spare, hi.x + spare, p.su):
@@ -504,12 +513,17 @@ func _add_pieces(src: Array, pts: PackedVector2Array, region: PackedVector2Array
 		# it, would leave a sliver of a block: leave it out.
 		if _hugs(piece, region, gap) or (not _park_poly.is_empty() and _hugs(piece, _park_poly, gap)):
 			continue
-		# Reach over the seam so the crossing is found.
-		var n := piece.size()
-		piece[0] += (piece[0] - piece[1]).normalized() * 1.5
-		piece[n - 1] += (piece[n - 1] - piece[n - 2]).normalized() * 1.5
-		src.append({"pts": piece, "cls": PATCHES[k].cls, "road": "", "patch": k, "fam": fam})
-		kept = true
+		# So would a stretch that grazes the edge, or an end that runs into
+		# it at a shallow angle: cut those out (the stubs left are pruned).
+		for part in _trim_close(piece, gap * 0.5):
+			if _length(part) < 12.0:
+				continue
+			# Reach over the seam so the crossing is found.
+			var n := part.size()
+			part[0] += (part[0] - part[1]).normalized() * 1.5
+			part[n - 1] += (part[n - 1] - part[n - 2]).normalized() * 1.5
+			src.append({"pts": part, "cls": PATCHES[k].cls, "road": "", "patch": k, "fam": fam})
+			kept = true
 	return kept
 
 
@@ -523,6 +537,59 @@ static func _v_line(o: Vector2, u_dir: Vector2, v_dir: Vector2, bend: float, v0:
 			break
 		u = minf(u + STEP, u1)
 	return pts
+
+
+## The parts of `line` worth keeping: its stretches within `near` of the
+## edge of the district (outside `_inner`) are cut out, except at an end
+## it reaches in less than 2.5 * near of line (it meets the edge at more
+## than about 24 degrees).
+func _trim_close(line: PackedVector2Array, near: float) -> Array[PackedVector2Array]:
+	var total := _length(line)
+	var spans: Array = [] # [from, to] along the line, inside _inner
+	for poly in _inner:
+		for part in Geometry2D.intersect_polyline_with_polygon(line, poly):
+			spans.append([_arc_at(line, part[0]), _arc_at(line, part[part.size() - 1])])
+	if spans.size() == 1 and spans[0][0] < 0.5 and spans[0][1] > total - 0.5:
+		return [line]
+	spans.sort_custom(func(x, y): return x[0] < y[0])
+	var out: Array[PackedVector2Array] = []
+	for i in spans.size():
+		var from: float = spans[i][0]
+		var to: float = spans[i][1]
+		if i == 0 and from <= near * 2.5:
+			from = 0.0
+		if i == spans.size() - 1 and total - to <= near * 2.5:
+			to = total
+		if to - from > 1.0:
+			out.append(_between(line, from, to))
+	return out
+
+
+## Distance along `line` to its point nearest q.
+static func _arc_at(line: PackedVector2Array, q: Vector2) -> float:
+	var best := INF
+	var at := 0.0
+	var t := 0.0
+	for k in line.size() - 1:
+		var c := Geometry2D.get_closest_point_to_segment(q, line[k], line[k + 1])
+		var d := c.distance_squared_to(q)
+		if d < best:
+			best = d
+			at = t + line[k].distance_to(c)
+		t += line[k].distance_to(line[k + 1])
+	return at
+
+
+## The part of `line` from distance `from` to `to` along it.
+static func _between(line: PackedVector2Array, from: float, to: float) -> PackedVector2Array:
+	var out := PackedVector2Array([_point_at(line, from)])
+	var t := 0.0
+	for k in line.size() - 1:
+		t += line[k].distance_to(line[k + 1])
+		if t > from and t < to:
+			out.append(line[k + 1])
+	out.append(_point_at(line, to))
+	return out
 
 
 ## True when the middle and both quarter points of a line lie within
@@ -1141,6 +1208,29 @@ func _thin() -> void:
 					edge_cls[e] = p.cls
 
 
+## A junction of five or more streets (where district streets happened to
+## cross a road at another junction) loses district streets, shortest
+## link first, down to four where the network allows.
+func _ease_crowds() -> void:
+	for n in node_pos.size():
+		if _adj[n].size() < 5:
+			continue
+		var options: Array = [] # [length, edge]
+		for e in _adj[n]:
+			if edge_patch[e] >= 0:
+				var l := _full_link(e)
+				var length := 0.0
+				for x in l[0]:
+					length += node_pos[edge_a[x]].distance_to(node_pos[edge_b[x]])
+				options.append([length, e])
+		options.sort_custom(func(x, y): return x[0] < y[0])
+		for o in options:
+			if _adj[n].size() < 5:
+				break
+			if _dead[o[1]] == 0:
+				_drop_links([o[1]])
+
+
 ## Outline of a park `span` long on `road`, `depth` deep, on the side of
 ## the road where `at` is. Sets _park_poly and returns the street round the
 ## three sides away from the road (empty when `at` isn't near the road).
@@ -1211,6 +1301,10 @@ func _joined(a: int, b: int) -> bool:
 		return true
 	var play := window.grow(2.0)
 	var inside := play.has_point(node_pos[a]) or play.has_point(node_pos[b])
+	if not play.has_point(node_pos[a]):
+		var x := a
+		a = b
+		b = x
 	var seen := {a: true}
 	var todo := PackedInt32Array([a])
 	var i := 0
@@ -1440,20 +1534,30 @@ func _drop_links(edges: Array) -> bool:
 	while i < links.size() and i < 8:
 		for n in [links[i][1], links[i][2]]:
 			if _adj[n].size() == 1:
+				# Named roads and the bridge stay; the dead end left fails
+				# the check below.
 				var stub := _full_link(_adj[n][0])
+				if edge_road[stub[0][0]] != "":
+					continue
 				for k in stub[0]:
 					_kill(k)
 					killed.append(k)
 				links.append(stub)
 		i += 1
-	# No dead ends, and each drivable link's ends still joined.
+	# No dead ends, and every end of a drivable link that still has a
+	# street to drive on joined to the others (a stub's far end too, when
+	# the junction between them went with it).
 	var cut := false
+	var ends: Array[int] = []
 	for l in links:
-		var a: int = l[1]
-		var b: int = l[2]
-		cut = cut or _adj[a].size() == 1 or _adj[b].size() == 1
-		if CLASSES[edge_cls[l[0][0]]].drive and _adj[a].size() > 0 and _adj[b].size() > 0:
-			cut = cut or not _joined(a, b)
+		for n in [l[1], l[2]]:
+			cut = cut or _adj[n].size() == 1
+			if CLASSES[edge_cls[l[0][0]]].drive and _drives(n) and not ends.has(n):
+				ends.append(n)
+	for n in ends:
+		if cut:
+			break
+		cut = not _joined(n, ends[0])
 	if cut:
 		for k in killed:
 			_revive(k)

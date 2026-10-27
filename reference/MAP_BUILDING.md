@@ -154,19 +154,23 @@ nodes and blocks have int ids, and blocks have any number of sides.
   | Gilt East | +6° | Big blocks, curved the other way |
   | Gilt South | +29° | One row of streets between Liberty and Crescent |
   | Lantern Quarter West / East | -12° / -6° | Tight blocks, strongly fanned and curved |
-  | Floodline Wards | -25° | Long shotgun blocks, curved |
+  | Floodline Wards south / north | -25° / +30° | Long shotgun blocks; the north half fanned and curved, split from the south by Bayou Road |
   | Ironwharf | +9° | Big yards on the wharves |
   | Morrow Point West / East | +16° / -20° | Far bank, fanned; the halves meet at a chevron on Point Avenue |
 
 - **Seams and long roads:**
-  - Crescent Boulevard (Gilt | Quarter), Rampart Avenue (west | east) and
-    Wharf Street (Wards | docks);
+  - Crescent Boulevard (Gilt | Quarter), Rampart Avenue (west | east),
+    Wharf Street (Wards | docks) and **Bayou Road**, curving east from
+    Rampart across the Wards (north | south);
   - Lantern Boulevard, from Union Station to the river and over **Morrow
     Bridge** to Morrow Point;
   - **Liberty Avenue**, the diagonal from Aurum Tower through the
     Crescent/Rampart junction to Ironwharf (like Esplanade);
   - Magnolia Avenue, curving through Gilt West;
   - the River Road and the Levee Road along the banks.
+- **Clean edges.** A district street that runs alongside its district's
+  edge, grazes it, or runs into it at less than about 24° is cut back
+  there (it would leave a sliver of a block).
 - **Arrangement.** All lines are overlaid and split where they cross. Each
   block is a face of the graph, found by walking half-edges.
 - **Thinning.** Minor streets are dropped at random per patch, so streets
@@ -175,6 +179,10 @@ nodes and blocks have int ids, and blocks have any number of sides.
     streets (so every junction can still be driven to);
   - no dead end appears, and it is not the short step of a jogged street;
   - the joined block stays under the patch's size cap.
+
+  A junction where five or more streets meet (district streets crossing
+  a road right at another junction) then loses district streets,
+  shortest first, until four are left.
 - **Liberty Green** is designed, not left over: a 120 x 80 m park on the
   north side of Liberty Avenue, with a street round its other three sides.
 - **Landmark blocks** that are too small are joined with the neighbour that
