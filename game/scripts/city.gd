@@ -49,6 +49,8 @@ var districts: Array = []
 var rail_lines: Array = []
 ## Node the streaming follows; the spawn point when unset.
 var focus_node: Node3D
+## Night light pools are drawn only after dark (see set_glow_visible).
+var glow_visible := false
 
 var _landmarks := {} # block -> {id, type, name}
 var _water := {} # node -> true where the river covers it
@@ -60,6 +62,7 @@ var _task := -1
 var _task_cell := Vector2i.ZERO
 var _task_result: Dictionary
 var _stream_tick := 0.0
+var _astar: AStar2D
 
 
 func build(seed_v: int) -> void:
@@ -111,6 +114,14 @@ func stream_now(pos: Vector3) -> void:
 	for cell in _cells_near(pos, LOAD_RADIUS):
 		if not _cells.has(cell):
 			_add_cell(cell, Cells.build(self, cell))
+
+
+func set_glow_visible(on: bool) -> void:
+	glow_visible = on
+	for cell in _cells:
+		var g: Node3D = _cells[cell].get_node_or_null("Glow")
+		if g:
+			g.visible = on
 
 
 func loaded_cells() -> Array:
@@ -193,7 +204,77 @@ func rail_on(a: Vector2i, b: Vector2i) -> int:
 	return -1
 
 
+## In-window landmarks for the maps: [{id, type, name, pos}].
+func landmarks() -> Array:
+	var list: Array = []
+	for b in _landmarks:
+		var lm: Dictionary = _landmarks[b].duplicate()
+		lm["pos"] = block_center(b)
+		list.append(lm)
+	return list
+
+
+## Position on the south sidewalk in front of landmark `id` (where missions
+## meet people), or Vector3.INF if the landmark isn't in the window.
+func landmark_front(id: String) -> Vector3:
+	var b := landmark_block(id)
+	if b.x < 0:
+		return Vector3.INF
+	return block_center(b) + Vector3(0, 0, BLOCK * 0.5 - WALK_INSET)
+
+
 # --- Road graph helpers used by traffic, police and spawning -------------------
+
+## Shortest drive along the streets, as points from `from` to `to` (for the
+## GPS line on the maps).
+func route(from: Vector3, to: Vector3) -> PackedVector3Array:
+	if _astar == null:
+		_build_astar()
+	var pts := PackedVector3Array([from])
+	var a := nearest_node(from)
+	var b := nearest_node(to)
+	if in_grid(a) and in_grid(b):
+		for id in _astar.get_id_path(_node_id(a), _node_id(b)):
+			pts.append(node_pos(Vector2i(id % (blocks.x + 1), id / (blocks.x + 1))))
+	pts.append(to)
+	return pts
+
+
+## Like route(), but through the right-hand lane at each junction, for
+## scripted drivers.
+func route_lanes(from: Vector3, to: Vector3) -> PackedVector3Array:
+	var nodes := route(from, to)
+	var pts := PackedVector3Array()
+	for k in range(1, nodes.size() - 1):
+		var here := nearest_node(nodes[k])
+		var prev := nearest_node(nodes[k - 1]) if k > 1 else here
+		var d := here - prev
+		if d == Vector2i.ZERO and k + 1 < nodes.size() - 1:
+			d = nearest_node(nodes[k + 1]) - here
+		d = d.clamp(Vector2i(-1, -1), Vector2i(1, 1))
+		pts.append(lane_point(here, d) if d != Vector2i.ZERO else nodes[k])
+	pts.append(to)
+	return pts
+
+
+func _node_id(n: Vector2i) -> int:
+	return n.x + n.y * (blocks.x + 1)
+
+
+func _build_astar() -> void:
+	_astar = AStar2D.new()
+	for i in blocks.x + 1:
+		for j in blocks.y + 1:
+			var n := Vector2i(i, j)
+			if in_grid(n):
+				_astar.add_point(_node_id(n), Vector2(i, j))
+	for i in blocks.x + 1:
+		for j in blocks.y + 1:
+			var n := Vector2i(i, j)
+			for d in [Vector2i(1, 0), Vector2i(0, 1)]:
+				if in_grid(n) and in_grid(n + d):
+					_astar.connect_points(_node_id(n), _node_id(n + d))
+
 
 func node_pos(n: Vector2i) -> Vector3:
 	return Vector3(n.x * PITCH, 0.0, n.y * PITCH)
@@ -480,6 +561,13 @@ func _add_cell(cell: Vector2i, built: Dictionary) -> void:
 		var inst: MeshInstance3D = built.mesh.make_instance()
 		inst.material_override = MeshBuilder.cutaway_material()
 		root.add_child(inst)
+	if built.glow.triangle_count() > 0:
+		var glow: MeshInstance3D = built.glow.make_instance()
+		glow.name = "Glow"
+		glow.material_override = MeshBuilder.glow_material()
+		glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		glow.visible = glow_visible
+		root.add_child(glow)
 	for group in [[built.colliders, L.WORLD], [built.props, L.PROPS]]:
 		if group[0].is_empty():
 			continue

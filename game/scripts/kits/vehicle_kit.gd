@@ -10,6 +10,7 @@ const KINDS := {
 	"pickup": {"size": Vector3(2.0, 1.6, 4.9), "max_speed": 22.0, "accel": 12.0, "turn": 2.1},
 	"van": {"size": Vector3(2.0, 2.2, 4.8), "max_speed": 20.0, "accel": 11.0, "turn": 2.0},
 	"sports": {"size": Vector3(1.95, 1.1, 4.1), "max_speed": 31.0, "accel": 19.0, "turn": 2.8},
+	"scooter": {"size": Vector3(0.8, 1.2, 1.9), "max_speed": 18.0, "accel": 14.0, "turn": 3.4, "rider": true},
 }
 ## Weighted pick list for civilian traffic and parked cars.
 const CIVILIAN := ["sedan", "sedan", "sedan", "pickup", "van", "sports", "taxi", "taxi"]
@@ -75,8 +76,25 @@ static func build(mb, kind: String, paint: Color) -> void:
 			for side in [-0.7, 0.7]:
 				mb.box(Vector3(side, 0.85, 1.95), Vector3(0.08, 0.35, 0.1), paint.darkened(0.3))
 			_lights(mb, 1.95, 4.1, 0.5)
+		"scooter":
+			_scooter(mb, paint)
 		_:
 			_sedan(mb, paint)
+
+
+## Step-through scooter; the rider sits on it (vehicle.gd keeps them visible).
+static func _scooter(mb, paint: Color) -> void:
+	for z in [-0.7, 0.7]:
+		mb.box(Vector3(0, 0.25, z), Vector3(0.14, 0.5, 0.5), TYRE)
+		mb.box(Vector3(0.08, 0.25, z), Vector3(0.03, 0.22, 0.22), Color(0.75, 0.75, 0.78))
+	mb.box(Vector3(0, 0.32, 0.0), Vector3(0.42, 0.1, 1.0), Color(0.2, 0.2, 0.22))
+	mb.box(Vector3(0, 0.55, 0.5), Vector3(0.5, 0.45, 0.8), paint)
+	mb.box(Vector3(0, 0.82, 0.45), Vector3(0.36, 0.12, 0.65), Color(0.12, 0.1, 0.1))
+	mb.box(Vector3(0, 0.75, -0.62), Vector3(0.5, 0.9, 0.18), paint)
+	mb.box(Vector3(0, 1.2, -0.6), Vector3(0.12, 0.3, 0.12), Color(0.3, 0.3, 0.32))
+	mb.box(Vector3(0, 1.32, -0.55), Vector3(0.75, 0.06, 0.08), Color(0.3, 0.3, 0.32))
+	mb.box(Vector3(0, 1.0, -0.73), Vector3(0.2, 0.14, 0.04), HEAD)
+	mb.box(Vector3(0, 0.75, 0.92), Vector3(0.22, 0.1, 0.04), TAIL)
 
 
 static func _sedan(mb, paint: Color, length := 4.2) -> void:

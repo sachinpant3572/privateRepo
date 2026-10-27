@@ -19,6 +19,7 @@ config/features=PackedStringArray("4.7", "GL Compatibility")
 
 Controls="*res://scripts/controls.gd"
 Wanted="*res://scripts/wanted.gd"
+Fx="*res://scripts/fx.gd"
 
 [display]
 
@@ -41,3 +42,22 @@ common/physics_interpolation=true
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 textures/vram_compression/import_etc2_astc=true
+
+[shader_globals]
+
+night={
+"type": "float",
+"value": 0.0
+}
+wet={
+"type": "float",
+"value": 0.0
+}
+detail={
+"type": "float",
+"value": 1.0
+}
+sky_tint={
+"type": "color",
+"value": Color(0.55, 0.7, 0.85, 1)
+}

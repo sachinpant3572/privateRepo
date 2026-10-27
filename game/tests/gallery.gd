@@ -8,6 +8,8 @@ const Buildings = preload("res://scripts/kits/building_kit.gd")
 const Props = preload("res://scripts/kits/prop_kit.gd")
 const VehicleKit = preload("res://scripts/kits/vehicle_kit.gd")
 const CharacterKit = preload("res://scripts/kits/character_kit.gd")
+const Rig = preload("res://scripts/rig.gd")
+const Player = preload("res://scripts/player.gd")
 
 var out_dir := "user://"
 var rng := RandomNumberGenerator.new()
@@ -26,8 +28,9 @@ func _ready() -> void:
 func _run() -> void:
 	await _shot(_buildings(), Vector3(0, 0, 0), 62.0, "gallery_1_buildings.png")
 	await _shot(_landmarks(), Vector3(0, 0, 300), 108.0, "gallery_2_landmarks.png")
-	await _shot(_vehicles_and_people(), Vector3(0, 0, 600), 22.0, "gallery_3_vehicles_people.png")
-	await _shot(_props(), Vector3(0, 0, 900), 24.0, "gallery_4_props.png")
+	await _shot(_vehicles(), Vector3(0, 0, 598), 22.0, "gallery_3_vehicles.png")
+	await _people()
+	await _shot(_props(), Vector3(0, 0, 900), 24.0, "gallery_5_props.png")
 	get_tree().quit()
 
 
@@ -80,22 +83,66 @@ func _landmarks() -> MeshBuilder:
 	return mb
 
 
-func _vehicles_and_people() -> MeshBuilder:
+func _vehicles() -> MeshBuilder:
 	var mb := MeshBuilder.new()
 	var kinds := VehicleKit.KINDS.keys()
 	for i in kinds.size():
-		mb.xform = Transform3D(Basis(Vector3.UP, PI * 0.15), Vector3(-15.0 + i * 6.0, 0, 596))
+		var row := i / 5
+		mb.xform = Transform3D(Basis(Vector3.UP, PI * 0.15), Vector3(-12.0 + (i % 5) * 6.0, 0, 594 + row * 8.0))
 		VehicleKit.build(mb, kinds[i], VehicleKit.PAINTS[i % VehicleKit.PAINTS.size()])
-	var looks: Array = []
-	for i in 9:
-		looks.append(CharacterKit.random_look(rng))
-	looks[0] = {"shirt": Color(0.85, 0.18, 0.2), "pants": Color(0.18, 0.3, 0.55), "skin": CharacterKit.SKIN[2], "hair": "short", "hair_color": CharacterKit.HAIR[0]}
-	looks[1] = {"shirt": Color(0.2, 0.3, 0.6), "pants": Color(0.1, 0.12, 0.2), "hair": "police", "hat": Color(0.1, 0.14, 0.3), "skin": CharacterKit.SKIN[1]}
-	for i in looks.size():
-		mb.xform = Transform3D(Basis(Vector3.UP, PI), Vector3(-12.0 + i * 3.0, 0, 605))
-		CharacterKit.build(mb, looks[i])
 	mb.xform = Transform3D.IDENTITY
 	return mb
+
+
+## Two rows of people under the game camera, close up: Jules and a cop in
+## the front row showing the animation set, random civilians behind.
+func _people() -> void:
+	var poses := [["idle", Player.JULES], ["walk", Player.JULES], ["run", Player.JULES], ["punch", Player.JULES],
+		["kick", Player.JULES], ["phone", Player.JULES], ["ride", Player.JULES], ["down", Player.JULES]]
+	var rigs: Array = []
+	for i in poses.size():
+		rigs.append(_person(poses[i][1], poses[i][0], Vector3(-7.0 + i * 2.0, 0, 748)))
+	for i in 8:
+		rigs.append(_person(CharacterKit.random_look(rng), "walk" if i % 3 == 0 else "idle", Vector3(-7.0 + i * 2.0, 0, 752)))
+	for frame in 40:
+		for r in rigs:
+			var st = r[1]
+			if r[2] == "punch":
+				st.punch = clampf(frame / 12.0 * 0.35, 0.0, 0.35)
+			if r[2] == "kick":
+				st.kick = clampf(frame / 12.0 * 0.4, 0.0, 0.4)
+			r[0].pose(st, 1.0 / 60.0)
+	var floor_mb := MeshBuilder.new()
+	floor_mb.box(Vector3(0, -0.5, 750), Vector3(1, 0.2, 1), Color.GRAY)
+	await _shot(floor_mb, Vector3(0, 0, 749), 8.0, "gallery_4_people.png")
+	for r in rigs:
+		r[0].skeleton.queue_free()
+
+
+func _person(look: Dictionary, pose: String, pos: Vector3) -> Array:
+	var skel := CharacterKit.build_rig(look)
+	skel.get_node("Body").material_override = MeshBuilder.material()
+	var holder := Node3D.new()
+	holder.position = pos
+	holder.rotation.y = PI * 0.85
+	add_child(holder)
+	holder.add_child(skel)
+	var st = Rig.State.new()
+	match pose:
+		"walk":
+			st.speed = 1.6
+		"run":
+			st.speed = 6.0
+			st.run_speed = 6.0
+		"phone":
+			st.gesture = "phone"
+		"ride":
+			st.ride = true
+		"down":
+			st.down = true
+	var rig = Rig.new(skel)
+	rig.phase = 1.2
+	return [rig, st, pose]
 
 
 func _props() -> MeshBuilder:

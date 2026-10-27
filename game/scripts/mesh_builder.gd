@@ -17,12 +17,78 @@ static var _xray_materials := {}
 static var _cutaway_material: ShaderMaterial
 static var _water_material: ShaderMaterial
 
+## Vertex alpha marks surfaces that glow after dark (the city has no real
+## lights; lamps, windows and signs light themselves in the shader):
+## GLOW_WINDOW windows lit at night, GLOW_LAMP lamp heads, GLOW_NEON signs that
+## glow a little by day and fully at night.
+const GLOW_WINDOW := 0.25
+const GLOW_LAMP := 0.5
+const GLOW_NEON := 0.75
+
+## Shared shader code: grain noise, wet ground and the glow codes. The
+## globals `night`, `wet` and `sky_tint` are set by Atmosphere.
+const SURFACE_COMMON := """
+global uniform float night;
+global uniform float wet;
+global uniform vec4 sky_tint;
+global uniform float detail;
+
+// Sine-free hash: cheap on mobile GPUs.
+float hash(vec2 p) {
+	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+	p3 += dot(p3, p3.yzx + 33.33);
+	return fract((p3.x + p3.y) * p3.z);
+}
+
+float vnoise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+
+// Grain so flat colours read as stone, asphalt and plaster; wet ground with
+// puddles that mirror the sky; emission for the glow codes.
+void surface(vec3 base, float code, vec3 wpos, vec3 wnormal, float time, out vec3 albedo, out vec3 emission) {
+	vec3 col = base;
+	if (detail > 0.5) {
+		float grain = vnoise(wpos.xz * 2.1 + wpos.y * 1.7) * 0.55 + vnoise(wpos.xz * 0.3 + wpos.y * 0.2) * 0.45;
+		col *= 0.92 + 0.12 * grain;
+	}
+	if (wet > 0.01 && wnormal.y > 0.9 && wpos.y < 0.35 && detail < 0.5) {
+		col *= mix(1.0, 0.7, wet);
+	} else if (wet > 0.01 && wnormal.y > 0.9 && wpos.y < 0.35) {
+		float puddle = smoothstep(0.62, 0.74, vnoise(wpos.xz * 0.16) * 0.7 + vnoise(wpos.xz * 0.8) * 0.3);
+		col *= mix(1.0, 0.6, wet);
+		vec2 cell = floor(wpos.xz * 0.7);
+		vec2 local = fract(wpos.xz * 0.7) - 0.5;
+		float t = fract(time * 1.3 + hash(cell));
+		float ring = smoothstep(0.03, 0.0, abs(length(local) - t * 0.45)) * (1.0 - t) * step(0.7, hash(cell + floor(time * 1.3 + hash(cell))));
+		col = mix(col, sky_tint.rgb * mix(0.9, 0.35, night), puddle * wet * 0.5);
+		col += vec3(ring * puddle * wet * 0.25);
+	}
+	emission = vec3(0.0);
+	if (code < 0.95) {
+		if (abs(code - 0.25) < 0.08) {
+			col = mix(col, col * 0.5, night);
+			emission = mix(col, vec3(1.0, 0.78, 0.45), 0.7) * night * 1.3;
+		} else if (abs(code - 0.5) < 0.08) {
+			emission = base * night * 1.2;
+		} else if (abs(code - 0.75) < 0.08) {
+			emission = base * mix(0.35, 2.0, night);
+		}
+	}
+	albedo = col;
+}
+"""
+
 ## City shader: the same toon look as material(), plus a dissolving hole in
 ## anything standing between the camera and the player, so buildings never
 ## hide what happens around them. The camera updates the uniforms each frame.
 const CUTAWAY_SHADER := """
 shader_type spatial;
 render_mode diffuse_toon, specular_disabled;
+#include_common
 
 uniform vec3 focus = vec3(0.0);
 uniform vec3 cam_right = vec3(1.0, 0.0, 0.0);
@@ -31,13 +97,19 @@ uniform vec3 cam_back = vec3(0.0, 0.0, 1.0);
 uniform float cut_radius = 7.0;
 
 varying vec3 world_pos;
+varying vec3 world_normal;
 
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 }
 
 void fragment() {
-	ALBEDO = COLOR.rgb;
+	vec3 albedo;
+	vec3 emission;
+	surface(COLOR.rgb, COLOR.a, world_pos, world_normal, TIME, albedo, emission);
+	ALBEDO = albedo;
+	EMISSION = emission;
 	ROUGHNESS = 1.0;
 	vec3 rel = world_pos - focus;
 	if (world_pos.y > 0.4 && dot(rel, cam_back) > 1.0) {
@@ -53,10 +125,14 @@ void fragment() {
 """
 
 ## River and harbour water: the vertex colour with drifting light glints, the
-## classic top-down way of showing a current.
+## classic top-down way of showing a current. Rain roughens it; at night the
+## glints fade and lamp light streaks across it.
 const WATER_SHADER := """
 shader_type spatial;
 render_mode diffuse_toon, specular_disabled;
+
+global uniform float night;
+global uniform float wet;
 
 varying vec3 world_pos;
 
@@ -69,10 +145,28 @@ void fragment() {
 	float a = sin(p.x * 0.35 + TIME * 1.2 + sin(p.y * 0.21 + TIME * 0.7) * 2.0);
 	float b = sin(p.y * 0.5 - TIME * 0.9 + sin(p.x * 0.17) * 1.5);
 	float glint = smoothstep(0.8, 0.95, a * b);
-	ALBEDO = COLOR.rgb + vec3(0.22, 0.28, 0.28) * glint;
+	float drops = smoothstep(0.92, 1.0, sin(p.x * 3.1 + TIME * 7.0) * sin(p.y * 2.7 - TIME * 6.0)) * wet;
+	ALBEDO = COLOR.rgb + vec3(0.22, 0.28, 0.28) * glint * (1.0 - night * 0.6) + vec3(0.2) * drops;
+	EMISSION = vec3(1.0, 0.8, 0.45) * glint * night * 0.25;
 	ROUGHNESS = 1.0;
 }
 """
+
+## Additive light on the ground after dark: lamp pools and headlight beams.
+## Vertex colour is the light; it fades to black at the rim.
+const GLOW_SHADER := """
+shader_type spatial;
+render_mode unshaded, blend_add, depth_draw_never, cull_disabled, shadows_disabled;
+
+global uniform float night;
+global uniform float wet;
+
+void fragment() {
+	ALBEDO = COLOR.rgb * night * (0.75 + 0.5 * wet);
+}
+"""
+
+static var _glow_material: ShaderMaterial
 
 var verts := PackedVector3Array()
 var normals := PackedVector3Array()
@@ -82,6 +176,14 @@ var indices := PackedInt32Array()
 ## the caller sets this to position and rotate them (rotation and translation
 ## only, so winding and normals stay valid).
 var xform := Transform3D.IDENTITY
+## [first vertex, bone] marks set by set_bone(): every vertex from the mark on
+## is bound fully to that bone (rigid skinning, for code-built characters).
+var _bone_marks: Array = []
+
+
+## Binds everything added from now on to skeleton bone `bone`.
+func set_bone(bone: int) -> void:
+	_bone_marks.append([verts.size(), bone])
 
 
 ## The toon material every baked mesh uses; colour comes from the vertices.
@@ -112,7 +214,7 @@ static func xray_material(color := Color(1.0, 0.85, 0.25, 0.6)) -> StandardMater
 static func cutaway_material() -> ShaderMaterial:
 	if _cutaway_material == null:
 		var shader := Shader.new()
-		shader.code = CUTAWAY_SHADER
+		shader.code = CUTAWAY_SHADER.replace("#include_common", SURFACE_COMMON)
 		_cutaway_material = ShaderMaterial.new()
 		_cutaway_material.shader = shader
 	return _cutaway_material
@@ -125,6 +227,45 @@ static func water_material() -> ShaderMaterial:
 		_water_material = ShaderMaterial.new()
 		_water_material.shader = shader
 	return _water_material
+
+
+static func glow_material() -> ShaderMaterial:
+	if _glow_material == null:
+		var shader := Shader.new()
+		shader.code = GLOW_SHADER
+		_glow_material = ShaderMaterial.new()
+		_glow_material.shader = shader
+	return _glow_material
+
+
+## `color` marked with a glow code (see GLOW_WINDOW and friends).
+static func glow(color: Color, code: float) -> Color:
+	return Color(color.r, color.g, color.b, code)
+
+
+## A soft disc of light on the ground (bright centre fading to nothing at
+## the rim) for the additive glow material.
+func light_pool(center: Vector3, radius: Vector2, color: Color, sides := 10) -> void:
+	for i in sides:
+		var a0 := TAU * i / sides
+		var a1 := TAU * (i + 1) / sides
+		var base := verts.size()
+		for p in [center, center + Vector3(cos(a0) * radius.x, 0, sin(a0) * radius.y), center + Vector3(cos(a1) * radius.x, 0, sin(a1) * radius.y)]:
+			verts.append(xform * p)
+			normals.append(Vector3.UP)
+		colors.append_array([color, Color.BLACK, Color.BLACK])
+		indices.append_array([base, base + 2, base + 1])
+
+
+## A beam of light on the ground from `from` along `dir` (headlights).
+func light_beam(from: Vector3, dir: Vector3, length: float, spread: float, color: Color) -> void:
+	var side := Vector3(-dir.z, 0, dir.x)
+	var base := verts.size()
+	for p in [from - side * 0.3, from + side * 0.3, from + dir * length + side * spread, from + dir * length - side * spread]:
+		verts.append(xform * p)
+		normals.append(Vector3.UP)
+	colors.append_array([color, color, Color.BLACK, Color.BLACK])
+	indices.append_array([base, base + 2, base + 1, base, base + 3, base + 2])
 
 
 ## Thinner than this, a box is drawn as its two broad faces only (one face if
@@ -238,6 +379,23 @@ static func _sphere_pt(theta: float, phi: float) -> Vector3:
 	return Vector3(sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi))
 
 
+## A tapered limb from `a` to `b` (radius `ra` at a, `rb` at b) with flat
+## ends: arms, legs and necks.
+func limb(a: Vector3, b: Vector3, ra: float, rb: float, color: Color, sides := 6) -> void:
+	var axis := (b - a).normalized()
+	var side := axis.cross(Vector3.FORWARD if absf(axis.z) < 0.9 else Vector3.RIGHT).normalized()
+	var up := side.cross(axis)
+	for i in sides:
+		var a0 := TAU * i / sides
+		var a1 := TAU * (i + 1) / sides
+		var d0 := side * cos(a0) + up * sin(a0)
+		var d1 := side * cos(a1) + up * sin(a1)
+		var n := ((d0 + d1) * 0.5).normalized()
+		quad(a + d0 * ra, a + d1 * ra, b + d1 * rb, b + d0 * rb, n, color)
+		tri(b, b + d0 * rb, b + d1 * rb, axis, color)
+		tri(a, a + d1 * ra, a + d0 * ra, -axis, color)
+
+
 ## Number of triangles collected so far (for budgets and tests).
 func triangle_count() -> int:
 	return indices.size() / 3
@@ -264,6 +422,18 @@ func commit() -> ArrayMesh:
 	arrays[Mesh.ARRAY_NORMAL] = normals
 	arrays[Mesh.ARRAY_COLOR] = colors
 	arrays[Mesh.ARRAY_INDEX] = indices
+	if not _bone_marks.is_empty():
+		var bones := PackedInt32Array()
+		var weights := PackedFloat32Array()
+		bones.resize(verts.size() * 4)
+		weights.resize(verts.size() * 4)
+		for k in _bone_marks.size():
+			var end: int = verts.size() if k == _bone_marks.size() - 1 else _bone_marks[k + 1][0]
+			for v in range(_bone_marks[k][0], end):
+				bones[v * 4] = _bone_marks[k][1]
+				weights[v * 4] = 1.0
+		arrays[Mesh.ARRAY_BONES] = bones
+		arrays[Mesh.ARRAY_WEIGHTS] = weights
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	return mesh

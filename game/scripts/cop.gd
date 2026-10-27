@@ -12,8 +12,9 @@ var aggro_time := 0.0
 
 func _init() -> void:
 	look = {
-		"shirt": Color(0.2, 0.3, 0.6), "pants": Color(0.1, 0.12, 0.2), "hair": "police",
+		"outfit": "uniform", "shirt": Color(0.2, 0.3, 0.6), "pants": Color(0.1, 0.12, 0.2), "hair": "police",
 		"hat": Color(0.1, 0.14, 0.3), "skin": CharacterKit.SKIN[randi() % CharacterKit.SKIN.size()],
+		"build": 1.08,
 	}
 	xray_color = Color(0.3, 0.55, 1.0, 0.6)
 	run_speed = 6.0

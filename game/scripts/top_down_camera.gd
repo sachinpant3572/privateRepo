@@ -19,6 +19,8 @@ const CUT_RADIUS := 6.0
 var target: Node3D
 var _focus := Vector3.ZERO
 var _cut := 0.0
+var _trauma := 0.0
+var _shake_t := 0.0
 
 
 func _ready() -> void:
@@ -45,6 +47,20 @@ func _process(delta: float) -> void:
 	size = lerpf(size, want_size, 1.0 - exp(-2.0 * delta))
 	global_position = _focus + global_basis.z * DISTANCE
 	_update_cutaway(pos, delta)
+	_apply_shake(delta)
+
+
+## Adds screen shake (0..1); it eases off by itself.
+func shake(amount: float) -> void:
+	_trauma = minf(_trauma + amount, 1.0)
+
+
+func _apply_shake(delta: float) -> void:
+	_trauma = maxf(_trauma - delta * 2.2, 0.0)
+	_shake_t += delta * 40.0
+	var k := _trauma * _trauma * 0.9
+	h_offset = (sin(_shake_t * 1.13) + sin(_shake_t * 2.71) * 0.5) * k
+	v_offset = (sin(_shake_t * 1.37 + 1.0) + sin(_shake_t * 3.07) * 0.5) * k
 
 
 ## Ground-plane directions for screen right and screen up (east and north).

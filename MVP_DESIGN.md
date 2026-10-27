@@ -238,15 +238,40 @@ device.
 | 5. Soft launch | 2-3 test countries | Retention near targets |
 | 6. Global launch | Android, then iOS | |
 
-**Status**: milestone 1 (prototype) is playable in `game/`, pending the
-fun and 30 fps checks on a real phone. Since then the 6-block grey box has
-grown into the **demo map**: 1.3 km x 1.1 km of Bellerive (25 x 22 blocks:
-Gilt District, Lantern Quarter, Floodline Wards, Ironwharf and the Morrow
-River), streamed in cells, built from the asset kits (buildings, props,
-vehicles, people) that the vertical slice will reuse. See `game/README.md`.
+**Status (Oct 27, 2026)**:
+- **Milestone 1 is done.** The demo map ran smoothly on real phones: a
+  steady 120 fps on a Galaxy S25 Ultra and 30 fps on a phone with a much
+  weaker CPU and GPU, which meets the 30 fps exit check and confirms Godot.
+  The 6-block grey box had already grown into the **demo map**: 1.3 km x
+  1.1 km of Bellerive (25 x 22 blocks: Gilt District, Lantern Quarter,
+  Floodline Wards, Ironwharf and the Morrow River), streamed in cells,
+  built from the asset kits.
+- **Milestone 2 (vertical slice) is under way**:
+  - **Missions 1-3**, the phone, a minimap and a full map are in;
+  - the Lantern Quarter is getting its final look: day and night, rain,
+    lit windows, lamp pools and neon, shopfronts, festoon lights and
+    effects;
+  - **still missing**: the random event set and a playtest.
+
+  The extra night, rain and effects work costs about 0.3-0.6 ms of CPU per
+  frame on desktop. A Detail LOW setting and a shadows toggle are in the
+  phone for weak devices. See `game/README.md`.
 
 Timelines depend on team size; to be estimated once the team and the split
 between Claude, AI tools and people are decided.
+
+## Character art decision
+
+**Decision (Oct 27, 2026)**: characters will be **AI-generated 3D models
+with a standard animation set**: models made with an image-to-3D tool,
+auto-rigged to a standard humanoid skeleton, sharing one set of animation
+clips.
+
+**For now, no credits are being spent.** The prototype's people are built
+in code on a humanoid skeleton that uses the standard bone names (Hips,
+Spine, Chest, LeftUpperArm...) and are animated in code. Modelled characters
+on the same skeleton can replace them later without changing the gameplay
+or animation code.
 
 ## Open decisions
 

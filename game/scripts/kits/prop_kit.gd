@@ -2,6 +2,8 @@ extends RefCounted
 ## Street props and dock gear. Positions are local to the current
 ## MeshBuilder.xform; small solid props add [center, size] collision boxes.
 
+const MeshBuilder = preload("res://scripts/mesh_builder.gd")
+
 const IRON := Color(0.1, 0.12, 0.11)
 const STEEL := Color(0.55, 0.57, 0.6)
 const LAMP_GLOW := Color(1.0, 0.86, 0.45)
@@ -11,19 +13,26 @@ const BARK := Color(0.38, 0.27, 0.19)
 const CONTAINERS := [Color(0.78, 0.28, 0.2), Color(0.2, 0.45, 0.72), Color(0.28, 0.58, 0.35), Color(0.88, 0.62, 0.2), Color(0.55, 0.55, 0.6)]
 
 
-## Black cast-iron gas lamp with a warm lantern (Lantern Quarter).
-static func gas_lamp(mb, out: Array, p: Vector3) -> void:
+const POOL_WARM := Color(0.55, 0.38, 0.16)
+const POOL_COOL := Color(0.4, 0.42, 0.38)
+
+
+## Black cast-iron gas lamp with a warm lantern (Lantern Quarter). With a
+## `glow` builder, also the pool of light it throws at night.
+static func gas_lamp(mb, out: Array, p: Vector3, glow = null) -> void:
 	mb.cylinder(p + Vector3(0, 0.15, 0), 0.09, 3.1, IRON, 4)
-	mb.box(p + Vector3(0, 3.45, 0), Vector3(0.42, 0.55, 0.42), LAMP_GLOW)
+	mb.box(p + Vector3(0, 3.45, 0), Vector3(0.42, 0.55, 0.42), MeshBuilder.glow(LAMP_GLOW, MeshBuilder.GLOW_LAMP))
+	_pool(mb, glow, p + Vector3(0, 0.2, 0), 5.0, POOL_WARM)
 	mb.box(p + Vector3(0, 3.8, 0), Vector3(0.55, 0.12, 0.55), IRON)
 	out.append([p + Vector3(0, 1.5, 0), Vector3(0.3, 3.0, 0.3)])
 
 
 ## Modern street light; the arm reaches toward `dir` (over the road).
-static func street_light(mb, out: Array, p: Vector3, dir: Vector3) -> void:
+static func street_light(mb, out: Array, p: Vector3, dir: Vector3, glow = null) -> void:
 	mb.cylinder(p + Vector3(0, 0.15, 0), 0.1, 6.0, STEEL, 4)
 	mb.box(p + dir * 1.2 + Vector3(0, 6.0, 0), Vector3(absf(dir.x) * 2.4 + 0.15, 0.12, absf(dir.z) * 2.4 + 0.15), STEEL)
-	mb.box(p + dir * 2.3 + Vector3(0, 5.9, 0), Vector3(0.6, 0.15, 0.6), LAMP_GLOW)
+	mb.box(p + dir * 2.3 + Vector3(0, 5.9, 0), Vector3(0.6, 0.15, 0.6), MeshBuilder.glow(Color(0.95, 0.95, 0.85), MeshBuilder.GLOW_LAMP))
+	_pool(mb, glow, p + dir * 2.3 + Vector3(0, 0.05, 0), 7.0, POOL_COOL)
 	out.append([p + Vector3(0, 2.0, 0), Vector3(0.3, 4.0, 0.3)])
 
 
@@ -193,6 +202,72 @@ static func crosswalk(mb, center: Vector3, along: Vector3, width := 10.0) -> voi
 
 static func manhole(mb, p: Vector3) -> void:
 	mb.cylinder(p, 0.45, 0.02, Color(0.25, 0.25, 0.27), 8)
+
+
+## Adds a light pool to `glow` (if given) under the same placement as `mb`.
+static func _pool(mb, glow, at: Vector3, radius: float, color: Color) -> void:
+	if glow == null:
+		return
+	glow.xform = mb.xform
+	glow.light_pool(at, Vector2(radius, radius), color)
+	glow.xform = Transform3D.IDENTITY
+
+
+## A string of festoon bulbs on a wire from `a` to `b` (both at wire height),
+## sagging in the middle (Lantern Quarter streets).
+static func festoon(mb, a: Vector3, b: Vector3, rng: RandomNumberGenerator) -> void:
+	var bulbs := [Color(1.0, 0.8, 0.4), Color(1.0, 0.55, 0.35), Color(0.95, 0.9, 0.6), Color(0.6, 0.85, 1.0)]
+	var n := int(a.distance_to(b) / 1.1)
+	var prev := a
+	for i in range(1, n + 1):
+		var t := float(i) / n
+		var q := a.lerp(b, t) - Vector3(0, sin(t * PI) * 0.9, 0)
+		var mid := (prev + q) * 0.5
+		var d := q - prev
+		mb.box(mid, Vector3(absf(d.x) + 0.04, absf(d.y) + 0.04, absf(d.z) + 0.04), Color(0.08, 0.08, 0.08))
+		if i < n:
+			mb.box(q - Vector3(0, 0.12, 0), Vector3(0.16, 0.2, 0.16), MeshBuilder.glow(bulbs[rng.randi() % bulbs.size()], MeshBuilder.GLOW_LAMP))
+		prev = q
+
+
+## Café set on the sidewalk: round table, two chairs and a parasol.
+static func cafe_table(mb, out: Array, p: Vector3, parasol: Color) -> void:
+	mb.cylinder(p + Vector3(0, 0.15, 0), 0.05, 0.6, IRON, 4)
+	mb.cylinder(p + Vector3(0, 0.75, 0), 0.4, 0.05, Color(0.92, 0.9, 0.85), 8)
+	for side in [-0.7, 0.7]:
+		mb.box(p + Vector3(side, 0.45, 0), Vector3(0.38, 0.06, 0.38), IRON)
+		mb.box(p + Vector3(side * 1.25, 0.7, 0), Vector3(0.06, 0.5, 0.38), IRON)
+	mb.cylinder(p + Vector3(0, 0.8, 0), 0.03, 1.4, Color(0.9, 0.9, 0.88), 4)
+	mb.ball(p + Vector3(0, 2.3, 0), Vector3(1.2, 0.3, 1.2), parasol, 8, 2)
+	out.append([p + Vector3(0, 0.5, 0), Vector3(1.6, 1.0, 0.8)])
+
+
+## Oil stain, crack or patch on the asphalt (pure decoration).
+static func road_mark(mb, p: Vector3, along: Vector3, rng: RandomNumberGenerator) -> void:
+	var across := Vector3(absf(along.z), 0, absf(along.x))
+	match rng.randi() % 3:
+		0:
+			mb.box(p + Vector3(0, 0.012, 0), along.abs() * rng.randf_range(0.8, 1.6) + across * rng.randf_range(0.6, 1.2) + Vector3(0, 0.02, 0), Color(0.13, 0.13, 0.15))
+		1:
+			for k in 3:
+				var off := along * (k - 1) * 0.6 + across * rng.randf_range(-0.2, 0.2)
+				mb.box(p + off + Vector3(0, 0.012, 0), along.abs() * 0.7 + across * 0.06 + Vector3(0, 0.02, 0), Color(0.12, 0.12, 0.13))
+		_:
+			mb.box(p + Vector3(0, 0.011, 0), along.abs() * rng.randf_range(2.0, 4.0) + across * rng.randf_range(1.5, 2.5) + Vector3(0, 0.02, 0), Color(0.25, 0.25, 0.27))
+
+
+## A spray-painted tag on a wall facing -Z (local), centred at `p`.
+static func graffiti(mb, p: Vector3, w: float, rng: RandomNumberGenerator) -> void:
+	var inks := [Color(0.95, 0.3, 0.55), Color(0.3, 0.8, 0.95), Color(0.98, 0.85, 0.2), Color(0.5, 0.95, 0.4), Color(0.95, 0.5, 0.15), Color(0.65, 0.4, 0.95)]
+	var base: Color = inks[rng.randi() % inks.size()]
+	var outline: Color = Color(0.08, 0.08, 0.1)
+	mb.box(p + Vector3(0, 0, -0.01), Vector3(w + 0.2, 1.1, 0.03), outline)
+	var letters := int(w / 0.7)
+	for i in letters:
+		var x := -w * 0.5 + (i + 0.5) * w / letters
+		var h := rng.randf_range(0.6, 1.0)
+		mb.box(p + Vector3(x, rng.randf_range(-0.1, 0.1), -0.03), Vector3(w / letters * 0.8, h, 0.03), base if i % 2 == 0 else base.lightened(0.25))
+	mb.box(p + Vector3(0, -0.3, -0.04), Vector3(w * 0.9, 0.08, 0.03), inks[rng.randi() % inks.size()])
 
 
 static func _rot(yaw: float, size: Vector3) -> Vector3:

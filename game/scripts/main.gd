@@ -1,6 +1,7 @@
 extends Node3D
 ## Entry point: builds the Bellerive demo map and wires the player, camera,
-## police, population and HUD together. Handles BUSTED and WASTED.
+## police, population, story missions and HUD together. Handles BUSTED and
+## WASTED, cash and settings.
 
 const City = preload("res://scripts/city.gd")
 const Player = preload("res://scripts/player.gd")
@@ -9,48 +10,79 @@ const TopDownCamera = preload("res://scripts/top_down_camera.gd")
 const PoliceManager = preload("res://scripts/police_manager.gd")
 const Population = preload("res://scripts/population.gd")
 const Hud = preload("res://scripts/hud.gd")
+const Atmosphere = preload("res://scripts/atmosphere.gd")
+const MissionManager = preload("res://scripts/missions/mission_manager.gd")
 
 const RESPAWN_DELAY := 2.5
 
 var population_enabled := true
+## Tests turn the story off (or point it at a throwaway save).
+var missions_enabled := true
+var save_enabled := true
 var city
 var player
 var camera
 var police
 var population
 var hud
+var atmosphere
+var missions
 var respawning := false
+var cash := 0
+var settings := {"shadows": true, "show_fps": true, "weather": "auto", "detail": "high"}
+## Player-set map waypoint (a road node position) or null.
+var waypoint = null
 
 
 func _ready() -> void:
 	add_to_group("game")
-	_setup_environment()
+	atmosphere = Atmosphere.new()
+	add_child(atmosphere)
 
 	city = City.new()
 	add_child(city)
 	city.build(1234)
+	atmosphere.night_changed.connect(city.set_glow_visible)
+	city.set_glow_visible(atmosphere.night_amount() > 0.02)
 
-	# The car waiting outside Union Station; population parks the rest.
+	missions = MissionManager.new()
+	missions.game = self
+	missions.save_enabled = save_enabled and missions_enabled
+	missions.auto_start = missions_enabled
+	add_child(missions)
+	if not missions_enabled:
+		missions.process_mode = Node.PROCESS_MODE_DISABLED
+	var start: Vector3 = missions.spawn_point() if missions_enabled else city.spawn_point
+
+	# The car waiting outside Union Station (or home, once the story has
+	# begun); population parks the rest.
 	var home = Vehicle.new()
 	home.kind = "sports"
 	home.body_color = Color(0.82, 0.16, 0.16)
 	home.city = city
 	home.position = city.parked_spots[0][0]
 	home.rotation.y = city.parked_spots[0][1]
+	if start != city.spawn_point:
+		home.position = start + Vector3(8.0, 0, city.WALK_INSET + city.ROAD * 0.5 - city.CURB_PARKING)
+		home.rotation.y = -PI / 2
 	add_child(home)
 
 	player = Player.new()
-	player.position = city.spawn_point
+	player.position = start
 	player.rotation.y = PI
 	add_child(player)
 	city.focus_node = player
+	atmosphere.focus = player
 	player.died.connect(func(_who): _respawn("WASTED", city.hospital))
+	if start != city.spawn_point:
+		city.stream_now(start)
 
 	camera = TopDownCamera.new()
 	camera.target = player
 	add_child(camera)
 	camera.snap()
 	Controls.camera = camera
+	Fx.camera = camera
 
 	police = PoliceManager.new()
 	police.game = self
@@ -64,6 +96,46 @@ func _ready() -> void:
 	hud = Hud.new()
 	hud.game = self
 	add_child(hud)
+	missions.hud = hud
+	apply_settings()
+	if missions_enabled and missions.is_new_game():
+		missions.start.call_deferred("m01_homecoming")
+
+
+func apply_settings() -> void:
+	atmosphere.sun.shadow_enabled = settings.get("shadows", true)
+	# Low detail: flat colours (no grain or puddles) and lighter rain.
+	var high: bool = settings.get("detail", "high") == "high"
+	RenderingServer.global_shader_parameter_set("detail", 1.0 if high else 0.0)
+	atmosphere.low_detail = not high
+	var w: String = settings.get("weather", "auto")
+	atmosphere.weather_changes = w == "auto"
+	if w != "auto":
+		atmosphere.set_weather(w)
+	if missions:
+		missions.save_game()
+
+
+## After "New game": back to Union Station and the first mission.
+func restart_story() -> void:
+	if player.vehicle != null:
+		player.exit_vehicle()
+	city.stream_now(city.spawn_point)
+	player.respawn(city.spawn_point)
+	camera.snap()
+	if missions_enabled:
+		missions.start("m01_homecoming")
+
+
+## Everything the minimap and full map should mark: [{pos, color, label,
+## gps}]. The first entry with gps gets the GPS route.
+func map_markers() -> Array:
+	var list: Array = []
+	if waypoint != null:
+		list.append({"pos": waypoint, "color": Color(0.85, 0.4, 0.95), "label": "Waypoint", "gps": true})
+	if missions:
+		list.append_array(missions.markers)
+	return list
 
 
 func on_busted() -> void:
@@ -76,6 +148,7 @@ func _respawn(text: String, point: Vector3) -> void:
 	respawning = true
 	player.controllable = false
 	hud.show_message(text)
+	missions.on_player_down(text)
 	await get_tree().create_timer(RESPAWN_DELAY, true, true).timeout
 	Wanted.clear()
 	police.clear_all()
@@ -83,23 +156,3 @@ func _respawn(text: String, point: Vector3) -> void:
 	player.respawn(point)
 	camera.snap()
 	respawning = false
-
-
-func _setup_environment() -> void:
-	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-55.0, -30.0, 0.0)
-	sun.light_energy = 0.7
-	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 110.0
-	add_child(sun)
-
-	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.55, 0.7, 0.85)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.78, 0.8, 0.88)
-	env.ambient_light_energy = 0.35
-	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
-	var world_env := WorldEnvironment.new()
-	world_env.environment = env
-	add_child(world_env)

@@ -27,11 +27,33 @@ const TOUR := [
 ]
 
 
+## [file, landmark, offset, hour, weather] shots of the Lantern Quarter at
+## night and in the rain.
+const MOODS := [
+	["13_quarter_night", "blue_lantern", Vector3(0, 0, 22.0), 21.5, "clear"],
+	["14_square_night", "lantern_square", Vector3(0, 0, 21.0), 22.0, "clear"],
+	["15_quarter_rain_night", "blue_lantern", Vector3(18, 0, 24.0), 21.0, "storm"],
+	["16_quarter_rain_day", "lantern_square", Vector3(-20, 0, 24.0), 13.0, "rain"],
+	["17_quarter_dusk", "lantern_square", Vector3(20, 0, 22.0), 19.2, "clear"],
+]
+
+
 func _run() -> void:
 	var game = MainScene.instantiate()
+	game.missions_enabled = false
 	add_child(game)
+	game.atmosphere.hour = 12.5
+	game.atmosphere.minutes_per_second = 0.0
+	game.atmosphere.weather_changes = false
 	await _frames(180)
 	await _shot("1_on_foot.png")
+	game.waypoint = game.city.node_pos(game.city.nearest_node(game.city.landmark_front("lantern_square")))
+	await _frames(30)
+	game.hud.full_map.open()
+	for i in 4:
+		await get_tree().process_frame
+	await _shot("12_full_map.png")
+	game.hud.full_map.close()
 	var home: Vector3 = game.player.global_position
 	for stop in TOUR:
 		var b: Vector2i = game.city.landmark_block(stop[1])
@@ -42,6 +64,19 @@ func _run() -> void:
 		game.camera.snap()
 		await _frames(90)
 		await _shot(stop[0] + ".png")
+	for mood in MOODS:
+		var b: Vector2i = game.city.landmark_block(mood[1])
+		var pos: Vector3 = game.city.block_center(b) + mood[2]
+		game.atmosphere.hour = mood[3]
+		game.atmosphere.set_weather(mood[4], true)
+		game.city.stream_now(pos)
+		game.player.global_position = pos
+		game.player.reset_physics_interpolation()
+		game.camera.snap()
+		await _frames(90)
+		await _shot(mood[0] + ".png")
+	game.atmosphere.hour = 12.5
+	game.atmosphere.set_weather("clear", true)
 	game.city.stream_now(home)
 	game.player.global_position = home
 	game.player.reset_physics_interpolation()
@@ -53,6 +88,17 @@ func _run() -> void:
 	Controls.override_vector = Controls.screen_from_world(Vector3.RIGHT)
 	await _frames(100)
 	await _shot("2_driving.png")
+	game.atmosphere.hour = 22.0
+	game.atmosphere.set_weather("rain", true)
+	Input.action_press("sprint")
+	Controls.override_vector = Controls.screen_from_world(Vector3(1, 0, 0.8).normalized())
+	await _frames(40)
+	Input.action_release("sprint")
+	Controls.override_vector = Controls.screen_from_world(Vector3.RIGHT)
+	await _frames(20)
+	await _shot("18_night_drive.png")
+	game.atmosphere.hour = 12.5
+	game.atmosphere.set_weather("clear", true)
 
 	Wanted.report_crime(2)
 	await _frames(150)

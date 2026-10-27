@@ -5,6 +5,9 @@ extends RefCounted
 ## MeshBuilder.xform and turns the returned collision boxes into shapes.
 ## Collision boxes are [local_center, size] pairs.
 
+const MeshBuilder = preload("res://scripts/mesh_builder.gd")
+const Props = preload("res://scripts/kits/prop_kit.gd")
+
 const FLOOR := 3.4
 
 const CREOLE := [
@@ -25,6 +28,14 @@ const DARK := Color(0.1, 0.11, 0.13)
 const WOOD := Color(0.42, 0.28, 0.18)
 const ROOF_TAR := Color(0.32, 0.3, 0.3)
 const GOLD := Color(0.9, 0.72, 0.25)
+const SHOP_GLASS := Color(0.55, 0.68, 0.72)
+const AWNINGS := [Color(0.75, 0.15, 0.2), Color(0.15, 0.4, 0.3), Color(0.2, 0.3, 0.6), Color(0.85, 0.55, 0.15)]
+const NEONS := [Color(1.0, 0.3, 0.55), Color(0.3, 0.85, 1.0), Color(1.0, 0.75, 0.2), Color(0.55, 1.0, 0.45), Color(0.8, 0.4, 1.0)]
+
+
+## A window opening that may light up at night (about `lit` of them do).
+static func _window(rng: RandomNumberGenerator, lit := 0.55) -> Color:
+	return MeshBuilder.glow(DARK, MeshBuilder.GLOW_WINDOW) if rng.randf() < lit else DARK
 
 
 ## Two- to four-storey Creole townhouse with a cast-iron gallery over the
@@ -39,23 +50,45 @@ static func townhouse(mb, out: Array, w: float, d: float, floors: int, rng: Rand
 	var bays := maxi(1, int(w / 2.6))
 	var bay_w := w / bays
 	var front := -d * 0.5 - 0.04
+	var shop := floors >= 2 and w >= 5.5 and rng.randf() < 0.5
 	for f in floors:
 		var y := f * FLOOR
-		for b in bays:
-			var x := -w * 0.5 + bay_w * (b + 0.5)
-			var is_door := f == 0 and b == bays / 2
-			var open_h := 2.4 if (f > 0 or is_door) else 1.6
-			var open_y := y + (0.2 if (f > 0 or is_door) else 0.9) + open_h * 0.5
-			mb.box(Vector3(x, open_y, front), Vector3(bay_w * 0.45, open_h, 0.08), WOOD if is_door else DARK)
-			for side in [-1.0, 1.0]:
-				mb.box(Vector3(x + side * bay_w * 0.34, open_y, front - 0.02), Vector3(bay_w * 0.2, open_h, 0.06), shutter)
+		if f == 0 and shop:
+			_shopfront(mb, w, front, rng)
+		else:
+			for b in bays:
+				var x := -w * 0.5 + bay_w * (b + 0.5)
+				var is_door := f == 0 and b == bays / 2
+				var open_h := 2.4 if (f > 0 or is_door) else 1.6
+				var open_y := y + (0.2 if (f > 0 or is_door) else 0.9) + open_h * 0.5
+				mb.box(Vector3(x, open_y, front), Vector3(bay_w * 0.45, open_h, 0.08), WOOD if is_door else _window(rng))
+				for side in [-1.0, 1.0]:
+					mb.box(Vector3(x + side * bay_w * 0.34, open_y, front - 0.02), Vector3(bay_w * 0.2, open_h, 0.06), shutter)
 		mb.box(Vector3(0, y + FLOOR - 0.15, front), Vector3(w, 0.12, 0.08), TRIM)
 	if floors > 1:
 		_gallery(mb, w, d, floors, rng)
 	# Back: a simple window band per floor (seen across courtyards).
 	for f in floors:
-		mb.box(Vector3(0, f * FLOOR + 1.8, d * 0.5 + 0.04), Vector3(w * 0.8, 1.2, 0.06), DARK)
+		mb.box(Vector3(0, f * FLOOR + 1.8, d * 0.5 + 0.04), Vector3(w * 0.8, 1.2, 0.06), _window(rng, 0.4))
 	_roof_clutter(mb, w, d, h + 0.25, rng)
+
+
+## Ground-floor shop: a lit display window, a glazed door, a striped awning
+## and a neon blade sign hanging from the gallery.
+static func _shopfront(mb, w: float, front: float, rng: RandomNumberGenerator) -> void:
+	var glass := MeshBuilder.glow(SHOP_GLASS, MeshBuilder.GLOW_WINDOW)
+	mb.box(Vector3(-w * 0.18, 1.45, front), Vector3(w * 0.5, 2.1, 0.08), glass)
+	mb.box(Vector3(w * 0.28, 1.25, front), Vector3(1.1, 2.3, 0.08), WOOD.darkened(0.2))
+	mb.box(Vector3(w * 0.28, 1.6, front - 0.02), Vector3(0.7, 1.0, 0.06), glass)
+	mb.box(Vector3(0, 0.45, front - 0.01), Vector3(w * 0.96, 0.5, 0.08), TRIM.darkened(0.15))
+	var awning: Color = AWNINGS[rng.randi() % AWNINGS.size()]
+	var stripes := int(w / 0.6)
+	for i in stripes:
+		var x := -w * 0.5 + (i + 0.5) * w / stripes
+		mb.box(Vector3(x, 2.85, front - 0.55), Vector3(w / stripes, 0.12, 1.1), awning if i % 2 == 0 else Color(0.95, 0.93, 0.88))
+	var neon: Color = NEONS[rng.randi() % NEONS.size()]
+	mb.box(Vector3(w * 0.42, 2.5, front - 1.05), Vector3(0.12, 0.9, 1.0), Color(0.1, 0.1, 0.12))
+	mb.box(Vector3(w * 0.42, 2.5, front - 1.05), Vector3(0.16, 0.6, 0.75), MeshBuilder.glow(neon, MeshBuilder.GLOW_NEON))
 
 
 ## Cast-iron gallery: one balcony per upper floor on posts down to the street,
@@ -105,7 +138,7 @@ static func shotgun(mb, out: Array, w: float, d: float, rng: RandomNumberGenerat
 		mb.box(Vector3(win_x, pier + 1.5, front - 0.05), Vector3(1.3, 1.4, 0.08), WOOD.lightened(0.15))
 		mb.box(Vector3(win_x, pier + 1.5, front - 0.1), Vector3(1.6, 0.18, 0.06), WOOD)
 	else:
-		mb.box(Vector3(win_x, pier + 1.5, front - 0.04), Vector3(1.0, 1.5, 0.08), DARK)
+		mb.box(Vector3(win_x, pier + 1.5, front - 0.04), Vector3(1.0, 1.5, 0.08), _window(rng, 0.6))
 		for side in [-1.0, 1.0]:
 			mb.box(Vector3(win_x + side * 0.72, pier + 1.5, front - 0.06), Vector3(0.4, 1.5, 0.06), TRIM if body.v < 0.8 else SHUTTERS[0])
 	# Front-facing gable roof (ridge runs front to back).
@@ -130,7 +163,7 @@ static func ward_apartment(mb, out: Array, w: float, d: float, rng: RandomNumber
 	var front := -d * 0.5 - 0.04
 	for f in 2:
 		for b in 3:
-			mb.box(Vector3(-w * 0.33 + b * w * 0.33, f * FLOOR + 1.8, front), Vector3(1.1, 1.4, 0.08), DARK)
+			mb.box(Vector3(-w * 0.33 + b * w * 0.33, f * FLOOR + 1.8, front), Vector3(1.1, 1.4, 0.08), _window(rng))
 	# Exterior stair up the right side, with a landing.
 	for s in 8:
 		mb.box(Vector3(w * 0.5 + 0.6, 0.2 + s * 0.42, -d * 0.3 + s * 0.45), Vector3(1.1, 0.12, 0.45), IRON)
@@ -148,6 +181,11 @@ static func tower(mb, out: Array, w: float, d: float, h: float, rng: RandomNumbe
 	var y := lobby + 3.5
 	while y < h - 1.0:
 		mb.box(Vector3(0, y, 0), Vector3(w - 0.6, 0.3, d - 0.6), glass.lightened(0.35))
+		# Office floors: some rooms stay lit at night.
+		for k in 4:
+			if rng.randf() < 0.45:
+				var x0 := -w * 0.5 + 0.4 + (k + 0.5) * (w - 0.8) / 4.0
+				mb.box(Vector3(x0, y - 1.6, -d * 0.5 + 0.38), Vector3((w - 0.8) / 4.0 - 0.4, 2.2, 0.05), MeshBuilder.glow(glass.darkened(0.15), MeshBuilder.GLOW_WINDOW))
 		y += 3.5
 	for i in 5:
 		var x := -w * 0.4 + i * w * 0.2
@@ -202,6 +240,8 @@ static func warehouse(mb, out: Array, w: float, d: float, h: float, rng: RandomN
 		mb.box(Vector3(dx, 2.3, -d * 0.5 - 0.1), Vector3(4.0, 4.4, 0.1), Color(0.55, 0.56, 0.58))
 		mb.box(Vector3(dx, 4.6, -d * 0.5 - 0.15), Vector3(4.3, 0.3, 0.15), Color(0.95, 0.75, 0.2))
 	mb.box(Vector3(0, 0.6, -d * 0.5 - 1.5), Vector3(w * 0.9, 1.2, 3.0), STONE.darkened(0.15))
+	if rng.randf() < 0.6:
+		Props.graffiti(mb, Vector3(rng.randf_range(-w * 0.3, w * 0.3), 6.0, -d * 0.5 - 0.12), rng.randf_range(2.5, 4.5), rng)
 	_solid_only(out, Vector3(0, 0.6, -d * 0.5 - 1.5), Vector3(w * 0.9, 1.2, 3.0))
 	mb.gable(Vector3(0, h + 0.6, 0), Vector3(w + 0.4, 1.2, d + 0.4), body.darkened(0.35), body)
 	for i in 3:
@@ -249,10 +289,10 @@ static func union_station(mb, out: Array) -> void:
 		var x := -14.0 + i * 4.0
 		mb.cylinder(Vector3(x, 0.15, -9.6), 0.45, 8.5, TRIM, 6)
 	mb.box(Vector3(0, 8.9, -9.6), Vector3(31.0, 1.0, 1.2), body.lightened(0.1))
-	mb.box(Vector3(0, 3.0, -9.05), Vector3(6.0, 5.6, 0.1), DARK)
+	mb.box(Vector3(0, 3.0, -9.05), Vector3(6.0, 5.6, 0.1), MeshBuilder.glow(DARK, MeshBuilder.GLOW_WINDOW))
+	mb.box(Vector3(13.0, 15.5, 5.4), Vector3(2.4, 2.4, 0.05), MeshBuilder.glow(Color(1.0, 0.95, 0.8), MeshBuilder.GLOW_LAMP))
 	mb.gable(Vector3(0, 11.6, -7.0), Vector3(12.0, 2.0, 6.0), body.darkened(0.25), body)
 	_solid(mb, out, Vector3(13.0, 9.0, 8.0), Vector3(5.0, 18.0, 5.0), body.darkened(0.08))
-	mb.box(Vector3(13.0, 15.5, 5.45), Vector3(2.6, 2.6, 0.1), TRIM)
 	mb.box(Vector3(13.0, 15.5, 5.38), Vector3(0.12, 1.0, 0.06), DARK)
 	mb.box(Vector3(13.3, 15.5, 5.38), Vector3(0.7, 0.12, 0.06), DARK)
 	mb.gable(Vector3(13.0, 19.0, 8.0), Vector3(5.6, 2.0, 5.6), Color(0.35, 0.48, 0.42), body)
@@ -275,8 +315,10 @@ static func blue_lantern(mb, out: Array, rng: RandomNumberGenerator) -> void:
 	mb.box(Vector3(0, 8.15, 2.0), Vector3(24.4, 0.3, 18.4), blue.darkened(0.3))
 	mb.box(Vector3(0, 3.4, -8.6), Vector3(16.0, 0.2, 3.2), Color(0.85, 0.2, 0.25))
 	mb.box(Vector3(0, 1.4, -7.04), Vector3(3.0, 2.8, 0.08), WOOD)
-	mb.box(Vector3(0, 6.2, -7.1), Vector3(12.0, 1.2, 0.1), Color(1.0, 0.85, 0.35))
-	mb.box(Vector3(9.5, 6.0, -7.4), Vector3(0.9, 1.4, 0.9), Color(0.4, 0.75, 1.0))
+	mb.box(Vector3(0, 6.2, -7.1), Vector3(12.0, 1.2, 0.1), MeshBuilder.glow(Color(1.0, 0.85, 0.35), MeshBuilder.GLOW_NEON))
+	mb.box(Vector3(9.5, 6.0, -7.4), Vector3(0.9, 1.4, 0.9), MeshBuilder.glow(Color(0.4, 0.75, 1.0), MeshBuilder.GLOW_NEON))
+	mb.box(Vector3(-6.0, 1.6, -7.06), Vector3(5.0, 2.0, 0.08), MeshBuilder.glow(Color(0.6, 0.3, 0.7), MeshBuilder.GLOW_WINDOW))
+	mb.box(Vector3(6.0, 1.6, -7.06), Vector3(5.0, 2.0, 0.08), MeshBuilder.glow(Color(0.6, 0.3, 0.7), MeshBuilder.GLOW_WINDOW))
 	_gallery_front(mb, 24.0, 18.0)
 	_roof_clutter(mb, 24.0, 18.0, 8.3, rng)
 
@@ -293,7 +335,8 @@ static func precinct(mb, out: Array) -> void:
 	_solid(mb, out, Vector3(0, 4.5, 4.0), Vector3(28.0, 9.0, 18.0), body)
 	mb.box(Vector3(0, 7.0, -5.06), Vector3(28.0, 1.0, 0.1), Color(0.15, 0.25, 0.6))
 	mb.box(Vector3(0, 9.15, 4.0), Vector3(28.4, 0.3, 18.4), body.darkened(0.3))
-	mb.box(Vector3(0, 1.6, -5.06), Vector3(4.0, 3.2, 0.1), Color(0.25, 0.32, 0.4))
+	mb.box(Vector3(0, 1.6, -5.06), Vector3(4.0, 3.2, 0.1), MeshBuilder.glow(Color(0.25, 0.32, 0.4), MeshBuilder.GLOW_WINDOW))
+	mb.box(Vector3(0, 4.2, -5.1), Vector3(5.0, 0.6, 0.06), MeshBuilder.glow(Color(0.35, 0.55, 1.0), MeshBuilder.GLOW_NEON))
 	mb.box(Vector3(0, 3.6, -6.0), Vector3(6.0, 0.2, 2.0), Color(0.15, 0.25, 0.6))
 	mb.cylinder(Vector3(-11.0, 0.15, -9.0), 0.1, 9.0, Color(0.85, 0.85, 0.85), 4)
 	mb.box(Vector3(-10.2, 8.4, -9.0), Vector3(1.6, 1.0, 0.05), Color(0.8, 0.25, 0.25))
@@ -306,12 +349,13 @@ static func clinic(mb, out: Array) -> void:
 	var body := Color(0.95, 0.95, 0.96)
 	_solid(mb, out, Vector3(0, 3.8, 2.0), Vector3(26.0, 7.6, 20.0), body)
 	mb.box(Vector3(0, 7.75, 2.0), Vector3(26.4, 0.3, 20.4), Color(0.75, 0.78, 0.8))
-	mb.box(Vector3(0, 7.95, 2.0), Vector3(8.0, 0.1, 2.4), Color(0.85, 0.15, 0.15))
-	mb.box(Vector3(0, 7.95, 2.0), Vector3(2.4, 0.1, 8.0), Color(0.85, 0.15, 0.15))
+	mb.box(Vector3(0, 7.95, 2.0), Vector3(8.0, 0.1, 2.4), MeshBuilder.glow(Color(0.85, 0.15, 0.15), MeshBuilder.GLOW_NEON))
+	mb.box(Vector3(0, 7.95, 2.0), Vector3(2.4, 0.1, 8.0), MeshBuilder.glow(Color(0.85, 0.15, 0.15), MeshBuilder.GLOW_NEON))
 	mb.box(Vector3(0, 3.4, -9.6), Vector3(8.0, 0.25, 3.0), Color(0.85, 0.15, 0.15))
-	mb.box(Vector3(0, 1.4, -8.05), Vector3(3.2, 2.8, 0.1), Color(0.5, 0.7, 0.85))
+	var clinic_glass := MeshBuilder.glow(Color(0.5, 0.7, 0.85), MeshBuilder.GLOW_WINDOW)
+	mb.box(Vector3(0, 1.4, -8.05), Vector3(3.2, 2.8, 0.1), clinic_glass)
 	for i in 6:
-		mb.box(Vector3(-10.0 + i * 4.0, 4.6, -8.05), Vector3(2.2, 1.4, 0.08), Color(0.5, 0.7, 0.85))
+		mb.box(Vector3(-10.0 + i * 4.0, 4.6, -8.05), Vector3(2.2, 1.4, 0.08), clinic_glass)
 
 
 ## Old Streetcar Depot: open-fronted shed where the drowned line ends, with
@@ -327,7 +371,7 @@ static func streetcar_depot(mb, out: Array) -> void:
 
 ## Lantern Square: paved square with a lantern monument, fountain ring,
 ## benches, lamps and oaks.
-static func lantern_square(mb, out: Array, props, rng: RandomNumberGenerator) -> void:
+static func lantern_square(mb, out: Array, props, rng: RandomNumberGenerator, glow = null) -> void:
 	mb.box(Vector3(0, 0.17, 0), Vector3(34.0, 0.04, 34.0), Color(0.72, 0.66, 0.58))
 	for corner in [Vector3(-11, 0, -11), Vector3(11, 0, -11), Vector3(-11, 0, 11), Vector3(11, 0, 11)]:
 		mb.box(corner + Vector3(0, 0.2, 0), Vector3(9.0, 0.06, 9.0), Color(0.38, 0.62, 0.32))
@@ -335,11 +379,15 @@ static func lantern_square(mb, out: Array, props, rng: RandomNumberGenerator) ->
 	mb.cylinder(Vector3(0, 0.15, 0), 4.0, 0.5, STONE, 8)
 	mb.cylinder(Vector3(0, 0.2, 0), 3.6, 0.5, Color(0.35, 0.6, 0.75), 8)
 	mb.box(Vector3(0, 1.5, 0), Vector3(1.2, 3.0, 1.2), STONE.darkened(0.1))
-	mb.box(Vector3(0, 3.4, 0), Vector3(1.0, 0.8, 1.0), Color(1.0, 0.85, 0.35))
+	mb.box(Vector3(0, 3.4, 0), Vector3(1.0, 0.8, 1.0), MeshBuilder.glow(Color(1.0, 0.85, 0.35), MeshBuilder.GLOW_LAMP))
 	mb.box(Vector3(0, 3.95, 0), Vector3(1.3, 0.25, 1.3), IRON)
 	_solid_only(out, Vector3(0, 1.5, 0), Vector3(2.4, 3.0, 2.4))
 	for p in [Vector3(-6, 0, -16), Vector3(6, 0, -16), Vector3(-6, 0, 16), Vector3(6, 0, 16)]:
-		props.gas_lamp(mb, out, p)
+		props.gas_lamp(mb, out, p, glow)
+	if glow != null:
+		glow.xform = mb.xform
+		glow.light_pool(Vector3(0, 0.25, 0), Vector2(8.0, 8.0), Color(0.6, 0.45, 0.2))
+		glow.xform = Transform3D.IDENTITY
 	for p in [Vector3(-4, 0, -6), Vector3(4, 0, -6), Vector3(-4, 0, 6), Vector3(4, 0, 6)]:
 		props.bench(mb, out, p, 0.0)
 

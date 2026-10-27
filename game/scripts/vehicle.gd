@@ -9,8 +9,11 @@ const VehicleKit = preload("res://scripts/kits/vehicle_kit.gd")
 const L = preload("res://scripts/layers.gd")
 
 signal officer_deployed(car)
+## A SCRIPT driver reached the end of its path.
+signal path_done(car)
 
-enum Driver { NONE, PLAYER, TRAFFIC, POLICE }
+## SCRIPT drives a mission path; CHASER hunts the player like police do.
+enum Driver { NONE, PLAYER, TRAFFIC, POLICE, SCRIPT, CHASER }
 
 const REVERSE_SPEED := 8.0
 const BRAKE := 32.0
@@ -38,6 +41,15 @@ var handbrake := false
 var braking := false
 
 var rng := RandomNumberGenerator.new()
+## Bikes and scooters show their rider (see player.gd).
+var shows_rider := false
+## NPC sitting on a scooter (visible) and NPCs riding inside (hidden).
+var rider = null
+var passengers: Array = []
+## SCRIPT driving: points to follow and the throttle to use.
+var path := PackedVector3Array()
+var path_index := 0
+var script_throttle := 0.6
 var max_speed := 24.0
 var accel := 14.0
 var turn_rate := 2.4
@@ -50,6 +62,13 @@ var _light_time := 0.0
 var _lights: Array[MeshInstance3D] = []
 var _model: MeshInstance3D
 var _ahead: RayCast3D
+var _beams: MeshInstance3D
+var _size := Vector3.ONE
+var _skid_dist := 0.0
+var _smoke_time := 0.0
+var _splash_time := 0.0
+var _hard_brake := false
+var _game
 
 
 func _ready() -> void:
@@ -63,7 +82,10 @@ func _ready() -> void:
 	max_speed = spec.max_speed
 	accel = spec.accel
 	turn_rate = spec.turn
+	shows_rider = spec.get("rider", false)
 	var size: Vector3 = spec.size
+	_size = size
+	_game = get_tree().get_first_node_in_group("game")
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
 	box.size = Vector3(size.x + 0.1, 1.2, size.z + 0.1)
@@ -92,14 +114,72 @@ func _physics_process(delta: float) -> void:
 				_player_input()
 			Driver.TRAFFIC:
 				_traffic_ai()
-			Driver.POLICE:
+			Driver.POLICE, Driver.CHASER:
 				_police_ai(delta)
+			Driver.SCRIPT:
+				_script_ai()
 	_drive(delta)
 	_flash_lights(delta)
+	_effects(delta)
+	_carry()
 
 
 func has_ai_driver() -> bool:
-	return driver == Driver.TRAFFIC or driver == Driver.POLICE
+	return driver in [Driver.TRAFFIC, Driver.POLICE, Driver.SCRIPT, Driver.CHASER]
+
+
+## Drives along `points` (see City.route_lanes) at `throttle`, then stops
+## and emits path_done.
+func drive_path(points: PackedVector3Array, throttle_amount := 0.6) -> void:
+	path = points
+	path_index = 0
+	script_throttle = throttle_amount
+	driver = Driver.SCRIPT
+	# Skip the junction just behind us; drive on to the next one.
+	var fwd := -global_basis.z
+	while path_index < path.size() - 1:
+		var to := path[path_index] - global_position
+		if to.dot(fwd) >= 0.0 or to.length() > 30.0:
+			break
+		path_index += 1
+
+
+func _script_ai() -> void:
+	if path_index >= path.size():
+		braking = true
+		return
+	var target := path[path_index]
+	var to := target - global_position
+	to.y = 0.0
+	if to.length() < 5.0:
+		path_index += 1
+		if path_index >= path.size():
+			path_done.emit(self)
+		return
+	desired_dir = to.normalized()
+	throttle = script_throttle
+	braking = _ahead.is_colliding() and _ahead.get_collider() != null and _ahead.get_collider().get("driver") != Driver.PLAYER
+
+
+## Keeps a scooter's rider in the saddle and passengers inside.
+func _carry() -> void:
+	if rider != null and is_instance_valid(rider):
+		rider.global_position = global_position
+		rider.rotation.y = rotation.y
+	for p in passengers:
+		if is_instance_valid(p):
+			p.global_position = global_position
+
+
+## Everyone riding gets out (wrecks, mission ends).
+func unload_all() -> void:
+	if rider != null and is_instance_valid(rider):
+		rider.dismount(global_position - global_basis.x * 1.4)
+	rider = null
+	for p in passengers:
+		if is_instance_valid(p):
+			p.dismount(global_position + global_basis.x * 2.0)
+	passengers.clear()
 
 
 ## The person responsible for what this car hits (for crime reporting).
@@ -180,7 +260,8 @@ func _police_ai(delta: float) -> void:
 		throttle = 1.0
 		return
 	if player.vehicle == null and d < 9.0 and not _deployed:
-		# Close to a player on foot: stop and send an officer out.
+		# Close to a player on foot: stop and send an officer (or a mission
+		# chaser's crew) out.
 		_deployed = true
 		driver = Driver.NONE
 		officer_deployed.emit(self)
@@ -212,10 +293,12 @@ func _drive(delta: float) -> void:
 		rotate_y(turn * (1.6 if handbrake else 1.0))
 
 	var rate := accel
+	_hard_brake = false
 	if desired_dir == Vector3.ZERO:
 		rate = COAST
 	elif signf(target) != signf(speed) and absf(speed) > 0.5:
 		rate = BRAKE
+		_hard_brake = absf(speed) > 9.0
 	elif absf(target) < absf(speed):
 		rate = COAST * 2.0
 	speed = move_toward(speed, target, rate * delta)
@@ -236,11 +319,15 @@ func _handle_collisions(before: Vector3) -> void:
 		var col := get_slide_collision(i)
 		var other := col.get_collider()
 		if other != null and other.has_method("hit_by_vehicle"):
+			if before.length() > 2.5 and not other.dead:
+				Fx.hit(other.global_position, true, driver == Driver.PLAYER)
 			other.hit_by_vehicle(self, before.length())
 			continue
 		var impact := absf(before.dot(col.get_normal()))
 		if impact < 4.0:
 			continue
+		var players: bool = driver == Driver.PLAYER or (other != null and other.get("driver") == Driver.PLAYER)
+		Fx.crash(col.get_position(), impact, players)
 		speed *= 0.5
 		_damage(impact * 0.6)
 		if other != null and other.has_method("bump"):
@@ -254,6 +341,7 @@ func _damage(amount: float) -> void:
 	if health > 0.0:
 		return
 	wrecked = true
+	unload_all()
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(0.12, 0.11, 0.1)
 	_model.material_override = mat
@@ -272,6 +360,40 @@ func _flash_lights(delta: float) -> void:
 	_lights[1].visible = on and not phase
 
 
+## Skid marks and tyre smoke when drifting or braking hard, splashes on wet
+## roads, smoke from a damaged engine, and headlights after dark.
+func _effects(delta: float) -> void:
+	var v := Vector3(velocity.x, 0.0, velocity.z)
+	var fwd := -global_basis.z
+	var moving := v.length()
+	var slip := 0.0
+	if moving > 6.0:
+		slip = absf(fwd.signed_angle_to(v / moving * signf(speed if speed != 0.0 else 1.0), Vector3.UP))
+	var skidding := not shows_rider and ((handbrake and moving > 6.0) or (slip > 0.3 and moving > 8.0) or _hard_brake)
+	if skidding:
+		_skid_dist += moving * delta
+		if _skid_dist > 0.6:
+			_skid_dist = 0.0
+			for x in [-_size.x * 0.42, _size.x * 0.42]:
+				Fx.skid(global_transform * Vector3(x, 0, _size.z * 0.32), v)
+		_smoke_time -= delta
+		if _smoke_time <= 0.0:
+			_smoke_time = 0.12
+			Fx.smoke(global_transform * Vector3(0, 0.3, _size.z * 0.4), 0.8)
+	if _game != null and _game.atmosphere.wetness > 0.4 and moving > 7.0:
+		_splash_time -= delta
+		if _splash_time <= 0.0:
+			_splash_time = 0.16
+			Fx.splash(global_transform * Vector3(_size.x * 0.45 * (1.0 if randf() < 0.5 else -1.0), 0.1, _size.z * 0.3))
+	if health < 45.0:
+		_smoke_time -= delta
+		if _smoke_time <= 0.0:
+			_smoke_time = 0.35 if not wrecked else 0.2
+			Fx.smoke(global_transform * Vector3(0, 1.0, -_size.z * 0.3), 0.9 if not wrecked else 1.4)
+	if _beams != null:
+		_beams.visible = not wrecked and (driver != Driver.NONE or _deployed) and _game != null and _game.atmosphere.night_amount() > 0.05
+
+
 func _build_model() -> void:
 	var mb := MeshBuilder.new()
 	VehicleKit.build(mb, kind, body_color)
@@ -279,6 +401,18 @@ func _build_model() -> void:
 	if is_police:
 		_model.material_override = MeshBuilder.xray_material(POLICE_XRAY)
 	add_child(_model)
+	var glow := MeshBuilder.new()
+	var head := Color(0.6, 0.55, 0.38)
+	var lamps := [0.0] if shows_rider else [-_size.x * 0.33, _size.x * 0.33]
+	for x in lamps:
+		glow.light_beam(Vector3(x, 0.05, -_size.z * 0.5), Vector3.FORWARD, 13.0, 3.2, head)
+		glow.light_pool(Vector3(x, 0.7, -_size.z * 0.5 - 0.1), Vector2(0.5, 0.35), Color(1.0, 0.95, 0.8))
+	glow.light_pool(Vector3(0, 0.08, _size.z * 0.5 + 0.6), Vector2(_size.x * 0.7, 1.2), Color(0.5, 0.05, 0.04))
+	_beams = glow.make_instance()
+	_beams.material_override = MeshBuilder.glow_material()
+	_beams.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_beams.visible = false
+	add_child(_beams)
 	if is_police:
 		for i in 2:
 			var light := MeshInstance3D.new()

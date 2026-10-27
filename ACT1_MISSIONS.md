@@ -4,6 +4,16 @@ Status: **draft**, Oct 26, 2026. Act 1 of the story spine in `WORLD_BIBLE.md`,
 set in Bellerive. Mission locations are in `game/data/missions_act1.json`
 (stops are map landmarks), drawn on `bellerive_map.svg` and the Solvera Atlas.
 
+**In the demo (Oct 27, 2026)**: missions 1-3 are playable in `game/`
+(`game/scripts/missions/`). Small changes from the outline below, made for
+the demo map:
+- **Homecoming**: the crew's car is a maroon pickup.
+- **Empty Rooms**: the clues are searched around the outside of Teo's
+  building; interiors come later. Nia hands over the phone at the door.
+- **Lantern Lights** is played at night. The Aurum ambush always wrecks the
+  car, so Jules has to carjack another and lose a two-star wanted level with
+  Marcel aboard.
+
 ## Shape of the act
 
 - **13 story missions, about 4-6 hours.** Each one teaches a system in play

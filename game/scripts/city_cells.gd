@@ -43,10 +43,15 @@ const ZEBRA_STYLES := ["downtown", "quarter", "station", "tower", "police", "hos
 class Ctx:
 	var city
 	var mb
+	## Light pools for the additive night glow mesh.
+	var glow
 	var out: Array = []
 	## Street furniture colliders: block movement but not the camera's view.
 	var props: Array = []
 	var rng := RandomNumberGenerator.new()
+	## Separate stream for decoration, so adding details never reshuffles
+	## the buildings.
+	var deco := RandomNumberGenerator.new()
 	var buildings := 0
 	var cell := Vector2i.ZERO
 	var c := Vector3.ZERO
@@ -56,9 +61,11 @@ static func build(city, cell: Vector2i) -> Dictionary:
 	var ctx := Ctx.new()
 	ctx.city = city
 	ctx.mb = MeshBuilder.new()
+	ctx.glow = MeshBuilder.new()
 	ctx.cell = cell
 	ctx.c = city.block_center(cell)
 	ctx.rng.seed = hash([city.seed_value, cell.x, cell.y])
+	ctx.deco.seed = hash([city.seed_value, cell.x, cell.y, "deco"])
 	var style: String = city.block_style(cell)
 	_roads(ctx, style)
 	if style == "water":
@@ -67,7 +74,7 @@ static func build(city, cell: Vector2i) -> Dictionary:
 		_land_block(ctx, style)
 	else:
 		_outer_block(ctx)
-	return {"mesh": ctx.mb, "colliders": ctx.out, "props": ctx.props, "buildings": ctx.buildings}
+	return {"mesh": ctx.mb, "glow": ctx.glow, "colliders": ctx.out, "props": ctx.props, "buildings": ctx.buildings}
 
 
 # --- Placement -------------------------------------------------------------------
@@ -122,6 +129,8 @@ static func _roads(ctx: Ctx, style: String) -> void:
 			_water_wall(ctx, mid, along * BLOCK + across * ROAD)
 			continue
 		mb.box(mid + Vector3(0, -SLAB * 0.5, 0), along * BLOCK + across * ROAD + Vector3(0, SLAB, 0), ASPHALT)
+		for k in ctx.deco.randi_range(0, 2):
+			Props.road_mark(mb, mid + along * ctx.deco.randf_range(-BLOCK * 0.45, BLOCK * 0.45) + across * ctx.deco.randf_range(-4.0, 4.0), along, ctx.deco)
 		var line: int = city.rail_on(n, m)
 		if line >= 0:
 			_tram_segment(ctx, p0, p1, along, across, line)
@@ -231,7 +240,7 @@ static func _land_block(ctx: Ctx, style: String) -> void:
 			_single(ctx, "clinic", PLAZA)
 		"lantern_square":
 			var local := _at(ctx, c, 0.0)
-			Buildings.lantern_square(ctx.mb, local, Props, ctx.rng)
+			Buildings.lantern_square(ctx.mb, local, Props, ctx.rng, ctx.glow)
 			_done(ctx, local, false)
 		"wharfside_courts":
 			var local := _at(ctx, c, 0.0)
@@ -550,7 +559,7 @@ static func _furniture(ctx: Ctx, kind: String) -> void:
 		match kind:
 			"downtown":
 				for t in [-10.0, 10.0]:
-					Props.street_light(mb, out, base + along * t, dir)
+					Props.street_light(mb, out, base + along * t, dir, ctx.glow)
 				if rng.randf() < 0.5:
 					Props.trash_can(mb, out, base + along * 4.0)
 				if rng.randf() < 0.35:
@@ -566,16 +575,25 @@ static func _furniture(ctx: Ctx, kind: String) -> void:
 				if rng.randf() < 0.25:
 					Props.trash_can(mb, out, base + along * 7.0)
 			"docks":
-				Props.street_light(mb, out, base, dir)
+				Props.street_light(mb, out, base, dir, ctx.glow)
 				if rng.randf() < 0.5:
 					Props.barrel(mb, out, base + along * rng.randf_range(-15.0, 15.0), Color(0.75, 0.3, 0.2))
 			_:
 				for t in [-12.0, 0.0, 12.0]:
-					Props.gas_lamp(mb, out, base + along * t)
+					Props.gas_lamp(mb, out, base + along * t, ctx.glow)
 				if rng.randf() < 0.5:
 					Props.crepe_myrtle(mb, out, base + along * (6.0 if rng.randf() < 0.5 else -6.0), rng)
+				elif kind == "quarter" and ctx.deco.randf() < 0.6:
+					# Café tables in front of the shops.
+					var parasol: Color = Buildings.AWNINGS[ctx.deco.randi() % Buildings.AWNINGS.size()]
+					Props.cafe_table(mb, out, c + dir * (CURB - 1.7) + along * (6.0 if ctx.deco.randf() < 0.5 else -6.0), parasol)
 				if rng.randf() < 0.3:
 					Props.trash_can(mb, out, base + along * 16.0)
+				# Festoon lights across the street to the next block (east and
+				# south sides only, so each street gets one string).
+				if kind == "quarter" and (s == 1 or s == 3) and ctx.deco.randf() < 0.6:
+					var a := base + along * ctx.deco.randf_range(-8.0, 8.0) + Vector3(0, 4.6, 0)
+					Props.festoon(mb, a, a + dir * (ROAD + 0.9), ctx.deco)
 	if rng.randf() < 0.7:
 		Props.hydrant(mb, out, c + Vector3(15.0, 0, CURB))
 	if rng.randf() < 0.3:

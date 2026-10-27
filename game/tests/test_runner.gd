@@ -4,6 +4,7 @@ extends Node
 
 const MainScene = preload("res://main.tscn")
 const Vehicle = preload("res://scripts/vehicle.gd")
+const Npc = preload("res://scripts/npc.gd")
 
 var game
 var passed := 0
@@ -28,6 +29,13 @@ func _run() -> void:
 		"test_wasted_respawns_at_hospital",
 		"test_city_runs_with_population",
 		"test_camera_is_classic_top_down",
+		"test_punch_combo_ends_in_knockdown_kick",
+		"test_minimap_routes_to_waypoint",
+		"test_night_lights_the_city",
+		"test_homecoming_runs_start_to_finish",
+		"test_failed_mission_can_be_retried",
+		"test_empty_rooms_phone_and_clues",
+		"test_lantern_lights_ambush",
 	]
 	for name in tests:
 		var before := failed
@@ -45,8 +53,8 @@ func test_city_streams_cells() -> void:
 	var city = game.city
 	var cells: Array = city.loaded_cells()
 	_check(cells.size() >= 10, "cells around the spawn are built, got %d" % cells.size())
-	var single := cells.all(func(c): return city.cell_node(c).get_children().filter(func(n): return n is MeshInstance3D).size() <= 1)
-	_check(single, "every cell draws as at most one mesh")
+	var single := cells.all(func(c): return city.cell_node(c).get_children().filter(func(n): return n is MeshInstance3D and n.name != "Glow").size() <= 1)
+	_check(single, "every cell draws as at most one mesh (plus its night glow)")
 	_check(city.building_count > 20, "city has buildings, got %d" % city.building_count)
 	var land := 0
 	for i in city.blocks.x:
@@ -204,6 +212,7 @@ func test_city_runs_with_population() -> void:
 		Controls.override_vector = Vector2.from_angle(i * 1.3)
 		await _frames(60)
 	Controls.override_vector = null
+	await _frames(120) # let the bubble refill around wherever the drive ended
 	_check(game.population.peds.size() >= 10, "pedestrians spawned, got %d" % game.population.peds.size())
 	_check(game.population.cars.size() >= 5, "traffic spawned, got %d" % game.population.cars.size())
 	_check(is_instance_valid(car), "player car still exists")
@@ -224,10 +233,190 @@ func test_camera_is_classic_top_down() -> void:
 
 # --- Helpers -----------------------------------------------------------------
 
+func test_punch_combo_ends_in_knockdown_kick() -> void:
+	await _new_game(false)
+	var p = game.player
+	var target = Npc.new()
+	target.setup("Dummy", {})
+	target.position = p.global_position + p.forward() * 1.0
+	target.max_health = 200.0
+	game.add_child(target)
+	target.health = 200.0
+	await _frames(2)
+	for i in 3:
+		await _press("attack")
+		await _frames(int(p.PUNCH_COOLDOWN * 60.0) + 2)
+	_check(target.knocked_time > 0.0 or target.dead, "third hit of the combo is a kick that knocks down")
+	_check(target.health <= 200.0 - p.punch_damage * 4.0 + 0.1, "the kick hits twice as hard")
+
+
+func test_minimap_routes_to_waypoint() -> void:
+	await _new_game(false)
+	var city = game.city
+	game.waypoint = city.node_pos(city.nearest_node(city.landmark_front("lantern_square")))
+	await _frames(10)
+	var route: PackedVector3Array = game.hud.minimap.route()
+	_check(route.size() > 5, "GPS route follows the streets, got %d points" % route.size())
+	_check(route[route.size() - 1].distance_to(game.waypoint) < 1.0, "route ends at the waypoint")
+	game.hud.full_map.open()
+	await get_tree().process_frame
+	_check(get_tree().paused, "full map pauses the game")
+	game.hud.full_map.close()
+	_check(not get_tree().paused, "closing the map resumes")
+
+
+func test_night_lights_the_city() -> void:
+	await _new_game(false)
+	game.atmosphere.hour = 22.0
+	await _frames(5)
+	_check(game.atmosphere.is_night(), "22:00 is night")
+	var glows := 0
+	for c in game.city.loaded_cells():
+		var g = game.city.cell_node(c).get_node_or_null("Glow")
+		if g and g.visible:
+			glows += 1
+	_check(glows > 3, "lamp pools glow at night, got %d cells" % glows)
+	game.atmosphere.hour = 12.0
+	await _frames(5)
+	_check(not game.city.glow_visible, "lamp pools are off by day")
+
+
+func test_homecoming_runs_start_to_finish() -> void:
+	await _new_story_game()
+	var mm = game.missions
+	_check(mm.active != null and mm.active.id == "m01_homecoming", "a new game starts with Homecoming")
+	await _talk_until(func(): return mm.objective_text == "Catch the thief!", 900)
+	_check(mm.objective_text == "Catch the thief!", "the bag gets snatched")
+	var m = mm.active
+	await _talk_until(func(): return mm.objective_text == "Get on the scooter", 900)
+	_check(m.kid.vehicle == m.getaway, "the thief rides off on his scooter")
+	_place_player_at(m.spare.global_position + Vector3(0, 0, -1.5))
+	await _press("interact")
+	_check(game.player.vehicle == m.spare and game.player.riding, "Jules rides the spare scooter")
+	await _talk_until(func(): return mm.objective_text == "Follow the thief", 120)
+	await _frames(60)
+	_check(m.getaway.speed > 3.0, "the thief drives his route")
+	# Skip to the end of the chase: both scooters near the Square.
+	var end: Vector3 = m.getaway.path[m.getaway.path.size() - 1]
+	m.getaway.global_position = end + Vector3(-12, 0, 0)
+	m.getaway.path_index = m.getaway.path.size() - 1
+	m.spare.global_position = end + Vector3(-20, 0, 0)
+	game.city.stream_now(end)
+	await _talk_until(func(): return mm.objective_text == "Beat the crew", 600)
+	_check(m.crew.size() == 3, "the kid and two of his crew fight")
+	for n in m.crew:
+		n.take_hit(game.player, 999.0, Vector3.ZERO)
+	await _talk_until(func(): return mm.objective_text == "Take the crew's car", 300)
+	_check(mm.objective_text == "Take the crew's car", "beating the crew moves on")
+	game.player.exit_vehicle()
+	game.player.enter_vehicle(m.crew_car)
+	await _talk_until(func(): return mm.objective_text == "Drive home to Moreau House", 60)
+	var home_curb: Vector3 = m.curb("moreau_house")
+	game.city.stream_now(home_curb)
+	m.crew_car.global_position = home_curb
+	await _talk_until(func(): return mm.objective_text == "Go to the front door", 60)
+	game.player.exit_vehicle()
+	_place_player_at(m.front("moreau_house"))
+	await _talk_until(func(): return mm.active == null, 900)
+	_check(mm.done.has("m01_homecoming"), "Homecoming passed")
+	_check(game.cash == 500, "reward paid, got $%d" % game.cash)
+	_check(mm.next_mission().get("id") == "m02_empty_rooms", "Empty Rooms is next")
+
+
+func test_failed_mission_can_be_retried() -> void:
+	await _new_story_game()
+	var mm = game.missions
+	await _talk_until(func(): return mm.objective_text == "Catch the thief!", 900)
+	game.player.take_hit(null, 999.0, Vector3.ZERO)
+	await _talk_until(func(): return game.hud.retry_visible(), 600)
+	_check(mm.active == null, "dying fails the mission")
+	_check(game.hud.retry_visible(), "the retry prompt shows")
+	mm.retry()
+	await _frames(5)
+	_check(mm.active != null and mm.active.id == "m01_homecoming", "retry restarts the mission")
+	_check(game.player.global_position.distance_to(game.city.spawn_point) < 2.0, "retry puts Jules back at Union Station")
+
+
+func test_empty_rooms_phone_and_clues() -> void:
+	await _new_story_game()
+	var mm = game.missions
+	mm.abandon()
+	mm.done = ["m01_homecoming"]
+	mm.start("m02_empty_rooms", true)
+	await _talk_until(func(): return mm.objective_text.begins_with("Check your phone"), 1200)
+	_check(mm.phone_unlocked, "Nia unlocks the phone")
+	game.hud.phone.open()
+	await get_tree().process_frame
+	game.hud.phone.close()
+	await _talk_until(func(): return mm.objective_text == "Go to Teo's apartment", 900)
+	_check(mm.objective_text == "Go to Teo's apartment", "after the messages, go to Teo's")
+	var m = mm.active
+	_place_player_at(m.curb("teo_apartment"))
+	game.city.stream_now(m.curb("teo_apartment"))
+	await _talk_until(func(): return mm.objective_text == "Meet Nia at the door", 120)
+	_place_player_at(m.front("teo_apartment"))
+	await _talk_until(func(): return mm.objective_text.begins_with("Search for clues"), 900)
+	var center: Vector3 = game.city.block_center(game.city.landmark_block("teo_apartment"))
+	for c in m.CLUES:
+		_place_player_at(center + c[0])
+		await _frames(2)
+		await _press("interact")
+		await _frames(int(m.SEARCH_TIME * 60.0) + 10)
+	await _talk_until(func(): return mm.objective_text == "Go to the Floodline Clinic", 1200)
+	_check(mm.objective_text == "Go to the Floodline Clinic", "three clues found, on to the clinic")
+
+
+func test_lantern_lights_ambush() -> void:
+	await _new_story_game()
+	var mm = game.missions
+	mm.abandon()
+	mm.done = ["m01_homecoming", "m02_empty_rooms"]
+	mm.start("m03_lantern_lights", true)
+	await _talk_until(func(): return mm.objective_text.begins_with("Meet Celeste"), 300)
+	await _talk_until(func(): return mm.objective_text.begins_with("Pick up Marcel"), 900)
+	var m = mm.active
+	_place_player_at(m.front("bpd_lantern"))
+	game.city.stream_now(m.front("bpd_lantern"))
+	await _talk_until(func(): return mm.objective_text == "Get in a car with Marcel", 900)
+	var ride = _spawn_car(game.city.nearest_node(game.player.global_position), Vector3(0, 0, 0), 0.0)
+	ride.global_position = game.player.global_position + Vector3(0, 0, 4.0)
+	await _frames(2)
+	game.player.enter_vehicle(ride)
+	await _talk_until(func(): return m.marcel.vehicle == ride, 300)
+	_check(m.marcel.vehicle == ride, "Marcel gets in when the car is close")
+	ride.global_position = m.front("bpd_lantern") + Vector3(0, 0, 60.0)
+	await _talk_until(func(): return ride.wrecked, 600)
+	_check(ride.wrecked, "the ambush wrecks the car")
+	_check(Wanted.level == 2, "the police are called")
+	_check(m.marcel.vehicle == null and not m.marcel.dead, "Marcel gets out alive")
+	await _talk_until(func(): return mm.objective_text.begins_with("Steal a car"), 300)
+	_check(mm.objective_text.begins_with("Steal a car"), "next: steal a car")
+
+
+func _new_story_game() -> void:
+	await _free_game()
+	game = MainScene.instantiate()
+	game.population_enabled = false
+	game.save_enabled = false
+	add_child(game)
+	await _frames(2)
+
+
+## Runs frames, tapping through dialogue, until `cond` holds (or `limit`).
+func _talk_until(cond: Callable, limit: int) -> void:
+	for i in limit:
+		if cond.call():
+			return
+		if game.hud._dialogue.visible:
+			game.hud._advance_dialogue()
+		await _frames(1)
+
+
 func _new_game(with_population: bool) -> void:
 	await _free_game()
 	game = MainScene.instantiate()
 	game.population_enabled = with_population
+	game.missions_enabled = false
 	add_child(game)
 	await _frames(2)
 

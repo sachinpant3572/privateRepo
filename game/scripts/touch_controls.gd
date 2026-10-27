@@ -11,6 +11,8 @@ const BUTTONS := [
 ]
 
 var labels := {}
+## HUD controls (the minimap) whose taps the stick and buttons ignore.
+var exclusions: Array = []
 var _stick_touch := -1
 var _stick_origin := Vector2.ZERO
 var _stick_pos := Vector2.ZERO
@@ -35,6 +37,8 @@ func _input(event: InputEvent) -> void:
 		return
 	if event is InputEventScreenTouch:
 		if event.pressed:
+			if exclusions.any(func(c): return c.visible and c.get_global_rect().has_point(event.position)):
+				return
 			var action := _button_at(event.position)
 			if action != "":
 				_button_touches[event.index] = action
