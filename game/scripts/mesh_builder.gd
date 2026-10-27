@@ -90,7 +90,7 @@ vec3 pattern(int c, vec3 col, vec2 uv, vec3 wpos, inout float rough, inout float
 		col *= mix(0.88, 1.0, vnoise(uv * 0.7));
 	} else if (c == 7) {
 		col *= 0.93 + 0.12 * step(0.5, fract(uv.x / 4.0));
-		col *= 0.85 + 0.25 * hash(floor(wpos.xz * 6.0));
+		col *= 0.85 + 0.25 * vnoise(wpos.xz * 1.7);
 	} else if (c == 9) {
 		vec2 cell = abs(fract(uv / vec2(0.16, 0.16)) - 0.5);
 		col *= 1.0 - 0.25 * step(0.42, max(cell.x, cell.y));
@@ -152,7 +152,8 @@ void surface(vec3 base, float code, vec3 wpos, vec3 wnormal, vec3 view_dir, vec2
 		// horizon and the street below it, brighter at grazing angles.
 		vec3 r = reflect(-view_dir, wnormal);
 		vec3 sky = mix(sky_tint.rgb * 1.05, vec3(0.75, 0.82, 0.9), 0.35) * mix(1.0, 0.18, night);
-		vec3 refl = mix(base * 0.6, sky, smoothstep(-0.15, 0.35, r.y));
+		vec3 street = mix(base, vec3(0.42, 0.42, 0.44), 0.7) * mix(1.0, 0.3, night);
+		vec3 refl = mix(street, sky, smoothstep(-0.15, 0.35, r.y));
 		float fres = pow(1.0 - clamp(dot(view_dir, wnormal), 0.0, 1.0), 3.0);
 		col = mix(base * 0.55, refl, 0.55 + 0.4 * fres);
 		rough = 0.08;
@@ -190,8 +191,9 @@ void surface(vec3 base, float code, vec3 wpos, vec3 wnormal, vec3 view_dir, vec2
 		emission = base * mix(0.35, 2.0, night);
 	} else if (c == 2) {
 		// Offices and flats behind the glass: a few panels lit after dark.
+		// Only upper-storey walls: not shelters, skylights or screens.
 		vec2 pane = floor(vec2(wpos.x + wpos.z, wpos.y) / vec2(2.2, 3.4));
-		float lit = step(0.62, hash(pane + 5.0));
+		float lit = step(0.62, hash(pane + 5.0)) * step(abs(wnormal.y), 0.3) * step(3.0, wpos.y);
 		emission = mix(vec3(1.0, 0.86, 0.62), vec3(0.75, 0.88, 1.0), hash(pane)) * lit * night * 0.9;
 	}
 	albedo = col;
@@ -489,8 +491,8 @@ func gable(center: Vector3, size: Vector3, color: Color, end_color: Color) -> vo
 	var zf := center.z - h.z
 	var zb := center.z + h.z
 	var zc := center.z
-	var front_n := Vector3(0, h.z, -h.y).normalized()
-	var back_n := Vector3(0, h.z, h.y).normalized()
+	var front_n := Vector3(0, h.z, -size.y).normalized()
+	var back_n := Vector3(0, h.z, size.y).normalized()
 	tri(Vector3(x0, y0, zf), Vector3(x1, y0, zf), Vector3(x1, y1, zc), front_n, color)
 	tri(Vector3(x0, y0, zf), Vector3(x1, y1, zc), Vector3(x0, y1, zc), front_n, color)
 	tri(Vector3(x0, y0, zb), Vector3(x1, y1, zc), Vector3(x1, y0, zb), back_n, color)

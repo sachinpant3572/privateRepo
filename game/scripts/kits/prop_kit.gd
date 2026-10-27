@@ -395,13 +395,13 @@ static func road_mark(mb, p: Vector3, along: Vector3, rng: RandomNumberGenerator
 	var across := Vector3(absf(along.z), 0, absf(along.x))
 	match rng.randi() % 3:
 		0:
-			mb.box(p + Vector3(0, 0.012, 0), along.abs() * rng.randf_range(0.8, 1.6) + across * rng.randf_range(0.6, 1.2) + Vector3(0, 0.02, 0), Color(0.13, 0.13, 0.15))
+			mb.box(p + Vector3(0, 0.012, 0), along.abs() * rng.randf_range(0.8, 1.6) + across * rng.randf_range(0.6, 1.2) + Vector3(0, 0.02, 0), MeshBuilder.glow(Color(0.19, 0.19, 0.21), MeshBuilder.ASPHALT))
 		1:
 			for k in 3:
 				var off := along * (k - 1) * 0.6 + across * rng.randf_range(-0.2, 0.2)
-				mb.box(p + off + Vector3(0, 0.012, 0), along.abs() * 0.7 + across * 0.06 + Vector3(0, 0.02, 0), Color(0.12, 0.12, 0.13))
+				mb.box(p + off + Vector3(0, 0.012, 0), along.abs() * 0.7 + across * 0.06 + Vector3(0, 0.02, 0), MeshBuilder.glow(Color(0.14, 0.14, 0.15), MeshBuilder.ASPHALT))
 		_:
-			mb.box(p + Vector3(0, 0.011, 0), along.abs() * rng.randf_range(2.0, 4.0) + across * rng.randf_range(1.5, 2.5) + Vector3(0, 0.02, 0), Color(0.25, 0.25, 0.27))
+			mb.box(p + Vector3(0, 0.011, 0), along.abs() * rng.randf_range(2.0, 4.0) + across * rng.randf_range(1.5, 2.5) + Vector3(0, 0.02, 0), MeshBuilder.glow(Color(0.23, 0.23, 0.25), MeshBuilder.ASPHALT))
 
 
 ## A spray-painted tag on a wall facing -Z (local), centred at `p`.

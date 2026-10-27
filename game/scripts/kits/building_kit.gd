@@ -202,8 +202,9 @@ static func ward_apartment(mb, out: Array, w: float, d: float, rng: RandomNumber
 
 ## Glass office tower: a curtain wall with mullions and spandrel bands over
 ## a glazed stone lobby, and a busy plant roof (Gilt District). `accent`
-## trims the crown (gold for Aurum).
-static func tower(mb, out: Array, w: float, d: float, h: float, rng: RandomNumberGenerator, accent := Color(0.75, 0.78, 0.82)) -> void:
+## trims the crown (gold for Aurum). `crowned` leaves the middle of the
+## roof clear for a crown built on top.
+static func tower(mb, out: Array, w: float, d: float, h: float, rng: RandomNumberGenerator, accent := Color(0.75, 0.78, 0.82), crowned := false) -> void:
 	var glass: Color = MeshBuilder.glow(GLASS[rng.randi() % GLASS.size()], MeshBuilder.GLASS)
 	var lobby := 4.6
 	var gw := w - 0.8
@@ -213,7 +214,10 @@ static func tower(mb, out: Array, w: float, d: float, h: float, rng: RandomNumbe
 	var spandrel := MeshBuilder.glow(Color(0.5, 0.54, 0.58), MeshBuilder.METAL)
 	var y := lobby + 3.5
 	while y < h - 1.0:
-		mb.box(Vector3(0, y, 0), Vector3(gw + 0.12, 0.4, gd + 0.12), spandrel)
+		# Four strips, not a slab: a full box would stack hidden floors.
+		for side in [-1.0, 1.0]:
+			mb.box(Vector3(0, y, side * (gd * 0.5 + 0.03)), Vector3(gw + 0.12, 0.4, 0.06), spandrel)
+			mb.box(Vector3(side * (gw * 0.5 + 0.03), y, 0), Vector3(0.06, 0.4, gd), spandrel)
 		y += 3.5
 	# Mullions on every face, about every 1.8 m.
 	var mullion := MeshBuilder.glow(Color(0.42, 0.45, 0.5), MeshBuilder.METAL)
@@ -249,7 +253,9 @@ static func tower(mb, out: Array, w: float, d: float, h: float, rng: RandomNumbe
 	var cw := minf(w * 0.45, 7.0)
 	_hvac(mb, Vector3(-w * 0.12, h, gd * 0.5 - 1.8), Vector3(cw, 1.6, 2.2))
 	var roll := rng.randf()
-	if roll < 0.3 and w >= 14.0:
+	if crowned:
+		pass # the crown fills the middle of the roof
+	elif roll < 0.3 and w >= 14.0:
 		# Helipad: concrete deck, white ring and H, perimeter lights.
 		mb.box(Vector3(0, h + 0.3, -d * 0.08), Vector3(w * 0.6, 0.5, d * 0.5), MeshBuilder.glow(Color(0.5, 0.5, 0.5), MeshBuilder.CONCRETE))
 		var hc := Vector3(0, h + 0.55, -d * 0.08)
@@ -259,9 +265,10 @@ static func tower(mb, out: Array, w: float, d: float, h: float, rng: RandomNumbe
 		mb.box(hc + Vector3(-w * 0.06, 0.03, 0), Vector3(w * 0.03, 0.02, w * 0.18), yellow)
 		mb.box(hc + Vector3(w * 0.06, 0.03, 0), Vector3(w * 0.03, 0.02, w * 0.18), yellow)
 		mb.box(hc + Vector3(0, 0.03, 0), Vector3(w * 0.12, 0.02, w * 0.03), yellow)
+		var lights_r := minf(w * 0.22, d * 0.23)
 		for k in 8:
 			var ang := TAU * k / 8.0
-			mb.box(hc + Vector3(cos(ang) * w * 0.22, 0.05, sin(ang) * w * 0.22), Vector3(0.2, 0.1, 0.2), MeshBuilder.glow(Color(0.4, 1.0, 0.5), MeshBuilder.GLOW_LAMP))
+			mb.box(hc + Vector3(cos(ang) * lights_r, 0.05, sin(ang) * lights_r), Vector3(0.2, 0.1, 0.2), MeshBuilder.glow(Color(0.4, 1.0, 0.5), MeshBuilder.GLOW_LAMP))
 	elif roll < 0.55:
 		# Roof garden: lawn, timber deck, planters and a pergola.
 		mb.box(Vector3(-w * 0.12, h + 0.08, -d * 0.12), Vector3(w * 0.45, 0.06, d * 0.45), MeshBuilder.glow(Color(0.38, 0.6, 0.3), MeshBuilder.GRASS))
@@ -383,10 +390,28 @@ static func union_station(mb, out: Array) -> void:
 ## Aurum Tower: the tallest building in the city, gold-trimmed crown.
 static func aurum_tower(mb, out: Array, rng: RandomNumberGenerator) -> void:
 	const H := 40.0
-	tower(mb, out, 22.0, 22.0, H, rng, GOLD)
-	mb.box(Vector3(0, H + 1.5, 0), Vector3(14.0, 3.0, 14.0), GOLD)
-	mb.box(Vector3(0, H + 4.5, 0), Vector3(7.0, 3.0, 7.0), GOLD.darkened(0.15))
-	mb.cylinder(Vector3(0, H + 6.0, 0), 0.25, 9.0, GOLD, 4)
+	tower(mb, out, 22.0, 22.0, H, rng, GOLD, true)
+	# Crown: two glass lanterns in gold frames with fins, and a spire.
+	var gold := MeshBuilder.glow(GOLD, MeshBuilder.METAL)
+	var amber := MeshBuilder.glow(Color(0.5, 0.42, 0.26), MeshBuilder.GLASS)
+	mb.box(Vector3(0, H + 0.3, 0), Vector3(14.0, 0.6, 14.0), gold)
+	for tier in [[H + 0.6, 13.0, 2.4], [H + 3.0, 7.0, 2.6]]:
+		var y0: float = tier[0]
+		var size: float = tier[1]
+		var ht: float = tier[2]
+		mb.box(Vector3(0, y0 + ht * 0.5, 0), Vector3(size, ht, size), amber)
+		var fins := int(size / 1.6)
+		for k in fins + 1:
+			var t := -size * 0.5 + size * k / fins
+			for side in [-1.0, 1.0]:
+				mb.box(Vector3(t, y0 + ht * 0.5, side * (size * 0.5 + 0.04)), Vector3(0.3, ht, 0.08), gold)
+				mb.box(Vector3(side * (size * 0.5 + 0.04), y0 + ht * 0.5, t), Vector3(0.08, ht, 0.3), gold)
+		for side in [-1.0, 1.0]:
+			mb.box(Vector3(0, y0 + ht + 0.15, side * (size * 0.5 - 0.2)), Vector3(size + 0.2, 0.3, 0.6), gold)
+			mb.box(Vector3(side * (size * 0.5 - 0.2), y0 + ht + 0.15, 0), Vector3(0.6, 0.3, size - 0.8), gold)
+	mb.cylinder(Vector3(0, H + 5.6, 0), 0.35, 2.0, gold, 6)
+	mb.cylinder(Vector3(0, H + 7.6, 0), 0.18, 7.0, gold, 6)
+	mb.box(Vector3(0, H + 14.7, 0), Vector3(0.3, 0.3, 0.3), MeshBuilder.glow(Color(1.0, 0.15, 0.1), MeshBuilder.GLOW_NEON))
 
 
 ## The Blue Lantern: jazz club with a deep blue front, a long awning and a
@@ -612,7 +637,7 @@ static func _slope_solar(mb, center: Vector3, size: Vector3, inset: float) -> vo
 ## and from f0 to f1 of the way up from the eave to the ridge.
 static func _slope_quad(mb, center: Vector3, size: Vector3, x0: float, x1: float, f0: float, f1: float, color: Color) -> void:
 	var h := size * 0.5
-	var n := Vector3(0, h.z, -h.y).normalized()
+	var n := Vector3(0, h.z, -size.y).normalized()
 	var y0 := center.y - h.y + n.y * 0.08
 	var zf := center.z - h.z + n.z * 0.08
 	var a := Vector3(0, y0 + size.y * f0, zf + h.z * f0)

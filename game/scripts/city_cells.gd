@@ -385,10 +385,6 @@ static func _street(ctx: Ctx, e: int, cls: String) -> void:
 			_approach(mb, s0 + run - gap, 1.0, cls, w, style == "downtown" or style == "quarter", run > 32.0)
 		if s0 > 0.0:
 			_approach(mb, s0 + gap, -1.0, cls, w, style == "downtown" or style == "quarter", run > 32.0)
-		if cls != "street":
-			# Parking lane lines.
-			for side in [-1.0, 1.0]:
-				mb.box(Vector3(mid, 0.01, side * (w * 0.5 - 2.2)), Vector3(run - 6.0, 0.02, 0.12), WHITE_LINE)
 	mb.xform = Transform3D.IDENTITY
 
 
@@ -407,13 +403,14 @@ static func _approach(mb, x: float, heading: float, cls: String, w: float, bikes
 	if not arrows:
 		return
 	var lanes: Array
+	# Lane centres, the outer one kept clear of cars parked 1 m off the curb.
 	match cls:
 		"boulevard":
-			lanes = [5.4, 9.8]
+			lanes = [5.4, 9.2]
 		"street":
 			lanes = [w * 0.22]
 		_:
-			lanes = [w * 0.125, w * 0.375]
+			lanes = [w * 0.125, w * 0.375 - 0.6]
 	for k in lanes.size():
 		var turn := -1 if k == 0 and lanes.size() > 1 else 0
 		_arrow(mb, Vector3(x - heading * 6.0, 0.012, side * lanes[k]), heading, turn)
@@ -1372,7 +1369,7 @@ static func _furniture(ctx: Ctx, kind: String) -> void:
 					if rng.randf() < 0.25:
 						Props.bins(ctx.mb, local, Vector3(minf(7.0, half), 0, 0.3))
 					if ctx.deco.randf() < 0.15:
-						Props.scooter(ctx.mb, Vector3(ctx.deco.randf_range(-half, half), 0.15, 1.6), ctx.deco.randf() * TAU, Props.SCOOTERS[ctx.deco.randi() % Props.SCOOTERS.size()])
+						Props.scooter(ctx.mb, Vector3(ctx.deco.randf_range(-half, half), 0, 1.6), ctx.deco.randf() * TAU, Props.SCOOTERS[ctx.deco.randi() % Props.SCOOTERS.size()])
 				"docks":
 					var t := -half
 					while t <= half:
@@ -1405,26 +1402,29 @@ static func _furniture(ctx: Ctx, kind: String) -> void:
 		_done(ctx, local, false, ctx.props)
 
 
-## Present-day kit along a curb (furniture frame, -Z to the street): a bus
-## shelter, a bike-share dock, EV chargers or a wayfinding totem (all but
-## the dock downtown only), parking pay stations and dockless scooters.
+## Present-day kit along a curb (furniture frame, -Z to the street). Downtown,
+## in the gap between the bench (x -4.9..-3.1) and the bins (3.35..4.65): a
+## bus shelter, a bike-share dock, EV chargers or a wayfinding totem, and
+## sometimes a pay station past the bench. Everywhere: dockless scooters,
+## kept inside the sidewalk (its back edge is at z 2.55).
 static func _modern_street(ctx: Ctx, local: Array, half: float, downtown: bool) -> void:
 	var deco := ctx.deco
-	var roll := deco.randf()
-	if downtown and roll < 0.25 and half > 6.0:
-		Props.bus_shelter(ctx.mb, local, Vector3(half * 0.4, 0, 1.2), deco)
-	elif roll < (0.45 if downtown else 0.15) and half > 5.0:
-		Props.bike_dock(ctx.mb, local, Vector3(half * 0.35, 0, 1.6), minf(5.6, half), deco)
-	elif downtown and roll < 0.6 and half > 7.0:
-		for k in 2:
-			Props.ev_charger(ctx.mb, local, Vector3(half * 0.5 + k * 3.0 - 1.5, 0, 0.15))
-	elif downtown and roll < 0.75:
-		Props.wayfinding(ctx.mb, local, Vector3(half * 0.5, 0, 0.7))
-	if downtown and half >= 8.0 and deco.randf() < 0.25:
-		Props.pay_station(ctx.mb, local, Vector3(-half * 0.7, 0, 0.3))
+	if downtown and half > 6.0:
+		var roll := deco.randf()
+		if roll < 0.25:
+			Props.bus_shelter(ctx.mb, local, Vector3(0.2, 0, 1.2), deco)
+		elif roll < 0.45:
+			Props.bike_dock(ctx.mb, local, Vector3(0.4, 0, 1.6), 4.0, deco)
+		elif roll < 0.6:
+			for x in [-1.5, 1.5]:
+				Props.ev_charger(ctx.mb, local, Vector3(x, 0, 0.15))
+		elif roll < 0.75:
+			Props.wayfinding(ctx.mb, local, Vector3(1.0, 0, 0.7))
+		if half >= 8.0 and deco.randf() < 0.25:
+			Props.pay_station(ctx.mb, local, Vector3(-half * 0.7, 0, 0.3))
 	if deco.randf() < 0.3:
 		for k in deco.randi_range(1, 2):
-			Props.scooter(ctx.mb, Vector3(deco.randf_range(-half, half), 0, 2.0 + k * 0.4), deco.randf() * TAU, Props.SCOOTERS[deco.randi() % Props.SCOOTERS.size()])
+			Props.scooter(ctx.mb, Vector3(deco.randf_range(-half, half), 0, 1.7 + k * 0.3), deco.randf() * TAU, Props.SCOOTERS[deco.randi() % Props.SCOOTERS.size()])
 
 
 # --- Outside the window ----------------------------------------------------------
