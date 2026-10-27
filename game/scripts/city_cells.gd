@@ -551,7 +551,7 @@ static func _open_sides(ctx: Ctx, e: int, cls: String) -> void:
 		var ext1 := 1.0 if t1 < 0.0 else 0.0
 		var outer := w + 1.2
 		var strip := PackedVector2Array([a - dir * ext0, b + dir * ext1, b + dir * ext1 + side * outer, a - dir * ext0 + side * outer])
-		ctx.mb.prism(strip, -SLAB, 0.0, MeshBuilder.glow(ASPHALT, MeshBuilder.ASPHALT) if cls != "quay" else MeshBuilder.glow(CONCRETE, MeshBuilder.CONCRETE), CONCRETE.darkened(0.3))
+		ctx.mb.prism(strip, -SLAB, 0.0, MeshBuilder.glow(ASPHALT, MeshBuilder.ASPHALT), CONCRETE.darkened(0.3))
 		if not plan.is_water_point(mid + side * (w + 6.0)):
 			continue
 		var r0: Vector2 = a + dir * (t0 if t0 >= 0.0 else -ext0) + side * (outer - 0.3)
