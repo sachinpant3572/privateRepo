@@ -128,8 +128,13 @@ static func bake(city) -> Dictionary:
 	return {"texture": tex, "origin": origin, "size": Vector2(size)}
 
 
-## Fills a polygon (local metres, convex or not) row by row, even-odd.
-static func _poly(img: Image, origin: Vector2, poly: PackedVector2Array, color: Color) -> void:
+## Fills a polygon (metres, convex or not) row by row, even-odd, at
+## `px_m` metres per pixel with pixel (0, 0) at `origin`.
+static func fill_poly(img: Image, origin: Vector2, poly: PackedVector2Array, color: Color, px_m := PX_M) -> void:
+	_poly(img, origin, poly, color, px_m)
+
+
+static func _poly(img: Image, origin: Vector2, poly: PackedVector2Array, color: Color, px_m := PX_M) -> void:
 	var n := poly.size()
 	if n < 3:
 		return
@@ -137,7 +142,7 @@ static func _poly(img: Image, origin: Vector2, poly: PackedVector2Array, color: 
 	var y0 := INF
 	var y1 := -INF
 	for p in poly:
-		var q := (p - origin) / PX_M
+		var q := (p - origin) / px_m
 		pts.append(q)
 		y0 = minf(y0, q.y)
 		y1 = maxf(y1, q.y)

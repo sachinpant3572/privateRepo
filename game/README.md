@@ -47,7 +47,17 @@ phone.
 - **Minimap and full map**: round north-up minimap with landmark icons,
   mission blips (on the rim when off the map), police while wanted and the
   GPS route; tap it (or M) for the full map: pan, pinch or scroll to zoom,
-  tap to set a waypoint.
+  tap to set a waypoint. Zoom out past the city and the full map becomes
+  the whole state of Solvera (`scripts/state_map.gd`, baked from the world
+  map at 6 m a pixel in about 0.1 s):
+  - terrain textured by kind (forest, ridges, desert, fields, swamp);
+  - highways, roads, county lanes, dashed dirt tracks and dotted trails;
+  - rivers and creeks, the four cities and the towns and ghost towns;
+  - peaks with heights;
+  - pins for airports, bases, stations, gas and campsites.
+  Labels that would overlap are left out until you zoom in. A tap on a place
+  that isn't open yet says so. The minimap runs on into the same state map
+  past the city's edge.
 - **Day and night**: one game minute per second. The sun's shadows swing
   round; after dusk windows light up, gas lamps and street lights throw
   pools of light, neon signs glow and cars drive with headlight beams. None
@@ -71,6 +81,16 @@ phone.
 - **Demo map**: about 1.3 km x 1.5 km of Bellerive on both banks of the
   Morrow, from the world map (`data/world_map.json`, the city's
   `demo_window`). You start outside **Union Station** in the Gilt District.
+- **World map v3** (`data/world_map.json`, plan in `../WORLD_V3_PLAN.md`):
+  - a 12 x 9 km state with four cities: Bellerive (Florida and New Orleans),
+    Concordia (the planned capital), Steelhaven (the desolate motor city) and
+    Las Brasas (Vegas);
+  - 15 regions with counties, 16 towns, villages and ghost towns, and military
+    sites;
+  - 57 routes (highways down to trails, rail, metro, ferries, flights) and the
+    factions.
+  The game reads only Bellerive's window. Items with `"phase"` above 1 inside
+  it are planned, and are skipped when the city loads.
 - **Street plan** (`scripts/street_plan.gd`; research and rules in
   `reference/MAP_BUILDING.md`):
   - **Layout**: a real street network, not a grid. Each district has
@@ -228,7 +248,9 @@ The same command with `res://tests/gallery.tscn` renders the asset gallery
 dialogue, with `res://tests/place_shots.tscn` the storefronts by day
 and night, the rooms, the shop menu, a diner meal and the Places app, and
 with `res://tests/control_shots.tscn` the touch controls on foot and in
-each driving layout.
+each driving layout, and with `res://tests/map_shots.tscn` the full map
+zoomed out to the state and on the countryside, a tap on a closed place,
+and the minimap past the city's edge.
 
 `ONLY=test_a,test_b` before the test command runs just those tests.
 
@@ -261,7 +283,7 @@ cd game && godot --headless -s res://tests/plan_dump.gd -- /tmp/plan.json \
 | `scripts/missions/` | Mission manager (progress, saving, markers, retry), mission base helpers, missions 1-3, cast looks |
 | `scripts/atmosphere.gd` | Time of day, sun and moon, weather, rain |
 | `scripts/fx.gd` | Hit-stop, shake, sparks, smoke, splashes, skid marks (autoload) |
-| `scripts/minimap.gd`, `full_map.gd`, `map_image.gd` | Minimap, full map and the baked map texture |
+| `scripts/minimap.gd`, `full_map.gd`, `map_image.gd`, `state_map.gd` | Minimap, full map, the baked city map and the baked state map |
 | `scripts/phone.gd` | The phone and its apps |
 | `scripts/places.gd` | Which blocks hold a corner store or diner: names, doors, hours |
 | `scripts/interiors.gd`, `kits/interior_kit.gd` | Doors, the fade, building rooms far from the city, people inside, buying and eating |

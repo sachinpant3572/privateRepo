@@ -15,18 +15,47 @@ MISSIONS = ROOT / "game" / "data" / "missions_act1.json"
 REGION_FILL = {
     "desert": "#e8d3a2", "military": "#b9b39a", "mountains": "#b7a99a", "forest": "#8fb27a",
     "lakeside": "#a9c98f", "hills": "#9cc488", "farmland": "#d9d79a", "bayou": "#7fa37a",
-    "island": "#e9dca8",
+    "island": "#e9dca8", "rustbelt": "#b8b59a", "parkland": "#a6cf8f",
 }
 STYLE_FILL = {
     "quarter": "#f2a65a", "docks": "#9aa3ad", "downtown": "#7d8fa8", "heights": "#e9e4c9",
     "wards": "#e88b8b", "bayou": "#5f8a5a", "beach": "#f3dd8c", "hillside": "#d98a5f",
-    "strip": "#e04f8a", "industrial": "#a08a75",
+    "strip": "#e04f8a", "industrial": "#a08a75", "civic": "#f4f1e6", "midtown": "#8796ad",
+    "financial": "#6d7f99", "waterfront": "#b9c4cf", "oldtown": "#d9a066", "park": "#7fbf6a",
+    "rowhouse": "#d7b8a0", "market": "#c9a46b", "revival": "#9fb5c9", "prairie": "#bcc48f",
+    "enclave": "#d39b74", "suburb": "#dfe6c8",
 }
 ROUTE_STYLE = {
     "highway": ("#fff7e0", 9, ""), "rail": ("#5b4636", 4, "14 6"), "streetcar": ("#b5462f", 4, "6 4"),
     "metro": ("#7b4fa0", 4, "6 4"), "ferry": ("#ffffff", 3, "10 8"), "air": ("#ffffff", 2, "3 9"),
+    "road": ("#f3ead2", 4, ""), "mover": ("#2a9d8f", 3, "4 3"), "cable": ("#c0392b", 3, "2 3"),
+    "bus": ("#e67e22", 3, "8 4"), "airship": ("#5dade2", 2, "6 6"),
+    "lane": ("#f3ead2", 2.5, ""), "track": ("#8b5a2b", 2, "7 4"), "trail": ("#6b3e1e", 1.6, "2 3"),
 }
-LANDMARK_ICON = {"police": "#2c3e70", "hospital": "#d33", "airport": "#333", "legend": "#6a1b9a"}
+# Paved roads get a dark edge under them.
+CASED = ("highway", "road", "lane")
+LANDMARK_ICON = {"police": "#2c3e70", "hospital": "#d33", "airport": "#333", "legend": "#6a1b9a",
+                 "military": "#4d5656", "monument": "#b7950b", "cult": "#5dade2", "garage": "#e67e22",
+                 "dam": "#2874a6", "station": "#1e8449", "rental": "#16a085", "ruin": "#7b6d5d",
+                 "union": "#1f618d", "mafia": "#7b241c", "casino": "#c2185b", "gas": "#f39c12",
+                 "camp": "#27ae60", "farm": "#a17a2b", "lookout": "#784212", "lighthouse": "#d4ac0d",
+                 "mine": "#6e5a48", "motel": "#8e44ad", "tunnel": "#555", "pass": "#7f8c8d",
+                 "ford": "#5d6d7e", "bridge": "#b03a2e", "peak": "#5b4a3a"}
+# Terrain texture drawn over each region: SVG pattern bodies, 1 unit = 1 px.
+TERRAIN = {
+    "forest": (18, '<circle cx="5" cy="6" r="2.6" fill="#5f8a4f"/><circle cx="14" cy="14" r="2.2" fill="#6b9659"/>'),
+    "mountains": (26, '<path d="M3 18 L9 9 L15 18 M14 24 L20 15 L26 24" fill="none" stroke="#8a7c6e" stroke-width="1.3"/>'),
+    "desert": (16, '<circle cx="4" cy="4" r="0.9" fill="#c9b07a"/><circle cx="12" cy="11" r="0.7" fill="#c9b07a"/>'),
+    "farmland": (40, '<rect x="1" y="1" width="18" height="18" fill="#cfcd86"/><rect x="21" y="21" width="18" height="18" fill="#e3e1aa"/>'
+                     '<path d="M21 3 H39 M21 7 H39 M21 11 H39 M21 15 H39" stroke="#c4c27c" stroke-width="0.8"/>'),
+    "bayou": (20, '<path d="M4 12 L6 7 M6 12 L6 6 M8 12 L7 7" stroke="#5c8455" stroke-width="1"/><path d="M12 17 h6" stroke="#6fa8d6" stroke-width="1.6"/>'),
+    "hills": (30, '<path d="M2 20 Q9 12 16 20" fill="none" stroke="#86b072" stroke-width="1.2"/>'),
+    "lakeside": (20, '<circle cx="6" cy="6" r="2" fill="#86ad6f"/>'),
+    "parkland": (24, '<circle cx="6" cy="6" r="2.4" fill="#86b876"/><path d="M14 18 Q18 14 22 18" fill="none" stroke="#8cbf78" stroke-width="1"/>'),
+    "rustbelt": (22, '<path d="M2 2 L8 8" stroke="#a6a288" stroke-width="1"/><circle cx="15" cy="15" r="1.6" fill="#a29e84"/>'),
+    "military": (24, '<path d="M0 24 L24 0" stroke="#a7a189" stroke-width="1.2"/>'),
+}
+TOWN_FILL = {"ghost": "#9b8f80", "truck_stop": "#b9770e", "village": "#555", "town": "#333"}
 
 
 def tag(kind, item_id, phase=1):
@@ -52,8 +81,11 @@ def faction_colors(world):
 def world_svg(world):
     s = 0.2
     w, h = world["size"][0] * s, world["size"][1] * s
-    out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w:.0f} {h + 70:.0f}" width="{w:.0f}" height="{h + 70:.0f}">',
-           f'<rect width="{w}" height="{h + 70}" fill="#cfe3c0"/>']
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w:.0f} {h + 100:.0f}" width="{w:.0f}" height="{h + 100:.0f}">',
+           f'<rect width="{w}" height="{h + 100}" fill="#cfe3c0"/>', "<defs>"]
+    for kind, (size, body) in TERRAIN.items():
+        out.append(f'<pattern id="t-{kind}" width="{size}" height="{size}" patternUnits="userSpaceOnUse">{body}</pattern>')
+    out.append("</defs>")
     # Islands sit on top of the sea, so they are drawn after the water.
     land = [r for r in world["regions"] if r["type"] != "island"]
     islands = [r for r in world["regions"] if r["type"] == "island"]
@@ -74,21 +106,31 @@ def world_svg(world):
             out.append(f'<rect x="{dx * s}" y="{dy * s}" width="{dw * s}" height="{dh * s}" fill="{STYLE_FILL.get(d["style"], "#ddd")}" stroke="#fff" stroke-width="1"{tag("district", d["id"], c["phase"])}/>')
     for r in world["routes"]:
         color, width, dash = ROUTE_STYLE[r["type"]]
-        if r["type"] == "highway":
-            out.append(f'<polyline points="{pts(r["line"], s)}" fill="none" stroke="#8a7a5a" stroke-width="{width + 3}" stroke-linejoin="round"/>')
+        if r["type"] in CASED:
+            out.append(f'<polyline points="{pts(r["line"], s)}" fill="none" stroke="#8a7a5a" stroke-width="{width + (3 if r["type"] != "lane" else 1.6)}" stroke-linejoin="round"/>')
         dash_attr = f' stroke-dasharray="{dash}"' if dash else ""
         out.append(f'<polyline points="{pts(r["line"], s)}" fill="none" stroke="{color}" stroke-width="{width}" stroke-linejoin="round"{dash_attr}{tag("route", r["id"], r["phase"])}/>')
     for t in world["towns"]:
         x, y = t["pos"]
-        out.append(f'<circle cx="{x * s}" cy="{y * s}" r="5" fill="#444"{tag("town", t["id"], t["phase"])}/>')
-        out.append(text(x * s, y * s - 9, t["name"], 13))
+        kind = t.get("kind", "town")
+        out.append(f'<circle cx="{x * s}" cy="{y * s}" r="{6 if kind == "town" else 5}" fill="{TOWN_FILL.get(kind, "#444")}" stroke="#fff" stroke-width="1"{tag("town", t["id"], t["phase"])}/>')
+        out.append(text(x * s, y * s - 9, t["name"] + (" (ghost town)" if kind == "ghost" else ""), 13))
     for lm in world["landmarks"]:
         if lm.get("city"):
             continue
         x, y = lm["pos"]
         color = LANDMARK_ICON.get(lm["type"], "#555")
         mark = "?" if lm.get("secret") else ""
-        out.append(f'<circle cx="{x * s}" cy="{y * s}" r="6" fill="{color}" stroke="#fff" stroke-width="1.5"{tag("landmark", lm["id"], _phase_of(world, lm))}/>')
+        if lm["type"] == "peak":
+            cx, cy = x * s, y * s
+            out.append(f'<polygon points="{cx - 8:.1f},{cy + 6:.1f} {cx:.1f},{cy - 8:.1f} {cx + 8:.1f},{cy + 6:.1f}" fill="{color}" stroke="#fff" stroke-width="1.5"{tag("landmark", lm["id"], lm.get("phase", 3))}/>')
+            out.append(text(cx, cy + 19, f'{lm["name"]} {lm["elev"]:,} m', 11, "600"))
+            continue
+        if lm["type"] == "ford":
+            out.append(f'<circle cx="{x * s}" cy="{y * s}" r="3.5" fill="{color}" stroke="#fff" stroke-width="1"{tag("landmark", lm["id"], lm.get("phase", 3))}/>')
+            continue
+        radius = 9 if lm.get("size") == "large" else (5 if lm.get("detail") else 6)
+        out.append(f'<circle cx="{x * s}" cy="{y * s}" r="{radius}" fill="{color}" stroke="#fff" stroke-width="1.5"{tag("landmark", lm["id"], _phase_of(world, lm))}/>')
         if mark:
             out.append(f'<text x="{x * s}" y="{y * s + 4}" font-size="10" fill="#fff" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-weight="700">?</text>')
         out.append(text(x * s, y * s + 19, lm["name"], 11, "500"))
@@ -99,14 +141,30 @@ def world_svg(world):
     for c in world["cities"]:
         x, y, cw, ch = c["rect"]
         out.append(text((x + cw / 2) * s, (y - 30) * s, f'{c["name"]} (phase {c["phase"]})', 20, "800", "#1d1d1d"))
-    out.append(text(5600 * s, 5850 * s, "GULF OF SOLVERA", 22, "700", "#2f5f86"))
+        out.append(text((x + cw / 2) * s, (y - 30) * s + 18, f'{c.get("inspired_by", "")} · {c.get("condition", "")}', 12, "600", "#333"))
+    for wtr in world["water"]:
+        if "polygon" in wtr and wtr["type"] != "ocean":
+            xs = [p[0] for p in wtr["polygon"]]
+            ys = [p[1] for p in wtr["polygon"]]
+            out.append(text(sum(xs) / len(xs) * s, sum(ys) / len(ys) * s, wtr["name"], 14, "700", "#2f5f86"))
+        elif "line" in wtr and wtr.get("type") in ("river", "creek"):
+            # Between the two middle points, beside the stream.
+            line = wtr["line"]
+            k = max(len(line) // 2 - 1, 0)
+            mx = (line[k][0] + line[k + 1][0]) / 2
+            my = (line[k][1] + line[k + 1][1]) / 2
+            out.append(text(mx * s + 8, my * s, wtr["name"], 11, "600", "#2f5f86", anchor="start"))
+    out.append(text(world["size"][0] * 0.3 * s, (world["size"][1] - 300) * s, "GULF OF SOLVERA", 22, "700", "#2f5f86"))
     out.append(_legend(10, h + 12))
     out.append("</svg>")
     return "\n".join(out)
 
 
 def _region(r, s):
-    return f'<polygon points="{pts(r["polygon"], s)}" fill="{REGION_FILL.get(r["type"], "#ccc")}" stroke="#fff" stroke-width="1.5" stroke-opacity="0.6"{tag("region", r["id"], r["phase"])}/>'
+    shape = f'<polygon points="{pts(r["polygon"], s)}" fill="{REGION_FILL.get(r["type"], "#ccc")}" stroke="#fff" stroke-width="1.5" stroke-opacity="0.6"{tag("region", r["id"], r["phase"])}/>'
+    if r["type"] in TERRAIN:
+        shape += f'<polygon points="{pts(r["polygon"], s)}" fill="url(#t-{r["type"]})" pointer-events="none"/>'
+    return shape
 
 
 def _phase_of(world, landmark):
@@ -130,18 +188,20 @@ def _in_polygon(p, poly):
     return inside
 
 
-def _legend(x, y):
-    items = [("highway", "Highway"), ("rail", "Rail"), ("streetcar", "Streetcar"), ("metro", "Metro / monorail"),
-             ("ferry", "Ferry / cruise"), ("air", "Air route")]
+def _legend(x, y0):
+    items = [("highway", "Highway"), ("road", "Road"), ("lane", "County lane"), ("track", "Dirt track (unpaved)"),
+             ("trail", "Trail / 4x4"), ("rail", "Rail"), ("streetcar", "Streetcar"), ("metro", "Metro / monorail"),
+             ("mover", "People mover"), ("ferry", "Ferry / cruise"), ("air", "Flights")]
     parts = []
     for i, (kind, label) in enumerate(items):
         color, width, dash = ROUTE_STYLE[kind]
-        lx = x + i * 260
-        bg = '<rect x="{0}" y="{1}" width="50" height="16" fill="#6fa8d6"/>'.format(lx, y + 2) if kind in ("ferry", "air") else ""
+        lx = x + (i % 6) * 330
+        y = y0 + (i // 6) * 26
+        bg = '<rect x="{0}" y="{1}" width="50" height="16" fill="#6fa8d6"/>'.format(lx, y + 2) if kind in ("ferry", "air", "road", "lane") else ""
         dash_attr = f' stroke-dasharray="{dash}"' if dash else ""
         parts.append(f'{bg}<line x1="{lx}" y1="{y + 10}" x2="{lx + 50}" y2="{y + 10}" stroke="{color}" stroke-width="{width}"{dash_attr}/>')
         parts.append(text(lx + 58, y + 15, label, 14, "500", anchor="start"))
-    parts.append(text(x, y + 48, "? = secret / legend. Phase = build order (1 = MVP).", 14, "500", anchor="start"))
+    parts.append(text(x, y0 + 72, "? = secret / legend. Big grey dot = the large military base. Triangle = peak. Small grey dot = ford. Phase = build order (1 = playable now).", 14, "500", anchor="start"))
     return "".join(parts)
 
 

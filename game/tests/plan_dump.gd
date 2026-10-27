@@ -26,6 +26,8 @@ func _init() -> void:
 	var spots: Array = []
 	var names: Array = []
 	for lm in world.landmarks:
+		if int(lm.get("phase", 1)) > 1:
+			continue
 		var local := Vector2(lm.pos[0], lm.pos[1]) - origin
 		if rect.has_point(local):
 			spots.append([lm.id, local])

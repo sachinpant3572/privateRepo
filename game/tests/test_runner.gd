@@ -33,7 +33,7 @@ func _run() -> void:
 		"test_city_runs_with_population",
 		"test_camera_is_classic_top_down",
 		"test_punch_combo_ends_in_knockdown_kick",
-		"test_minimap_routes_to_waypoint",
+		"test_minimap_routes_to_waypoint", "test_state_map_shows_the_whole_state",
 		"test_night_lights_the_city",
 		"test_homecoming_runs_start_to_finish",
 		"test_failed_mission_can_be_retried",
@@ -517,6 +517,45 @@ func test_minimap_routes_to_waypoint() -> void:
 	_check(not get_tree().paused, "closing the map resumes")
 
 
+func test_state_map_shows_the_whole_state() -> void:
+	await _new_game(false)
+	var city = game.city
+	var t0 := Time.get_ticks_msec()
+	var state: Dictionary = preload("res://scripts/state_map.gd").bake(city.map_origin)
+	print("  state map bake: %d ms" % (Time.get_ticks_msec() - t0))
+	_check(state.size == Vector2(2000, 1500), "the state bakes at 6 m a pixel, got %s" % state.size)
+	var playable: Array = state.labels.cities.filter(func(c): return c.playable)
+	_check(state.labels.cities.size() == 4 and playable.size() == 1 and playable[0].name == "Bellerive",
+		"four cities, Bellerive the playable one")
+	_check(state.labels.peaks.size() >= 5 and state.labels.towns.size() >= 16, "peaks and towns are labelled")
+	# World (2965, 5398) is 35 m down Bottle Flats Road, inside its first dash;
+	# 95 m down is in the gap after it, back on the desert.
+	var img: Image = state.texture.get_image()
+	var dash := img.get_pixel(int(2965 / 6.0), int(5398 / 6.0))
+	var gap := img.get_pixel(int(2905 / 6.0), int(5394 / 6.0))
+	_check(_same_color(dash, preload("res://scripts/state_map.gd").TRACK), "a dirt track is drawn, got %s" % dash)
+	_check(not _same_color(gap, preload("res://scripts/state_map.gd").TRACK), "and dashed, got %s" % gap)
+	var fm = game.hud.full_map
+	fm.open()
+	await get_tree().process_frame
+	fm.zoom = fm._min_zoom()
+	var span: Vector2 = state.world_size * fm.zoom
+	_check(fm.zoom < fm.STATE_ZOOM and span.x <= fm.size.x and span.y <= fm.size.y - 56.0,
+		"zoomed out, the whole state fits the screen (%s in %s)" % [span, fm.size])
+	game.waypoint = null
+	var concordia: Dictionary = state.labels.cities.filter(func(c): return c.name == "Concordia")[0]
+	fm.pan = (Vector2(concordia.pos.x, concordia.pos.z) - fm.map.origin)
+	fm._tap(fm.size * 0.5)
+	_check(game.waypoint == null and fm._note == "Concordia: not open yet", "a tap on Concordia says it is not open, got '%s'" % fm._note)
+	fm.pan = (Vector2(city.window.get_center().x, city.window.get_center().y) - fm.map.origin)
+	fm._tap(fm.size * 0.5)
+	_check(game.waypoint != null, "a tap inside Bellerive still sets a waypoint")
+	fm.close()
+	var mat: ShaderMaterial = game.hud.minimap._mat
+	_check(mat.get_shader_parameter("state_tex") == fm.state.texture, "the minimap shows the state past the city's edge")
+	game.waypoint = null
+
+
 func test_night_lights_the_city() -> void:
 	await _new_game(false)
 	game.atmosphere.hour = 22.0
@@ -727,6 +766,11 @@ func _press(action: String) -> void:
 func _frames(n: int) -> void:
 	for i in n:
 		await get_tree().physics_frame
+
+
+## Equal to within 8-bit image rounding.
+func _same_color(a: Color, b: Color) -> bool:
+	return absf(a.r - b.r) < 0.01 and absf(a.g - b.g) < 0.01 and absf(a.b - b.b) < 0.01
 
 
 func _check(condition: bool, message: String) -> void:

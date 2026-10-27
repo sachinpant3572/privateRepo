@@ -7,6 +7,7 @@ extends CanvasLayer
 
 const TouchControls = preload("res://scripts/touch_controls.gd")
 const Minimap = preload("res://scripts/minimap.gd")
+const StateMap = preload("res://scripts/state_map.gd")
 const FullMap = preload("res://scripts/full_map.gd")
 const MapImage = preload("res://scripts/map_image.gd")
 const Phone = preload("res://scripts/phone.gd")
@@ -64,9 +65,11 @@ func _ready() -> void:
 	add_child(root)
 
 	var map: Dictionary = MapImage.bake(game.city)
+	var state: Dictionary = StateMap.bake(game.city.map_origin)
 	minimap = Minimap.new()
 	minimap.game = game
 	minimap.map = map
+	minimap.state = state
 	minimap.position = Vector2(16, 16)
 	minimap.size = Vector2(220, 220)
 	root.add_child(minimap)
@@ -145,6 +148,7 @@ func _ready() -> void:
 	full_map = FullMap.new()
 	full_map.game = game
 	full_map.map = map
+	full_map.state = state
 	add_child(full_map)
 	minimap.opened.connect(full_map.open)
 

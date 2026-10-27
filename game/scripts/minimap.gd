@@ -11,6 +11,10 @@ shader_type canvas_item;
 uniform sampler2D map_tex : filter_linear;
 uniform vec2 center_uv = vec2(0.5);
 uniform vec2 extent_uv = vec2(0.1);
+// Past the city's bake: the whole state (state_map.gd).
+uniform sampler2D state_tex : filter_linear;
+uniform vec2 state_center_uv = vec2(0.5);
+uniform vec2 state_extent_uv = vec2(0.01);
 
 void fragment() {
 	vec2 p = UV * 2.0 - 1.0;
@@ -21,7 +25,7 @@ void fragment() {
 	vec2 uv = center_uv + p * extent_uv;
 	vec4 c = texture(map_tex, uv);
 	if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) {
-		c = vec4(0.27, 0.5, 0.62, 1.0);
+		c = texture(state_tex, state_center_uv + p * state_extent_uv);
 	}
 	float rim = smoothstep(0.92, 0.95, d);
 	COLOR = vec4(mix(c.rgb, vec3(0.06, 0.06, 0.08), rim), 0.93);
@@ -32,6 +36,7 @@ signal opened
 
 var game
 var map: Dictionary # from MapImage.bake
+var state: Dictionary # from StateMap.bake
 ## Metres from the centre to the rim.
 var view_radius := 95.0
 
@@ -51,6 +56,7 @@ func _ready() -> void:
 	_mat.shader = Shader.new()
 	_mat.shader.code = SHADER
 	_mat.set_shader_parameter("map_tex", map.texture)
+	_mat.set_shader_parameter("state_tex", state.texture)
 	_map_rect = ColorRect.new()
 	_map_rect.material = _mat
 	_map_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -75,6 +81,8 @@ func _process(delta: float) -> void:
 	var center_uv: Vector2 = (Vector2(pos.x, pos.z) - map.origin) / MapImage.PX_M / map.size
 	_mat.set_shader_parameter("center_uv", center_uv)
 	_mat.set_shader_parameter("extent_uv", Vector2.ONE * view_radius / MapImage.PX_M / map.size)
+	_mat.set_shader_parameter("state_center_uv", (Vector2(pos.x, pos.z) - state.origin) / state.px_m / state.size)
+	_mat.set_shader_parameter("state_extent_uv", Vector2.ONE * view_radius / state.px_m / state.size)
 	_update_route(pos, delta)
 	_overlay.queue_redraw()
 

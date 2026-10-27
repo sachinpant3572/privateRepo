@@ -545,7 +545,10 @@ func _load_map() -> void:
 	blocks = Vector2i(int(win.blocks[0]), int(win.blocks[1]))
 	window = Rect2(Vector2.ZERO, Vector2(blocks) * PITCH)
 	map_origin = Vector2(win.origin[0], win.origin[1])
+	# Districts and landmarks of a later phase are planned, not built yet.
 	for d in city.districts:
+		if int(d.get("phase", 1)) > 1:
+			continue
 		var entry := {
 			"id": d.id, "name": d.name, "style": d.style, "faction": d.faction,
 			"rect": Rect2(d.rect[0], d.rect[1], d.rect[2], d.rect[3]),
@@ -553,6 +556,8 @@ func _load_map() -> void:
 		districts.append(entry)
 		_district_by_id[d.id] = entry
 	for lm in world.landmarks:
+		if int(lm.get("phase", 1)) > 1:
+			continue
 		var local := Vector2(lm.pos[0], lm.pos[1]) - map_origin
 		if window.has_point(local):
 			_map_landmarks.append({"id": lm.id, "type": lm.type, "name": lm.name, "local": local})
