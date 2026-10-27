@@ -10,6 +10,8 @@ const VehicleKit = preload("res://scripts/kits/vehicle_kit.gd")
 const CharacterKit = preload("res://scripts/kits/character_kit.gd")
 const Rig = preload("res://scripts/rig.gd")
 const Player = preload("res://scripts/player.gd")
+const Cop = preload("res://scripts/cop.gd")
+const Cast = preload("res://scripts/missions/cast.gd")
 
 var out_dir := "user://"
 var rng := RandomNumberGenerator.new()
@@ -102,16 +104,42 @@ func _vehicles() -> MeshBuilder:
 	return mb
 
 
-## Two rows of people under the game camera, close up: Jules and a cop in
-## the front row showing the animation set, random civilians behind.
+## People under the game camera, close up. Shot 4: Jules showing the
+## animation set, the named cast and police, then two rows of random
+## civilians (alternately facing the camera and walking away, some texting).
+## Shot 4b: every outfit, facing the camera and from behind.
 func _people() -> void:
-	var poses := [["idle", Player.JULES], ["walk", Player.JULES], ["run", Player.JULES], ["punch", Player.JULES],
-		["kick", Player.JULES], ["phone", Player.JULES], ["ride", Player.JULES], ["down", Player.JULES]]
+	var people_rng := RandomNumberGenerator.new()
+	people_rng.seed = 11
 	var rigs: Array = []
+	var poses := ["idle", "walk", "run", "punch", "kick", "phone", "ride", "down"]
 	for i in poses.size():
-		rigs.append(_person(poses[i][1], poses[i][0], Vector3(-7.0 + i * 2.0, 0, 748)))
-	for i in 8:
-		rigs.append(_person(CharacterKit.random_look(rng), "walk" if i % 3 == 0 else "idle", Vector3(-7.0 + i * 2.0, 0, 752)))
+		rigs.append(_person(Player.JULES, poses[i], Vector3(-6.3 + i * 1.8, 0, 744.5)))
+	var cop = Cop.new()
+	var cast := [cop.look, Cast.REYES, Cast.NIA, Cast.CELESTE, Cast.MARCEL, Cast.REMY, Cast.THIEF, Cast.CREW[0], Cast.CREW[1], Cast.AURUM]
+	for i in cast.size():
+		rigs.append(_person(cast[i], "walk" if i == 0 else "idle", Vector3(-7.2 + i * 1.6, 0, 747.5)))
+	cop.free()
+	for row in 2:
+		for i in 10:
+			var look := CharacterKit.random_look(people_rng)
+			var pose := "walk" if i % 3 == 0 else ("text" if look.has("phone") else "idle")
+			rigs.append(_person(look, pose, Vector3(-7.2 + i * 1.6, 0, 750.5 + row * 3.0), i % 2 == 1))
+	await _pose_and_shoot(rigs, Vector3(0, 0, 748.7), 11.0, "gallery_4_people.png")
+	var outfits := ["tee", "hoodie", "polo", "jersey", "bomber", "denim", "puffer", "puffer_vest",
+		"blazer", "suit", "jacket", "tank", "dress", "scrubs", "hivis", "delivery"]
+	for i in outfits.size():
+		var look := CharacterKit.random_look(people_rng, outfits[i])
+		var z := 745.0 + (i / 8) * 6.0
+		var x := -6.3 + (i % 8) * 1.8
+		rigs.append(_person(look, "idle", Vector3(x, 0, z)))
+		rigs.append(_person(look, "idle", Vector3(x, 0, z + 2.8), true))
+	await _pose_and_shoot(rigs, Vector3(0, 0, 748.7), 11.0, "gallery_4b_outfits.png")
+
+
+## Runs the rigs for 40 frames (punches and kicks frozen at full reach),
+## shoots, then clears them away.
+func _pose_and_shoot(rigs: Array, center: Vector3, view: float, file: String) -> void:
 	for frame in 40:
 		for r in rigs:
 			var st = r[1]
@@ -121,29 +149,34 @@ func _people() -> void:
 				st.kick = clampf(frame / 12.0 * 0.4, 0.0, 0.4)
 			r[0].pose(st, 1.0 / 60.0)
 	var floor_mb := MeshBuilder.new()
-	floor_mb.box(Vector3(0, -0.5, 750), Vector3(1, 0.2, 1), Color.GRAY)
-	await _shot(floor_mb, Vector3(0, 0, 749), 8.0, "gallery_4_people.png")
+	floor_mb.box(center + Vector3(0, -0.5, 0), Vector3(1, 0.2, 1), Color.GRAY)
+	await _shot(floor_mb, center, view, file)
 	for r in rigs:
-		r[0].skeleton.queue_free()
+		r[0].skeleton.get_parent().queue_free()
+	rigs.clear()
 
 
-func _person(look: Dictionary, pose: String, pos: Vector3) -> Array:
+## `away` turns the person to walk away from the camera, showing the back.
+func _person(look: Dictionary, pose: String, pos: Vector3, away := false) -> Array:
 	var skel := CharacterKit.build_rig(look)
 	skel.get_node("Body").material_override = MeshBuilder.material()
 	var holder := Node3D.new()
 	holder.position = pos
-	holder.rotation.y = PI * 0.85
+	holder.rotation.y = PI * 0.85 if not away else PI * -0.12
 	add_child(holder)
 	holder.add_child(skel)
 	var st = Rig.State.new()
 	match pose:
 		"walk":
 			st.speed = 1.6
+			st.texting = look.has("phone")
 		"run":
 			st.speed = 6.0
 			st.run_speed = 6.0
 		"phone":
 			st.gesture = "phone"
+		"text":
+			st.texting = true
 		"ride":
 			st.ride = true
 		"down":

@@ -5,11 +5,13 @@ const JOG_SPEED := 4.2
 const SPRINT_SPEED := 7.0
 const ENTER_RANGE := 3.5
 
-## Jules: red jacket over a white tee, jeans, white sneakers, short dark hair.
+## Jules: red zip jacket over a white tee, turned-up jeans, chunky white
+## sneakers with a red stripe, short dark hair.
 const JULES := {
 	"outfit": "jacket", "jacket": Color(0.82, 0.16, 0.18), "shirt": Color(0.95, 0.95, 0.93),
-	"pants": Color(0.18, 0.3, 0.55), "shoes": Color(0.95, 0.95, 0.95), "skin": Color(0.6, 0.42, 0.28),
-	"hair": "short", "hair_color": Color(0.08, 0.06, 0.05), "build": 1.05,
+	"bottoms": "jeans", "pants": Color(0.18, 0.3, 0.55), "shoes": Color(0.95, 0.95, 0.95),
+	"shoe_accent": Color(0.82, 0.16, 0.18), "skin": Color(0.6, 0.42, 0.28),
+	"hair": "fade", "hair_color": Color(0.08, 0.06, 0.05), "build": 1.05,
 }
 
 var vehicle = null

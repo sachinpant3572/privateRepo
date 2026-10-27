@@ -37,6 +37,7 @@ func _run() -> void:
 		"test_failed_mission_can_be_retried",
 		"test_empty_rooms_phone_and_clues",
 		"test_lantern_lights_ambush",
+		"test_people_wear_modern_clothes",
 	]
 	for name in tests:
 		var before := failed
@@ -637,3 +638,73 @@ func _check(condition: bool, message: String) -> void:
 	else:
 		failed += 1
 		print("  FAILED: " + message)
+
+
+# --- People's clothes ----------------------------------------------------------
+
+## Every outfit and the named cast build as one rigidly skinned mesh within
+## the triangle budget; random looks vary; old look keys still work; a phone
+## in hand comes up while strolling.
+func test_people_wear_modern_clothes() -> void:
+	const CharacterKit = preload("res://scripts/kits/character_kit.gd")
+	const MeshBuilder = preload("res://scripts/mesh_builder.gd")
+	const Rig = preload("res://scripts/rig.gd")
+	const Player = preload("res://scripts/player.gd")
+	const Cast = preload("res://scripts/missions/cast.gd")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var looks: Array = [Player.JULES, Cast.NIA, Cast.CELESTE, Cast.MARCEL, Cast.REYES, Cast.REMY, Cast.THIEF,
+		Cast.CREW[0], Cast.CREW[1], Cast.AURUM, {"outfit": "uniform", "hair": "police"}]
+	for row in CharacterKit.OUTFITS:
+		looks.append(CharacterKit.random_look(rng, row[0]))
+	var bones_ok := true
+	for look in looks:
+		var mb := MeshBuilder.new()
+		CharacterKit.build(mb, look)
+		var arrays := mb.commit().surface_get_arrays(0)
+		var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
+		var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
+		for v in range(0, bones.size(), 4):
+			if bones[v] < 0 or bones[v] >= CharacterKit.BONES.size() or weights[v] != 1.0:
+				bones_ok = false
+		_check(mb.triangle_count() < 1300, "%s look stays under 1300 triangles, got %d" % [look.get("outfit"), mb.triangle_count()])
+	_check(bones_ok, "every vertex is bound rigidly to one real bone")
+	var total := 0
+	var outfits := {}
+	var hats := {}
+	var bags := {}
+	for i in 400:
+		var look := CharacterKit.random_look(rng)
+		var mb := MeshBuilder.new()
+		CharacterKit.build(mb, look)
+		total += mb.triangle_count()
+		outfits[look.outfit] = true
+		hats[look.get("headwear", "")] = true
+		bags[look.get("bag", "")] = true
+	# About 690 triangles a person before the modern clothes; budget 1.5x.
+	_check(total / 400.0 < 1035.0, "average civilian within the triangle budget, got %.0f" % (total / 400.0))
+	_check(outfits.size() >= 14 and hats.size() >= 6 and bags.size() >= 5,
+		"street looks vary: %d outfits, %d hats, %d bags" % [outfits.size(), hats.size(), bags.size()])
+	var bare := MeshBuilder.new()
+	CharacterKit.build(bare, {"hair": "bald"})
+	var vest := MeshBuilder.new()
+	CharacterKit.build(vest, {"outfit": "vest"})
+	var gilet := MeshBuilder.new()
+	CharacterKit.build(gilet, {"outfit": "puffer_vest"})
+	_check(vest.triangle_count() == gilet.triangle_count(), "old outfit 'vest' builds as a puffer vest")
+	for old in [{"hair": "cap"}, {"hair": "beanie"}, {"hair": "police"}]:
+		var mb := MeshBuilder.new()
+		CharacterKit.build(mb, old)
+		_check(mb.triangle_count() > bare.triangle_count(), "old look key %s still builds its part" % str(old))
+	var hand_y := []
+	for texting in [false, true]:
+		var skel := CharacterKit.build_rig({"phone": Color.BLACK})
+		var rig = Rig.new(skel)
+		var st = Rig.State.new()
+		st.speed = 1.4
+		st.texting = texting
+		for f in 60:
+			rig.pose(st, 1.0 / 60.0)
+		hand_y.append(skel.get_bone_global_pose(skel.find_bone("RightHand")).origin.y)
+		skel.free()
+	_check(hand_y[1] > hand_y[0] + 0.15, "texting brings the phone hand up (%.2f -> %.2f)" % hand_y)
