@@ -175,8 +175,9 @@ phone.
 | Action | Touch | Keyboard | Gamepad |
 |---|---|---|---|
 | Move / steer | Left half of screen (floating stick) | WASD / arrows | Left stick |
+| Gas / brake (held at a stop: reverse) | GAS / BRAKE pedals | W / S (arrows and tilt layouts) | RT / LT |
 | Punch | PUNCH | Space / J | X |
-| Run / handbrake | RUN / BRAKE | Shift | A |
+| Run / handbrake | RUN / DRIFT | Shift | A |
 | Get in / out, search, go into a place, shop | ENTER / EXIT / SEARCH / BUY / ORDER | E / F | Y |
 | Eat a snack from the bag | SNACK | H | |
 | Map | Tap the minimap | M | Back |
@@ -184,6 +185,19 @@ phone.
 | Skip a line of dialogue | Tap it | Enter | |
 
 Tab toggles the on-screen controls on desktop.
+
+Driving has three layouts, picked in Phone > Settings > Driving and saved:
+
+- **Stick + pedals** (default): the car heads where the stick points, as on
+  foot, with a corner assist that slows for tight turns. GAS alone drives
+  straight on; BRAKE stops, then reverses.
+- **Arrows + pedals**: two arrow buttons on the left turn the wheel, the
+  pedals on the right drive, as in most phone racers. A thumb can slide
+  from one arrow or pedal to the other. Off the pedals the car rolls on.
+  On a keyboard this is W/S gas and brake, A/D steer.
+- **Tilt + pedals**: turn the phone like a wheel (full lock at about 25
+  degrees, a small dead zone near level); a gauge on the left shows the
+  wheel.
 
 ## Play it on Android
 
@@ -211,8 +225,10 @@ cd game && xvfb-run -a -s "-screen 0 1280x720x24" godot --rendering-driver openg
 The same command with `res://tests/gallery.tscn` renders the asset gallery
 (every building, landmark, vehicle and prop, and posed people), and with
 `res://tests/mission_shots.tscn` shots of the missions, the phone and the
-dialogue, and with `res://tests/place_shots.tscn` the storefronts by day
-and night, the rooms, the shop menu, a diner meal and the Places app.
+dialogue, with `res://tests/place_shots.tscn` the storefronts by day
+and night, the rooms, the shop menu, a diner meal and the Places app, and
+with `res://tests/control_shots.tscn` the touch controls on foot and in
+each driving layout.
 
 `ONLY=test_a,test_b` before the test command runs just those tests.
 

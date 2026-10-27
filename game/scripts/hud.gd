@@ -175,6 +175,7 @@ func _process(delta: float) -> void:
 	_phone_button.visible = game.missions != null and game.missions.phone_unlocked
 	_phone_button.modulate = Color(1.0, 0.85, 0.3) if _phone_pulse and int(_blink * 3.0) % 2 == 0 else Color.WHITE
 	_update_dialogue(delta)
+	touch.set_mode(player.vehicle != null, Controls.scheme)
 	var ride_id: int = player.vehicle.get_instance_id() if player.vehicle != null else 0
 	if ride_id != _ride_id:
 		_ride_id = ride_id
@@ -185,7 +186,7 @@ func _process(delta: float) -> void:
 		if _ride_name_time > 0.0:
 			_prompt.text = player.vehicle.model_name() + "   " + _prompt.text
 		touch.set_label("interact", "EXIT")
-		touch.set_label("sprint", "BRAKE")
+		touch.set_label("sprint", "DRIFT")
 	elif context_prompt.size() == 2:
 		_prompt.text = context_prompt[0]
 		touch.set_label("interact", context_prompt[1])

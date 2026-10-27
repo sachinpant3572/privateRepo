@@ -33,7 +33,7 @@ var interiors
 var inventory = Inventory.new()
 var respawning := false
 var cash := 0
-var settings := {"shadows": true, "show_fps": true, "weather": "auto", "detail": "high"}
+var settings := {"shadows": true, "show_fps": true, "weather": "auto", "detail": "high", "controls": "stick"}
 ## Player-set map waypoint (a road node position) or null.
 var waypoint = null
 
@@ -120,6 +120,8 @@ func apply_settings() -> void:
 	atmosphere.weather_changes = w == "auto"
 	if w != "auto":
 		atmosphere.set_weather(w)
+	var scheme: String = settings.get("controls", "stick")
+	Controls.scheme = scheme if Controls.SCHEMES.has(scheme) else "stick"
 	if missions:
 		missions.save_game()
 

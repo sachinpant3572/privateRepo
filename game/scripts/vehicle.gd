@@ -19,6 +19,10 @@ const COAST := 4.0
 ## Corner assist: a turn the stick asks for that is too tight at this speed
 ## slows the car to the speed at which it can turn on this radius (m).
 const CORNER_RADIUS := 5.0
+## Wheel steering (arrows, tilt): full lock aims this far (radians) off
+## the nose, which _drive turns into full steer; seconds to reach it.
+const WHEEL_ANGLE := 0.5
+const STEER_IN := 0.2
 const TRAFFIC_THROTTLE := 0.6
 ## Traffic never cruises faster than this (m/s), whatever the model.
 const TRAFFIC_CRUISE := 13.0
@@ -48,6 +52,12 @@ var desired_dir := Vector3.ZERO
 var throttle := 0.0
 var handbrake := false
 var braking := false
+## The player steers by the wheel (Controls.wheel_steering): no corner
+## assist, and off the pedals the car rolls on rather than braking.
+var _wheel := false
+var _coast := false
+## The wheel eased toward the arrows' full lock, as a thumb turns it.
+var _steer_in := 0.0
 
 var rng := RandomNumberGenerator.new()
 ## Bikes and scooters show their rider (see player.gd).
@@ -152,6 +162,8 @@ func _physics_process(delta: float) -> void:
 	throttle = 0.0
 	handbrake = false
 	braking = false
+	_wheel = false
+	_coast = false
 	if not wrecked:
 		match driver:
 			Driver.PLAYER:
@@ -303,11 +315,51 @@ func bump(push: Vector3) -> void:
 
 
 func _player_input() -> void:
+	handbrake = Input.is_action_pressed("sprint")
+	var fwd := -global_basis.z
+	var gas := Controls.gas()
+	var brake := Controls.brake()
+	if Controls.wheel_steering():
+		_wheel = true
+		var s := Controls.steer()
+		# Turning in takes STEER_IN seconds; letting go or turning back
+		# is twice as quick.
+		var rate := 1.0 / STEER_IN
+		if signf(s) != signf(_steer_in) or absf(s) < absf(_steer_in):
+			rate *= 2.0
+		_steer_in = move_toward(_steer_in, s, rate * get_physics_process_delta_time())
+		desired_dir = fwd.rotated(Vector3.UP, -_steer_in * WHEEL_ANGLE)
+		throttle = gas
+		if brake > 0.05:
+			_pedal_brake(brake, _steer_in)
+		else:
+			_coast = gas < 0.05
+		return
+	# Stick: the car heads where the stick points; GAS floors it that way
+	# (straight on with the stick at rest), BRAKE stops and reverses.
 	var dir := Controls.world_move()
 	throttle = dir.length()
 	if throttle > 0.05:
 		desired_dir = dir / throttle
-	handbrake = Input.is_action_pressed("sprint")
+	if gas > 0.05:
+		throttle = maxf(throttle, gas)
+		if desired_dir == Vector3.ZERO:
+			desired_dir = fwd
+	if brake > 0.05:
+		_pedal_brake(brake, 0.0)
+
+
+## The brake pedal: stops the car (still steering), then backs it up.
+## `steer` turns the wheel while reversing (the tail swings that way).
+func _pedal_brake(amount: float, steer: float) -> void:
+	var fwd := -global_basis.z
+	if speed > 0.5:
+		throttle = 0.0
+		if desired_dir == Vector3.ZERO:
+			desired_dir = fwd
+	else:
+		throttle = amount
+		desired_dir = (-fwd).rotated(Vector3.UP, steer * WHEEL_ANGLE)
 
 
 func _traffic_ai() -> void:
@@ -418,7 +470,7 @@ func _drive(delta: float) -> void:
 			target = max_speed * throttle * lerpf(1.0, 0.45, absf(angle) / PI)
 			# Corner assist for the player only: AI drivers pick their own
 			# junction speeds.
-			if driver == Driver.PLAYER and not handbrake:
+			if driver == Driver.PLAYER and not handbrake and not _wheel:
 				var mix := smoothstep(0.3, 0.9, absf(angle))
 				var assisted := lerpf(target, _corner_speed(), mix)
 				if assisted < target and assisted < pace:
@@ -431,7 +483,7 @@ func _drive(delta: float) -> void:
 
 	var rate: float = accel * (1.0 - _spec.power_fade * clampf(pace / max_speed, 0.0, 1.0))
 	_hard_brake = false
-	if desired_dir == Vector3.ZERO:
+	if desired_dir == Vector3.ZERO or _coast:
 		rate = COAST
 	elif signf(target) != signf(speed) and pace > 0.5:
 		rate = _spec.brake

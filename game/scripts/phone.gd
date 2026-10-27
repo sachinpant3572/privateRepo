@@ -242,6 +242,12 @@ func _settings() -> void:
 		game.apply_settings()
 		wb.text = "Weather: " + weathers[i].to_upper())
 	_body.add_child(wb)
+	var cb := _button("Driving: " + Controls.SCHEME_NAMES[Controls.scheme], Callable())
+	cb.pressed.connect(func():
+		s["controls"] = Controls.SCHEMES[(Controls.SCHEMES.find(Controls.scheme) + 1) % Controls.SCHEMES.size()]
+		game.apply_settings()
+		cb.text = "Driving: " + Controls.SCHEME_NAMES[Controls.scheme])
+	_body.add_child(cb)
 	var tb := _button("Skip 3 hours (now %s)" % game.atmosphere.clock_text(), Callable())
 	tb.pressed.connect(func():
 		game.atmosphere.hour = fmod(game.atmosphere.hour + 3.0, 24.0)

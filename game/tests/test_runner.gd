@@ -43,6 +43,8 @@ func _run() -> void:
 		"test_vehicle_roster_and_parking",
 		"test_vehicle_speed_ranks",
 		"test_player_driving_assists",
+		"test_driving_layouts",
+		"test_touch_driving_layouts",
 		"test_heavy_vehicle_pushes_harder",
 		"test_vehicle_handling_differs",
 		"test_traffic_drives_every_kind",
@@ -678,7 +680,9 @@ func _new_game(with_population: bool) -> void:
 
 func _free_game() -> void:
 	Controls.override_vector = null
-	for action in ["attack", "interact", "sprint"]:
+	Controls.scheme = "stick"
+	Controls.tilt_override = null
+	for action in ["attack", "interact", "sprint", "gas", "brake", "steer_left", "steer_right"]:
 		Input.action_release(action)
 	if game != null:
 		game.queue_free()
@@ -969,6 +973,132 @@ func test_player_driving_assists() -> void:
 	post.queue_free()
 	Controls.override_vector = null
 	# The game that set it is gone; the next _new_game sets it again.
+
+
+## The driving layouts: GAS and BRAKE work with the stick; the arrows and
+## tilt turn the wheel, off the pedals the car rolls on, and the brake
+## held at a stop reverses with the tail swinging the way the wheel turns.
+func test_driving_layouts() -> void:
+	await _free_game()
+	Controls.camera = null
+	# Stick: GAS alone drives straight on, BRAKE stops then backs up.
+	var car = _player_car("sedan", Vector3(-100.0, 0, 0), 0.0)
+	Input.action_press("gas")
+	await _frames(60)
+	_check(car.speed > 8.0 and absf(car.global_position.x + 100.0) < 0.5, "stick layout: GAS alone drives straight on (%.1f m/s)" % car.speed)
+	Input.action_release("gas")
+	Input.action_press("brake")
+	await _frames(40)
+	var stopped_in: float = car.speed
+	await _frames(60)
+	_check(stopped_in < 2.0 and car.speed < -1.0, "BRAKE stops the car (%.1f m/s), held it reverses (%.1f m/s)" % [stopped_in, car.speed])
+	Input.action_release("brake")
+	car.queue_free()
+	for scheme in ["arrows", "tilt"]:
+		Controls.scheme = scheme
+		car = _player_car("sedan", Vector3(-60.0 if scheme == "arrows" else -20.0, 0, 0), 12.0)
+		var heading: Vector3 = -car.global_basis.z
+		Input.action_press("gas")
+		if scheme == "arrows":
+			Input.action_press("steer_right")
+		else:
+			Controls.tilt_override = Vector3(4.0, -8.9, 0.0) # right side down
+		await _frames(45)
+		var turned := heading.signed_angle_to(-car.global_basis.z, Vector3.UP)
+		_check(turned < -0.6, "%s layout: steering right with GAS turns right (%.2f rad)" % [scheme, turned])
+		_check(car.speed > 9.0, "%s layout: no corner assist braking (%.1f m/s)" % [scheme, car.speed])
+		# Off the gas, still steering: it rolls on.
+		Input.action_release("gas")
+		await _frames(30)
+		_check(car.speed > 6.0, "%s layout: off the pedals the car coasts (%.1f m/s)" % [scheme, car.speed])
+		Input.action_release("steer_right")
+		Controls.tilt_override = null
+		car.queue_free()
+	# Wheel left while reversing: the nose swings right, the tail left.
+	Controls.scheme = "arrows"
+	car = _player_car("sedan", Vector3(20.0, 0, 0), 0.0)
+	var nose: Vector3 = -car.global_basis.z
+	Input.action_press("brake")
+	Input.action_press("steer_left")
+	await _frames(90)
+	var swung := nose.signed_angle_to(-car.global_basis.z, Vector3.UP)
+	_check(car.speed < -1.0 and swung < -0.2, "reversing with the wheel left swings the nose right (%.1f m/s, %.2f rad)" % [car.speed, swung])
+	Input.action_release("brake")
+	Input.action_release("steer_left")
+	car.queue_free()
+	# Tilt: dead zone near level, full lock by 25 degrees.
+	Controls.scheme = "tilt"
+	Controls.tilt_override = Vector3(sin(deg_to_rad(2.0)), -cos(deg_to_rad(2.0)), 0.0) * 9.8
+	_check(Controls.steer() == 0.0, "a 2-degree tilt is in the dead zone")
+	Controls.tilt_override = Vector3(-sin(deg_to_rad(30.0)), -cos(deg_to_rad(30.0)), 0.0) * 9.8
+	_check(is_equal_approx(Controls.steer(), -1.0), "a 30-degree left tilt is full left lock")
+	Controls.tilt_override = null
+	Controls.scheme = "stick"
+
+
+## Each driving layout puts its buttons on screen in a car, the on-foot
+## buttons come back after, and a pedal held while getting out lets go.
+func test_touch_driving_layouts() -> void:
+	await _new_game(false)
+	var touch = game.hud.touch
+	touch.visible = true
+	var window_size := get_window().size
+	get_window().size = Vector2i(1280, 720)
+	await get_tree().process_frame
+	var car = _spawn_car(_home(), Vector3(0, 0, 8), 0.0)
+	game.player.enter_vehicle(car)
+	for scheme in Controls.SCHEMES:
+		game.settings["controls"] = scheme
+		game.apply_settings()
+		await get_tree().process_frame
+		_check(touch.driving and touch.scheme == scheme and touch.stick_on() == (scheme == "stick"), "%s layout is up in the car" % scheme)
+		var actions: Array = touch.buttons().map(func(b): return b.action)
+		_check(actions.has("gas") and actions.has("brake") and actions.has("interact"), "%s layout has GAS, BRAKE and EXIT" % scheme)
+		_check(actions.has("steer_left") == (scheme == "arrows"), "%s layout: arrow buttons only in the arrows layout" % scheme)
+		var screen := Rect2(Vector2.ZERO, touch.size)
+		for b in touch.buttons():
+			var ev := InputEventScreenTouch.new()
+			ev.index = 2
+			ev.position = touch._center(b)
+			ev.pressed = true
+			touch._input(ev)
+			var held := Input.is_action_pressed(b.action)
+			ev.pressed = false
+			touch._input(ev)
+			_check(held and not Input.is_action_pressed(b.action) and screen.has_point(ev.position), "%s layout: %s presses and lets go" % [scheme, b.action])
+	# A thumb sliding from one arrow to the other swaps them.
+	game.settings["controls"] = "arrows"
+	game.apply_settings()
+	await get_tree().process_frame
+	var left: Dictionary = touch.ARROWS[0]
+	var right: Dictionary = touch.ARROWS[1]
+	var tap := InputEventScreenTouch.new()
+	tap.index = 4
+	tap.position = touch._center(left)
+	tap.pressed = true
+	touch._input(tap)
+	var drag := InputEventScreenDrag.new()
+	drag.index = 4
+	drag.position = touch._center(right)
+	touch._input(drag)
+	_check(Input.is_action_pressed("steer_right") and not Input.is_action_pressed("steer_left"), "sliding onto the right arrow swaps the wheel")
+	tap.position = drag.position
+	tap.pressed = false
+	touch._input(tap)
+	# GAS held while getting out lets go.
+	tap.index = 5
+	tap.position = touch._center(touch.DRIVE_BUTTONS[0])
+	tap.pressed = true
+	touch._input(tap)
+	_check(Input.is_action_pressed("gas"), "GAS is held")
+	game.player.exit_vehicle()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_check(not touch.driving and not Input.is_action_pressed("gas") and touch.stick_on(), "out of the car: GAS let go, on-foot buttons and stick back")
+	tap.pressed = false
+	touch._input(tap)
+	get_window().size = window_size
+	await get_tree().process_frame
 
 
 ## A player-driven `kind` at `pos` heading -z turned by `yaw`, at `speed`.

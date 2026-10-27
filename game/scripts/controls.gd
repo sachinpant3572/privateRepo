@@ -11,6 +11,13 @@ const KEYS := {
 	"sprint": [KEY_SHIFT], # handbrake while driving
 	"attack": [KEY_SPACE, KEY_J],
 	"interact": [KEY_E, KEY_F],
+	# Pedals and steering buttons: the touch layouts and gamepad triggers.
+	# On a keyboard, W/S and A/D double as them in the arrows and tilt
+	# layouts (gas(), brake(), steer()).
+	"gas": [],
+	"brake": [],
+	"steer_left": [],
+	"steer_right": [],
 }
 const PAD_BUTTONS := {
 	"sprint": JOY_BUTTON_A,
@@ -22,11 +29,25 @@ const PAD_AXES := {
 	"move_right": [JOY_AXIS_LEFT_X, 1.0],
 	"move_up": [JOY_AXIS_LEFT_Y, -1.0],
 	"move_down": [JOY_AXIS_LEFT_Y, 1.0],
+	"gas": [JOY_AXIS_TRIGGER_RIGHT, 1.0],
+	"brake": [JOY_AXIS_TRIGGER_LEFT, 1.0],
 }
+## Driving layouts (settings "controls"). stick: the car heads where the
+## stick points, as on foot, with GAS and BRAKE pedals beside it. arrows:
+## left and right buttons turn the wheel, the pedals drive. tilt: the phone
+## is the wheel.
+const SCHEMES := ["stick", "arrows", "tilt"]
+const SCHEME_NAMES := {"stick": "Stick + pedals", "arrows": "Arrows + pedals", "tilt": "Tilt + pedals"}
+## Tilt steering: no turn inside TILT_DEAD of level, full lock at
+## TILT_FULL (both the sine of the roll angle: about 3 and 25 degrees).
+const TILT_DEAD := 0.05
+const TILT_FULL := 0.42
 
 var camera: Camera3D
 var touch_vector := Vector2.ZERO # written by the on-screen joystick
 var override_vector = null # tests set a Vector2 here to steer the player
+var scheme := "stick"
+var tilt_override = null # tests set a gravity Vector3 here to tilt the phone
 
 var _was_pressed := {}
 var _just_pressed := {}
@@ -87,3 +108,45 @@ func world_move() -> Vector3:
 		return Vector3(v.x, 0.0, v.y)
 	var axes: Array[Vector3] = camera.ground_axes()
 	return axes[0] * v.x - axes[1] * v.y
+
+
+## The car steers by the wheel (arrows, tilt) rather than by pointing.
+func wheel_steering() -> bool:
+	return scheme != "stick"
+
+
+## Gas pedal, 0..1. W and the stick's up count in the wheel layouts.
+func gas() -> float:
+	var g := Input.get_action_strength("gas")
+	if wheel_steering():
+		g = maxf(g, Input.get_action_strength("move_up"))
+	return g
+
+
+## Brake pedal, 0..1 (held at a stop, it reverses).
+func brake() -> float:
+	var b := Input.get_action_strength("brake")
+	if wheel_steering():
+		b = maxf(b, Input.get_action_strength("move_down"))
+	return b
+
+
+## The wheel in the arrows and tilt layouts: -1 full left .. 1 full right.
+func steer() -> float:
+	var s := Input.get_axis("move_left", "move_right") + Input.get_axis("steer_left", "steer_right")
+	if scheme == "tilt":
+		s += tilt_steer()
+	return clampf(s, -1.0, 1.0)
+
+
+## Turning the phone like a wheel. Godot's sensors are turned to the screen
+## (x right, y up) and point along gravity, so a right-side-down tilt gives
+## +x (platform/android GodotInputHandler.onSensorChanged).
+func tilt_steer() -> float:
+	var g: Vector3 = tilt_override if tilt_override != null else Input.get_gravity()
+	if g == Vector3.ZERO:
+		g = Input.get_accelerometer()
+	if g.length() < 1.0:
+		return 0.0
+	var roll := g.x / g.length()
+	return signf(roll) * clampf((absf(roll) - TILT_DEAD) / (TILT_FULL - TILT_DEAD), 0.0, 1.0)
