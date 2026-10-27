@@ -126,6 +126,7 @@ func apply_settings() -> void:
 
 ## After "New game": back to Union Station and the first mission.
 func restart_story() -> void:
+	interiors.force_out()
 	if player.vehicle != null:
 		player.exit_vehicle()
 	city.stream_now(city.spawn_point)
@@ -177,6 +178,7 @@ func _respawn(text: String, point: Vector3) -> void:
 	hud.show_message(text)
 	missions.on_player_down(text)
 	await get_tree().create_timer(RESPAWN_DELAY, true, true).timeout
+	interiors.force_out()
 	Wanted.clear()
 	police.clear_all()
 	city.stream_now(point)

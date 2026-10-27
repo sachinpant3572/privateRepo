@@ -73,6 +73,8 @@ with the interiors and services plan". This note tracks the build.
 | P0-4 | Snacks: bag of 3, SNACK button / H eats the best one, only when hurt | Light-touch healing that is worth buying; no full inventory screen yet | Bigger: inventory screen (phase 2 with clothes) |
 | P0-5 | Phone "Places" app: places sorted by distance, open or closed, GO sets a waypoint | The minimap needs a way to find shops | - |
 | P0-6 | Diner glass porch is 0.7 m deep; sidewalk props never stand on a doorstep (`_put` rolls the prop back) | The 1.5 m porch and benches or planters blocked the door point | - |
+| P0-8 | `interiors.force_out()` (instant, no fade) runs on respawn, new game and every mission start; `enter()` gives up if Jules is downed during the fade | Review run 1: those paths left the street frozen and the camera on an empty room | Cheaper: hide REPLAY / New game / Retry while inside (leaves the death-in-fade case) |
+| P0-9 | Hit or knocked-out diners free their seat; a hit diner slides out of the booth first | Review run 1: the diner filled up for good and ORDER stopped working | - |
 | P0-7 | Standing up from a seat is a slide out without collisions, like sitting down | Booth diners got stuck inside the bench collider | - |
 
 ## Traps and constraints
@@ -86,6 +88,10 @@ with the interiors and services plan". This note tracks the build.
 - Tests that look at far-away cells must move the player there too: the
   streamer unloads cells far from the player on the next frame.
 - `ONLY=test_a,test_b` in the environment runs just those tests.
+- Touch exclusions must use `is_visible_in_tree()`: the shop menu hides
+  its root, not the panel, and the panel covers the right-hand buttons on
+  a 16:9 screen. The headless test window is square, so the test resizes
+  it to 1280x720.
 
 ## Open questions
 

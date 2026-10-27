@@ -62,6 +62,9 @@ var _meal_seat := -1
 var _snack_pose := 0.0
 var _cooldown := 0.0
 var _blink := 0.0
+## Bumped by force_out(), so a fade in progress knows it was cut short.
+var _visit := 0
+var _tween: Tween
 
 
 func _ready() -> void:
@@ -199,12 +202,21 @@ func enter(p: Dictionary) -> void:
 	var player = game.player
 	player.controllable = false
 	player.velocity = Vector3.ZERO
+	var visit := _visit
 	var result := {}
 	var task := WorkerThreadPool.add_task(func(): result["room"] = InteriorKit.build(p.type, p.seed), false, "interior")
 	await _fade_to(1.0)
 	while not WorkerThreadPool.is_task_completed(task):
 		await get_tree().process_frame
 	WorkerThreadPool.wait_for_task_completion(task)
+	if visit != _visit:
+		return
+	if player.dead or game.respawning:
+		# Knocked down on the doorstep during the fade: stay outside.
+		state = State.OUTSIDE
+		place = {}
+		await _fade_to(0.0)
+		return
 	room = result.room
 	_freeze_street()
 	_make_room()
@@ -217,9 +229,11 @@ func enter(p: Dictionary) -> void:
 	game.atmosphere.indoors = true
 	_spawn_people()
 	state = State.INSIDE
+	# Inside on the exit spot: a double tap of ENTER doesn't walk back out.
+	_cooldown = 0.5
 	game.hud.show_banner(place.name)
 	await _fade_to(0.0)
-	if state == State.INSIDE:
+	if state == State.INSIDE and visit == _visit:
 		player.controllable = true
 
 
@@ -231,7 +245,10 @@ func leave() -> void:
 	var player = game.player
 	player.controllable = false
 	player.velocity = Vector3.ZERO
+	var visit := _visit
 	await _fade_to(1.0)
+	if visit != _visit:
+		return
 	_clear_room()
 	_thaw_street()
 	player.sitting = false
@@ -249,14 +266,44 @@ func leave() -> void:
 	room = {}
 	_cooldown = 0.5
 	await _fade_to(0.0)
-	if state == State.OUTSIDE:
+	if state == State.OUTSIDE and visit == _visit:
 		player.controllable = true
 
 
+## Back on the street at once, no fade: for a respawn, a mission (re)start
+## or a new game while inside or on the way in or out. Whoever calls it
+## puts the player where they need to be.
+func force_out() -> void:
+	if state == State.OUTSIDE:
+		return
+	_visit += 1
+	if _tween:
+		_tween.kill()
+	_fade.color.a = 0.0
+	menu.visible = false
+	_clear_room()
+	_thaw_street()
+	var player = game.player
+	player.sitting = false
+	player.gesture = ""
+	player._set_standing_layers()
+	player.controllable = true
+	game.camera.fixed_focus = null
+	game.camera.room_size = 0.0
+	game.atmosphere.indoors = false
+	state = State.OUTSIDE
+	place = {}
+	room = {}
+	near = {}
+	_cooldown = 0.5
+
+
 func _fade_to(alpha: float) -> void:
-	var tween := create_tween()
-	tween.tween_property(_fade, "color:a", alpha, FADE_TIME)
-	await tween.finished
+	if _tween:
+		_tween.kill()
+	_tween = create_tween()
+	_tween.tween_property(_fade, "color:a", alpha, FADE_TIME)
+	await _tween.finished
 
 
 ## Stops and hides everything on the street (people, traffic, police, the
@@ -318,6 +365,8 @@ func _clear_room() -> void:
 		_root = null
 	for n in get_tree().get_nodes_in_group("patrons"):
 		n.remove_from_group("patrons")
+		n.queue_free()
+	for n in get_tree().get_nodes_in_group("patrons_out"):
 		n.queue_free()
 
 
@@ -386,6 +435,7 @@ func _new_customer():
 	who.hub = ORIGIN + room.hub
 	who.door = ORIGIN + room.door + Vector3(0, 0, -0.3)
 	who.left.connect(_on_left)
+	who.died.connect(_on_died)
 	return who
 
 
@@ -408,6 +458,17 @@ func _on_left(who) -> void:
 	for k in _taken.keys():
 		if _taken[k] == who:
 			_taken.erase(k)
+
+
+## Knocked out inside: the seat is free again, they no longer count in
+## the crowd, and the body is taken away after a while.
+func _on_died(who) -> void:
+	_on_left(who)
+	who.remove_from_group("patrons")
+	who.add_to_group("patrons_out")
+	get_tree().create_timer(8.0).timeout.connect(func():
+		if is_instance_valid(who):
+			who.queue_free())
 
 
 func _spots_of(kinds: Array) -> Array:
@@ -465,6 +526,7 @@ func buy(id: String, mode: String) -> bool:
 				return false
 			var seat := _free_spot(["seat", "stool"])
 			if seat < 0:
+				menu.say("No free seats right now")
 				return false
 			game.cash -= item.price
 			game.missions.save_game()

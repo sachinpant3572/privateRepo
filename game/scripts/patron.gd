@@ -207,8 +207,17 @@ func _on_hit(attacker) -> void:
 		gesture = "cower"
 		return
 	stops.clear()
-	sitting = false
-	_slide = -1.0
+	if sitting or (_slide >= 0.0 and not _slide_out):
+		# Out of the seat the way they got in, then out of the door.
+		_slide = -1.0
+		_stand_up()
+		return
+	if _slide >= 0.0:
+		# Already sliding out: keep the way back to the hub, then the door.
+		var i := _path.find(hub)
+		_path = (_path.slice(0, i + 1) if i >= 0 else [hub]) + [door]
+		_step = Step.OUT
+		return
 	_set_standing_layers()
 	_step = Step.OUT
 	_path = [hub, door]

@@ -28,6 +28,8 @@ func _ready() -> void:
 
 func open() -> void:
 	var p: Vector3 = game.player.focus_node().global_position
+	if game.interiors != null and not game.interiors.place.is_empty():
+		p = game.interiors.place.door
 	pan = (Vector2(p.x, p.z) - map.origin) / MapImage.PX_M
 	zoom = clampf(size.y / map.size.y * 1.6, 0.3, 4.0)
 	_touches.clear()

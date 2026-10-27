@@ -111,6 +111,11 @@ func refresh() -> void:
 		_list.add_child(row)
 
 
+## Shows a short note in the status line (until the next refresh).
+func say(text: String) -> void:
+	_status.text = text
+
+
 func _buy_button(text: String, enabled: bool, press: Callable) -> Button:
 	var b := _button(text, press)
 	b.custom_minimum_size = Vector2(104, 56)

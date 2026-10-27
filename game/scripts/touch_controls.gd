@@ -37,7 +37,7 @@ func _input(event: InputEvent) -> void:
 		return
 	if event is InputEventScreenTouch:
 		if event.pressed:
-			if exclusions.any(func(c): return c.visible and c.get_global_rect().has_point(event.position)):
+			if exclusions.any(func(c): return c.is_visible_in_tree() and c.get_global_rect().has_point(event.position)):
 				return
 			var action := _button_at(event.position)
 			if action != "":

@@ -52,6 +52,9 @@ func _run() -> void:
 		"test_doors_lock_and_close",
 		"test_diner_meal_and_people_inside",
 		"test_bag_and_save_v2",
+		"test_shop_menu_leaves_touch_buttons_alone",
+		"test_thrown_out_of_a_room",
+		"test_hit_diner_leaves_the_booth",
 	]
 	# ONLY=name1,name2 runs just those (handy while working on one test).
 	var only := OS.get_environment("ONLY")
@@ -1454,3 +1457,113 @@ func test_bag_and_save_v2() -> void:
 	_check(game.cash == 500 and mm.done == ["m01_homecoming"] and inv.bag.is_empty(), "a v1 save loads with an empty bag")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(mm.save_path))
 
+
+
+## The shop menu's panel covers the right-hand buttons' corner: closed, it
+## must not swallow their taps (review finding).
+func test_shop_menu_leaves_touch_buttons_alone() -> void:
+	await _new_game(false)
+	var touch = game.hud.touch
+	touch.visible = true
+	# A phone-shaped screen (the test window is square, where the panel
+	# misses the buttons).
+	var window_size := get_window().size
+	get_window().size = Vector2i(1280, 720)
+	await get_tree().process_frame
+	# Open and shut it once (as at a counter), so its panel has a layout.
+	game.interiors.menu.open({"type": "corner_store", "name": "Test Mart"})
+	for i in 4:
+		await get_tree().process_frame
+	game.interiors.menu.close()
+	await get_tree().process_frame
+	var frame: Rect2 = game.interiors.menu.frame.get_global_rect()
+	_check(touch.BUTTONS.any(func(b): return frame.has_point(touch._center(b))), "the panel's area covers a button (else this test proves nothing)")
+	for b in touch.BUTTONS:
+		var ev := InputEventScreenTouch.new()
+		ev.index = 3
+		ev.position = touch._center(b)
+		ev.pressed = true
+		touch._input(ev)
+		var held := Input.is_action_pressed(b.action)
+		ev.pressed = false
+		touch._input(ev)
+		_check(held, "%s works with the shop menu shut" % b.label)
+	get_window().size = window_size
+	await get_tree().process_frame
+
+
+## A respawn, a new game or a mission start while inside (or while the
+## door is fading) puts the street, camera and light back (review finding).
+func test_thrown_out_of_a_room() -> void:
+	await _new_game(false)
+	var ii = game.interiors
+	game.atmosphere.hour = 12.0
+	var store := _nearest_place("corner_store")
+	await _enter(store)
+	_check(ii.is_inside(), "inside the store")
+	game.restart_story()
+	await _frames(2)
+	_check(ii.state == ii.State.OUTSIDE and game.city.visible and game.population.process_mode != Node.PROCESS_MODE_DISABLED, "a new game from inside gives the street back")
+	_check(game.camera.fixed_focus == null and not game.atmosphere.indoors and get_tree().get_nodes_in_group("patrons").is_empty(), "camera, light and room are reset")
+	_check(game.player.global_position.distance_to(ii.ORIGIN) > 500.0 and game.player.controllable, "the player is back in the city and can move")
+	# Knocked down on the doorstep while the door fades.
+	await _at_door(store)
+	while ii._cooldown > 0.0:
+		await _frames(1)
+	await _press("interact")
+	_check(ii.state == ii.State.ENTERING, "going in")
+	game.player.take_hit(null, 1000.0, Vector3.ZERO)
+	for i in 600:
+		if not game.respawning and game.player.controllable and not game.player.dead:
+			break
+		await _frames(1)
+	await _frames(30)
+	_check(ii.state == ii.State.OUTSIDE and game.city.visible, "dying at the door leaves you outside, got state %d" % ii.state)
+	_check(game.camera.fixed_focus == null and game.player.global_position.distance_to(ii.ORIGIN) > 500.0, "the respawn is on the street")
+
+
+## Hitting someone eating in a booth: they slide out and leave, and the
+## seat is free again (review finding).
+func test_hit_diner_leaves_the_booth() -> void:
+	await _new_game(false)
+	var ii = game.interiors
+	game.atmosphere.hour = 12.0
+	await _enter(_nearest_place("diner"))
+	var victim = null
+	for n in get_tree().get_nodes_in_group("patrons"):
+		if not n.staff and n.sitting:
+			victim = n
+			break
+	_check(victim != null, "someone is eating")
+	if victim == null:
+		return
+	var seat := -1
+	for k in ii._taken:
+		if ii._taken[k] == victim:
+			seat = k
+	var gone := [false]
+	victim.left.connect(func(_w): gone[0] = true)
+	victim.take_hit(game.player, 1.0, Vector3.ZERO)
+	var worst := 0.0
+	for i in 1200:
+		if gone[0]:
+			break
+		worst = maxf(worst, victim.stuck_time)
+		await _frames(1)
+	_check(gone[0], "the diner runs out of the door (stuck %.1f s)" % worst)
+	_check(seat >= 0 and not ii._taken.has(seat), "the seat is free again")
+	Wanted.clear()
+	game.police.clear_all()
+	# A knocked-out customer frees their seat and stops counting.
+	var other = null
+	for n in get_tree().get_nodes_in_group("patrons"):
+		if not n.staff and n.sitting:
+			other = n
+			break
+	if other != null:
+		var before: int = ii._customers()
+		other.take_hit(game.player, 1000.0, Vector3.ZERO)
+		await _frames(2)
+		_check(ii._customers() == before - 1 and not ii._taken.values().has(other), "a knocked-out diner frees the seat")
+	Wanted.clear()
+	await _leave()

@@ -125,6 +125,8 @@ func start(id: String, teleport := false) -> void:
 	m.manager = self
 	add_child(m)
 	active = m
+	if game.interiors != null:
+		game.interiors.force_out()
 	if teleport:
 		var p: Vector3 = m.start_point()
 		game.city.stream_now(p)

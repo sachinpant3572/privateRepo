@@ -1399,7 +1399,7 @@ static func _furniture(ctx: Ctx, kind: String) -> void:
 						var t := -half
 						while t <= half + 0.1:
 							var nxt = Vector3(t + 13.0, 0, 0) if t + 13.0 <= half + 0.1 else null
-							_put(ctx, local, clear, func(): Props.power_pole(ctx.mb, local, Vector3(t, 0, 0), nxt))
+							Props.power_pole(ctx.mb, local, Vector3(t, 0, 0), nxt)
 							t += 13.0
 					for i in int(length / 40.0) + 1:
 						if rng.randf() < 0.4:
@@ -1407,7 +1407,8 @@ static func _furniture(ctx: Ctx, kind: String) -> void:
 					if rng.randf() < 0.25:
 						_put(ctx, local, clear, func(): Props.bins(ctx.mb, local, Vector3(minf(7.0, half), 0, 0.3)))
 					if ctx.deco.randf() < 0.15:
-						_put(ctx, local, clear, func(): Props.scooter(ctx.mb, Vector3(ctx.deco.randf_range(-half, half), 0, 1.6), ctx.deco.randf() * TAU, Props.SCOOTERS[ctx.deco.randi() % Props.SCOOTERS.size()]))
+						var at := Vector3(ctx.deco.randf_range(-half, half), 0, 1.6)
+						_put(ctx, local, clear, func(): Props.scooter(ctx.mb, at, ctx.deco.randf() * TAU, Props.SCOOTERS[ctx.deco.randi() % Props.SCOOTERS.size()]), at)
 					elif half > 3.0 and ctx.deco.randf() < 0.06:
 						_put(ctx, local, clear, func(): Props.roadworks(ctx.mb, local, Vector3(0, 0, 1.7)))
 				"docks":
@@ -1460,8 +1461,11 @@ static func _door_zones(ctx: Ctx, half: float) -> Array:
 
 
 ## Builds one prop (`build` adds its mesh and colliders) and takes it out
-## again if it stands on a doorstep.
-static func _put(ctx: Ctx, local: Array, clear: Array, build: Callable) -> void:
+## again if it stands on a doorstep. Props without colliders (scooters)
+## give their spot as `at` and are skipped there.
+static func _put(ctx: Ctx, local: Array, clear: Array, build: Callable, at = null) -> void:
+	if at != null and clear.any(func(z): return z.has_point(Vector2(at.x, at.z))):
+		return
 	var mark: Array = ctx.mb.mark()
 	var glow_mark: Array = ctx.glow.mark() if ctx.glow else []
 	var n := local.size()
@@ -1510,7 +1514,8 @@ static func _modern_street(ctx: Ctx, local: Array, clear: Array, half: float, do
 		_put(ctx, local, clear, func(): Props.bike_rack(ctx.mb, local, Vector3(0, 0, 1.6), deco))
 	if deco.randf() < 0.3:
 		for k in deco.randi_range(1, 2):
-			_put(ctx, local, clear, func(): Props.scooter(ctx.mb, Vector3(deco.randf_range(-half, half), 0, 1.7 + k * 0.3), deco.randf() * TAU, Props.SCOOTERS[deco.randi() % Props.SCOOTERS.size()]))
+			var at := Vector3(deco.randf_range(-half, half), 0, 1.7 + k * 0.3)
+			_put(ctx, local, clear, func(): Props.scooter(ctx.mb, at, deco.randf() * TAU, Props.SCOOTERS[deco.randi() % Props.SCOOTERS.size()]), at)
 
 
 # --- Outside the window ----------------------------------------------------------
