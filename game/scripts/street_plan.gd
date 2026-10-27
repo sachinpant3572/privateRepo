@@ -1683,17 +1683,30 @@ static func _tidy(poly: PackedVector2Array) -> PackedVector2Array:
 		return poly
 	if area(poly) < 0.0:
 		poly.reverse()
+	# Near-duplicate points first, then points on a straight run, each
+	# tested against the points kept (testing against the original
+	# neighbours dropped both copies of a doubled corner, cutting the
+	# corner off).
 	var out := PackedVector2Array()
-	var n := poly.size()
-	for k in n:
-		var a := poly[(k - 1 + n) % n]
-		var b := poly[k]
-		var c := poly[(k + 1) % n]
-		if b.distance_to(a) < 0.3:
-			continue
-		if absf((b - a).normalized().cross((c - b).normalized())) < 0.01 and (b - a).dot(c - b) > 0.0:
-			continue
-		out.append(b)
+	for b in poly:
+		if out.is_empty() or b.distance_to(out[out.size() - 1]) >= 0.3:
+			out.append(b)
+	while out.size() > 3 and out[0].distance_to(out[out.size() - 1]) < 0.3:
+		out.remove_at(out.size() - 1)
+	var changed := true
+	while changed:
+		changed = false
+		var k := 0
+		while out.size() > 3 and k < out.size():
+			var n := out.size()
+			var a := out[(k - 1 + n) % n]
+			var b := out[k]
+			var c := out[(k + 1) % n]
+			if absf((b - a).normalized().cross((c - b).normalized())) < 0.01 and (b - a).dot(c - b) > 0.0:
+				out.remove_at(k)
+				changed = true
+			else:
+				k += 1
 	return out
 
 
