@@ -2544,7 +2544,13 @@ func test_diner_meal_and_people_inside() -> void:
 	arrived.clear()
 	worst = 0.0
 	var paid := [0]
-	for i in 3600:
+	# A minute at least, then on until a second shopper is out: one who
+	# walks in early and browses three shelves takes up to a minute (each
+	# shelf is reached from the middle of the shop), so with only one
+	# shopper there at the start a flat minute sometimes saw one leave.
+	for i in 9000:
+		if i >= 3600 and left[0] >= 2 and paid[0] > 0:
+			break
 		for n in get_tree().get_nodes_in_group("patrons"):
 			if not n.staff:
 				if not arrived.has(n):
