@@ -61,7 +61,7 @@ func _run() -> void:
 	await _shot("controls_settings.png")
 	# Each tab, and the preview driving fast after a Drive zoom-out change.
 	var page = game.hud.phone.settings_page
-	page.steppers["Drive zoom-out"].get_meta("less").pressed.emit()
+	page.sliders["Drive zoom-out"].get_meta("slider").value -= 1
 	await _ui_frames(120)
 	await _shot("settings_driving.png")
 	for t in ["Graphics", "Controls", "Game"]:

@@ -516,6 +516,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		look_pitch = clampf(look_pitch + rel.y * 0.2, 5.0, 85.0)
 
 
+## Settings > Screen shake (0..1): how far a shake moves the view. 1 is the
+## full shake every release before 0.23 had; 0 turns it off.
+var shake_strength := 0.5
+
+
 ## Adds screen shake (0..1); it eases off by itself.
 func shake(amount: float) -> void:
 	_trauma = minf(_trauma + amount, 1.0)
@@ -524,7 +529,7 @@ func shake(amount: float) -> void:
 func _apply_shake(delta: float) -> void:
 	_trauma = maxf(_trauma - delta * 2.2, 0.0)
 	_shake_t += delta * 40.0
-	var k := _trauma * _trauma * 0.9
+	var k := _trauma * _trauma * 0.9 * clampf(shake_strength, 0.0, 1.0)
 	h_offset = (sin(_shake_t * 1.13) + sin(_shake_t * 2.71) * 0.5) * k
 	v_offset = (sin(_shake_t * 1.37 + 1.0) + sin(_shake_t * 3.07) * 0.5) * k
 
