@@ -364,14 +364,14 @@ depends on, including later ones.
 | N2 | E4 swing engine + mini-golf + driving range + bowling | Three venues on one engine (pool and darts stay in R-21) | none | 2.5 | 4 |
 | N3 | E2 rhythm engine + karaoke + busking | Songs become playable, not just heard | R-6 | 2.5 | 4 |
 | N4 | Fishing | Biggest calm hobby; uses E4 and E7 | N1, N2 | 1.5 | 4 |
-| N5 | E5 shift jobs + 4 careers (crane, courier, line cook, barista) | Legit money; teaches the map | R-16, IS-1 | 2 | 3 |
+| N5 | E5 shift jobs + 4 careers (crane, courier, line cook, barista) | Legit money; teaches the map | R-16, IS-1, R-26 (bike) | 2 | 3 |
 | N6 | Krewe Cards (game F) | Long-term collection hook, playable everywhere | R-11, N1 | 2 | 4 |
 | N7 | Getaway driver for hire + pickpocketing + armoured van | Cheap crime variety on existing driving and wanted systems | R-5, R-20 | 1.5 | 4 |
 | N8 | E6 business sim + food truck + Buy back the Wards | The long loop, tied to the story | R-22 | 3.5 | 4 |
 | N9 | Studio + music app + record shop + 5 more stations | The AI-music promise in full | R-6, N3 | 2.5 | 3 |
 | N10 | Martial-arts masters + fight manuals + 6 new styles (2.9) | On top of R-17 | R-17, N1 | 2 | 3 |
 | N11 | Night classes (driving, coding, languages, first aid) | Learning as play | R-9 (first aid) | 2 | 2 |
-| N12 | Hurricane-season event + election | Signature systemic events | R-25, R-9 | 3 | 5 |
+| N12 | Hurricane-season event + election | Signature systemic events | R-25, R-9, R-26 (boats) | 3 | 5 |
 | N13 | Arcade games G-L | Six small games | R-11 | 4.5 | 2 |
 | N14 | Comedy chaos set + RC and drone | Cheap laughs | none | 1.5 | 3 |
 
@@ -382,8 +382,8 @@ depends on, including later ones.
   - real golf;
   - the gallery and storm heists;
   - photography, diving, pets, escape rooms, laser tag and paintball;
-  - 6 of the 10 careers;
-  - the meta layer (4.9) and water fun (4.10).
+  - 7 of the 11 careers;
+  - water fun (4.10); the meta layer (4.9) is costed there (about 1 session) but not yet scheduled.
 
   On the engines, most of these are 0.3-1 session each. A rough guess for all of them is another
   15-20 sessions.
@@ -395,7 +395,7 @@ depends on, including later ones.
   - a little shopping (capsule toys).
 
   Gym, boxing, table tennis, racing, martial arts and eating out come from the roadmap's own
-  packages (R-1, R-12, R-14, R-17, R-21) and from N10.
+  packages (R-1, R-14, R-17, R-18, R-21) and from N10.
 - **Recommendation**: the cheaper option first. Re-score after players (or Sachin) have played the
   first wave, and order the rest by what they actually return to.
 
