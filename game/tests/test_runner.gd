@@ -3593,14 +3593,19 @@ func test_homes_by_wealth() -> void:
 	c._finish_task()
 	var Kit = preload("res://scripts/kits/country_kit.gd")
 	var MB = preload("res://scripts/mesh_builder.gd")
-	var built := func(kind: String, tier: int) -> Array:
+	var meshes := {}  # "kind tier" -> the built MeshBuilder
+	var built_at := func(kind: String, tier: int, size: Vector2) -> Array:
 		var rng := RandomNumberGenerator.new()
 		rng.seed = 3
 		Kit.wealth = tier
 		var out: Array = []
-		Kit.build(kind, MB.new(), out, Kit.footprint(kind), rng)
+		var mb = MB.new()
+		Kit.build(kind, mb, out, size, rng)
 		Kit.wealth = -1
+		meshes["%s %d" % [kind, tier]] = mb
 		return out
+	var built := func(kind: String, tier: int) -> Array:
+		return built_at.call(kind, tier, Kit.footprint(kind))
 	var count := func(out: Array, size: Vector3) -> int:
 		var k := 0
 		for col in out:
@@ -3612,12 +3617,38 @@ func test_homes_by_wealth() -> void:
 	var rich: Array = built.call("house", 4)
 	var chain := 0
 	var hedge := 0
-	for col in poor:
-		chain += 1 if is_equal_approx(col[1].y, 1.8) and minf(col[1].x, col[1].z) < 0.2 else 0
+	var d: float = Kit.footprint("house").y
+	# Chain-link crosses the front; the board fence of T2-T3 stops at the
+	# sides, so only a run along the front line counts.
+	var front_runs := func(out: Array) -> int:
+		var k := 0
+		for col in out:
+			k += 1 if is_equal_approx(col[1].y, 1.8) and col[1].z < 0.2 and col[1].x > 1.5 and col[0].z < -d * 0.5 + 2.0 else 0
+		return k
+	chain = front_runs.call(poor)
+	var middle: int = front_runs.call(built.call("house", 2))
 	for col in rich:
 		hedge += 1 if is_equal_approx(col[1].y, 1.1) and is_equal_approx(minf(col[1].x, col[1].z), 0.8) else 0
-	_check(count.call(poor, LUX) == 0 and chain >= 4 and count.call(rich, LUX) == 1 and hedge >= 4,
-		"a T1 house has chain-link and no luxury car (%d runs), a T4 house a hedge and one (%d runs, %d cars)" % [chain, hedge, count.call(rich, LUX)])
+	_check(count.call(poor, LUX) == 0 and chain >= 1 and middle == 0 and count.call(rich, LUX) == 1 and hedge >= 4,
+		"a T1 house has chain-link across its front (%d runs, T2 %d) and no luxury car, a T4 house a hedge and one (%d runs, %d cars)" % [chain, middle, hedge, count.call(rich, LUX)])
+	# On the 14 m hill lots the T4 car pulls into the garage rather than
+	# hang over the lot's front edge.
+	var hill_front := INF
+	for col in built_at.call("house", 4, Vector2(14, 14)):
+		if (col[1] as Vector3).is_equal_approx(LUX):
+			hill_front = col[0].z - 2.45
+	_check(hill_front >= -7.0 + 0.25 and hill_front < INF, "a T4 car on a 14 m hill lot stays inside the lot (front at %.2f, edge -7)" % hill_front)
+	# Every kind with markers builds differently at the bottom and the top
+	# of its range, from the same seed.
+	var same: Array[String] = []
+	for kind: String in ["shack", "trailer_home", "stilt_house", "garden_apartments", "rowhouse_row", "house", "cape_house", "farmhouse_small", "condo_tower", "mansion"]:
+		built.call(kind, RANGE[kind][0])
+		built.call(kind, RANGE[kind][1])
+		var lo = meshes["%s %d" % [kind, RANGE[kind][0]]]
+		var hi = meshes["%s %d" % [kind, RANGE[kind][1]]]
+		if lo.verts.size() == hi.verts.size() and lo.colors == hi.colors:
+			same.append(kind)
+	_check(same.is_empty(), "each marked home kind looks different at its lowest and highest tier (same: %s)" % [same])
 	_check(count.call(built.call("mansion", 5), LUX) == 2 and count.call(built.call("mansion", 4), LUX) == 1,
 		"a T5 mansion keeps two luxury cars, a T4 mansion one")
 	# A tile build hands each lot its tier: a T4 house there gets its car.
@@ -3632,9 +3663,9 @@ func test_homes_by_wealth() -> void:
 		for i in c.tiles[key].l:
 			if int(i) == rich_lot:
 				tile_key = key
-	var tile: Dictionary = preload("res://scripts/country_tiles.gd").build(c, tile_key)
 	var cars := 0
 	if rich_lot >= 0:
+		var tile: Dictionary = preload("res://scripts/country_tiles.gd").build(c, tile_key)
 		var at := Vector3(c.lots[rich_lot][0], 0.0, c.lots[rich_lot][1])
 		for col in tile.colliders:
 			if (col[1] as Vector3).is_equal_approx(LUX) and Vector3(col[0].x, 0.0, col[0].z).distance_to(at) < 15.0:

@@ -88,7 +88,7 @@ block, for 2-3 sessions.
     airstrip), and flood-prone ground by the bayou.
   - Tier = round(6V - 0.5 + pocket noise of about 160 m + a little per-lot noise), clamped to the
     kind's range. A shack is T0-T1, a house T1-T4, a mansion T4-T5, and an estate is always T5.
-- The kit reads `Kit.tier` (set by country_tiles like `Kit.reach`). Markers:
+- The kit reads `Kit.wealth` (set by country_tiles like `Kit.reach`; not the size helper `_tier`). Markers:
   - upkeep: faded paint, a tarp on the roof, a boarded window, barred windows, junk, a dead lawn;
   - cars: beaters, then sedans, then luxury cars;
   - privacy: chain-link, then a board fence, then a picket front, then a hedge and a front wall;
@@ -125,6 +125,24 @@ block, for 2-3 sessions.
   T5 tower. The east side is nearly all T2, because its lots are all one size.
 - Markers that are not built: farm homes other than the small farmhouse (their size already speaks),
   ranch and adobe houses, and the city.
+
+### Review of phase 1 (fixed, and what stays open)
+
+- Fixed: the T4 car on 14 m hill lots hung 1.15 m past the lot front; it now pulls half into an open
+  garage. The T4 hedge narrowed the drive gate (hedge runs reach 0.4 m past their ends): its gate is
+  0.8 m wider and the lit piers cap the hedge ends. T5 mansion cars park nose to tail on one side
+  of the loop. Tarps stay inside the hips. Cars on blocks sit on their blocks. Apartment tenant cars
+  keep their whole width off the drive. The kit comment for tier -1 now says it draws the `usual`
+  tier (not always the pre-tier look).
+- Tests: chain-link must cross a T1 house's front (a T2 board fence must not); a T4 car stays on a
+  14 m lot; every marked kind builds differently at the bottom and top of its range.
+- Open, and honest: "richer means more ground" holds across the ladder because of the mix of kinds
+  (capes, houses, mansions), not inside a kind: 609 houses share the 15 x 30 lot whatever their
+  tier, and T4 beats T3 on ground only through the 13 street mansions. Phase 3 must size lots by
+  tier within a kind (wider, deeper house lots for T3-T4) and check the ladder per kind.
+- Open: no T0 trailers in the data (all 3 are T1), so the T0 trailer markers never show; all 27
+  apartment lots are 18 m deep, too shallow for tenant cars; the east side is 606 of 672 homes at
+  T2; T3 and T4 condo towers differ only in their pools.
 
 ## Open questions
 

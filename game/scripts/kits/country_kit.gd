@@ -716,7 +716,7 @@ static func _car(mb, out: Array, p: Vector3, yaw: float, color: Color, collide :
 	for x: float in [-0.82, 0.82]:
 		for z: float in [-axle, axle]:
 			if style == CAR_BLOCKS:
-				mb.box(Vector3(x, 0.2, z), Vector3(0.35, 0.4, 0.4), Color(0.6, 0.6, 0.58))
+				mb.box(Vector3(x, 0.27, z), Vector3(0.35, 0.54, 0.4), Color(0.6, 0.6, 0.58))  # up to the body
 			else:
 				_wheel(mb, Vector3(x, 0.34, z), 0.34, 0.22)
 	mb.xform = saved
@@ -729,7 +729,8 @@ static func _car(mb, out: Array, p: Vector3, yaw: float, color: Color, collide :
 ## The household tier on the lot being built, T0 (the poorest) to T5
 ## (owners and CEOs), from lot element 10 (tools/wealth.py; country_tiles
 ## sets it before each build). -1 when the lot has none (tests, galleries):
-## each kit then takes its usual look.
+## each kit then draws the `usual` tier its _wealth call names, which is not
+## always the look it had before tiers (a shack's window is boarded, say).
 static var wealth := -1
 
 ## The tier to draw: `wealth` held to the kind's range, `usual` when unset.
@@ -3046,10 +3047,14 @@ static func house(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator
 		# A tarp over a leak on the front slope, clear of the hips.
 		var ze := cz - (bd + 1.0) * 0.5
 		var tx := mx + rng.randf_range(-0.6, 0.6)
-		_tarp(mb, Vector3(tx, H + rise * 0.15, lerpf(ze, cz, 0.15)), Vector3(tx, H + rise * 0.6, lerpf(ze, cz, 0.6)), minf(2.2, bw * 0.35))
+		# The slope narrows toward the ridge: keep the top edge inside the hips.
+		var lim := (total + 1.0) * 0.5 - 0.6 * (bd + 1.0) * 0.5 - 0.2
+		var tw := minf(minf(2.2, bw * 0.35), lim * 2.0)
+		if tw >= 0.8:
+			tx = clampf(tx, -lim + tw * 0.5, lim - tw * 0.5)
+			_tarp(mb, Vector3(tx, H + rise * 0.15, lerpf(ze, cz, 0.15)), Vector3(tx, H + rise * 0.6, lerpf(ze, cz, 0.6)), tw)
 	# Garage door, front door, windows.
 	var front := fz - 0.04
-	mb.box(Vector3(gx, 1.25, front), Vector3(gw - 0.7, 2.3, 0.08), MeshBuilder.glow(WHITE, MeshBuilder.SIDING))
 	var dx := mx + side * bw * 0.22
 	mb.box(Vector3(dx, 1.2, front), Vector3(1.0, 2.1, 0.08), _pick(ACCENTS, rng))
 	mb.box(Vector3(dx, 2.4, front - 0.06), Vector3(1.4, 0.12, 0.3), trim)
@@ -3078,8 +3083,18 @@ static func house(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator
 		Props.palm(mb, out, Vector3(-side * (w * 0.5 - 3.0), 0, -d * 0.5 + 2.6), rng)
 	else:
 		Props.crepe_myrtle(mb, out, Vector3(-side * (w * 0.5 - 2.0), 0, -d * 0.5 + 2.2), rng)
+	# The car on the drive, its nose 0.3 m inside the lot. On a short front
+	# (the 14 m hill lots) it pulls half into the garage, door up.
+	var garage_open := false
 	if t >= 4 or rng.randf() < [0.75, 0.6, 0.8, 1.0][t - 1]:
-		_wealth_car(mb, out, Vector3(gx, 0, fz - 3.2), 0.0, t, rng)
+		var half := 2.45 if t >= 4 else 2.15
+		var car_z := maxf(fz - 3.2, -d * 0.5 + 0.3 + half)
+		garage_open = car_z + half > fz - 0.1
+		_wealth_car(mb, out, Vector3(gx, 0, car_z), 0.0, t, rng)
+	if garage_open:
+		mb.box(Vector3(gx, 1.25, front), Vector3(gw - 0.7, 2.3, 0.08), Color(0.07, 0.07, 0.08))
+	else:
+		mb.box(Vector3(gx, 1.25, front), Vector3(gw - 0.7, 2.3, 0.08), MeshBuilder.glow(WHITE, MeshBuilder.SIDING))
 	# Back: a screened pool cage or a patio.
 	var back := fz + bd
 	var room := d * 0.5 - back
@@ -3120,11 +3135,13 @@ static func house(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator
 	if t <= 1:
 		_lot_fence(mb, out, w, d, "chain", Color(0.66, 0.68, 0.7), gate, true, 1.2, false)
 	elif t >= 4:
-		_lot_fence(mb, out, w, d, "hedge", LEAF, gate, true, 1.2, false)
+		# Hedge runs reach 0.4 m past their ends, so the gate is 0.8 m wider
+		# to leave the same opening; the lit piers cap the hedge ends.
+		_lot_fence(mb, out, w, d, "hedge", LEAF, [[gx, gw + 1.2]], true, 1.2, false)
 		var stucco := MeshBuilder.glow(Color(0.93, 0.9, 0.84), MeshBuilder.CONCRETE)
 		for s: float in [-1.0, 1.0]:
-			_solid(mb, out, Vector3(gx + s * (gw * 0.5 + 0.55), 0.8, -d * 0.5 + 1.2), Vector3(0.6, 1.6, 0.6), stucco)
-			mb.ball(Vector3(gx + s * (gw * 0.5 + 0.55), 1.75, -d * 0.5 + 1.2), Vector3(0.2, 0.2, 0.2), MeshBuilder.glow(Color(1.0, 0.9, 0.6), MeshBuilder.GLOW_LAMP), 6, 3)
+			_solid(mb, out, Vector3(gx + s * (gw * 0.5 + 0.5), 0.8, -d * 0.5 + 1.2), Vector3(0.6, 1.6, 0.6), stucco)
+			mb.ball(Vector3(gx + s * (gw * 0.5 + 0.5), 1.75, -d * 0.5 + 1.2), Vector3(0.2, 0.2, 0.2), MeshBuilder.glow(Color(1.0, 0.9, 0.6), MeshBuilder.GLOW_LAMP), 6, 3)
 	elif t == 3 and rng.randf() < 0.5:
 		_lot_fence(mb, out, w, d, "picket", WHITE, gate, true, 1.2, false)
 	else:
@@ -3202,8 +3219,12 @@ static func mansion(mb, out: Array, w: float, d: float, rng: RandomNumberGenerat
 	mb.cylinder(rc + Vector3(0, 1.8, 0), 0.8, 0.15, MeshBuilder.glow(CONCRETE.lightened(0.15), MeshBuilder.CONCRETE), 8)
 	_col(out, rc + Vector3(0, 0.5, 0), Vector3(fr * 1.6, 1.0, fr * 1.6))
 	# Cars on the loop: one luxury car at T4, two at T5 (owners and CEOs).
-	for k in _wealth(4, 5, 4) - 3:
-		_wealth_car(mb, out, rc + Vector3(r if k == 0 else -r, 0, 0), 0.0, 5, rng)
+	# Both on the east side, nose to tail along the loop, so the far side
+	# stays open for a car to pass.
+	var cars := _wealth(4, 5, 4) - 3
+	for k in cars:
+		var a := 0.0 if cars == 1 else (2.7 if k == 0 else -2.7) / r
+		_wealth_car(mb, out, rc + Vector3(cos(a), 0, sin(a)) * r, -a, 5, rng)
 	for s: float in ([] if in_grounds else [-1.0, 1.0]):
 		_solid(mb, out, Vector3(s * 2.3, 1.1, -d * 0.5 + 0.7), Vector3(0.9, 2.2, 0.9), MeshBuilder.glow(BRICKS[0], MeshBuilder.BRICK))
 		mb.ball(Vector3(s * 2.3, 2.5, -d * 0.5 + 0.7), Vector3(0.3, 0.3, 0.3), MeshBuilder.glow(Color(1.0, 0.9, 0.6), MeshBuilder.GLOW_LAMP), 6, 3)
@@ -3290,7 +3311,7 @@ static func garden_apartments(mb, out: Array, w: float, d: float, rng: RandomNum
 	if stall_d >= 4.6:
 		for i in n:
 			var x := -n * 1.35 + 1.35 + i * 2.7
-			if absf(x) > 2.6 and rng.randf() < 0.45:
+			if absf(x) - 0.95 > 2.6 and rng.randf() < 0.45:
 				_wealth_car(mb, out, Vector3(x, 0, fz - 4.6 - stall_d * 0.5), PI, t, rng)
 	_solid(mb, out, Vector3(w * 0.5 - 2.0, 0.9, d * 0.5 - 1.6), Vector3(3.0, 1.8, 2.0), MeshBuilder.glow(CONCRETE, MeshBuilder.CONCRETE))
 	if t <= 1:
