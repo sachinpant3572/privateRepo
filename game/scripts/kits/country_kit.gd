@@ -554,11 +554,184 @@ static func _hedge(mb, out: Array, a: Vector3, b: Vector3, h: float, collide := 
 ## farm fence, split a two-rail split-rail, picket a white picket fence,
 ## chain chain-link, board a tall privacy fence, wall a rendered wall with a
 ## cap and pilasters, low a knee-high brick wall, hedge a clipped hedge,
-## wire three strands on posts 4 m apart (big spreads).
+## wire three strands on posts 4 m apart (big spreads), slat horizontal
+## boards with gaps, ply painted sheets nailed to posts (each its own shade,
+## a raw patch here and there), iron wrought-iron bars on a low wall with
+## piers, block a bare or painted concrete-block wall, brick a brick wall
+## with piers, stone a dry-stone wall, broken chain-link gone to ruin (panels
+## sagging or down, each standing panel its own collider). The height here
+## is the usual one: a boundary() spec sets its own.
 const FENCES := {
 	"rail": [1.2, 0.2], "split": [1.1, 0.2], "picket": [1.0, 0.15], "chain": [1.8, 0.15], "wire": [1.2, 0.15],
 	"board": [1.8, 0.15], "wall": [1.4, 0.35], "low": [0.8, 0.35], "hedge": [1.1, 0.8],
+	"slat": [1.6, 0.12], "ply": [1.9, 0.12], "iron": [1.6, 0.3], "block": [1.7, 0.25], "brick": [1.9, 0.3],
+	"stone": [0.9, 0.5], "broken": [1.5, 0.15],
 }
+## Masonry styles: a pier at each gate post, with its collider.
+const MASONRY := ["wall", "low", "iron", "block", "brick", "stone"]
+const FENCE_IRON := Color(0.12, 0.12, 0.13)
+
+# --- Boundaries (Sachin: "every house should not same kind of fence some can
+# have it but others can have their own different types of boundaries, from
+# wood, concrete, ply, some high some low etc, depending upon the people,
+# location etc." and "every home does not need to have same length and
+# height of gate, make it mixed please.") ---------------------------------------
+
+## The lot's zone (country.json lot element 7), set by country_tiles around
+## each build like wealth; "" in tests and galleries.
+static var zone := ""
+
+## Front styles by household tier T0-T5: [style, weight, lowest, highest
+## height]. "" leaves the front open, a lawn to the road. Poor homes behind
+## chain-link, sheets or a ruin of a fence, or none; suburban ones open or
+## behind pickets and low walls; rich ones behind tall walls, iron or hedges.
+const FRONTS := [
+	[["", 30, 0.0, 0.0], ["broken", 25, 1.0, 1.5], ["chain", 20, 1.2, 1.8], ["ply", 15, 1.6, 2.0], ["wire", 10, 1.0, 1.3]],
+	[["chain", 30, 1.2, 1.8], ["", 25, 0.0, 0.0], ["broken", 15, 1.0, 1.5], ["ply", 15, 1.6, 2.0], ["block", 15, 0.8, 1.4]],
+	[["", 40, 0.0, 0.0], ["picket", 15, 0.7, 1.1], ["low", 10, 0.6, 0.9], ["block", 10, 0.7, 1.2], ["chain", 10, 1.0, 1.5], ["slat", 8, 0.9, 1.3], ["hedge", 7, 0.8, 1.2]],
+	[["picket", 25, 0.8, 1.2], ["", 20, 0.0, 0.0], ["low", 15, 0.6, 1.0], ["hedge", 15, 0.9, 1.4], ["iron", 15, 1.1, 1.5], ["stone", 10, 0.6, 1.0]],
+	[["hedge", 30, 1.1, 2.2], ["iron", 25, 1.5, 2.2], ["wall", 25, 1.8, 2.5], ["brick", 20, 1.6, 2.3]],
+	[["wall", 30, 2.0, 2.5], ["iron", 30, 1.8, 2.4], ["hedge", 20, 1.6, 2.4], ["brick", 20, 1.8, 2.4]],
+]
+## Sides and back by tier, always there so a yard never just stops at the
+## field: [style, weight, lowest, highest].
+const BACKS := [
+	[["chain", 35, 1.4, 1.8], ["ply", 35, 1.6, 2.1], ["wire", 30, 1.0, 1.3]],
+	[["chain", 35, 1.5, 1.8], ["board", 25, 1.5, 1.8], ["ply", 25, 1.7, 2.1], ["wire", 15, 1.1, 1.3]],
+	[["board", 40, 1.6, 2.0], ["slat", 15, 1.5, 1.9], ["block", 20, 1.5, 2.0], ["chain", 15, 1.5, 1.8], ["ply", 10, 1.7, 2.0]],
+	[["board", 35, 1.7, 2.1], ["slat", 25, 1.6, 2.0], ["brick", 15, 1.7, 2.1], ["block", 10, 1.6, 2.0], ["hedge", 15, 1.6, 2.2]],
+	[["wall", 35, 2.0, 2.5], ["hedge", 25, 1.8, 2.4], ["brick", 20, 1.9, 2.4], ["slat", 20, 1.8, 2.1]],
+	[["wall", 40, 2.1, 2.5], ["hedge", 30, 2.0, 2.4], ["brick", 30, 2.0, 2.5]],
+]
+## Where a zone leans: a style's weight there times this.
+const ZONE_LEAN := {
+	"heights": {"wall": 2.0, "iron": 1.5, "stone": 1.5},
+	"mountain": {"stone": 3.0, "wall": 1.5, "hedge": 0.5},
+	"bayou_town": {"chain": 1.5, "ply": 2.0, "wire": 2.0, "": 1.5, "broken": 1.5},
+	"eastside": {"block": 1.5, "chain": 1.3, "": 1.2},
+	"wheaton": {"picket": 2.0, "wire": 1.5, "board": 1.3},
+	"larkspur": {"picket": 2.0, "stone": 2.0, "wire": 1.5},
+	"shore": {"low": 2.0, "slat": 2.0, "picket": 1.5, "wall": 1.5},
+	"beach_town": {"low": 2.0, "slat": 2.0, "picket": 1.5, "wall": 1.5},
+}
+## Paints and materials per style; each household takes one.
+const FENCE_COLORS := {
+	"picket": [Color(0.94, 0.93, 0.89), Color(0.94, 0.93, 0.89), Color(0.9, 0.86, 0.72), Color(0.62, 0.74, 0.8), Color(0.62, 0.5, 0.38)],
+	"board": [Color(0.62, 0.5, 0.36), Color(0.78, 0.72, 0.62), Color(0.94, 0.93, 0.89), Color(0.55, 0.53, 0.5), Color(0.48, 0.3, 0.22)],
+	"slat": [Color(0.36, 0.26, 0.18), Color(0.66, 0.45, 0.3), Color(0.4, 0.4, 0.42), Color(0.16, 0.16, 0.17)],
+	"ply": [Color(0.74, 0.62, 0.44), Color(0.36, 0.5, 0.64), Color(0.42, 0.55, 0.4), Color(0.6, 0.32, 0.26), Color(0.6, 0.62, 0.63)],
+	"chain": [Color(0.66, 0.68, 0.7), Color(0.66, 0.68, 0.7), Color(0.24, 0.36, 0.27)],
+	"broken": [Color(0.5, 0.47, 0.42), Color(0.58, 0.56, 0.52)],
+	"wire": [Color(0.48, 0.44, 0.38), Color(0.4, 0.37, 0.32)],
+	"block": [Color(0.62, 0.62, 0.6), Color(0.86, 0.83, 0.75), Color(0.85, 0.68, 0.58), Color(0.7, 0.7, 0.66)],
+	"brick": [Color(0.6, 0.32, 0.25), Color(0.52, 0.28, 0.22), Color(0.68, 0.44, 0.34), Color(0.8, 0.72, 0.6)],
+	"low": [Color(0.6, 0.32, 0.25), Color(0.52, 0.28, 0.22), Color(0.68, 0.44, 0.34)],
+	"wall": [Color(0.93, 0.9, 0.84), Color(0.96, 0.95, 0.92), Color(0.86, 0.78, 0.64), Color(0.88, 0.72, 0.64)],
+	"iron": [Color(0.93, 0.9, 0.84), Color(0.6, 0.32, 0.25), Color(0.7, 0.69, 0.66)],
+	"stone": [Color(0.6, 0.58, 0.54), Color(0.66, 0.6, 0.5), Color(0.52, 0.5, 0.47)],
+	"hedge": [Color(0.3, 0.44, 0.22), Color(0.26, 0.4, 0.2), Color(0.34, 0.46, 0.24)],
+	"rail": [Color(0.48, 0.44, 0.38), Color(0.97, 0.96, 0.92), Color(0.5, 0.42, 0.33)],
+	"split": [Color(0.5, 0.42, 0.33), Color(0.48, 0.44, 0.38)],
+}
+## The gate leaves each front style hangs (see _leaf).
+const GATE_LOOKS := {
+	"picket": ["picket"], "chain": ["mesh"], "broken": ["mesh"], "ply": ["wood", "mesh"], "wire": ["bars"],
+	"rail": ["bars"], "split": ["bars"], "board": ["wood"], "slat": ["wood"], "block": ["mesh", "iron", "wood"],
+	"low": ["iron", "picket"], "hedge": ["iron", "wood"], "iron": ["iron"], "wall": ["iron", "wood"],
+	"brick": ["iron", "wood"], "stone": ["wood", "iron"],
+}
+## How the gate hangs by tier: [kind, weight] (see _gate_leaves).
+const GATE_KINDS := [
+	[["", 50], ["swing", 30], ["double", 20]],
+	[["", 45], ["swing", 30], ["double", 25]],
+	[["", 35], ["swing", 25], ["double", 25], ["slide", 15]],
+	[["", 25], ["swing", 25], ["double", 30], ["slide", 20]],
+	[["", 15], ["double", 45], ["slide", 40]],
+	[["", 10], ["double", 45], ["slide", 45]],
+]
+
+
+## A household's boundary, from its tier t, its zone and its own seed (its
+## own generator, so the kit's other draws stay as they were): a spec for
+## _lot_fence with the front "style" ("" open) and "h", the sides and back
+## ("back", "back_h"), their colours, the gate ("gate" kind, "gate_look",
+## "gate_h"), how much wider than the drive the drive gate is ("drive_extra")
+## and a pedestrian gate's width ("walk", 0 for none).
+static func boundary(t: int, where: String, seed: int) -> Dictionary:
+	var r := RandomNumberGenerator.new()
+	r.seed = seed
+	t = clampi(t, 0, 5)
+	var lean: Dictionary = ZONE_LEAN.get(where, {})
+	var front: Array = _roll(FRONTS[t], lean, r)
+	var back: Array = _roll(BACKS[t], lean, r)
+	var fs: String = front[0]
+	var bs: String = back[0]
+	var b := {"style": fs, "h": snappedf(r.randf_range(front[2], front[3]), 0.05), "back": bs,
+		"back_h": snappedf(r.randf_range(back[2], back[3]), 0.05)}
+	var fc: Array = FENCE_COLORS.get(fs, [WHITE])
+	var bc: Array = FENCE_COLORS[bs]
+	b["color"] = fc[r.randi() % fc.size()]
+	b["back_color"] = b.color if bs == fs else bc[r.randi() % bc.size()]
+	b["gate"] = _roll(GATE_KINDS[t], {}, r)[0]
+	var looks: Array = GATE_LOOKS.get(fs, ["wood"])
+	b["gate_look"] = looks[r.randi() % looks.size()]
+	b["gate_h"] = clampf(snappedf(b.h + r.randf_range(-0.35, 0.3), 0.05), 0.8, 2.3)
+	b["drive_extra"] = snappedf(r.randf_range(0.2, 1.4), 0.1)
+	b["walk"] = snappedf(r.randf_range(0.9, 1.4), 0.1) if r.randf() < [0.2, 0.3, 0.45, 0.6, 0.5, 0.5][t] else 0.0
+	b["lamps"] = t >= 4
+	return b
+
+
+## A farm's boundary (rural: post-and-rail or none): `usual` and its paint
+## most often, else another farm style; its height and gate from the farm's
+## own seed, and the front left open on about one in four.
+static func _farm_fence(rng: RandomNumberGenerator, usual: String, color: Color) -> Dictionary:
+	var r := RandomNumberGenerator.new()
+	r.seed = hash([rng.seed, "farm fence"])
+	var style := usual
+	var roll := r.randf()
+	if roll < 0.2:
+		style = "wire"
+	elif roll < 0.35:
+		style = "split" if usual == "rail" else "rail"
+	elif roll < 0.5 and zone in ["mountain", "larkspur", "heights"]:
+		style = "stone"
+	var paints: Array = FENCE_COLORS[style]
+	var paint: Color = color if style == usual else paints[r.randi() % paints.size()]
+	var h := snappedf(FENCES[style][0] * r.randf_range(0.85, 1.2), 0.05)
+	var open := r.randf() < 0.25
+	return {"style": "" if open else style, "h": h, "back": style, "back_h": h, "color": paint, "back_color": paint,
+		"gate": ["", "", "swing", "double"][r.randi() % 4], "gate_look": "bars" if style != "stone" else "wood",
+		"gate_h": snappedf(r.randf_range(1.0, 1.4), 0.05)}
+
+
+## An adobe's yard wall: stucco most often, at a height of its own, else
+## iron bars on a stucco base, dry stone or block; the back stucco (stone
+## behind stone); the gate iron or wood, or none.
+static func _adobe_wall(rng: RandomNumberGenerator, color: Color) -> Dictionary:
+	var r := RandomNumberGenerator.new()
+	r.seed = hash([rng.seed, "adobe wall"])
+	var style: String = _roll([["wall", 55], ["iron", 20], ["stone", 15], ["block", 10]], {}, r)[0]
+	var h := snappedf(r.randf_range(0.8, 1.2) if style == "stone" else r.randf_range(1.0, 2.2), 0.05)
+	var paints: Array = FENCE_COLORS[style]
+	var paint: Color = color if style in ["wall", "iron"] else paints[r.randi() % paints.size()]
+	var back := "stone" if style == "stone" else "wall"
+	return {"style": style, "h": h, "back": back, "back_h": h if back == style else snappedf(r.randf_range(1.2, 1.9), 0.05),
+		"color": paint, "back_color": color if back == "wall" else paint, "gate": ["", "swing", "double"][r.randi() % 3],
+		"gate_look": "iron" if r.randf() < 0.6 else "wood", "gate_h": snappedf(clampf(h, 1.0, 1.9), 0.05)}
+
+
+## One weighted pick from [[name, weight, ...], ...], weights times lean.
+static func _roll(table: Array, lean: Dictionary, r: RandomNumberGenerator) -> Array:
+	var total := 0.0
+	for e: Array in table:
+		total += float(e[1]) * float(lean.get(e[0], 1.0))
+	var x := r.randf() * total
+	for e: Array in table:
+		x -= float(e[1]) * float(lean.get(e[0], 1.0))
+		if x < 0.0:
+			return e
+	return table[table.size() - 1]
 
 
 ## A fence or wall round a lot whose yard differs from the land about it, so
@@ -569,59 +742,155 @@ const FENCES := {
 ## Each front gate [x, width] gets a route out to the road in `route`'s
 ## colour (gravel when null, none when false); a gate [x, width, z] also
 ## gets one in to z (a door or porch with no drive of its own), and a
-## fourth element true makes it a dirt two-track.
-static func _lot_fence(mb, out: Array, w: float, d: float, style: String, color: Color, gates := [], front := true, front_in := 1.2, route = null) -> void:
-	var t: float = FENCES[style][1]
+## fourth element true makes it a dirt two-track (the routes are drawn with
+## the front open too). `style` is a FENCES name, or a boundary() spec: the
+## front's "style" ("" open) and "h", the sides and back ("back", "back_h",
+## "back_color"), and the leaves hung in each front gate ("gate", see
+## _gate_leaves; "gate_look", "gate_h"), "lamps" on the gate piers.
+static func _lot_fence(mb, out: Array, w: float, d: float, style, color: Color, gates := [], front := true, front_in := 1.2, route = null) -> void:
+	var b: Dictionary = style if style is Dictionary else {"style": style}
+	var fs: String = b.style
+	var bs: String = b.get("back", fs)
+	var fh: float = b.get("h", FENCES[fs][0]) if fs != "" else 0.0
+	var bh: float = b.get("back_h", fh if bs == fs else FENCES[bs][0])
+	var fc: Color = b.get("color", color)
+	var bc: Color = b.get("back_color", fc)
+	var t: float = FENCES[bs][1]
 	var x0 := -w * 0.5 + 0.1 + t * 0.5
 	var x1 := w * 0.5 - 0.1 - t * 0.5
 	var zf := -d * 0.5 + front_in
 	var zb := d * 0.5 - 0.1 - t * 0.5
-	_fence_run(mb, out, Vector3(x0, 0, zf), Vector3(x0, 0, zb), style, color)
-	_fence_run(mb, out, Vector3(x0, 0, zb), Vector3(x1, 0, zb), style, color)
-	_fence_run(mb, out, Vector3(x1, 0, zb), Vector3(x1, 0, zf), style, color)
-	if not front:
-		return
+	_fence_run(mb, out, Vector3(x0, 0, zf), Vector3(x0, 0, zb), bs, bc, bh)
+	_fence_run(mb, out, Vector3(x0, 0, zb), Vector3(x1, 0, zb), bs, bc, bh)
+	_fence_run(mb, out, Vector3(x1, 0, zb), Vector3(x1, 0, zf), bs, bc, bh)
 	var cuts := gates.duplicate()
-	cuts.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
+	cuts.sort_custom(func(a: Array, c: Array) -> bool: return a[0] < c[0])
 	if not (route is bool):
 		var surface: Color = route if route is Color else MeshBuilder.glow(ROUTE_GRAVEL, MeshBuilder.CONCRETE)
 		for g: Array in cuts:
 			var half: float = maxf(0.5, g[1] * 0.5 - 0.3)
 			var ruts: bool = g.size() > 3 and g[3]
 			_route_out(mb, g[0] - half, g[0] + half, d, surface, g[2] if g.size() > 2 else NAN, ruts)
-	var x := x0
+	if not front or fs == "":
+		return
+	var ft: float = FENCES[fs][1]
+	# A hedge runs on half its thickness past its ends: the opening is that
+	# much narrower than the cut, and the leaves hang inside it.
+	var inset := ft * 0.5 if fs == "hedge" else 0.0
+	var lamp := MeshBuilder.glow(Color(1.0, 0.9, 0.6), MeshBuilder.GLOW_LAMP)
+	# A hedge front starts at the side runs' inner faces (it runs on past
+	# its ends), so a short stub never stands in a side fence.
+	var end := t * 0.5 + 0.02 + ft * 0.5 if fs == "hedge" else 0.0
+	var x := x0 + end
 	for g: Array in cuts:
 		var g0: float = g[0] - g[1] * 0.5
 		var g1: float = g[0] + g[1] * 0.5
-		_fence_run(mb, out, Vector3(x, 0, zf), Vector3(minf(g0, x1), 0, zf), style, color)
-		# Gate posts, or piers in a wall.
-		var h: float = FENCES[style][0]
-		for gx: float in [g0, g1]:
+		if minf(g0, x1 - end) - x > 0.3:
+			_fence_run(mb, out, Vector3(x, 0, zf), Vector3(minf(g0, x1 - end), 0, zf), fs, fc, fh)
+		# Gate posts, or piers in a wall (and at a rich hedge's gap), under
+		# 0.6 m square so a pier never reads as a building.
+		for k in 2:
+			var gx: float = g0 + inset if k == 0 else g1 - inset
 			if gx > x0 + 0.3 and gx < x1 - 0.3:
-				if style == "wall" or style == "low":
-					_solid(mb, out, Vector3(gx, (h + 0.3) * 0.5, zf), Vector3(t + 0.2, h + 0.3, t + 0.2), color.darkened(0.08))
-				elif style != "hedge":
-					mb.box(Vector3(gx, (h + 0.15) * 0.5, zf), Vector3(0.18, h + 0.15, 0.18), color.darkened(0.15))
+				if fs in MASONRY or (fs == "hedge" and b.get("lamps", false)):
+					var ph := (maxf(fh, 1.2) if fs == "hedge" else fh) + 0.3
+					var pier := MeshBuilder.glow(Color(0.93, 0.9, 0.84), MeshBuilder.CONCRETE) if fs == "hedge" else fc.darkened(0.08)
+					_solid(mb, out, Vector3(gx, ph * 0.5, zf), Vector3(0.56, ph, 0.56), pier)
+					if b.get("lamps", false):
+						mb.ball(Vector3(gx, ph + 0.15, zf), Vector3(0.2, 0.2, 0.2), lamp, 6, 3)
+				elif fs != "hedge":
+					mb.box(Vector3(gx, (fh + 0.15) * 0.5, zf), Vector3(0.18, fh + 0.15, 0.18), fc.darkened(0.15))
+		var kind: String = b.get("gate", "")
+		if g[1] <= 1.6 + inset * 2.0 and kind != "":
+			kind = "swing"  # a pedestrian gate: one leaf
+		# A sliding leaf runs back only as far as the next gate's post, never
+		# across a walk gate beside the drive.
+		var i := cuts.find(g)
+		var hi: float = x1 if i == cuts.size() - 1 else minf(x1, cuts[i + 1][0] - cuts[i + 1][1] * 0.5)
+		_gate_leaves(mb, out, g0 + inset, g1 - inset, zf, ft, kind, b.get("gate_look", "wood"), b.get("gate_h", minf(fh, 1.8)), fc, x, hi)
 		x = maxf(x, g1)
-	_fence_run(mb, out, Vector3(x, 0, zf), Vector3(x1, 0, zf), style, color)
+	if x1 - end - x > 0.3:
+		_fence_run(mb, out, Vector3(x, 0, zf), Vector3(x1 - end, 0, zf), fs, fc, fh)
+
+
+## The gate in the opening g0..g1 of a front run on z = zf, always drawn
+## open so the way in stays clear: "swing" one leaf hinged on the left post
+## and turned in square to the yard (narrow gates), "double" a leaf from each
+## post turned in the same way, "slide" one leaf run back behind the fence on
+## whichever side has the room (a double where neither has), "" none, just
+## the posts. A gap over 2 m never swings one leaf (it would reach the
+## house). Each leaf has its own thin collider, beside the way in.
+static func _gate_leaves(mb, out: Array, g0: float, g1: float, zf: float, t: float, kind: String, look: String, h: float, color: Color, x0: float, x1: float) -> void:
+	var gap := g1 - g0
+	if kind == "" or gap < 0.6:
+		return
+	if kind == "swing" and gap > 2.0:
+		kind = "double"
+	if kind == "slide":
+		var z := zf + t * 0.5 + 0.12
+		if x1 - 0.3 - g1 >= gap:
+			_leaf(mb, out, Vector3(g1 + gap * 0.5, 0, z), Vector3.RIGHT, gap, h, look, color)
+			return
+		if g0 - (x0 + 0.3) >= gap:
+			_leaf(mb, out, Vector3(g0 - gap * 0.5, 0, z), Vector3.RIGHT, gap, h, look, color)
+			return
+		kind = "double"
+	var leaves := [[g0 + 0.06, gap]] if kind == "swing" else [[g0 + 0.06, gap * 0.5], [g1 - 0.06, gap * 0.5]]
+	for lf: Array in leaves:
+		_leaf(mb, out, Vector3(lf[0], 0, zf + 0.1 + lf[1] * 0.5), Vector3.BACK, lf[1], h, look, color)
+
+
+## One gate leaf centred on c (on the ground), `length` along u (X or Z) and
+## h tall, in a frame: "iron" bars, "wood" solid boards, "mesh" chain-link,
+## "picket" pickets, "bars" a five-bar farm gate; with its thin collider.
+static func _leaf(mb, out: Array, c: Vector3, u: Vector3, length: float, h: float, look: String, color: Color) -> void:
+	var frame := FENCE_IRON if look == "iron" else (Color(0.66, 0.68, 0.68) if look in ["mesh", "bars"] else color.darkened(0.15))
+	mb.box(c + Vector3(0, h - 0.04, 0), _run_size(u, length, 0.06, 0.08), frame)
+	mb.box(c + Vector3(0, 0.14, 0), _run_size(u, length, 0.06, 0.08), frame)
+	for s: float in [-1.0, 1.0]:
+		mb.box(c + u * s * (length * 0.5 - 0.03) + Vector3(0, h * 0.5, 0), Vector3(0.06, h, 0.06), frame)
+	match look:
+		"iron":
+			var n := maxi(2, int(length / 0.16))
+			for i in range(1, n):
+				mb.box(c + u * (-length * 0.5 + length * i / n) + Vector3(0, h * 0.5, 0), Vector3(0.03, h - 0.1, 0.03), FENCE_IRON)
+			mb.box(c + Vector3(0, h * 0.62, 0), _run_size(u, length, 0.04, 0.05), FENCE_IRON)
+		"wood":
+			mb.box(c + Vector3(0, h * 0.5 + 0.04, 0), _run_size(u, length - 0.08, 0.04, h - 0.12), MeshBuilder.glow(color, MeshBuilder.SIDING))
+		"mesh":
+			mb.box(c + Vector3(0, h * 0.5 + 0.04, 0), _run_size(u, length - 0.08, 0.02, h - 0.14), MeshBuilder.glow(Color(0.42, 0.45, 0.45), MeshBuilder.METAL))
+		"picket":
+			var n := maxi(2, int(length / 0.18))
+			for i in n:
+				mb.box(c + u * (-length * 0.5 + (i + 0.5) * length / n) + Vector3(0, h * 0.47, 0), _run_size(u, 0.09, 0.03, h * 0.94), color)
+		"bars":
+			for k in 4:
+				mb.box(c + Vector3(0, 0.34 + (h - 0.4) * k / 3.0, 0), _run_size(u, length, 0.05, 0.05), frame)
+	_col(out, c + Vector3(0, h * 0.5, 0), _run_size(u, length, 0.08, h))
 
 
 ## One straight run of a _lot_fence style from a to b (along X or Z), with
-## its collider.
-static func _fence_run(mb, out: Array, a: Vector3, b: Vector3, style: String, color: Color) -> void:
+## its collider, h tall (the style's usual height when negative); rails and
+## strands keep their spacing in proportion.
+static func _fence_run(mb, out: Array, a: Vector3, b: Vector3, style: String, color: Color, h := -1.0) -> void:
 	var along := b - a
 	var length := along.length()
 	if length < 0.3:
 		return
 	var u := along / length
 	var mid := (a + b) * 0.5
-	var h: float = FENCES[style][0]
+	if h <= 0.0:
+		h = FENCES[style][0]
+	var k: float = h / FENCES[style][0]
 	var t: float = FENCES[style][1]
 	if style == "hedge":
 		_hedge(mb, out, a, b, h, true, t)
 		return
-	var bays := maxi(1, int(round(length / {"chain": 3.0, "wire": 4.0}.get(style, 2.4))))
-	var post_t := {"rail": 0.14, "split": 0.18, "picket": 0.12, "chain": 0.08, "board": 0.14, "wire": 0.12}.get(style, 0.0) as float
+	if style == "broken":
+		_broken_run(mb, out, a, b, color, h)
+		return
+	var bays := maxi(1, int(round(length / {"chain": 3.0, "wire": 4.0, "iron": 3.0, "brick": 3.0}.get(style, 2.4))))
+	var post_t := {"rail": 0.14, "split": 0.18, "picket": 0.12, "chain": 0.08, "board": 0.14, "wire": 0.12, "slat": 0.12, "ply": 0.12}.get(style, 0.0) as float
 	if post_t > 0.0:
 		for i in bays + 1:
 			var p := a.lerp(b, float(i) / bays)
@@ -629,16 +898,55 @@ static func _fence_run(mb, out: Array, a: Vector3, b: Vector3, style: String, co
 	match style:
 		"rail":
 			for y: float in [0.35, 0.72, 1.08]:
-				mb.box(mid + Vector3(0, y, 0), _run_size(u, length, 0.05, 0.14), color)
+				mb.box(mid + Vector3(0, y * k, 0), _run_size(u, length, 0.05, 0.14), color)
 		"wire":
 			for y: float in [0.4, 0.75, 1.1]:
-				mb.box(mid + Vector3(0, y, 0), _run_size(u, length, 0.025, 0.025), Color(0.35, 0.36, 0.37))
+				mb.box(mid + Vector3(0, y * k, 0), _run_size(u, length, 0.025, 0.025), Color(0.35, 0.36, 0.37))
 		"split":
 			for y: float in [0.45, 0.85]:
-				mb.box(mid + Vector3(0, y, 0), _run_size(u, length, 0.09, 0.1), color)
+				mb.box(mid + Vector3(0, y * k, 0), _run_size(u, length, 0.09, 0.1), color)
+		"slat":
+			var n := maxi(3, int(h / 0.2))
+			for i in n:
+				mb.box(mid + Vector3(0, (i + 0.5) * h / n, 0), _run_size(u, length, 0.04, h / n * 0.72), color if i % 2 == 0 else color.darkened(0.05))
+		"ply":
+			# Sheets a shade apart, the odd one raw ply (a patch) or short.
+			for i in bays:
+				var pa := a.lerp(b, float(i) / bays)
+				var pb := a.lerp(b, float(i + 1) / bays)
+				var j := _jit((pa + pb) * 0.5)
+				var sheet := color.lerp(Color(0.74, 0.62, 0.44), 0.8) if j > 0.82 else color.darkened(j * 0.2)
+				var sh := h - 0.06 - (0.25 if j < 0.15 else 0.0)
+				mb.box((pa + pb) * 0.5 + Vector3(0, sh * 0.5 + 0.04, 0), _run_size(u, length / bays - 0.03, 0.03, sh), sheet)
+		"iron":
+			# Bars on a low wall, a pier every bay.
+			var base := 0.5 if h > 1.2 else 0.3
+			mb.box(mid + Vector3(0, base * 0.5, 0), _run_size(u, length + t, t, base), color)
+			mb.box(mid + Vector3(0, base + 0.03, 0), _run_size(u, length + t + 0.06, t + 0.08, 0.06), color.darkened(0.1))
+			var n := maxi(2, int(length / 0.18))
+			for i in n:
+				mb.box(a + along * ((i + 0.5) / n) + Vector3(0, (base + h) * 0.5, 0), Vector3(0.03, h - base, 0.03), FENCE_IRON)
+			for y: float in [base + 0.15, h - 0.06]:
+				mb.box(mid + Vector3(0, y, 0), _run_size(u, length, 0.04, 0.05), FENCE_IRON)
+			for i in range(1, bays):
+				mb.box(a.lerp(b, float(i) / bays) + Vector3(0, (h + 0.1) * 0.5, 0), Vector3(0.42, h + 0.1, 0.42), color.darkened(0.05))
+		"block", "brick", "stone":
+			# Courses: blocks 0.4 x 0.2, bricks, or rough stones 0.6 x 0.3.
+			var skin: int = mb.uvs.size()
+			var code := MeshBuilder.PAVING if style == "stone" else MeshBuilder.BRICK
+			mb.box(mid + Vector3(0, h * 0.5, 0), _run_size(u, length + t, t, h), MeshBuilder.glow(color, code))
+			if style == "block":
+				mb.scale_uvs(skin, Vector2(0.6, 0.4))
+			if style == "stone":
+				mb.box(mid + Vector3(0, h + 0.05, 0), _run_size(u, length + t * 0.6, t * 0.6, 0.12), color.darkened(0.12))
+			else:
+				mb.box(mid + Vector3(0, h + 0.04, 0), _run_size(u, length + t + 0.06, t + 0.06, 0.08), color.darkened(0.1) if style == "brick" else CONCRETE)
+			if style == "brick":
+				for i in range(1, bays):
+					mb.box(a.lerp(b, float(i) / bays) + Vector3(0, (h + 0.12) * 0.5, 0), Vector3(t + 0.14, h + 0.12, t + 0.14), color.darkened(0.06))
 		"picket":
 			for y: float in [0.3, 0.75]:
-				mb.box(mid + Vector3(0, y, 0), _run_size(u, length, 0.05, 0.07), color.darkened(0.06))
+				mb.box(mid + Vector3(0, y * k, 0), _run_size(u, length, 0.05, 0.07), color.darkened(0.06))
 			var n := maxi(1, int(length / 0.3))
 			for i in n:
 				mb.box(a + along * ((i + 0.5) / n) + Vector3(0, h * 0.47, 0), _run_size(u, 0.09, 0.03, h * 0.94), color)
@@ -657,6 +965,39 @@ static func _fence_run(mb, out: Array, a: Vector3, b: Vector3, style: String, co
 					var p := a.lerp(b, float(i) / round(length / 4.0))
 					mb.box(p + Vector3(0, h * 0.5, 0), Vector3(t + 0.12, h, t + 0.12), color.darkened(0.04))
 	_col(out, mid + Vector3(0, h * 0.5, 0), _run_size(u, length, t, h))
+
+
+## Chain-link gone to ruin: posts at odd heights, panels sagging to
+## different heights, about one in four down flat in the yard. Each standing
+## panel collides on its own, so the gaps are real ones.
+static func _broken_run(mb, out: Array, a: Vector3, b: Vector3, color: Color, h: float) -> void:
+	var length := a.distance_to(b)
+	var u := (b - a) / length
+	var bays := maxi(1, int(round(length / 2.5)))
+	var mesh := MeshBuilder.glow(Color(0.46, 0.44, 0.4), MeshBuilder.METAL)
+	for i in bays + 1:
+		var p := a.lerp(b, float(i) / bays)
+		var ph := h * (0.75 + _jit(p) * 0.25)
+		mb.box(p + Vector3(0, ph * 0.5, 0), Vector3(0.08, ph, 0.08), color)
+	for i in bays:
+		var c := a.lerp(b, (i + 0.5) / bays)
+		var j := _jit(c + Vector3(0.37, 0, 0.21))
+		var span := length / bays
+		if j < 0.25:
+			# Down: flat on the ground just inside (+Z or +X: broken runs
+			# are fronts), no collider.
+			mb.box(c + Vector3(0, 0.03, 0) + Vector3(absf(u.z), 0, absf(u.x)) * (h * 0.35 + 0.1), _run_size(u, span - 0.2, h * 0.7, 0.02), mesh)
+			continue
+		var ph := h * (0.55 + j * 0.45)
+		mb.box(c + Vector3(0, ph * 0.5, 0), _run_size(u, span - 0.1, 0.02, ph - 0.05), mesh)
+		if j > 0.6:
+			mb.box(c + Vector3(0, ph - 0.03, 0), _run_size(u, span, 0.05, 0.05), color)
+		_col(out, c + Vector3(0, ph * 0.5, 0), _run_size(u, span, 0.15, ph))
+
+
+## A steady 0..1 from a point (picks per panel without a generator).
+static func _jit(p: Vector3) -> float:
+	return fposmod(sin(p.x * 12.9898 + p.z * 78.233) * 43758.5453, 1.0)
 
 
 ## A box size `length` along direction u (X or Z), `t` across and `h` high.
@@ -1088,7 +1429,7 @@ static func _farmhouse_cottage(mb, out: Array, w: float, d: float, rng: RandomNu
 	_pad(mb, dx - 1.5, dx + 1.5, -d * 0.5, zf + bd, MeshBuilder.glow(GRAVEL, MeshBuilder.CONCRETE), 0.04)
 	_car(mb, out, Vector3(dx, 0, zf + 0.2), 0.0, _pick(PAINTS, rng))
 	_rural_mailbox(mb, Vector3(dx - 2.0, 0, -d * 0.5 + 0.5))
-	_lot_fence(mb, out, w, d, "rail", fence, [[dx, 3.6], [cx, 2.2, zf - 2.0]])
+	_lot_fence(mb, out, w, d, _farm_fence(rng, "rail", fence), fence, [[dx, 3.6], [cx, 2.2, zf - 2.0]])
 
 
 ## Tier 1: the usual two-storey house, full or door-wide porch, kitchen
@@ -1121,7 +1462,7 @@ static func _farmhouse_usual(mb, out: Array, w: float, d: float, rng: RandomNumb
 	_rural_mailbox(mb, Vector3(dx - 2.2, 0, -d * 0.5 + 0.5))
 	if d * 0.5 - (zf + bd) >= 4.5 and w >= 18.0:
 		Props.oak(mb, out, Vector3(minf(dx, w * 0.5 - 3.8), 0, d * 0.5 - 3.8), rng)
-	_lot_fence(mb, out, w, d, "rail", fence, [[dx, 4.0], [cx, 2.2, zf - 2.4]])
+	_lot_fence(mb, out, w, d, _farm_fence(rng, "rail", fence), fence, [[dx, 4.0], [cx, 2.2, zf - 2.4]])
 
 
 ## Tier 2: a bigger two-storey house with a cross gable over the door, a
@@ -1202,7 +1543,7 @@ static func _farmhouse_spread(mb, out: Array, w: float, d: float, rng: RandomNum
 	var t1 := gx - gw * 0.5
 	if t1 - t0 >= 4.4:
 		_yard_tree(mb, out, Vector3((t0 + t1) * 0.5, 0, d * 0.5 - 2.6), rng)
-	_lot_fence(mb, out, w, d, "rail", fence, [[gx, 4.8], [cx, 2.2, zf - 2.4]])
+	_lot_fence(mb, out, w, d, _farm_fence(rng, "rail", fence), fence, [[gx, 4.8], [cx, 2.2, zf - 2.4]])
 
 
 ## A porch `pw` wide and `pd` deep before the wall at zf, centred on cx:
@@ -1376,7 +1717,7 @@ static func farmhouse_big(mb, out: Array, w: float, d: float, rng: RandomNumberG
 			_yard_tree(mb, out, Vector3(side * (t0 + t1) * 0.5, 0, d * 0.5 - 2.6), rng)
 	# A white board fence round the yard, gated at the drive and the walk
 	# (or wide where the car stands out front).
-	_lot_fence(mb, out, w, d, "rail", TRIM if rng.randf() < 0.7 else OLD_WOOD, [[drx, 4.0], [cx, 1.8, zf - pd]] if drive else [[cx, 5.6, zf - pd]])
+	_lot_fence(mb, out, w, d, _farm_fence(rng, "rail", TRIM if rng.randf() < 0.7 else OLD_WOOD), TRIM, [[drx, 4.0], [cx, 1.8, zf - pd]] if drive else [[cx, 5.6, zf - pd]])
 
 
 ## A white octagonal gazebo: a raised floor, eight posts, a rail and a
@@ -1484,9 +1825,9 @@ static func farmhouse_small(mb, out: Array, w: float, d: float, rng: RandomNumbe
 	# A picket fence round the yard (weathered boards on the old ones), a
 	# gate at the stoop.
 	if weathered:
-		_lot_fence(mb, out, w, d, "rail", OLD_WOOD.darkened(0.1), [[door, 1.4, zf - 1.85]], true, 1.2, MeshBuilder.glow(DIRT.lightened(0.05), MeshBuilder.CONCRETE))
+		_lot_fence(mb, out, w, d, _farm_fence(rng, "rail", OLD_WOOD.darkened(0.1)), OLD_WOOD, [[door, 1.4, zf - 1.85]], true, 1.2, MeshBuilder.glow(DIRT.lightened(0.05), MeshBuilder.CONCRETE))
 	else:
-		_lot_fence(mb, out, w, d, "picket", TRIM if rng.randf() < 0.75 else siding, [[door, 1.4, zf - 1.85]], true, 1.2, MeshBuilder.glow(CONCRETE, MeshBuilder.CONCRETE))
+		_lot_fence(mb, out, w, d, _farm_fence(rng, "picket", TRIM if rng.randf() < 0.75 else siding), TRIM, [[door, 1.4, zf - 1.85]], true, 1.2, MeshBuilder.glow(CONCRETE, MeshBuilder.CONCRETE))
 
 
 ## farmhouse_small's plan on a small lot: a log cabin, its gable end to
@@ -1552,7 +1893,7 @@ static func _cabin(mb, out: Array, w: float, d: float, rng: RandomNumberGenerato
 	mb.box(o + Vector3(0, 1.0, -0.62), Vector3(0.7, 1.8, 0.06), OLD_WOOD.darkened(0.3))
 	mb.box(o + Vector3(0, 1.65, -0.66), Vector3(0.16, 0.2, 0.04), Color(0.95, 0.85, 0.4))
 	_rural_mailbox(mb, Vector3(-w * 0.5 + 0.6, 0, -d * 0.5 + 0.4))
-	_lot_fence(mb, out, w, d, "rail", OLD_WOOD.darkened(0.1), [[cx, 3.2, zf - 1.8, true]], true, 1.2, MeshBuilder.glow(DIRT, MeshBuilder.CONCRETE))
+	_lot_fence(mb, out, w, d, _farm_fence(rng, "rail", OLD_WOOD.darkened(0.1)), OLD_WOOD, [[cx, 3.2, zf - 1.8, true]], true, 1.2, MeshBuilder.glow(DIRT, MeshBuilder.CONCRETE))
 
 
 ## A red hen house on legs with a ramp, and its wire run in front (-Z).
@@ -1658,7 +1999,7 @@ static func ranch_house(mb, out: Array, w: float, d: float, rng: RandomNumberGen
 	var yard := d * 0.5 - zf - bd
 	if yard >= 4.6 and w >= 18.0:
 		Props.oak(mb, out, Vector3(cx - side * bw * 0.3, 0, d * 0.5 - 3.7), rng)
-	_lot_fence(mb, out, w, d, "split", Color(0.5, 0.42, 0.33), [[px, cw + 0.8]], true, 1.0, MeshBuilder.glow(CONCRETE, MeshBuilder.CONCRETE))
+	_lot_fence(mb, out, w, d, _farm_fence(rng, "split", Color(0.5, 0.42, 0.33)), OLD_WOOD, [[px, cw + 0.8]], true, 1.0, MeshBuilder.glow(CONCRETE, MeshBuilder.CONCRETE))
 
 
 ## ranch_house's plan on a big lot: a long low house with a gabled wing
@@ -1745,7 +2086,7 @@ static func _ranch_l(mb, out: Array, w: float, d: float, rng: RandomNumberGenera
 		mb.cylinder(tp + Vector3(0, 0.7, 0), 0.6, 0.05, WHITE, 8)
 		mb.box(tp + Vector3(0, 1.15, 0), Vector3(0.05, 2.3, 0.05), WHITE)
 		_cone(mb, tp + Vector3(0, 2.0, 0), 1.3, 0.45, _pick(ACCENTS, rng), 8)
-	_lot_fence(mb, out, w, d, "split", Color(0.5, 0.42, 0.33), [[gx, gw + 0.8], [door, 1.6, zf - 1.5]], true, 1.0, found)
+	_lot_fence(mb, out, w, d, _farm_fence(rng, "split", Color(0.5, 0.42, 0.33)), OLD_WOOD, [[gx, gw + 0.8], [door, 1.6, zf - 1.5]], true, 1.0, found)
 
 
 ## An adobe farmhouse: thick stucco walls under a low terracotta roof, a
@@ -1835,7 +2176,7 @@ static func adobe_farmhouse(mb, out: Array, w: float, d: float, rng: RandomNumbe
 		mb.box(Vector3(cxw, 2.98, fz), Vector3(3.4, 0.1, 0.6), tile)
 		for i in 3:
 			_agave(mb, Vector3(cxw + (i - 1) * span * 0.28, 0, (fz + zf) * 0.5 + (i % 2) * 1.6), rng)
-	_lot_fence(mb, out, w, d, "wall", wall, gates, true, 1.2, MeshBuilder.glow(CALICHE, MeshBuilder.CONCRETE))
+	_lot_fence(mb, out, w, d, _adobe_wall(rng, wall), wall, gates, true, 1.2, MeshBuilder.glow(CALICHE, MeshBuilder.CONCRETE))
 	# Chile ristras either side of the door.
 	for s: float in [-0.95, 0.95]:
 		mb.box(Vector3(cx + s, 2.0, zf - 0.12), Vector3(0.18, 0.8, 0.18), Color(0.7, 0.12, 0.1))
@@ -1908,7 +2249,7 @@ static func _pueblo(mb, out: Array, w: float, d: float, rng: RandomNumberGenerat
 	_col(out, Vector3(hx, 0.6, hz), Vector3(1.8, 1.2, 1.8))
 	for s: float in [-1.0, 1.0]:
 		_agave(mb, Vector3(cx + s * 2.6, 0, -d * 0.5 + 2.6), rng)
-	_lot_fence(mb, out, w, d, "wall", stucco.darkened(0.06), [[cx, 2.6, zf - pd]], true, 1.2, MeshBuilder.glow(CALICHE, MeshBuilder.CONCRETE))
+	_lot_fence(mb, out, w, d, _adobe_wall(rng, stucco.darkened(0.06)), stucco, [[cx, 2.6, zf - pd]], true, 1.2, MeshBuilder.glow(CALICHE, MeshBuilder.CONCRETE))
 	_rural_mailbox(mb, Vector3(-side * (w * 0.5 - 0.8), 0, -d * 0.5 + 0.4))
 
 
@@ -1993,7 +2334,7 @@ static func _hacienda(mb, out: Array, w: float, d: float, rng: RandomNumberGener
 	for s: float in [-1.0, 1.0]:
 		for k in 2:
 			_agave(mb, Vector3(s * (2.8 + k * 3.0), 0, (-d * 0.5 + 1.2 + zf) * 0.5 + k * 0.6), rng)
-	_lot_fence(mb, out, w, d, "wall", stucco.darkened(0.06), [[0.0, 2.6, zf - 0.1]], true, 1.2, MeshBuilder.glow(TERRACOTTA.darkened(0.08), MeshBuilder.BRICK))
+	_lot_fence(mb, out, w, d, _adobe_wall(rng, stucco.darkened(0.06)), stucco, [[0.0, 2.6, zf - 0.1]], true, 1.2, MeshBuilder.glow(TERRACOTTA.darkened(0.08), MeshBuilder.BRICK))
 	_rural_mailbox(mb, Vector3(w * 0.5 - 0.8, 0, -d * 0.5 + 0.4))
 
 
@@ -2209,9 +2550,10 @@ static func trailer_home(mb, out: Array, w: float, d: float, rng: RandomNumberGe
 	_rural_mailbox(mb, Vector3(tx + 2.2, 0, -d * 0.5 + 0.5))
 	if t <= 0:
 		_junk(mb, Vector3(w * 0.5 - 0.8, 0, -d * 0.5 + 2.5), -1.0, rng)
-	# Chain-link round the yard (a sagging rail fence on some), gated at the drive.
-	if rng.randf() < 0.6:
-		_lot_fence(mb, out, w, d, "chain", Color(0.66, 0.68, 0.7), [[tx, 4.0]])
+	# A poor yard's boundary (chain-link, ply, wire, a broken run or none
+	# out front; a sagging rail fence on some), gated at the drive.
+	if rng.randf() < 0.75:
+		_lot_fence(mb, out, w, d, boundary(mini(t, 1), zone, hash([rng.seed, "boundary"])), WHITE, [[tx, 4.0]])
 	else:
 		_lot_fence(mb, out, w, d, "rail", OLD_WOOD.darkened(0.15), [[tx, 4.0]])
 
@@ -3163,25 +3505,24 @@ static func house(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator
 	elif room >= 3.5:
 		_pad(mb, mx - 2.5, mx + 2.5, back, back + 3.0, MeshBuilder.glow(Color(0.82, 0.78, 0.7), MeshBuilder.PAVING), 0.05)
 		Props.cafe_table(mb, out, Vector3(mx, 0, back + 1.6), _pick(Buildings.PARASOLS, rng))
-	# A privacy fence round the sides and back. The front lawn stays open
-	# to the street, except chain-link round a T1 rental, a picket front on
-	# half the T3 homes, and a hedge all round at T4 with lit piers at the
-	# gate; each gated at the drive (its route is drawn above).
-	var gate := [[gx, gw + 0.4]]
-	if t <= 1:
-		_lot_fence(mb, out, w, d, "chain", Color(0.66, 0.68, 0.7), gate, true, 1.2, false)
-	elif t >= 4:
-		# Hedge runs reach 0.4 m past their ends, so the gate is 0.8 m wider
-		# to leave the same opening; the lit piers cap the hedge ends.
-		_lot_fence(mb, out, w, d, "hedge", LEAF, [[gx, gw + 1.2]], true, 1.2, false)
-		var stucco := MeshBuilder.glow(Color(0.93, 0.9, 0.84), MeshBuilder.CONCRETE)
-		for s: float in [-1.0, 1.0]:
-			_solid(mb, out, Vector3(gx + s * (gw * 0.5 + 0.5), 0.8, -d * 0.5 + 1.2), Vector3(0.6, 1.6, 0.6), stucco)
-			mb.ball(Vector3(gx + s * (gw * 0.5 + 0.5), 1.75, -d * 0.5 + 1.2), Vector3(0.2, 0.2, 0.2), MeshBuilder.glow(Color(1.0, 0.9, 0.6), MeshBuilder.GLOW_LAMP), 6, 3)
-	elif t == 3 and rng.randf() < 0.5:
-		_lot_fence(mb, out, w, d, "picket", WHITE, gate, true, 1.2, false)
-	else:
-		_lot_fence(mb, out, w, d, "board", [Color(0.62, 0.5, 0.36), Color(0.78, 0.72, 0.62), WHITE][rng.randi() % 3], [], false)
+	# The boundary: this household's own front (or none), sides and back,
+	# heights, paint and gates from its tier, zone and seed (boundary()).
+	# The drive gate is wider than the drive by a household's own margin (a
+	# hedge's by 0.8 m more, as its runs reach 0.4 m past their ends), and
+	# some homes have a pedestrian gate at the door with a walk to the road.
+	var b := boundary(t, zone, hash([rng.seed, "boundary"]))
+	b["color"] = _worn(b.color, t)
+	b["back_color"] = _worn(b.back_color, t)
+	var over := 0.8 if b.style == "hedge" else 0.0
+	var gates := [[gx, gw + b.drive_extra + over]]
+	var walk: float = b.walk
+	if walk > 0.0 and absf(gx - dx) - (gw + b.drive_extra + walk) * 0.5 - over < 0.6:
+		walk = 0.0
+	if walk > 0.0:
+		gates.append([dx, walk + over])
+		var half := maxf(0.5, walk * 0.5 - 0.3)
+		_route_out(mb, dx - half, dx + half, d, drive, fz - 2.0)
+	_lot_fence(mb, out, w, d, b, b.color, gates, true, 1.2, false)
 
 
 ## Magnolia Heights mansion: a white Greek Revival house with a two-storey
@@ -3261,13 +3602,22 @@ static func mansion(mb, out: Array, w: float, d: float, rng: RandomNumberGenerat
 	for k in cars:
 		var a := 0.0 if cars == 1 else (2.7 if k == 0 else -2.7) / r
 		_wealth_car(mb, out, rc + Vector3(cos(a), 0, sin(a)) * r, -a, 5, rng)
+	# The household's own boundary (a hedge, iron on a wall, a tall stucco
+	# or brick wall) between lit brick gate piers, the gates standing open;
+	# round the sides and back too (estate grounds have their own).
+	var bound := boundary(_wealth(4, 5, 4), zone, hash([rng.seed, "boundary"]))
+	var fs: String = bound.style
+	var fh: float = bound.h
+	var ft: float = FENCES[fs][1]
+	var zg := -d * 0.5 + 0.7
+	var ph := maxf(2.2, fh + 0.3)
 	for s: float in ([] if in_grounds else [-1.0, 1.0]):
-		_solid(mb, out, Vector3(s * 2.3, 1.1, -d * 0.5 + 0.7), Vector3(0.9, 2.2, 0.9), MeshBuilder.glow(BRICKS[0], MeshBuilder.BRICK))
-		mb.ball(Vector3(s * 2.3, 2.5, -d * 0.5 + 0.7), Vector3(0.3, 0.3, 0.3), MeshBuilder.glow(Color(1.0, 0.9, 0.6), MeshBuilder.GLOW_LAMP), 6, 3)
-		_hedge(mb, out, Vector3(s * 3.2, 0, -d * 0.5 + 0.7), Vector3(s * (w * 0.5 - 0.6), 0, -d * 0.5 + 0.7), 1.3)
-	# The hedge round the sides and back too (estate grounds have their own).
+		_solid(mb, out, Vector3(s * 2.3, ph * 0.5, zg), Vector3(0.9, ph, 0.9), MeshBuilder.glow(BRICKS[0], MeshBuilder.BRICK))
+		mb.ball(Vector3(s * 2.3, ph + 0.3, zg), Vector3(0.3, 0.3, 0.3), MeshBuilder.glow(Color(1.0, 0.9, 0.6), MeshBuilder.GLOW_LAMP), 6, 3)
+		_fence_run(mb, out, Vector3(s * (2.78 + ft * 0.5), 0, zg), Vector3(s * (w * 0.5 - 0.6), 0, zg), fs, bound.color, fh)
 	if not in_grounds:
-		_lot_fence(mb, out, w, d, "hedge", LEAF, [], false, 0.7)
+		_gate_leaves(mb, out, -1.85, 1.85, zg, ft, bound.gate, bound.gate_look, bound.gate_h, bound.color, -w * 0.5 + 0.6, w * 0.5 - 0.6)
+		_lot_fence(mb, out, w, d, bound, bound.color, [], false, 0.7)
 	# Oaks on the lawn.
 	for s: float in [-1.0, 1.0]:
 		var ox := s * (w * 0.5 - 5.0)

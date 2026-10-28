@@ -42,6 +42,7 @@ const Props = preload("res://scripts/kits/prop_kit.gd")
 const Civic = preload("res://scripts/kits/civic_kit.gd")
 const Skyline = preload("res://scripts/kits/skyline_kit.gd")
 const Shady = preload("res://scripts/kits/shady_kit.gd")
+const Kit = preload("res://scripts/kits/country_kit.gd")
 const StreetPlan = preload("res://scripts/street_plan.gd")
 
 ## Road and block slabs reach down into the water so quays have walls.
@@ -72,6 +73,45 @@ const STEEL := Color(0.3, 0.36, 0.4)
 ## District banners on downtown street lights.
 const BANNERS := [Color(0.85, 0.62, 0.18), Color(0.12, 0.5, 0.58), Color(0.7, 0.16, 0.22)]
 const ZEBRA_STYLES := ["downtown", "quarter", "station", "tower", "police", "hospital", "park", "club"]
+## Road surfaces (Sachin: "some roads are newly paved ... some roads are old
+## worn out but still solid, some are too washed out but still good, some
+## are built from tiles, of white or brown colors"): [colour, pattern code,
+## pattern scale, how far the paint has faded toward the road, share of
+## the dashes worn away (1: no lines at all)]. The tarmac's shade sets how
+## cracked and patched the shader draws it (MeshBuilder's asphalt).
+const ROAD_LOOKS := {
+	"fresh": [Color(0.165, 0.165, 0.18), MeshBuilder.ASPHALT, Vector2.ONE, 0.0, 0.0],
+	"worn": [Color(0.31, 0.31, 0.315), MeshBuilder.ASPHALT, Vector2.ONE, 0.2, 0.05],
+	"washed": [Color(0.43, 0.42, 0.4), MeshBuilder.ASPHALT, Vector2.ONE, 0.55, 0.35],
+	# Slabs about 4.5 m by 3.6 m.
+	"concrete": [Color(0.53, 0.53, 0.5), MeshBuilder.CONCRETE, Vector2(0.333, 0.417), 0.1, 0.0],
+	# Pale tiles 1 m by 0.5 m.
+	"tile_white": [Color(0.8, 0.78, 0.74), MeshBuilder.PAVING, Vector2(0.6, 0.6), 0.3, 1.0],
+	# Terracotta brick pavers in light mortar.
+	"tile_brown": [Color(0.6, 0.37, 0.27), MeshBuilder.BRICK, Vector2(0.5, 0.5), 0.3, 1.0],
+	"pavers": [PAVERS, MeshBuilder.PAVING, Vector2.ONE, 0.25, 1.0],
+	# Grey granite setts.
+	"setts": [Color(0.47, 0.46, 0.45), MeshBuilder.PAVING, Vector2(1.8, 1.8), 0.25, 1.0],
+}
+const ROAD_KINDS := ["fresh", "worn", "washed", "concrete", "tile_white", "tile_brown"]
+## Shares of ROAD_KINDS by district style: new tarmac and concrete in the
+## centre, worn and washed-out in the wards and on the docks, brick and
+## tile in the old quarters (tiles only on the two-lane streets).
+const ROAD_MIX := {
+	"downtown": [45, 25, 0, 20, 10, 0], "financial": [45, 25, 0, 20, 10, 0], "civic": [45, 25, 0, 20, 10, 0],
+	"midtown": [30, 40, 10, 20, 0, 0], "market": [30, 40, 10, 20, 0, 0], "strip": [30, 40, 10, 20, 0, 0],
+	"quarter": [10, 30, 20, 0, 15, 25], "oldtown": [10, 30, 20, 0, 15, 25], "revival": [10, 30, 20, 0, 15, 25],
+	"brownstone": [30, 35, 5, 10, 5, 15], "rowhouse": [30, 35, 5, 10, 5, 15], "heights": [30, 35, 5, 10, 5, 15], "enclave": [30, 35, 5, 10, 5, 15],
+	"wards": [5, 40, 50, 5, 0, 0], "bayou": [5, 40, 50, 5, 0, 0],
+	"docks": [10, 35, 25, 30, 0, 0], "industrial": [10, 35, 25, 30, 0, 0], "waterfront": [10, 35, 25, 30, 0, 0],
+	"default": [25, 40, 15, 15, 0, 5],
+}
+## The paved quarter streets and walking lanes.
+const PAVER_KINDS := ["pavers", "pavers", "tile_brown", "tile_white", "setts"]
+## Road paint (the fade above applies to these colours only).
+const PAINTS := [MARKING, WHITE_LINE, BIKE_GREEN, Color(0.93, 0.93, 0.9)]
+## Dug-up ground at roadworks.
+const WORKS_DIRT := Color(0.45, 0.36, 0.26)
 ## Biggest parcel (along the front, deep) per district style; bigger lots
 ## are split.
 const PARCEL_MAX := {
@@ -350,6 +390,15 @@ static func _street(ctx: Ctx, e: int, cls: String) -> void:
 	var style: String = city.district_at((a + b) * 0.5).get("style", "quarter")
 	var line: int = city.rail_on(e)
 	var rusty: bool = line >= 0 and city.rail_lines[line].rusty
+	# Its surface (road_surface): a skin over the block's tarmac between
+	# the junctions; quarter streets and lanes are paved in it instead.
+	var look: Array = ROAD_LOOKS[road_surface(city.seed_value, e, cls, style)]
+	var drop: float = look[4]
+	var paint_from: int = mb.verts.size()
+	if cls != "quarter" and cls != "lane":
+		var skin: int = mb.uvs.size()
+		mb.box(Vector3(mid, 0.004, 0), Vector3(run, 0.008, w - 0.04), MeshBuilder.glow(look[0], look[1]))
+		mb.scale_uvs(skin, look[2])
 	match cls:
 		"boulevard":
 			# Neutral ground: a raised lawn with oaks (or palms downtown) and,
@@ -361,7 +410,7 @@ static func _street(ctx: Ctx, e: int, cls: String) -> void:
 			if ng >= 1.0:
 				mb.box(Vector3(ng_mid, 0.12, 0), Vector3(ng, 0.24, 6.4), PAVEMENT.darkened(0.1))
 				mb.box(Vector3(ng_mid, 0.25, 0), Vector3(maxf(ng - 0.4, 0.5), 0.02, 5.6), GRASS)
-			_lane_lines(mb, s0, run, cls)
+			_lane_lines(mb, s0, run, cls, drop)
 			if line >= 0:
 				Props.rails(mb, Vector3(s0, 0.26, 0), Vector3(s0 + run, 0.26, 0), rusty)
 				if not rusty:
@@ -385,18 +434,23 @@ static func _street(ctx: Ctx, e: int, cls: String) -> void:
 		"avenue", "river", "street":
 			# Four lanes: a double yellow line down the middle, dashes
 			# between the lanes, a solid line along the parking strip.
-			for z in [-0.12, 0.12]:
-				mb.box(Vector3(mid, 0.01, z), Vector3(run, 0.02, 0.12), MARKING)
-			_lane_lines(mb, s0, run, cls)
+			if drop < 1.0:
+				for z in [-0.12, 0.12]:
+					mb.box(Vector3(mid, 0.01, z), Vector3(run, 0.02, 0.12), MARKING)
+			_lane_lines(mb, s0, run, cls, drop)
 		"quay":
-			_dashes(mb, s0, run, 0.0, MARKING)
+			_dashes(mb, s0, run, 0.0, MARKING, drop)
 		"quarter":
-			# Old pavers between the curbs, no markings.
-			mb.box(Vector3(mid, 0.005, 0), Vector3(run + 1.0, 0.02, w - 0.4), MeshBuilder.glow(PAVERS, MeshBuilder.PAVING))
+			# Old pavers, setts or tiles between the curbs, no markings.
+			var skin: int = mb.uvs.size()
+			mb.box(Vector3(mid, 0.005, 0), Vector3(run + 1.0, 0.02, w - 0.4), MeshBuilder.glow(look[0], look[1]))
+			mb.scale_uvs(skin, look[2])
 		"lane":
 			# Pedestrian lane: paved over, bollards at each end, lights strung
 			# across.
-			mb.box(Vector3(length * 0.5, 0.08, 0), Vector3(length, 0.16, w), MeshBuilder.glow(PAVERS.lightened(0.1), MeshBuilder.PAVING))
+			var skin: int = mb.uvs.size()
+			mb.box(Vector3(length * 0.5, 0.08, 0), Vector3(length, 0.16, w), MeshBuilder.glow(look[0].lightened(0.1), look[1]))
+			mb.scale_uvs(skin, look[2])
 			var local: Array = []
 			for x in [s0 + 0.5, length - s1 - 0.5]:
 				for z in [-2.0, 0.0, 2.0]:
@@ -410,7 +464,8 @@ static func _street(ctx: Ctx, e: int, cls: String) -> void:
 	if line >= 0 and cls != "boulevard":
 		# The drowned line: rusty rails down the middle of the street.
 		Props.rails(mb, Vector3(s0, 0.02, 0), Vector3(s0 + run, 0.02, 0), rusty)
-	if cls != "lane":
+	if cls != "lane" and drop < 1.0:
+		# Tar patches and skid marks (not on pavers and tiles).
 		for k in ctx.deco.randi_range(0, 2):
 			Props.road_mark(mb, Vector3(ctx.deco.randf_range(s0 + 2.0, s0 + run - 2.0), 0.0, ctx.deco.randf_range(-w * 0.3, w * 0.3)), Vector3.RIGHT, ctx.deco)
 	var zebra: bool = style in ZEBRA_STYLES and cls != "lane"
@@ -419,24 +474,30 @@ static func _street(ctx: Ctx, e: int, cls: String) -> void:
 			Props.crosswalk(mb, Vector3(s0 + 1.6, 0.0, 0), Vector3.RIGHT, w - 1.5)
 		if s1 > 0.0:
 			Props.crosswalk(mb, Vector3(s0 + run - 1.6, 0.0, 0), Vector3.RIGHT, w - 1.5)
-	if cls in ["boulevard", "avenue", "river", "street", "quay"] and run > 10.0:
+	if cls in ["boulevard", "avenue", "river", "street", "quay"] and run > 10.0 and drop < 1.0:
 		# Traffic keeps right: towards b on the +z side, towards a on -z.
 		var gap := 3.6 if zebra else 1.0
 		if s1 > 0.0:
 			_approach(mb, s0 + run - gap, 1.0, cls, style == "downtown" or style == "quarter", run > 32.0)
 		if s0 > 0.0:
 			_approach(mb, s0 + gap, -1.0, cls, style == "downtown" or style == "quarter", run > 32.0)
+	# Paint as old as the road under it.
+	mb.fade_colors(paint_from, PAINTS, look[0], look[3])
+	var wk: Dictionary = city.roadworks.get(e, {})
+	if not wk.is_empty():
+		_works(ctx, wk, cls, w, frame)
 	mb.xform = Transform3D.IDENTITY
 
 
 ## Dashes between the lanes each way, and a solid line along the parking
-## strip, from the class's lanes (StreetPlan.CLASSES).
-static func _lane_lines(mb, s0: float, run: float, cls: String) -> void:
+## strip, from the class's lanes (StreetPlan.CLASSES); `drop` of the dashes
+## worn away (all of them, and the strip line, on tiles).
+static func _lane_lines(mb, s0: float, run: float, cls: String, drop := 0.0) -> void:
 	var lanes: Dictionary = StreetPlan.CLASSES[cls]
 	for side in [-1.0, 1.0]:
 		for k in range(1, lanes.lanes):
-			_dashes(mb, s0, run, side * (lanes.middle + lanes.lane_w * k), WHITE_LINE)
-		if lanes.park > 0.0:
+			_dashes(mb, s0, run, side * (lanes.middle + lanes.lane_w * k), WHITE_LINE, drop)
+		if lanes.park > 0.0 and drop < 1.0:
 			mb.box(Vector3(s0 + run * 0.5, 0.01, side * (lanes.middle + lanes.lane_w * lanes.lanes)), Vector3(run, 0.02, 0.12), WHITE_LINE)
 
 
@@ -481,12 +542,213 @@ static func _arrow(mb, p: Vector3, heading: float, turn: int) -> void:
 		mb.tri(Vector3(p.x - heading * 0.8, y, hz), Vector3(p.x, y, hz), Vector3(p.x - heading * 0.4, y, hz + left * 0.7), Vector3.UP, paint)
 
 
-## Dashed line along the street frame's x axis at offset z.
-static func _dashes(mb, s0: float, run: float, z: float, color: Color) -> void:
+## Dashed line along the street frame's x axis at offset z, `drop` of the
+## dashes (picked by a hash of where they are) worn away.
+static func _dashes(mb, s0: float, run: float, z: float, color: Color, drop := 0.0) -> void:
 	var t := s0 + 2.0
 	while t < s0 + run - 3.0:
-		mb.box(Vector3(t + 1.5, 0.01, z), Vector3(3.0, 0.02, 0.18), color)
+		if drop <= 0.0 or fposmod(sin(t * 12.9898 + z * 78.233) * 43758.5453, 1.0) >= drop:
+			mb.box(Vector3(t + 1.5, 0.01, z), Vector3(3.0, 0.02, 0.18), color)
 		t += 6.0
+
+
+## The surface of street e (ROAD_LOOKS): from a hash of the seed and the
+## edge, weighted by its district's style (ROAD_MIX), so a street keeps its
+## surface every time its cell is built.
+static func road_surface(seed_v: int, e: int, cls: String, style: String) -> String:
+	if cls == "quarter" or cls == "lane":
+		return PAVER_KINDS[posmod(hash([seed_v, e, "pavers"]), PAVER_KINDS.size())]
+	var mix: Array = ROAD_MIX.get(style, ROAD_MIX["default"])
+	# Tiles only on the two-lane streets and the quays.
+	var kinds := 6 if cls == "street" or cls == "quay" else 4
+	var total := 0
+	for k in kinds:
+		total += int(mix[k])
+	var roll := posmod(hash([seed_v, e, "road"]), maxi(total, 1))
+	for k in kinds:
+		roll -= int(mix[k])
+		if roll < 0:
+			return ROAD_KINDS[k]
+	return "worn"
+
+
+## Roadworks on a street (City.roadworks), drawn in its street frame: the
+## curb lane and parking strip dug up from x0 to x1 on the works side,
+## fenced in by water-filled barriers (orange and white; a car bursts them)
+## along the open lane and across both ends and by mesh panels along the
+## kerb, so nobody walks or drives into the pit. Where traffic meets it, a
+## taper of cones and a lit arrow board; 15 m before that, a ROAD WORK
+## AHEAD sign. Inside: a trench with a steel plate over part of it, a dirt
+## heap, fresh tarmac where the work is done, and a roller or a mini digger
+## (solid). Leaves mb.xform at `frame`.
+static func _works(ctx: Ctx, wk: Dictionary, cls: String, w: float, frame: Transform3D) -> void:
+	var mb = ctx.mb
+	var rng: RandomNumberGenerator = ctx.deco
+	var g: Dictionary = StreetPlan.CLASSES[cls]
+	var sd: float = wk.side
+	var x0: float = wk.x0
+	var x1: float = wk.x1
+	var span := x1 - x0
+	# The barrier line along the open lane, the kerb line, the pit between.
+	var zi: float = float(g.middle) + float(g.lane_w) * (int(g.lanes) - 1) + 0.35
+	var zo := w * 0.5 - 0.25
+	var zc := (zi + zo) * 0.5
+	var depth := zo - zi
+	# Traffic on the works side heads +x (side +1) or -x and meets xa first.
+	var xa := x0 if sd > 0.0 else x1
+	var xb := x1 if sd > 0.0 else x0
+	var local: Array = []
+	var from: Array
+	mb.xform = frame
+	# Over the road paint (lines reach 0.02 m), so no line runs through the pit.
+	mb.box(Vector3((x0 + x1) * 0.5, 0.025, sd * zc), Vector3(span, 0.006, depth), MeshBuilder.glow(WORKS_DIRT, 1.0))
+	var fresh := span * rng.randf_range(0.25, 0.4)
+	mb.box(Vector3(xb - sd * fresh * 0.5, 0.028, sd * zc), Vector3(fresh, 0.006, depth), MeshBuilder.glow(Color(0.12, 0.12, 0.13), MeshBuilder.ASPHALT))
+	var dug := span - fresh - 3.0
+	var tx := xa + sd * (2.5 + dug * 0.5)
+	var tz := sd * (zc + depth * 0.15)
+	mb.box(Vector3(tx, 0.029, tz), Vector3(dug, 0.006, 1.1), MeshBuilder.glow(Color(0.15, 0.11, 0.08), 1.0))
+	mb.box(Vector3(tx - sd * dug * 0.25, 0.04, tz), Vector3(2.4, 0.03, 1.5), Color(0.27, 0.26, 0.25))
+	mb.clump(Vector3(tx + sd * dug * 0.15, 0.2, sd * (zc - depth * 0.22)), Vector3(1.2, 0.55, 0.7), WORKS_DIRT.darkened(0.15), rng.randi(), 7, 3)
+	var mx := xb - sd * maxf(fresh * 0.5, 2.2)
+	if rng.randf() < 0.5:
+		_roller(mb, local, Vector3(mx, 0, sd * zc))
+	else:
+		_digger(mb, local, Vector3(mx, 0, sd * zc), -sd)
+	var orange := MeshBuilder.glow(Color(0.95, 0.45, 0.1), MeshBuilder.GLOSS)
+	var white := MeshBuilder.glow(Color(0.93, 0.93, 0.9), MeshBuilder.GLOSS)
+	# Along the open lane, 2 m units that burst two at a time.
+	var n := maxi(2, roundi(span / 2.0))
+	var unit := span / n
+	var k := 0
+	while k < n:
+		from = Props._start(mb, null)
+		var m := mini(2, n - k)
+		for j in m:
+			_barrier(mb, Vector3(x0 + unit * (k + j + 0.5), 0, sd * zi), Vector2(unit - 0.06, 0.45), orange if (k + j) % 2 == 0 else white)
+		local.append([Vector3(x0 + unit * (k + m * 0.5), 0.5, sd * zi), Vector3(unit * m, 1.0, 0.5)])
+		Props._breaks(mb, local, from, "roadworks", null)
+		k += m
+	# Across both ends.
+	var cnt := maxi(1, roundi(depth / 2.0))
+	for xe in [x0, x1]:
+		from = Props._start(mb, null)
+		for j in cnt:
+			_barrier(mb, Vector3(xe, 0, sd * (zi + depth / cnt * (j + 0.5))), Vector2(0.45, depth / cnt - 0.06), white if j % 2 == 0 else orange)
+		local.append([Vector3(xe, 0.5, sd * zc), Vector3(0.5, 1.0, depth)])
+		Props._breaks(mb, local, from, "roadworks", null)
+	# Mesh panels on feet along the kerb.
+	from = Props._start(mb, null)
+	var mesh := MeshBuilder.glow(Color(0.98, 0.5, 0.12), MeshBuilder.GLOSS)
+	mb.box(Vector3((x0 + x1) * 0.5, 0.55, sd * zo), Vector3(span, 0.9, 0.05), mesh)
+	mb.box(Vector3((x0 + x1) * 0.5, 1.02, sd * zo), Vector3(span, 0.06, 0.08), mesh)
+	var f := 0.0
+	while f <= span + 0.01:
+		mb.box(Vector3(x0 + f, 0.06, sd * zo), Vector3(0.6, 0.12, 0.3), Color(0.2, 0.2, 0.21))
+		f += span / maxf(roundf(span / 2.5), 1.0)
+	local.append([Vector3((x0 + x1) * 0.5, 0.6, sd * zo), Vector3(span, 1.2, 0.3)])
+	Props._breaks(mb, local, from, "roadworks", null)
+	# The taper: cones from the kerb out to the barrier line ahead of it.
+	from = Props._start(mb, null)
+	var c0 := Vector3(xa - sd * (0.6 + float(ctx.city.WORKS_TAPER)), 0, sd * (zo - 0.2))
+	var c1 := Vector3(xa - sd * 0.6, 0, sd * zi)
+	for i in 5:
+		_cone(mb, c0.lerp(c1, i / 4.0), orange, white)
+	var d := c1 - c0
+	local.append([(c0 + c1) * 0.5 + Vector3(0, 0.4, 0), Vector3(d.length() + 0.4, 0.8, 0.4), atan2(-d.z, d.x)])
+	Props._breaks(mb, local, from, "roadworks", null)
+	# A lit arrow board just inside, pointing traffic over to the open lanes.
+	from = Props._start(mb, null)
+	var ab := Vector3(xa + sd * 1.3, 0, sd * zc)
+	var dark := Color(0.14, 0.14, 0.15)
+	mb.box(ab + Vector3(0, 0.45, 0), Vector3(1.0, 0.4, 1.3), MeshBuilder.glow(Color(0.95, 0.75, 0.15), MeshBuilder.GLOSS))
+	mb.box(ab + Vector3(0, 1.1, 0), Vector3(0.1, 1.0, 0.1), dark)
+	mb.box(ab + Vector3(0, 1.9, 0), Vector3(0.1, 0.9, 1.7), dark)
+	var face := ab.x - sd * 0.06
+	var amber := MeshBuilder.glow(Color(1.0, 0.7, 0.2), MeshBuilder.GLOW_NEON)
+	mb.box(Vector3(face, 1.9, sd * (zc + 0.15)), Vector3(0.02, 0.12, 0.7), amber)
+	mb.tri(Vector3(face, 1.65, sd * (zc - 0.2)), Vector3(face, 2.15, sd * (zc - 0.2)), Vector3(face, 1.9, sd * (zc - 0.6)), Vector3(-sd, 0, 0), amber)
+	local.append([ab + Vector3(0, 0.9, 0), Vector3(1.0, 1.8, 1.3)])
+	Props._breaks(mb, local, from, "roadworks", null)
+	_works_sign(mb, local, Vector3(xa - sd * 15.0, 0, sd * (w * 0.5 - 0.9)), sd)
+	_done(ctx, local, false, ctx.props)
+	mb.xform = frame
+
+
+## A water-filled barrier on the ground at p, `size` its footprint (x, z):
+## a wide base and a narrower top.
+static func _barrier(mb, p: Vector3, size: Vector2, color: Color) -> void:
+	mb.box(p + Vector3(0, 0.28, 0), Vector3(size.x, 0.56, size.y), color)
+	var top := Vector3(size.x, 0.3, size.y * 0.55) if size.x > size.y else Vector3(size.x * 0.55, 0.3, size.y)
+	mb.box(p + Vector3(0, 0.71, 0), top, color)
+
+
+## A traffic cone on its black base.
+static func _cone(mb, p: Vector3, orange: Color, white: Color) -> void:
+	mb.box(p + Vector3(0, 0.02, 0), Vector3(0.42, 0.04, 0.42), Color(0.12, 0.12, 0.12))
+	mb.limb(p + Vector3(0, 0.04, 0), p + Vector3(0, 0.75, 0), 0.17, 0.035, orange, 6, false)
+	mb.limb(p + Vector3(0, 0.38, 0), p + Vector3(0, 0.52, 0), 0.112, 0.085, white, 6, false)
+
+
+## A ROAD WORK AHEAD sign on an A-frame at p: an orange diamond with a
+## black border and three lines of black lettering, leaning back so it reads
+## from above, facing traffic that heads `heading` (+1 or -1 along x).
+static func _works_sign(mb, out: Array, p: Vector3, heading: float) -> void:
+	var from := Props._start(mb, null)
+	var t := deg_to_rad(58.0)
+	var u := Vector3(heading * sin(t), cos(t), 0)
+	var n := Vector3(-heading * cos(t), sin(t), 0)
+	var a := Vector3(0, 0, 1)
+	var c := p + Vector3(0, 1.15, 0)
+	var steel := MeshBuilder.glow(Color(0.35, 0.36, 0.38), MeshBuilder.METAL)
+	for s in [-1.0, 1.0]:
+		mb.limb(p + Vector3(-heading * 0.25, 0, s * 0.4), c - u * 0.2 + a * s * 0.32 - n * 0.03, 0.025, 0.025, steel, 4, false)
+		mb.limb(p + Vector3(heading * 0.7, 0, s * 0.4), c + u * 0.4 + a * s * 0.2 - n * 0.03, 0.025, 0.025, steel, 4, false)
+	var black := Color(0.06, 0.06, 0.06)
+	mb.quad(c + u * 0.88, c + a * 0.88, c - u * 0.88, c - a * 0.88, n, black)
+	var q := c + n * 0.01
+	mb.quad(q + u * 0.78, q + a * 0.78, q - u * 0.78, q - a * 0.78, n, MeshBuilder.glow(Color(0.98, 0.55, 0.1), MeshBuilder.GLOSS))
+	for line in [[0.25, 0.21], [0.0, 0.25], [-0.25, 0.3]]:
+		var r: Vector3 = c + n * 0.02 + u * float(line[0])
+		var hw: float = line[1]
+		mb.quad(r + u * 0.055 - a * hw, r + u * 0.055 + a * hw, r - u * 0.055 + a * hw, r - u * 0.055 - a * hw, n, black)
+	out.append([p + Vector3(heading * 0.2, 0.7, 0), Vector3(1.1, 1.4, 1.3)])
+	Props._breaks(mb, out, from, "roadworks", null)
+
+
+## A tandem road roller along x at p, under a canopy (its collider solid).
+static func _roller(mb, out: Array, p: Vector3) -> void:
+	var yellow := MeshBuilder.glow(Color(0.93, 0.7, 0.12), MeshBuilder.GLOSS)
+	var drum := MeshBuilder.glow(Color(0.36, 0.37, 0.38), MeshBuilder.METAL)
+	var dark := Color(0.13, 0.13, 0.14)
+	for dx in [-1.05, 1.05]:
+		mb.limb(p + Vector3(dx, 0.5, -0.62), p + Vector3(dx, 0.5, 0.62), 0.5, 0.5, drum, 8, true)
+		mb.box(p + Vector3(dx, 0.98, 0), Vector3(1.1, 0.12, 1.36), yellow)
+	mb.box(p + Vector3(0, 0.85, 0), Vector3(1.0, 0.8, 1.2), yellow)
+	mb.box(p + Vector3(0, 1.4, 0), Vector3(0.7, 0.3, 0.6), dark)
+	for cx in [-0.45, 0.45]:
+		for cz in [-0.5, 0.5]:
+			mb.box(p + Vector3(cx, 1.85, cz), Vector3(0.07, 0.9, 0.07), dark)
+	mb.box(p + Vector3(0, 2.33, 0), Vector3(1.15, 0.07, 1.25), yellow)
+	out.append([p + Vector3(0, 1.0, 0), Vector3(3.2, 2.0, 1.4)])
+
+
+## A mini digger along x at p, its arm reaching `toward` (+1 or -1 on x)
+## into the trench (its collider solid).
+static func _digger(mb, out: Array, p: Vector3, toward: float) -> void:
+	var yellow := MeshBuilder.glow(Color(0.93, 0.7, 0.12), MeshBuilder.GLOSS)
+	var dark := Color(0.13, 0.13, 0.14)
+	for z in [-0.55, 0.55]:
+		mb.box(p + Vector3(0, 0.22, z), Vector3(2.0, 0.44, 0.38), dark)
+	mb.box(p + Vector3(0, 0.62, 0), Vector3(1.5, 0.36, 1.35), yellow)
+	mb.box(p + Vector3(-toward * 0.3, 1.25, 0.25), Vector3(0.85, 0.9, 0.75), MeshBuilder.glow(Color(0.2, 0.25, 0.3), MeshBuilder.GLASS))
+	mb.box(p + Vector3(-toward * 0.3, 1.73, 0.25), Vector3(0.95, 0.07, 0.85), yellow)
+	var elbow := p + Vector3(toward * 1.6, 2.0, -0.25)
+	mb.limb(p + Vector3(toward * 0.6, 0.9, -0.25), elbow, 0.13, 0.1, yellow, 5, false)
+	var tip := p + Vector3(toward * 2.5, 0.45, -0.25)
+	mb.limb(elbow, tip, 0.09, 0.07, yellow, 5, false)
+	mb.box(tip + Vector3(0, -0.1, 0), Vector3(0.5, 0.35, 0.55), dark)
+	out.append([p + Vector3(toward * 0.5, 1.0, 0), Vector3(3.2, 2.0, 1.5)])
 
 
 ## Overhead wires above the streetcar and, now and then, a streetcar at a
@@ -1017,13 +1279,32 @@ static func _wards(ctx: Ctx, special: String) -> void:
 			_done(ctx, local)
 	ctx.mb.xform = ctx.frame
 	var props: Array = []
+	# Back-yard boundaries, each household's own (a generator of their own,
+	# so the houses keep theirs).
+	var yr := RandomNumberGenerator.new()
+	yr.seed = hash([rng.seed, "yard fences"])
 	for k in range(1, slots):
 		var x := -hx + slot_w * k
-		Props.fence(mb, props, Vector3(x, KERB, -3.0), Vector3(x, KERB, 3.0), FENCE_WOOD)
-	Props.fence(mb, props, Vector3(-hx + 0.5, KERB, 0), Vector3(hx - 0.5, KERB, 0), FENCE_WOOD)
+		_yard_fence(mb, props, Vector3(x, KERB, -3.0), Vector3(x, KERB, 3.0), yr)
+	_yard_fence(mb, props, Vector3(-hx + 0.5, KERB, 0), Vector3(hx - 0.5, KERB, 0), yr)
 	if rng.randf() < 0.5:
 		Props.oak(mb, props, Vector3(rng.randf_range(-hx * 0.7, hx * 0.7), KERB, rng.randf_range(-1.5, 1.5)), rng)
 	_done(ctx, props, false, ctx.props)
+
+
+## One back-yard boundary from a to b (along X or Z) in a look of its own:
+## wood rails, a board or slat privacy fence, chain-link, ply sheets,
+## pickets (short runs), or none; its height 0.8 to 1.1 of the usual, with
+## its collider.
+static func _yard_fence(mb, out: Array, a: Vector3, b: Vector3, r: RandomNumberGenerator) -> void:
+	var style: String = Kit._roll([["rail", 25], ["board", 20], ["chain", 18], ["slat", 10], ["ply", 12], ["picket", 10], ["", 5]], {}, r)[0]
+	if style == "":
+		return
+	if style == "picket" and a.distance_to(b) > 12.0:
+		style = "rail"
+	var paints: Array = Kit.FENCE_COLORS[style]
+	var paint: Color = FENCE_WOOD if style == "rail" else paints[r.randi() % paints.size()]
+	Kit._fence_run(mb, out, a, b, style, paint, snappedf(Kit.FENCES[style][0] * r.randf_range(0.8, 1.1), 0.05))
 
 
 ## What the flood left: a bare foundation, steps to nowhere, weeds and junk.
