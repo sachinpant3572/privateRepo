@@ -121,7 +121,7 @@ func _update_parked(center: Vector3) -> void:
 			continue
 		var d: float = spots[idx][0].distance_to(center)
 		if d < PARK_SPAWN and (_first_pass or not _in_view(spots[idx][0])) and not _occupied(spots[idx][0]):
-			var car = _new_car(true)
+			var car = _new_car(true, spots[idx][3] if spots[idx].size() > 3 else -1)
 			car.city = game.city
 			car.position = spots[idx][0]
 			car.rotation.y = spots[idx][1]
@@ -159,9 +159,11 @@ func _in_view(pos: Vector3, margin := 0.1) -> bool:
 
 ## A civilian vehicle with a model from the traffic mix, or from the curb
 ## mix when `parked` (nothing too long for a curb spot, but bikes).
-func _new_car(parked := false):
+func _new_car(parked := false, tier := -1):
 	var car = Vehicle.new()
 	var pool: Array = VehicleKit.PARKED if parked else VehicleKit.CIVILIAN
+	if parked and tier >= 0:
+		pool = VehicleKit.PARKED_BY_TIER[clampi(tier, 0, 5)]
 	car.kind = pool[rng.randi() % pool.size()]
 	car.body_color = VehicleKit.pick_paint(car.kind, rng)
 	return car

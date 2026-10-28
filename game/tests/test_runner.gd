@@ -3560,14 +3560,19 @@ func test_suburb_home_cars_are_live() -> void:
 	game.population.refill()
 	await _frames(400)
 	var spots: Array = city.parked_spots.slice(first)
-	_check(spots.size() >= 10 and spots.all(func(s): return s.size() == 3), "east side homes open car spots, got %d" % spots.size())
+	_check(spots.size() >= 10 and spots.all(func(s): return s.size() == 4 and s[3] >= 0 and s[3] <= 5), "east side homes open car spots with their tiers, got %d" % spots.size())
 	var parked := 0
+	var off_tier: Array = []
 	for idx in game.population._parked:
 		if idx >= first and is_instance_valid(game.population._parked[idx]):
 			var car = game.population._parked[idx]
 			if car.global_position.distance_to(city.parked_spots[idx][0]) < 1.5:
 				parked += 1
+			var tier: int = city.parked_spots[idx][3]
+			if not car.kind in preload("res://scripts/kits/vehicle_kit.gd").PARKED_BY_TIER[tier]:
+				off_tier.append("%s at T%d" % [car.kind, tier])
 	_check(parked >= 3, "live cars park at the homes, got %d" % parked)
+	_check(off_tier.is_empty(), "each home's car suits its household (%s)" % [off_tier])
 	var keys: Array = c.loaded_tiles()
 	_place_player_at(city.spawn_point)
 	await _frames(240)
@@ -3967,10 +3972,17 @@ func test_estates_and_clusters() -> void:
 		var kinds := {}
 		for part: Array in p[6]:
 			kinds[c.part_kinds[int(part[0])]] = true
+		# An estate's gatehouse stands at its gate; the homes are the rest.
 		var homes: Array = []
+		var gates := 0
 		for l: Array in c.lots:
 			if int(l[8]) == i:
-				homes.append(l)
+				if c.kinds[int(l[5])] == "gatehouse":
+					gates += 1
+				else:
+					homes.append(l)
+		if gates > (1 if ty == "estate" else 0):
+			bare += 1
 		if ty == "estate":
 			estates += 1
 			tennis += 1 if kinds.has("tennis") else 0
@@ -4562,8 +4574,9 @@ func test_homes_by_wealth() -> void:
 	var c = game.city.country
 	const RANGE := {"shack": [0, 1], "trailer_home": [0, 1], "stilt_house": [0, 2], "garden_apartments": [1, 2],
 		"rowhouse_row": [1, 3], "house": [1, 4], "cape_house": [2, 3], "farmhouse_small": [1, 2], "farmhouse": [2, 3],
-		"ranch_house": [2, 3], "adobe_farmhouse": [2, 3], "farmhouse_big": [3, 4], "condo_tower": [3, 4], "mansion": [4, 5]}
-	const UNITS := {"garden_apartments": 12, "rowhouse_row": 4}
+		"ranch_house": [2, 3], "adobe_farmhouse": [2, 3], "farmhouse_big": [3, 4], "condo_tower": [3, 4], "mansion": [4, 5],
+		"cheap_block": [0, 1], "bungalow_barred": [0, 1], "midrise_condo": [3, 4], "res_tower": [4, 5], "exec_house": [4, 5]}
+	const UNITS := {"garden_apartments": 12, "rowhouse_row": 4, "cheap_block": 16, "midrise_condo": 20}
 	var n := [0, 0, 0, 0, 0, 0]
 	var value := [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 	var land := [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -4586,7 +4599,7 @@ func test_homes_by_wealth() -> void:
 			continue
 		n[t] += 1
 		value[t] += float(l[11])
-		if kind == "condo_tower":
+		if kind in ["condo_tower", "midrise_condo", "res_tower"]:
 			continue  # towers count their floors, not their ground
 		var q: Array = c.plots[int(l[8])] if int(l[8]) >= 0 else []
 		if plot_type == "estate" or plot_type == "parcel":
@@ -4688,6 +4701,10 @@ func test_homes_by_wealth() -> void:
 		var at := Vector3(c.lots[rich_lot][0], 0.0, c.lots[rich_lot][1])
 		for col in tile.colliders:
 			if (col[1] as Vector3).is_equal_approx(LUX) and Vector3(col[0].x, 0.0, col[0].z).distance_to(at) < 15.0:
+				cars += 1
+		# In the suburbs the car is live: a T4 spot that spawns a luxury pick.
+		for pk: Array in tile.parks:
+			if int(pk[3]) == 4 and Vector3(pk[1].x, 0.0, pk[1].z).distance_to(at) < 15.0:
 				cars += 1
 	_check(rich_lot >= 0 and cars >= 1, "a tile build gives a T4 street house its luxury car (lot %d, %d cars)" % [rich_lot, cars])
 

@@ -302,9 +302,13 @@ static func midrise_condo(mb, out: Array, w: float, d: float, rng: RandomNumberG
 		Kit._canopy(mb, out, cx - 2.4, cx + 2.4, fz - 3.0, fz, 2.85, 0.3, accent, _g(Buildings.MEMBRANES[0], MeshBuilder.ROOF), [Vector3(cx - 2.2, 0, fz - 2.8), Vector3(cx + 2.2, 0, fz - 2.8)], white)
 		if fz - cz0 >= 4.0:
 			Kit._wealth_car(mb, out, Vector3(cx + 3.6 * side, 0, fz - 3.4), PI * 0.5, t, rng)
+		# A palm's fronds reach about 3.9 m from its foot: it stands 3 m in
+		# from the side, clear of the motor court.
+		var px := w * 0.5 - 3.0
+		var pz := -d * 0.5 + 3.0
 		for s: float in [-1.0, 1.0]:
-			if w * 0.5 - 2.5 > bl * 0.5 - 1.0:
-				Props.palm(mb, out, Vector3(s * (w * 0.5 - 2.4), 0, -d * 0.5 + 3.0), rng)
+			if px > bl * 0.5 - 0.5 or pz < cz0 - 0.6:
+				Props.palm(mb, out, Vector3(s * px, 0, pz), rng)
 			else:
 				Kit._bush(mb, Vector3(s * (bl * 0.5 - 2.5), 0, -d * 0.5 + 2.4), 0.7, rng)
 		Kit._lot_fence(mb, out, w, d, "hedge", Kit.LEAF, [[0.0, 6.4]], true, 1.2, false)

@@ -97,6 +97,16 @@ const PARKED := ["sedan", "sedan", "sedan", "compact", "compact", "compact", "cr
 	"suv", "ev", "ev", "pickup", "pickup", "van", "luxury", "sports", "muscle", "super", "motorbike",
 	"motorbike", "scooter"]
 const PARKED_MAX_LENGTH := 5.5
+## Weighted pick lists for a country home's own car by household tier
+## (T0 to T5): old small cars and bikes, then family cars, then luxury.
+const PARKED_BY_TIER := [
+	["compact", "compact", "sedan", "pickup", "van", "scooter", "motorbike"],
+	["compact", "compact", "sedan", "sedan", "pickup", "van", "motorbike"],
+	["sedan", "sedan", "compact", "crossover", "crossover", "suv", "ev", "pickup", "van"],
+	["sedan", "crossover", "crossover", "suv", "suv", "ev", "ev", "pickup", "muscle"],
+	["luxury", "luxury", "suv", "ev", "sports"],
+	["luxury", "sports", "super", "luxury", "ev"],
+]
 const PAINTS := [
 	Color(0.82, 0.16, 0.16), Color(0.15, 0.35, 0.75), Color(0.95, 0.95, 0.95), Color(0.15, 0.15, 0.17),
 	Color(0.2, 0.55, 0.32), Color(0.6, 0.3, 0.62), Color(0.95, 0.55, 0.18), Color(0.55, 0.58, 0.62),

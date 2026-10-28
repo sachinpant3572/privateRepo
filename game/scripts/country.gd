@@ -517,7 +517,7 @@ func _open_parks(parks: Array) -> Array:
 		if at < 0:
 			at = city.parked_spots.size()
 			_park_slot[pk[0]] = at
-			city.parked_spots.append([pk[1], pk[2], true])
+			city.parked_spots.append([pk[1], pk[2], true, pk[3]])
 		else:
 			city.parked_spots[at][2] = true
 		idx.append(at)

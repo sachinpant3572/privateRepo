@@ -683,7 +683,7 @@ static func _lot(ctx: Ctx, i: int) -> void:
 	for e in local:
 		if e is Dictionary:
 			var p: Vector3 = ctx.mb.xform * e.park
-			ctx.parks.append(["%d:%d" % [i, k], Vector3(p.x, y, p.z), float(l[2]) + e.yaw])
+			ctx.parks.append(["%d:%d" % [i, k], Vector3(p.x, y, p.z), float(l[2]) + e.yaw, int(e.tier)])
 			k += 1
 		else:
 			cols.append(e)
