@@ -1,5 +1,61 @@
 # TODO
 
+## Wednesday, Oct 28, 2026: Solvera robbery missions and heists
+
+Status: **not started**. Sachin: "Abb robbery missions too, they will allow to rob most of the
+houses/buildings, with different things to rob. These will be first part of the main stroyline
+and then become side quests that can be taken up anytime. Add Bank and Restaurant and Hotel
+robbery too, this one will need planning. Add other robbery missions too accordingly. Add Car
+and Bike showroom robbery/theft too. Add these to TODO."
+
+What exists today, to build on:
+- interiors phase 0: places, doors, the interior manager, corner stores and diners with staff
+  and customers, shop menus, the bag (`INTERIORS_SERVICES_PLAN.md`);
+- that plan's decision D5 already says "Robbing a till is a crime (+2 stars), and the
+  shopkeeper flees or fights". It is not built yet;
+- wanted stars and the police; carjacking; 16 vehicle models, motorbikes and scooters among
+  them;
+- act 1 (`ACT1_MISSIONS.md`): 13 missions. Mission 10, Magnolia, already teaches disguises and
+  safe cracking at the Hale Estate;
+- `GANGSTAR_CONCEPT.md` has heists as "multi-stage planned jobs as late-game set pieces", and
+  `MVP_DESIGN.md` left heists beyond one story mission out of the MVP. Sachin now wants
+  robberies early in the main story, so update both docs when this starts.
+
+To build:
+- **Robbery in the main story first, then side quests**: a run of story missions teaches
+  robbing. Each target type then opens as a side job that can be taken any time, with
+  repeat runs varied (layouts, guards, loot, timing). Decide with Sachin where the run goes
+  in act 1: added missions, or a rework of some of the existing 13.
+- **Rob most houses and buildings**:
+  - break in to homes and businesses across the city and the country;
+  - things to steal by building type: cash, safes, jewellery, electronics, art, guns, drugs,
+    documents, keys to cars in the garage;
+  - a fence or pawn shop to sell the goods to;
+  - alarms, owners at home by time of day, dogs, guards, cameras and witnesses, all tied to
+    the wanted level.
+  - This needs many more enterable interiors than the two room types built now. Plan room
+    kits that generate many layouts, not one room per building.
+- **Planned heists, for the bank, a restaurant and a hotel**:
+  - a planning phase: scout the place, take photos or blueprints, pick an approach (quiet,
+    loud, disguise), pick a crew with their skills and cut, and buy gear and a getaway car;
+  - set-ups as smaller missions;
+  - the job itself, then the escape;
+  - pay depends on the choices made.
+- **Car and bike showrooms**: steal from the floor, from the lot by night, or with a fake test
+  drive. A showroom gets the models a district would have, with no real brands.
+- **Other robberies to add** (proposed; Sachin to confirm or trim):
+  - shop tills, gas stations and ATMs;
+  - jewellery stores, pawn shops and an art gallery or museum;
+  - a casino in Las Brasas;
+  - an armoured truck;
+  - a train, and cargo at the Ironwharf docks and the airport;
+  - mansions in Magnolia Heights;
+  - mugging people in the street, as a small crime with a reputation cost.
+- Everything stays fictional per WORLD_BIBLE: no real banks, hotels, restaurant chains or car
+  makers, and no ethnic group as the criminal faction.
+
+## Wednesday, Oct 28, 2026: Solvera weather, seasons and a yearly calendar
+
 ## Wednesday, Oct 28, 2026: Solvera weather, seasons and a yearly calendar
 
 Status: **not started**. Sachin: "We have to build a robust weather system, yesrly calendar
