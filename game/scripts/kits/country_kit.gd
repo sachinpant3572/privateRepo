@@ -14,6 +14,7 @@ const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const Buildings = preload("res://scripts/kits/building_kit.gd")
 const Props = preload("res://scripts/kits/prop_kit.gd")
 const Civic = preload("res://scripts/kits/civic_kit.gd")
+const Skyline = preload("res://scripts/kits/skyline_kit.gd")
 
 const KINDS := [
 	# Rural.
@@ -29,6 +30,8 @@ const KINDS := [
 	"grain_elevators", "hollis_farm", "larkspur_vineyard", "gator_farm", "moonshine_still",
 	"bellerive_general", "bus_terminal", "seaplane_base", "cruise_terminal", "torque_tone",
 	"aurum_hangar",
+	# The Bellerive Hills (one each, the masts two): the skyline kit's monuments.
+	"observatory", "hill_letters", "radio_mast",
 ]
 
 ## The usual lot of each kind: x along the street, y deep, metres.
@@ -51,6 +54,7 @@ const FOOTPRINTS := {
 	"bus_terminal": Vector2(80, 56), "seaplane_base": Vector2(60, 56),
 	"cruise_terminal": Vector2(120, 52), "torque_tone": Vector2(40, 36),
 	"aurum_hangar": Vector2(72, 64),
+	"observatory": Vector2(64, 44), "hill_letters": Vector2(150, 26), "radio_mast": Vector2(18, 18),
 }
 
 const FLOOR := 3.2
@@ -145,6 +149,9 @@ static func build(kind: String, mb, out: Array, size: Vector2, rng: RandomNumber
 		"cruise_terminal": cruise_terminal(mb, out, w, d, rng)
 		"torque_tone": torque_tone(mb, out, w, d, rng)
 		"aurum_hangar": aurum_hangar(mb, out, w, d, rng)
+		"observatory": Skyline.observatory(mb, out, w, d, rng)
+		"hill_letters": Skyline.hillside_letters(mb, out, w, d, rng)
+		"radio_mast": Skyline.radio_mast(mb, out, w, d, rng)
 		_:
 			# Government buildings and terraced homes come from the civic
 			# kit; an unknown kind is a plain block, so a typo shows instead

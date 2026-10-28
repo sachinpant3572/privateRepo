@@ -30,6 +30,9 @@ from shapely.ops import linemerge, nearest_points, substring, unary_union
 from shapely.prepared import prep
 from shapely.strtree import STRtree
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from mountain import Mountain, roads as mountain_roads, OBSERVATORY, OBSERVATORY_SIZE, LETTERS, LETTERS_SIZE, MASTS, MAST_SIZE  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent.parent
 WORLD = ROOT / "data" / "world_map.json"
 OUT = ROOT / "data" / "country.json"
@@ -74,6 +77,8 @@ LOT = {
     "fire_station": (26, 22), "post_office": (30, 24), "dmv_office": (40, 30), "sheriff_station": (30, 24),
     "public_school": (60, 40), "rowhouse_row": (36, 12), "cape_house": (11, 9), "pier_rides": (60, 140),
     "brownstone_row": (36, 14), "painted_lady_row": (36, 14),
+    # The Bellerive Hills (tools/mountain.py), built from the skyline kit.
+    "observatory": OBSERVATORY_SIZE, "hill_letters": LETTERS_SIZE, "radio_mast": MAST_SIZE,
 }
 KINDS = list(LOT)
 
@@ -149,6 +154,7 @@ SUBURB_STYLE.update({
     "estates": {"mansion": 1},
     "arterial": {"garden_apartments": 3, "strip_mall": 2, "diner": 1, "gas_station": 1},
     "beach": {"beach_bar": 3, "diner": 2, "garden_apartments": 2, "shopfront": 2},
+    "mountain": {"house": 3, "mansion": 2},
 })
 
 # --- Bellerive v3 outskirts patterns (HANDOFF-bellerive-v3.md B-4; the
@@ -217,7 +223,7 @@ PATTERN_WALKS = {"heights": ("flats",), "eastside": ("tract", "bulb"),
 # Ground zones, in drawing order; the game colours them (country_tiles.gd).
 ZONES = ["land", "farmland", "bayou", "hills", "heights", "bayou_town", "fringe", "eastside",
          "beach_town", "shore", "town", "sand", "far_desert", "far_mountains", "far_forest",
-         "far_lakeside", "far_parkland", "far_military", "far_land"]
+         "far_lakeside", "far_parkland", "far_military", "far_land", "mountain"]
 
 
 def main() -> None:
@@ -468,6 +474,8 @@ class Country:
         self.pier = None
         self.arterials = []  # east side: [LineString, "h" or "v"]
         self.flats_xs = []
+        self.mtn = Mountain()
+        self.terrain = None
 
     def L(self, pts):
         return [(x - self.origin[0], y - self.origin[1]) for x, y in pts]
@@ -646,6 +654,7 @@ class Country:
         brisa_band = coast_e.buffer(400.0, cap_style="flat").intersection(box(1450, -400, east, 2100))
         shore_band = box(west - 200, by1, 1500, 2100)
         zones = [
+            ("mountain", self.mtn.poly),
             ("beach_town", brisa_band),
             ("shore", shore_band.difference(brisa_band)),
             ("heights", box(west, north, bx0, 560)),
@@ -711,7 +720,8 @@ class Country:
         e_end = self._first_hit((east, north), (east, by1 + 600.0), self.ocean_drive) or (east, 700.0)
         belt = [w_end, (west, north), (east, north), e_end]
         for piece in lines_of(LineString(fillet(belt, 60.0, 8.0)).intersection(self.A.difference(self.P))):
-            self.add(list(piece.coords), "avenue", "Bellerive Beltway", "beltway")
+            self.add(list(piece.coords), "highway", "Bellerive Beltway", "beltway")
+        self._mountain_roads()
         self.routes_geom = unary_union([s[0] for s in self.sources if s[3] == "route"])
         self._heights_roads()
         self._fringe_roads()
@@ -860,6 +870,75 @@ class Country:
             self.reserved.append({"kind": kind, "c": c, "yaw": yaw, "W": W, "D": D, "poly": poly, "n": n})
             return self.reserved[-1]
         return None
+
+    def _mountain_roads(self):
+        """The Bellerive Hills' roads (tools/mountain.py), each graded as it
+        goes in so the ones after it meet it at its height."""
+        def route_at(name, near):
+            geom = unary_union([s[0] for s in self.sources if s[2] == name])
+            return nearest_points(Point(near), geom)[1].coords[0]
+
+        self.mtn_grades = []
+        for pts, cls, name, tag, radius in mountain_roads(route_at):
+            line = LineString(fillet(pts, radius, CLASSES[cls]["step"] * 0.5))
+            if cls != "trail":
+                self.mtn_grades.append((name, round(self.mtn.grade(line, cls), 3)))
+            self.add(list(line.coords), cls, name, tag)
+
+    def mountain_lots(self):
+        """The observatory at the end of its road, the letters on the slope
+        below Calder Peak facing the city, the masts on the summit."""
+        def site(x, y, kind, ident):
+            # Set where the design puts it: clear of the roads and lots, not
+            # squared to a road (none fronts the letters or the masts).
+            poly = lot_poly(x, y, south, *LOT[kind])
+            if self.road_prep.intersects(poly) or self.lot_grid.hits(poly):
+                print("  %s: %s" % (ident, "on a road" if self.road_prep.intersects(poly) else "on a lot"))
+                return False
+            self.lot_grid.add(poly.buffer(1.5))
+            self.lots.append({"x": x, "y": y, "yaw": south, "w": LOT[kind][0], "d": LOT[kind][1], "kind": kind,
+                              "id": ident, "zone": "mountain", "plot": -1})
+            return True
+
+        south = yaw_facing(0.0, -1.0)
+        placed = [site(OBSERVATORY[0], OBSERVATORY[1], "observatory", "lumen_observatory"),
+                  site(LETTERS[0], LETTERS[1], "hill_letters", "hill_letters")]
+        for i, m in enumerate(MASTS):
+            placed.append(site(m[0], m[1], "radio_mast", "calder_mast_%d" % i))
+        if not all(placed):
+            print("WARNING: mountain sites not all placed", placed)
+
+    def mountain_terrain(self):
+        """The height grid: each mountain plot and lot sits on a flat pad at
+        the height of the road it fronts (a lot in a plot on the plot's, the
+        masts on one summit compound); the letters stand on the slope."""
+        near = self.mtn.poly.buffer(40.0)
+
+        def front_height(x, y, yaw, d):
+            h = self.mtn.profile_near(frame_point((x, y), yaw, 0.0, -d * 0.5), 30.0)
+            return h if h is not None else self.mtn.raw_at((x, y))
+
+        pads = []
+        plot_h = {}
+        for i, p in enumerate(self.plots):
+            if near.contains(Point(p["x"], p["y"])):
+                plot_h[i] = front_height(p["x"], p["y"], p["yaw"], p["d"])
+                pads.append((lot_poly(p["x"], p["y"], p["yaw"], p["w"], p["d"]), plot_h[i]))
+        # The masts share one compound on the summit, level with the end of
+        # the fire road (or the higher ground, if that is higher).
+        summit = max([self.mtn.raw_at(m) for m in MASTS] + [self.mtn.profile_near(MASTS[0], 30.0) or 0.0])
+        for l in self.lots:
+            if l["kind"] == "hill_letters" or not near.contains(Point(l["x"], l["y"])):
+                continue
+            if l["kind"] == "radio_mast":
+                h = summit
+            elif l.get("plot", -1) in plot_h:
+                h = plot_h[l["plot"]]
+            else:
+                h = front_height(l["x"], l["y"], l["yaw"], l["d"])
+            pads.append((lot_poly(l["x"], l["y"], l["yaw"], l["w"], l["d"]), h))
+        self.terrain = self.mtn.grid(pads)
+        self.mtn_pads = pads
 
     def _heights_roads(self):
         """Magnolia Heights: the flats (straight north-south drives, one kind
@@ -1871,6 +1950,9 @@ class Country:
                     continue
                 if tag in ("arterial", "beltway", "route"):
                     style = "arterial"
+            elif style == "mountain":
+                if cls == "highway" or tag in ("observatory", "fire_road", "beltway", "route"):
+                    continue
             elif style == "shore":
                 if tag == "seabreeze":
                     style = "beach"
@@ -1909,6 +1991,18 @@ class Country:
                         else:
                             s += 4.0
                         continue
+                    if style == "mountain" and self.rng.random() < 0.6:
+                        # Hillside homes stand apart, with scrub between.
+                        s += self.rng.uniform(25.0, 60.0)
+                        continue
+                    if style == "mountain":
+                        # Not where the road climbs steeply past the frontage:
+                        # the lot's pad could not sit level with it.
+                        ha = self.mtn.profile_near(line.interpolate(s).coords[0], 1.0)
+                        hb = self.mtn.profile_near(line.interpolate(min(s + LOT[kind][0], line.length)).coords[0], 1.0)
+                        if ha is not None and hb is not None and abs(hb - ha) > 0.09 * LOT[kind][0]:
+                            s += 10.0
+                            continue
                     if kind == "condo_tower":
                         tq = self._side_point(line, min(s + 13.0, line.length), sgn, w * 0.5 + 16.5)
                         tkey = (math.floor(tq[0] / TILE), math.floor(tq[1] / TILE))
@@ -2608,6 +2702,7 @@ class Country:
         self.walls()
         self.lot_setup()
         self.landmark_lots()
+        self.mountain_lots()
         self.town_lots()
         self.outskirts_lots()
         self.street_lots()
@@ -2615,6 +2710,7 @@ class Country:
         self.farm_lots()
         self.field_plots()
         self.ground_zones()
+        self.mountain_terrain()
         self.polyline_outputs()
         self.tiles()
 
@@ -2638,6 +2734,38 @@ class Country:
                 worst = (off, item.get("kind", item.get("type")), round(item["x"]), round(item["y"]))
         print("plots:", counts, "turned estate houses:", turned, "worst turn off the fronting road (deg):", worst)
         self.self_check()
+        self.mountain_check()
+
+    def mountain_check(self):
+        """The hills: each road's steepest grade on the final grid, and how
+        far the grid strays from its graded profile along the road."""
+        names = {"Canyon Freeway", "Crest Drive", "Coyote Canyon Road", "Observatory Road", "Summit Fire Road"}
+        worst = {}
+        for pc in self.pieces:
+            if pc["name"] not in names:
+                continue
+            pts = resample(LineString(pc["pts"]), 4.0)
+            hs = [self.mtn.height(q) for q in pts]
+            g = max([abs(b - a) / max(dist(p, q), 0.1) for a, b, p, q in zip(hs, hs[1:], pts, pts[1:])] or [0.0])
+            off = max([abs(h - (self.mtn.profile_at(q) or 0.0)) for h, q in zip(hs, pts)] or [0.0])
+            w = worst.setdefault(pc["name"], [0.0, 0.0, 0.0])
+            worst[pc["name"]] = [max(w[0], g), max(w[1], off), max(w[2], max(hs))]
+        # Each pad is flat under its whole lot (2 m samples).
+        offs = []
+        for poly, ph in self.mtn_pads:
+            bx0, by0, bx1, by1 = poly.bounds
+            off = 0.0
+            for i in range(int((bx1 - bx0) / 2.0) + 1):
+                for j in range(int((by1 - by0) / 2.0) + 1):
+                    x, y = bx0 + i * 2.0, by0 + j * 2.0
+                    if poly.contains(Point(x, y)):
+                        off = max(off, abs(self.mtn.height((x, y)) - ph))
+            offs.append((round(off, 2), tuple(round(c) for c in poly.centroid.coords[0])))
+        offs.sort(reverse=True)
+        print("mountain: graded", self.mtn_grades, "pads %d, worst off flat (m)" % len(offs), offs[:4],
+              "peak %.0f m" % float(self.mtn.heights.max()))
+        for name, (g, off, top) in sorted(worst.items()):
+            print("  %-20s steepest %.1f%%, off its profile %.2f m, top %.0f m" % (name, g * 100.0, off, top))
 
     def self_check(self):
         """Geometry checks with shapely: lots clear of each other, of the roads
@@ -2753,6 +2881,7 @@ class Country:
             "bridges": [{"road": b["road"], "from": b["from"], "to": b["to"]} for b in self.bridges],
             "walls": self.wall_list,
             "barricades": self.barricades,
+            "terrain": self.terrain,
             "lots": lots,
             "plot_types": PLOT_TYPES,
             "part_kinds": PART_KINDS,

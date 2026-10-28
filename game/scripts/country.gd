@@ -14,6 +14,7 @@ extends Node3D
 const Tiles = preload("res://scripts/country_tiles.gd")
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const L = preload("res://scripts/layers.gd")
+const Terrain = preload("res://scripts/terrain.gd")
 
 const DATA_PATH := "res://data/country.json"
 ## Tiles load when their square comes this close to the focus (or to where
@@ -131,6 +132,7 @@ func load_data(seed_v := 1234) -> void:
 		if not plan_links.has(int(pair[1])):
 			plan_links[int(pair[1])] = []
 		plan_links[int(pair[1])].append(int(pair[0]))
+	Terrain.load_data(d.get("terrain"))
 	lots = d.lots
 	plots = d.get("plots", [])
 	plot_types = d.get("plot_types", [])

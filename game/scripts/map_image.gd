@@ -52,6 +52,8 @@ const ICONS := {
 	"story": ["?", Color(0.75, 0.6, 0.15)],
 	"boxing": ["F", Color(0.75, 0.2, 0.2)],
 	"legend": ["!", Color(0.45, 0.35, 0.6)],
+	"monument": ["M", Color(0.75, 0.6, 0.15)],
+	"viewpoint": ["V", Color(0.35, 0.5, 0.7)],
 	# Places (places.gd).
 	"corner_store": ["S", Color(0.15, 0.6, 0.55)],
 	"diner": ["D", Color(0.85, 0.3, 0.3)],

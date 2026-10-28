@@ -13,8 +13,20 @@ const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const Props = preload("res://scripts/kits/prop_kit.gd")
 const Kit = preload("res://scripts/kits/country_kit.gd")
 const Grounds = preload("res://scripts/kits/grounds_kit.gd")
+const Terrain = preload("res://scripts/terrain.gd")
 
 const GROUND_Y := -0.04
+## On the hills the ground sits this much lower still, so a road (straight
+## between its nodes) never dips under a crest of the ground it lies on.
+const HILL_GROUND_DROP := 0.26
+## Longest edge of a ground triangle on the hills (the height grid is 8 m).
+const HILL_TRI := 9.0
+## The hills' baked light (from the north-west, fairly low) and the colours
+## their faces take (see _hill_shade).
+const HILL_LIGHT := Vector3(-0.45, 0.75, -0.48)
+const HILL_SCRUB := Color(0.36, 0.4, 0.22)
+const HILL_GOLD := Color(0.78, 0.64, 0.34)
+const HILL_ROCK := Color(0.58, 0.54, 0.48)
 const ROAD_Y := 0.0
 const KERB := 0.15
 const SIDEWALK := 2.5
@@ -54,6 +66,8 @@ const ZONE_GROUND := {
 	"far_forest": [Color(0.26, 0.38, 0.22), true], "far_lakeside": [Color(0.38, 0.52, 0.3), true],
 	"far_parkland": [Color(0.4, 0.56, 0.3), true], "far_military": [Color(0.55, 0.54, 0.44), false],
 	"far_land": [Color(0.48, 0.54, 0.34), true],
+	# The Bellerive Hills: dry golden grass under the chaparral.
+	"mountain": [Color(0.6, 0.55, 0.36), false],
 }
 ## Tree spacing (metres between trees) and kind per zone.
 const TREES := {
@@ -64,6 +78,7 @@ const TREES := {
 	"far_desert": [40.0, "shrub"], "far_mountains": [22.0, "pine"], "far_forest": [12.0, "pine"],
 	"far_lakeside": [22.0, "round"], "far_parkland": [24.0, "round"], "far_military": [90.0, "shrub"],
 	"far_land": [30.0, "round"],
+	"mountain": [10.0, "chaparral"],
 }
 const TREE_GRID := 10.0
 const MAX_TREES := 120
@@ -84,6 +99,12 @@ class Ctx:
 	var rng := RandomNumberGenerator.new()
 	## Ground triangles of this tile: [a, b, c (Vector2), zone name].
 	var tris: Array = []
+	## Whether the tile lies on the hills, and its ground's vertices in mb.
+	var hill := false
+	var ground_end := 0
+	## Lots and plots on the hills' flat pads, lifted as one piece:
+	## [first vertex, end vertex, first collider, end collider, height].
+	var rigid: Array = []
 	## Lots and plots (index) and wall/rail segments ([a, b]) near the
 	## tile, for keeping scenery off them.
 	var lots_near: Array = []
@@ -100,8 +121,10 @@ static func build(country, key: Vector2i) -> Dictionary:
 	ctx.glow = MeshBuilder.new()
 	ctx.rng.seed = hash([country.seed_value, "tile", key.x, key.y])
 	var t: Dictionary = country.tiles.get(key, {})
+	ctx.hill = Terrain.touches(ctx.rect.grow(1.0))
 	if not t.is_empty():
 		_ground(ctx, t.g)
+		ctx.ground_end = ctx.mb.verts.size()
 		_gather(ctx)
 		for e in t.r:
 			_road(ctx, int(e))
@@ -124,6 +147,8 @@ static func build(country, key: Vector2i) -> Dictionary:
 			_trail(ctx, int(pair[0]), int(pair[1]))
 		_ponds(ctx)
 		_trees(ctx)
+		if ctx.hill:
+			_drape(ctx)
 	return {"mesh": ctx.mb, "glow": ctx.glow, "colliders": ctx.out, "props": ctx.props, "buildings": ctx.buildings}
 
 
@@ -251,8 +276,95 @@ static func _ground(ctx: Ctx, parts: Array) -> void:
 			var a := Vector2(flat[k], flat[k + 1])
 			var b := Vector2(flat[k + 2], flat[k + 3])
 			var cc := Vector2(flat[k + 4], flat[k + 5])
-			ctx.mb.tri(_v3(a, GROUND_Y), _v3(b, GROUND_Y), _v3(cc, GROUND_Y), Vector3.UP, color)
+			if ctx.hill:
+				_hill_tri(ctx.mb, a, b, cc, color)
+			else:
+				ctx.mb.tri(_v3(a, GROUND_Y), _v3(b, GROUND_Y), _v3(cc, GROUND_Y), Vector3.UP, color)
 			ctx.tris.append([a, b, cc, zone])
+
+
+## A ground triangle on the hills, split until no edge is longer than
+## HILL_TRI so it can follow the height grid (_drape lifts it).
+static func _hill_tri(mb, a: Vector2, b: Vector2, c: Vector2, color: Color) -> void:
+	var ab := a.distance_squared_to(b)
+	var bc := b.distance_squared_to(c)
+	var ca := c.distance_squared_to(a)
+	var longest := maxf(ab, maxf(bc, ca))
+	if longest <= HILL_TRI * HILL_TRI:
+		mb.tri(_v3(a, GROUND_Y), _v3(b, GROUND_Y), _v3(c, GROUND_Y), Vector3.UP, color)
+	elif longest == ab:
+		var m := (a + b) * 0.5
+		_hill_tri(mb, a, m, c, color)
+		_hill_tri(mb, m, b, c, color)
+	elif longest == bc:
+		var m := (b + c) * 0.5
+		_hill_tri(mb, b, m, a, color)
+		_hill_tri(mb, m, c, a, color)
+	else:
+		var m := (c + a) * 0.5
+		_hill_tri(mb, c, m, b, color)
+		_hill_tri(mb, m, a, b, color)
+
+
+## Lays the tile on the hills: lots and plots rise as one piece to their
+## pads, every other vertex, collider and prop by the ground's height under
+## it (the city and the flat country stay at 0), and the ground takes the
+## hill's own normals and shade.
+static func _drape(ctx: Ctx) -> void:
+	var mb = ctx.mb
+	var lifted := PackedByteArray()
+	lifted.resize(mb.verts.size())
+	var out_lifted := PackedByteArray()
+	out_lifted.resize(ctx.out.size())
+	for r: Array in ctx.rigid:
+		var h: float = r[4]
+		for i in range(r[0], r[1]):
+			mb.verts[i] += Vector3(0.0, h, 0.0)
+			lifted[i] = 1
+		for i in range(r[2], r[3]):
+			var p: Vector3 = ctx.out[i][0]
+			ctx.out[i][0] = p + Vector3(0.0, h, 0.0)
+			out_lifted[i] = 1
+	for i in mb.verts.size():
+		if lifted[i] == 1:
+			continue
+		var v: Vector3 = mb.verts[i]
+		var h := Terrain.height(v.x, v.z)
+		if h == 0.0:
+			continue
+		if i < ctx.ground_end:
+			v.y += h - HILL_GROUND_DROP * minf(1.0, h * 0.5)
+			var n := Terrain.normal(v.x, v.z)
+			mb.normals[i] = n
+			mb.colors[i] = _hill_shade(mb.colors[i], n, h)
+		else:
+			v.y += h
+		mb.verts[i] = v
+	var glow = ctx.glow
+	for i in glow.verts.size():
+		var v: Vector3 = glow.verts[i]
+		v.y += Terrain.height(v.x, v.z)
+		glow.verts[i] = v
+	for i in ctx.out.size():
+		if out_lifted[i] == 0:
+			var p: Vector3 = ctx.out[i][0]
+			ctx.out[i][0] = p + Vector3(0.0, Terrain.height(p.x, p.z), 0.0)
+	for c in ctx.props:
+		var p: Vector3 = c[0]
+		c[0] = p + Vector3(0.0, Terrain.height(p.x, p.z), 0.0)
+
+
+## Ground colour on the hills, so the relief reads from above: baked
+## shade from a low north-west light, dark chaparral on the north faces,
+## golden grass on the south ones, and bare rock showing near the top.
+## The alpha (the surface code) is kept.
+static func _hill_shade(c: Color, n: Vector3, h: float) -> Color:
+	var lit := clampf(1.0 + 2.2 * (n.dot(HILL_LIGHT) - HILL_LIGHT.y), 0.55, 1.3)
+	var rgb := Color(c.r, c.g, c.b)
+	rgb = rgb.lerp(HILL_SCRUB, clampf(-n.z * 2.5, 0.0, 0.55))
+	rgb = rgb.lerp(HILL_GOLD, clampf(n.z * 2.5, 0.0, 0.35))
+	rgb = rgb.lerp(HILL_ROCK, clampf((h - 70.0) / 60.0, 0.0, 0.4))
+	return Color(rgb.r * lit, rgb.g * lit, rgb.b * lit, c.a)
 
 
 ## Lots and wall/rail segments in this tile and its neighbours.
@@ -484,9 +596,14 @@ static func _lot(ctx: Ctx, i: int) -> void:
 	rng.seed = hash([c.seed_value, "lot", i])
 	ctx.mb.xform = Transform3D(Basis(Vector3.UP, float(l[2])), Vector3(l[0], 0.0, l[1]))
 	var local: Array = []
+	var v0: int = ctx.mb.verts.size()
+	var o0 := ctx.out.size()
 	Kit.build(kind, ctx.mb, local, Vector2(l[3], l[4]), rng, l.size() > 8 and int(l[8]) >= 0 and c.plot_types[int(c.plots[int(l[8])][5])] == "estate")
 	_done(ctx, local, ctx.out)
 	ctx.buildings += 1
+	# The letters stand on the slope as it is; everything else on its pad.
+	if ctx.hill and kind != "hill_letters":
+		_rigid(ctx, v0, o0, Vector2(l[0], l[1]))
 
 
 ## The grounds of a plot: estate gardens, a cluster's yard, a farmyard or
@@ -498,11 +615,23 @@ static func _plot(ctx: Ctx, i: int) -> void:
 	rng.seed = hash([c.seed_value, "plot", i])
 	var base := Transform3D(Basis(Vector3.UP, float(p[2])), Vector3(p[0], 0.0, p[1]))
 	var local: Array = []
+	var v0: int = ctx.mb.verts.size()
+	var o0 := ctx.out.size()
 	for part: Array in p[6]:
 		ctx.mb.xform = base
 		Grounds.draw(c.part_kinds[int(part[0])], part, c.tree_kinds, ctx.mb, local, rng)
 	ctx.mb.xform = base
 	_done(ctx, local, ctx.out)
+	if ctx.hill:
+		_rigid(ctx, v0, o0, Vector2(p[0], p[1]))
+
+
+## Marks what was just built (from vertex v0 and collider o0) to be lifted
+## as one piece to the pad's height at `at`.
+static func _rigid(ctx: Ctx, v0: int, o0: int, at: Vector2) -> void:
+	var h := Terrain.height(at.x, at.y)
+	if h > 0.0:
+		ctx.rigid.append([v0, ctx.mb.verts.size(), o0, ctx.out.size(), h])
 
 
 # --- Walls and barricades --------------------------------------------------------------
@@ -657,6 +786,8 @@ static func _trees(ctx: Ctx) -> void:
 			var kind: String = TREES[zone][1]
 			if kind == "palm" and zone == "eastside" and ctx.rng.randf() < 0.5:
 				kind = "round"
+			elif kind == "chaparral" and ctx.rng.randf() < 0.18:
+				kind = "round" # a live oak among the scrub
 			if not _clear(ctx, p, 2.5 if kind != "shrub" else 1.0):
 				continue
 			_tree(ctx, _v3(p, GROUND_Y), kind)
@@ -673,6 +804,14 @@ static func _tree(ctx: Ctx, p: Vector3, kind: String) -> void:
 			return
 		"shrub":
 			mb.clump(p + Vector3(0, 0.5, 0), Vector3(1.0, 0.6, 1.0) * rng.randf_range(0.7, 1.3), Props._leaf(Color(0.42, 0.45, 0.28)), seed, 5, 3)
+			return
+		"chaparral":
+			# Sage and chamise: low, wide, dusty olive clumps.
+			var leaf := Props._leaf(Color(0.33, 0.38, 0.22).lerp(Color(0.46, 0.47, 0.32), rng.randf()))
+			var r := rng.randf_range(1.6, 3.0)
+			mb.clump(p + Vector3(0, 0.7, 0), Vector3(r, 0.9, r * rng.randf_range(0.7, 1.0)), leaf, seed, 6, 3)
+			if rng.randf() < 0.5:
+				mb.clump(p + Vector3(r * 0.8, 0.5, rng.randf_range(-1.0, 1.0)), Vector3(r * 0.6, 0.6, r * 0.6), leaf.darkened(0.1), seed + 1, 5, 3)
 			return
 		"cypress":
 			var h := rng.randf_range(7.0, 11.0)

@@ -3,6 +3,7 @@ extends Node
 ##   xvfb-run godot --rendering-driver opengl3 res://tests/screenshots.tscn -- <out_dir>
 
 const MainScene = preload("res://main.tscn")
+const Terrain = preload("res://scripts/terrain.gd")
 
 var out_dir := "user://"
 
@@ -54,6 +55,11 @@ func _run() -> void:
 	game.atmosphere.minutes_per_second = 0.0
 	game.atmosphere.weather_changes = false
 	await _frames(180)
+	if OS.get_environment("SHOTS") == "hills":
+		# Just the roundabouts and the hills (quick look while working on them).
+		await _hills(game)
+		get_tree().quit()
+		return
 	await _shot("1_on_foot.png")
 	game.waypoint = game.city.node_pos(game.city.nearest_node(game.city.landmark_front("lantern_square")))
 	await _frames(30)
@@ -124,8 +130,7 @@ func _run() -> void:
 		game.camera.snap()
 		await _frames(90)
 		await _shot(stop[0] + ".png")
-	game.camera.fixed_focus = null
-	game.camera.room_size = 0.0
+	await _hills(game)
 	for stop in [["42_gilt_street", _road_spot(game, "", Vector2(150, 260))], ["43_wards_strip", _road_spot(game, "cypress", Vector2(1010, 650))]]:
 		var pos: Vector3 = stop[1]
 		game.city.stream_now(pos)
@@ -176,6 +181,39 @@ func _run() -> void:
 	await _shot("3_police_chase.png")
 	print("player at ", p.global_position, " wanted ", Wanted.level)
 	get_tree().quit()
+
+
+## The traffic circles and the Bellerive Hills from above: the camera's
+## focus sits on the ground, which is up the hill out there.
+func _hills(game) -> void:
+	var stops := [
+		["45_liberty_circle", Vector2(690, 500), 100.0],
+		["46_cypress_circle", Vector2(1010, 500), 90.0],
+		["48_lumen_observatory", Vector2(1050, -905), 110.0],
+		["49_hillside_letters", Vector2(1330, -1085), 190.0],
+		["50_calder_masts", Vector2(1118, -1240), 120.0],
+		["51_canyon_freeway", Vector2(760, -1150), 170.0],
+		["52_crest_drive", Vector2(1560, -1255), 110.0],
+	]
+	for stop in stops:
+		var at: Vector2 = stop[1]
+		var pos := Vector3(at.x, Terrain.height(at.x, at.y), at.y)
+		game.city.stream_now(pos)
+		game.player.global_position = pos
+		game.player.reset_physics_interpolation()
+		game.camera.fixed_focus = pos
+		game.camera.room_size = stop[2]
+		game.camera.snap()
+		await _frames(90)
+		await _shot(stop[0] + ".png")
+	game.camera.fixed_focus = null
+	game.camera.room_size = 0.0
+	# The hills on the full map, round the player standing on Crest Drive.
+	game.hud.full_map.open()
+	for i in 4:
+		await get_tree().process_frame
+	await _shot("47_bellerive_hills_map.png")
+	game.hud.full_map.close()
 
 
 ## Middle of the street of road `road` nearest `near` (local metres), on

@@ -6,6 +6,7 @@ const MainScene = preload("res://main.tscn")
 const Vehicle = preload("res://scripts/vehicle.gd")
 const Npc = preload("res://scripts/npc.gd")
 const VehicleKit = preload("res://scripts/kits/vehicle_kit.gd")
+const Terrain = preload("res://scripts/terrain.gd")
 const Population = preload("res://scripts/population.gd")
 
 var game
@@ -68,6 +69,7 @@ func _run() -> void:
 		"test_traffic_drives_into_the_country", "test_traffic_turns_round_at_barricades",
 		"test_country_kit_builds_every_kind",
 		"test_country_plots_square_to_their_roads", "test_estates_and_clusters", "test_grounds_kit_builds_every_part",
+		"test_bellerive_hills",
 	]
 	# ONLY=name1,name2 runs just those (handy while working on one test).
 	var only := OS.get_environment("ONLY")
@@ -2778,3 +2780,93 @@ func test_grounds_kit_builds_every_part() -> void:
 				elif kind in ["wall", "hedge", "fence"] and absf(wrapf(float(col[2]) - 0.5, -PI * 0.5, PI * 0.5)) > 0.01:
 					problems.append("%s: collider turned %.2f, not along the part" % [tag, col[2]])
 	_check(problems.is_empty(), "every grounds part builds soundly: %s" % ", ".join(problems.slice(0, 6)))
+
+
+## The Bellerive Hills: the height grid loads, the observatory stands on its
+## pad up the hill, its tile is raised to the ground, someone on foot stands
+## on the slope, and a car driven up Crest Drive keeps its wheels on the road.
+func test_bellerive_hills() -> void:
+	await _new_game(false)
+	var city = game.city
+	var c = city.country
+	_check(Terrain.nx > 0 and Terrain.ny > 0, "the hills' height grid loads (%d x %d)" % [Terrain.nx, Terrain.ny])
+	var peak := 0.0
+	for h in Terrain.heights:
+		peak = maxf(peak, h)
+	_check(peak > 100.0 and peak < 150.0, "Calder Peak tops out at %.0f m" % peak)
+	_check(Terrain.height(0.0, 0.0) == 0.0 and Terrain.height(1200.0, 900.0) == 0.0, "the city stays flat")
+	for id in ["lumen_observatory", "hill_letters", "calder_mast_0", "calder_mast_1"]:
+		_check(not c.landmark(id).is_empty(), "%s has its lot" % id)
+	var obs: Dictionary = c.landmark("lumen_observatory")
+	if obs.is_empty():
+		return
+	var at: Vector3 = obs.pos
+	var pad := Terrain.height(at.x, at.z)
+	_check(pad > 40.0, "the observatory stands up the hill (%.1f m)" % pad)
+	var front: Vector3 = obs.front
+	_place_player_at(Vector3(front.x, pad + 2.0, front.z))
+	city.stream_now(at)
+	await _frames(30)
+	var p: Vector3 = game.player.global_position
+	_check(absf(p.y - Terrain.height(p.x, p.z)) < 0.3, "someone on foot stands on the slope (%.2f m off)" % (p.y - Terrain.height(p.x, p.z)))
+	var tile: Node3D = c.tile_node(c.tile_key(at))
+	_check(tile != null, "the observatory's tile streams in")
+	if tile != null:
+		var top := -INF
+		for n in tile.get_children():
+			if n is MeshInstance3D:
+				top = maxf(top, (n.get_aabb() as AABB).end.y)
+		_check(top > pad + 8.0, "its tile is raised with the ground (top %.1f m)" % top)
+	# Up Crest Drive: from a node, toward the higher of its neighbours.
+	var road: Dictionary = {}
+	for r in c.roads:
+		if r.name == "Crest Drive" and r.nodes.size() > 30:
+			road = r
+			break
+	_check(not road.is_empty(), "Crest Drive is a country road")
+	if road.is_empty():
+		return
+	var best := -1
+	var rise := 0.0
+	for k in range(4, road.nodes.size() - 8):
+		var a: Vector2 = c.node_pos[road.nodes[k]]
+		var b: Vector2 = c.node_pos[road.nodes[k + 4]]
+		var dh := absf(Terrain.height(b.x, b.y) - Terrain.height(a.x, a.y))
+		if dh > rise:
+			rise = dh
+			best = k
+	var a: Vector2 = c.node_pos[road.nodes[best]]
+	var b: Vector2 = c.node_pos[road.nodes[best + 4]]
+	if Terrain.height(b.x, b.y) < Terrain.height(a.x, a.y):
+		var t := a
+		a = b
+		b = t
+	var dir := (b - a).normalized()
+	var start := Vector3(a.x, Terrain.height(a.x, a.y), a.y)
+	city.stream_now(start)
+	var car = Vehicle.new()
+	car.city = city
+	car.position = start
+	car.rotation.y = atan2(-dir.x, -dir.y)
+	game.add_child(car)
+	_place_player_at(start + Vector3(dir.y, 0, -dir.x) * 3.0)
+	await _frames(4)
+	await _press("interact")
+	_check(game.player.vehicle == car, "player gets in a car on Crest Drive")
+	var worst := 0.0
+	var tilt := 0.0
+	for f in 150:
+		Controls.override_vector = dir
+		await _frames(1)
+		var q: Vector3 = car.global_position
+		worst = maxf(worst, absf(q.y - Terrain.height(q.x, q.z)))
+		tilt = maxf(tilt, absf(car._slope.y))
+	Controls.override_vector = null
+	var q: Vector3 = car.global_position
+	_check(worst < 0.05, "the car rides on the ground (worst %.3f m off)" % worst)
+	_check(q.y > start.y + 2.0, "and it climbs the hill (%.1f m to %.1f m)" % [start.y, q.y])
+	_check(tilt > 0.03, "the body pitches up the slope (%.3f rad)" % tilt)
+	_check(c.road_distance(Vector2(q.x, q.z), 30.0) < 6.0, "and stays on the road")
+	await _press("interact")
+	car.queue_free()
+	await _frames(2)

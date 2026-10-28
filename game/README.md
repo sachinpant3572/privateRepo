@@ -103,6 +103,18 @@ phone.
   orchards. Villages, bayou camps and trailer parks put uneven homes inside a
   square yard. Farmyards have a windbreak, and the fields are cells along
   their road. `kits/grounds_kit.gd` draws the parts of each plot.
+- **The Bellerive Hills** (`tools/mountain.py`, `scripts/terrain.gd`;
+  `../HANDOFF-roads-mountain.md`): a chaparral ridge north of the Beltway,
+  like the Santa Monica Mountains above LA, up to 114 m at Calder Peak. It
+  is drivable: the **Canyon Freeway** climbs from the Beltway through the
+  saddle to Route 1, **Crest Drive** runs along the ridge between Route 9
+  and Route 1, **Coyote Canyon Road** and **Observatory Road** (hairpins)
+  come up from the city, and a fire road climbs to two red-and-white radio
+  masts on the summit. The **Lumen Observatory** looks down on the city and
+  the **Hillside Letters** stand on the slope below the peak. Roads are
+  graded (cut and fill), homes sit on level pads, cars pitch and roll on the
+  slopes and slow going uphill, and the ground is shaded so the relief reads
+  from above (dark scrub on the north faces, gold grass on the south).
 - **Taxis** (`scripts/taxi.gd`): hail a cab (TAXI / T) or call one from the
   phone's Cab app, pick a landmark or town, then ride along or pay 1.5x to
   skip there. $4 plus $3 a km.
@@ -110,10 +122,10 @@ phone.
   - a 12 x 9 km state with four cities: Bellerive (Florida and New Orleans),
     Concordia (the planned capital), Steelhaven (the desolate motor city) and
     Las Brasas (Vegas);
-  - 15 regions with counties, 16 towns, villages and ghost towns, and military
+  - 16 regions with counties, 16 towns, villages and ghost towns, and military
     sites;
   - 59 routes (highways down to trails, rail, metro, trams, ferries, flights),
-    147 landmarks (bus and train stations, airports, fords and bridges among them)
+    158 landmarks (bus and train stations, airports, fords and bridges among them)
     and 20 factions.
   - Porto Brisa (Rio de Janeiro) is expansion 1, across the Gulf and off this
     map: an `expansions` entry that the game does not read yet.
@@ -146,7 +158,8 @@ phone.
   - **Bellerive v3 set pieces** (borrowed from DC, New York and California;
     `../HANDOFF-bellerive-v3.md`, research in
     `../reference/world/bellerive_patterns.md`):
-    - **the civic centre**: City Hall on its lawn with a drive round it, the
+    - **the civic centre**: City Hall on its lawn, one grid block with
+      through streets on all four sides, the
       **Esplanade** (a mall with a reflecting pool and elm rows) running east
       to **Founders Circle**, a traffic circle with the Founders Obelisk where
       Lantern Boulevard meets Liberty Avenue. The Parish Courthouse, the
@@ -159,7 +172,10 @@ phone.
       Alamo Square);
     - **Morrow Point**: brownstone rows round green block cores (Brooklyn);
     - the **Ferry Building** on the Ironwharf quay (SF);
-    - palm-lined boulevards (LA).
+    - palm-lined boulevards (LA);
+    - four more traffic circles where arterials cross: **Liberty Circle**
+      (a statue), **Aurum**, **Cypress** and **Harbor Circle** (fountains);
+    - the **Bellerive Beltway** round the city is a highway.
   - **Liberty Green**, a long park on Liberty Avenue (Central Park, scaled
     down) with paths, a bandstand, a pond and oaks.
   - Some downtown blocks are plazas or car parks, and some Ward blocks are
@@ -318,7 +334,9 @@ the fare panel, a ride and a skip. `res://tests/civic_gallery.tscn`,
 `res://tests/skyline_gallery.tscn` and `res://tests/shady_gallery.tscn`
 render every kind of the civic, skyline and shady kits; the screenshots
 include aerial views of Gilt, Midtown, the Wards, Ironwharf and the
-Esplanade's arch (shots 37 to 41).
+Esplanade's arch (shots 37 to 41), and the traffic circles and the
+Bellerive Hills (45 to 52; `SHOTS=hills` before the command shoots just
+those).
 
 The country is generated, not hand-made. After changing `data/world_map.json`
 or the street plan, dump the plan and rebuild it (needs `pip install shapely`):
@@ -354,6 +372,7 @@ cd game && godot --headless -s res://tests/plan_dump.gd -- /tmp/plan.json \
 | `data/world_map.json` | The world map: regions, cities, districts, routes, landmarks |
 | `scripts/country.gd`, `country_tiles.gd` | The country past the plan: data, road graph, tile streaming; one tile's build |
 | `data/country.json`, `tools/build_country.py` | The generated country (play area, roads, lots, walls) and its generator |
+| `tools/mountain.py`, `scripts/terrain.gd` | The Bellerive Hills: height field, graded roads and pads (generator side); the height grid the game reads |
 | `scripts/taxi.gd` | Taxis: hail, phone call, destinations, fares, ride and skip |
 | `tools/render_map.py` | Renders the map data to `world_map.svg` and `bellerive_map.svg` |
 | `scripts/mesh_builder.gd` | Bakes coloured boxes into single meshes; surface codes, city shader, shared and x-ray materials |

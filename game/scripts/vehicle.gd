@@ -7,6 +7,7 @@ extends CharacterBody3D
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const VehicleKit = preload("res://scripts/kits/vehicle_kit.gd")
 const L = preload("res://scripts/layers.gd")
+const Terrain = preload("res://scripts/terrain.gd")
 
 signal officer_deployed(car)
 ## A SCRIPT driver reached the end of its path.
@@ -16,6 +17,9 @@ signal path_done(car)
 enum Driver { NONE, PLAYER, TRAFFIC, POLICE, SCRIPT, CHASER }
 
 const COAST := 4.0
+## How much of gravity's pull along a slope reaches the speed (the rest the
+## engine and brakes take).
+const SLOPE_PULL := 0.6
 ## Corner assist: a turn the stick asks for that is too tight at this speed
 ## slows the car to the speed at which it can turn on this radius (m).
 const CORNER_RADIUS := 5.0
@@ -113,6 +117,8 @@ var _game
 var _spec: Dictionary
 ## Body roll (x) and pitch (y) shown on the model, smoothed.
 var _tilt := Vector2.ZERO
+## The ground's slope under the car: (roll, pitch) in radians, eased.
+var _slope := Vector2.ZERO
 ## Real forward speed last frame (m/s), for the pitch.
 var _moved := 0.0
 ## Riders leaned with a two-wheeler last frame (straightened when they leave).
@@ -569,6 +575,9 @@ func _drive(delta: float) -> void:
 	speed = move_toward(speed, target, rate * delta)
 	if braking or handbrake:
 		speed = move_toward(speed, 0.0, (_spec.brake if braking else 10.0) * delta)
+	# Hills: slower up, faster down (none of it on the flat).
+	if _slope.y != 0.0:
+		speed -= 9.8 * SLOPE_PULL * sin(_slope.y) * delta
 
 	var want := -global_basis.z * speed
 	var grip: float = _spec.drift if handbrake else _spec.grip
@@ -578,7 +587,8 @@ func _drive(delta: float) -> void:
 	velocity = Vector3(velocity.x, 0.0, velocity.z).lerp(want, clampf(grip * delta, 0.0, 1.0))
 	var before := velocity
 	move_and_slide()
-	global_position.y = 0.0
+	global_position.y = Terrain.height(global_position.x, global_position.z)
+	_ground_slope(delta)
 	# Tilt follows how the body really moves, so a car pinned against a
 	# wall with the throttle down stays level.
 	var moved := get_real_velocity().dot(-global_basis.z)
@@ -608,7 +618,21 @@ func _body_tilt(delta: float, lateral: float, forward: float) -> void:
 	var pitch: float = clampf(forward * _spec.pitch, -0.06, 0.05)
 	_tilt = _tilt.lerp(Vector2(roll, pitch), 1.0 - exp(-7.0 * delta))
 	var b := Basis.from_euler(Vector3(_tilt.y, 0.0, _tilt.x))
-	_model.transform = Transform3D(b, pivot - b * pivot)
+	var lie := Basis.from_euler(Vector3(_slope.y, 0.0, _slope.x))
+	_model.transform = Transform3D(lie, Vector3.ZERO) * Transform3D(b, pivot - b * pivot)
+
+
+## The ground's slope along and across the car (it lies on the hill).
+func _ground_slope(delta: float) -> void:
+	var n := Terrain.normal(global_position.x, global_position.z)
+	var want := Vector2.ZERO
+	if n.y < 0.9999:
+		var fwd := -global_basis.z
+		var right := global_basis.x
+		want = Vector2(atan(-(n.x * right.x + n.z * right.z) / n.y), atan(-(n.x * fwd.x + n.z * fwd.z) / n.y))
+	_slope = _slope.lerp(want, 1.0 - exp(-10.0 * delta))
+	if _slope.length_squared() < 1e-8:
+		_slope = Vector2.ZERO
 
 
 func _handle_collisions(before: Vector3) -> void:

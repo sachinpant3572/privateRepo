@@ -20,12 +20,69 @@ Follows `HANDOFF-bellerive-ca.md` (C-1 to C-9), which is full; this note carries
 
 ## Decisions
 
-- M-1 **Civic centre on the grid** (the DC Mall pattern kept, its streets made the grid's):
-  - The grounds become one grid rectangle, x 27-125 by y 255-383 (two Gilt rows), cut out as a void like
-    Liberty Green, so its four sides are through grid streets. City Hall (70 x 56) faces east down the mall.
-  - The Esplanade's drives are the grid streets y 255 and y 383; the mall runs from x 125 to Founders
-    Circle, which moves to (330, 319) on the mall's axis. x 229 meets the mall at T-junctions from both
-    sides (one set piece face); y 320 west of the grounds is dropped (it would be a 130 m stub).
-  - Government buildings move into single grid blocks that already hold them, so no block has to grow
-    and drop streets: Federal Building (76, 172), Courthouse (280, 172), Library (177, 412), Police HQ
-    (280, 412) (`world_map.json`). Magnolia Avenue ends at the grounds' north-west corner (27, 255).
+- M-1 **Civic centre on the grid** (the DC Mall pattern kept, its streets made the grid's). Built:
+  - Grounds = one grid rectangle x 27-125, y 203-320 (`CIVIC_GROUNDS`, snapped), cut out as a void like
+    Liberty Green; its four sides are through grid streets. Founders Circle sits on the mall axis at
+    (330, 261.5). The mall runs x 125 to the circle; x 229 meets it at T-junctions; the cross street west
+    of the grounds is dropped (a stub).
+  - Rejected: grounds at y 255-383 (circle at y 319 put Liberty 2.6 m off Midtown junctions, merges bent
+    streets). The courthouse (needs 40 m depth) did not fit 229-330 x 140-203 beside the Aurum
+    boulevard, so it swapped with Police HQ: Federal Building (76,172), Police HQ (280,172, faces south),
+    Courthouse (280,352, faces north), Library (177,352), City Hall (76,261.5).
+  - Liberty Avenue bends at Liberty Circle to the nearest grid y at the east edge, so its frame
+    crossing does not sit 14 m from a grid junction (which had blocked y 987 from carrying on).
+- M-2 **Roundabouts** (`street_plan.gd ROUNDABOUTS`): Liberty Circle (690,500) r30 with a statue,
+  Aurum (1010,140), Cypress (1010,500), Harbor (690,1400) r26 with fountains; rings are avenue class.
+- M-3 **Every drivable edge street carries on**: east y 621 was blocked by the 40 m keep-clear round the
+  Torque & Tone garage (a map landmark at local (1600,650)); now 25 m. DMV and east school moved east
+  of Sunvale. Frame junctions: w 21/22, n 15/15, e 18/18, s 18/19; the two left are the levee path and
+  the quay (width 0, not streets).
+- M-4 **Taxi test** (intermittent "cab 20 m off"): from 17 of 153 start nodes a called cab stopped across
+  Aurum Boulevard, because the near side's shortest route ran along the curb street (a U-turn). Fix:
+  `_round_the_block` enters that end by another street; the far side costs 600 m (a block loop), not
+  250. Probe: all 153 starts now stop 6.6 m away.
+- M-5 **Highways**: the Bellerive Beltway (6.6 km ring) becomes highway class, and a new **Canyon
+  Freeway** runs from the Beltway north through the mountain's saddle to Route 1 (about 2.5 km).
+- M-6 **Mountain: drivable** (about 7 h; the cheaper option, scenery only with flat roads round it,
+  about 3 h). Where: the empty ground north of the Beltway between Route 9 and Route 1 (local x
+  250-1800, y -420 to -1800), like the Santa Monica Mountains above LA. Data: `tools/mountain.py`
+  (height field, roads, landmarks) used by `build_country.py`, exported as a height grid in
+  `country.json`. Game: `terrain.gd` height lookup; vehicles and people follow it (the two y pins);
+  country tiles in the mountain drape their vertices and draw a subdivided ground.
+  Content: Crest Drive on the ridge, Coyote Canyon Road with hillside houses, Observatory Road with a
+  hairpin, a fire road to the radio masts, the hillside letters, chaparral.
+
+## The mountain as built (M-6 detail)
+
+- **Shape** (`tools/mountain.py`): the Bellerive Hills, outline local (165..2210, -430..-1840); ridges are
+  Gaussian bumps along polylines (a spine plus spurs toward the city and the north), value noise, an
+  edge falloff. Calder Peak 114 m at (1100,-1255). Map: region `bellerive_hills` (type mountains,
+  phase 1) and landmarks `lumen_observatory`, `hill_letters`, `calder_peak` in `world_map.json`.
+- **Roads** graded to a profile (max grade per class: highway 7.5 %, road 13 %, track 25 %), pinned at
+  their ends and at crossings with earlier roads; the grid is cut and filled to them with banks no
+  steeper than 0.4. Canyon Freeway (Beltway x 690 -> saddle (770,-1262) -> Route 1), Crest Drive
+  (Route 9 -> ridge -> Route 1), Coyote Canyon Road, Observatory Road (hairpins), Summit Fire Road
+  (track), Letters Trail. Steepest measured on the final grid: freeway 10.7 % (bilinear 8 m cells
+  round the saddle bends), Crest 17.4 %, fire road 29 %.
+- **Pads**: every plot and lot near the hills sits on a flat pad at the height of the road it fronts
+  (a lot in a plot at the plot's; both masts on one summit compound level with the fire road's end).
+  Each grid node takes its nearest pad's height, flat a cell past the lot, fading over 12 m; inside
+  a lot always the pad; a road keeps its own grading a cell past its edge. Report: worst pad 1.06 m
+  off flat. Hillside homes only where the road climbs under 9 % past the frontage, 60 % skipped.
+- **Game**: `terrain.gd` (static height grid, bilinear); `vehicle.gd` and `humanoid.gd` set y from it,
+  cars pitch and roll to the ground and feel a slope pull; `country_tiles.gd` subdivides the ground
+  on hill tiles (9 m), lifts lots and plots rigidly to their pad and drapes everything else per
+  vertex, and bakes a hillshade into the ground colour (north-west light, dark scrub on north faces,
+  gold on south faces, rock near the top).
+- **Landmarks** reuse the skyline kit's monuments (`observatory`, `hillside_letters`, `radio_mast`),
+  dispatched from `country_kit.gd`. Lot sizes 64x44, 150x26 (letters about 15 m tall), 18x18.
+- **Cost**: a hill tile builds in about 19 ms (flat about 8 ms) on the worker thread, desktop.
+- Test: `test_bellerive_hills`. Shots 45-52 (`SHOTS=hills` runs just those).
+
+## Traps
+
+- `profile_at` only answers within a road's shoulder; a pad needs `profile_near` (the fronting road).
+- One big box (a forecourt) draped per vertex tilts between its corners and the subdivided ground
+  pokes through: lots on pads must rise rigidly.
+- Pads processed in order let a later one override an earlier neighbour: use nearest-pad.
+- Any change to the generator's RNG use shifts lots in every zone (fronting lots 1531 -> 1511).

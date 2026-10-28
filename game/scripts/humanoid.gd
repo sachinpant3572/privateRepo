@@ -4,6 +4,7 @@ extends CharacterBody3D
 ## skeletal cartoon model from CharacterKit animated by Rig.
 ## Subclasses put their behaviour in _think() and react to hits in _on_hit().
 
+const Terrain = preload("res://scripts/terrain.gd")
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const CharacterKit = preload("res://scripts/kits/character_kit.gd")
 const Rig = preload("res://scripts/rig.gd")
@@ -92,7 +93,7 @@ func _physics_process(delta: float) -> void:
 		_think(delta)
 	velocity.y = 0.0
 	move_and_slide()
-	global_position.y = 0.0
+	global_position.y = Terrain.height(global_position.x, global_position.z)
 
 
 ## Behaviour hook for subclasses; called only while standing and alive.

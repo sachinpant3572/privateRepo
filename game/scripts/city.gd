@@ -721,15 +721,23 @@ func _load_map() -> void:
 		var entry := {"id": lm.id, "type": lm.type, "name": lm.name, "local": local}
 		if window.has_point(local) and int(lm.get("phase", 1)) == 1:
 			_map_landmarks.append(entry)
-		elif not window.has_point(local):
+		elif not window.has_point(local) and lm.type != "peak":
+			# Peaks are names on the map, not places to go.
 			_outer_landmarks.append(entry)
 	for r in world.regions:
-		if int(r.get("phase", 1)) != 2:
+		var phase := int(r.get("phase", 1))
+		if phase > 2:
 			continue
 		var poly := PackedVector2Array()
 		for q in r.polygon:
 			poly.append(Vector2(q[0], q[1]))
-		_regions.append({"id": r.id, "name": r.name, "style": r.type, "faction": "", "poly": poly})
+		var entry := {"id": r.id, "name": r.name, "style": r.type, "faction": "", "poly": poly}
+		# Phase 1 regions (the Bellerive Hills) lie inside a phase 2 one's
+		# outline and are looked up first.
+		if phase == 1:
+			_regions.push_front(entry)
+		else:
+			_regions.append(entry)
 	for w in world.water:
 		if w.id == "morrow":
 			_river_half = w.width * 0.5
