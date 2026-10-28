@@ -161,7 +161,7 @@ static func _streets(img: Image, map_origin: Vector2, city) -> void:
 		for n in road.nodes:
 			line.append(country.pos(n) + map_origin)
 		var cls: Dictionary = country.classes[road.cls]
-		var col := TRACK if cls.id == "track" else (HIGHWAY if cls.id == "highway" else ROAD)
+		var col := TRACK if cls.id == "track" else (HIGHWAY if cls.id in ["highway", "freeway"] else ROAD)
 		_line(img, Vector2.ZERO, line, maxf(float(cls.w) * 1.4, 9.0), col)
 
 

@@ -8,6 +8,7 @@ const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const VehicleKit = preload("res://scripts/kits/vehicle_kit.gd")
 const L = preload("res://scripts/layers.gd")
 const Terrain = preload("res://scripts/terrain.gd")
+const Breakables = preload("res://scripts/breakables.gd")
 
 signal officer_deployed(car)
 ## A SCRIPT driver reached the end of its path.
@@ -85,6 +86,8 @@ var _next_node := -1
 ## The street after _next_node, chosen on the approach, so a right turn onto
 ## a wide street can start at that street's lane, short of the junction.
 var _after_node := -1
+## The lane traffic drives in (0 the curb lane; see City.lane_point).
+var lane := 0
 var _stuck_time := 0.0
 var _reverse_time := 0.0
 ## Traffic that touched another vehicle waits this long (random, so one of
@@ -348,13 +351,15 @@ func release_player() -> void:
 		_skin(MeshBuilder.material(), MeshBuilder.gloss_material())
 
 
-## Drives as traffic, setting off from junction `from` towards `to`.
-func start_traffic(c, from: int, to: int) -> void:
+## Drives as traffic, setting off from junction `from` towards `to` in
+## lane `in_lane`.
+func start_traffic(c, from: int, to: int, in_lane := 0) -> void:
 	city = c
 	driver = Driver.TRAFFIC
 	_prev_node = from
 	_next_node = to
 	_after_node = -1
+	lane = in_lane
 
 
 ## Hands a police car (or a stolen car left behind) back to normal traffic.
@@ -375,6 +380,15 @@ func join_traffic_here() -> void:
 	_prev_node = behind
 	_next_node = ahead
 	_after_node = -1
+	# The lane nearest the car.
+	lane = 0
+	if behind >= 0 and ahead >= 0:
+		var best_d := INF
+		for k in city.lane_count(behind, ahead):
+			var d: float = Geometry3D.get_closest_point_to_segment_uncapped(global_position, city.lane_start(behind, ahead, k), city.lane_point(behind, ahead, k)).distance_to(global_position)
+			if d < best_d:
+				best_d = d
+				lane = k
 
 
 ## Hit by another vehicle: `push` is already scaled by the two masses (see
@@ -437,26 +451,32 @@ func _traffic_ai() -> void:
 	if _next_node < 0:
 		throttle = 0.0
 		return
-	var target: Vector3 = city.lane_point(_prev_node, _next_node)
+	var target: Vector3 = city.lane_point(_prev_node, _next_node, lane)
 	var near := Vector2(target.x - global_position.x, target.z - global_position.z).length()
 	if near < TRAFFIC_SLOW_ZONE and _after_node < 0:
 		_after_node = city.pick_turn(_prev_node, _next_node, rng)
 	var turn_in := false
 	if _after_node >= 0:
-		var ls: Vector3 = city.lane_start(_next_node, _after_node)
+		var ls: Vector3 = city.lane_start(_next_node, _after_node, lane)
 		turn_in = Vector2(ls.x - global_position.x, ls.z - global_position.z).length() < 4.0
 	if near < 5.0 or turn_in:
 		var nxt: int = _after_node if _after_node >= 0 else city.pick_turn(_prev_node, _next_node, rng)
 		_prev_node = _next_node
 		_next_node = nxt
 		_after_node = -1
-		target = city.lane_point(_prev_node, _next_node)
+		# Keep to the same lane where the new street has it; now and then
+		# take another.
+		var lanes: int = city.lane_count(_prev_node, _next_node)
+		lane = mini(lane, lanes - 1)
+		if lanes > 1 and rng.randf() < 0.3:
+			lane = rng.randi() % lanes
+		target = city.lane_point(_prev_node, _next_node, lane)
 	var to := target - global_position
 	to.y = 0.0
 	# Follow the lane line a few metres ahead rather than aiming straight at
 	# the far junction, so a car that turned wide finds its own side of a
 	# boulevard median again instead of cutting across it.
-	var a: Vector3 = city.lane_start(_prev_node, _next_node) if _prev_node >= 0 else global_position
+	var a: Vector3 = city.lane_start(_prev_node, _next_node, lane) if _prev_node >= 0 else global_position
 	var ab := target - a
 	ab.y = 0.0
 	var aim := target
@@ -653,6 +673,14 @@ func _handle_collisions(before: Vector3) -> void:
 			if before.length() > 2.5 and not other.dead:
 				Fx.hit(other.global_position, true, driver == Driver.PLAYER)
 			other.hit_by_vehicle(self, before.length())
+			continue
+		if before.length() > Breakables.MIN_SPEED and not Breakables.prop_of(col).is_empty():
+			# A lamp post, small tree, hydrant or bin: it goes down, the car
+			# carries on with most of its speed.
+			var keep := Breakables.smash(col, before, driver == Driver.PLAYER)
+			velocity = before * keep
+			speed *= keep
+			_damage(1.0)
 			continue
 		var impact := absf(before.dot(col.get_normal()))
 		if not (other != null and other.has_method("bump")):

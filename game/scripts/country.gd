@@ -446,12 +446,14 @@ func _finish_task() -> void:
 func _add_tile(key: Vector2i, built: Dictionary) -> void:
 	var root := Node3D.new()
 	root.name = "Tile_%d_%d" % [key.x, key.y]
+	var inst: MeshInstance3D = null
+	var glow: MeshInstance3D = null
 	if built.mesh.triangle_count() > 0:
-		var inst: MeshInstance3D = built.mesh.make_instance()
+		inst = built.mesh.make_instance()
 		inst.material_override = MeshBuilder.cutaway_material()
 		root.add_child(inst)
 	if built.glow.triangle_count() > 0:
-		var glow: MeshInstance3D = built.glow.make_instance()
+		glow = built.glow.make_instance()
 		glow.name = "Glow"
 		glow.material_override = MeshBuilder.glow_material()
 		glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -463,6 +465,9 @@ func _add_tile(key: Vector2i, built: Dictionary) -> void:
 		var body := StaticBody3D.new()
 		body.collision_layer = group[1]
 		body.collision_mask = 0
+		# The meshes breakable props are cut from (Breakables).
+		body.set_meta("mesh", inst)
+		body.set_meta("glow", glow)
 		root.add_child(body)
 		for c in group[0]:
 			var shape := CollisionShape3D.new()
@@ -471,6 +476,8 @@ func _add_tile(key: Vector2i, built: Dictionary) -> void:
 			shape.shape = box
 			shape.position = c[0]
 			shape.rotation.y = c[2] if c.size() > 2 else 0.0
+			if c.size() > 3:
+				shape.set_meta("brk", c[3])
 			body.add_child(shape)
 	root.set_meta("buildings", built.buildings)
 	add_child(root)

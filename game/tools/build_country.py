@@ -31,6 +31,7 @@ from shapely.prepared import prep
 from shapely.strtree import STRtree
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from road_classes import CLASSES, CITY_RANK  # noqa: E402
 from mountain import Mountain, roads as mountain_roads, OBSERVATORY, OBSERVATORY_SIZE, OBSERVATORY_ROAD_END, LETTERS, LETTERS_SIZE, MASTS, MAST_SIZE  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -45,17 +46,6 @@ FRAME_IN = 4.0
 # Ground beyond the play area, so the edge is a fence, not the end of the world.
 BEYOND = 450.0
 
-# Road classes: width (m), traffic cruise speed (m/s), drivable by traffic,
-# corner radius for the world map's polylines, resample step.
-CLASSES = {
-    "highway": {"w": 16.0, "speed": 22.0, "graph": True, "r": 260.0, "step": 24.0, "prio": 6},
-    "avenue": {"w": 14.0, "speed": 15.0, "graph": True, "r": 60.0, "step": 20.0, "prio": 5},
-    "road": {"w": 10.0, "speed": 17.0, "graph": True, "r": 140.0, "step": 20.0, "prio": 4},
-    "street": {"w": 10.0, "speed": 12.0, "graph": True, "r": 20.0, "step": 20.0, "prio": 3},
-    "lane": {"w": 7.0, "speed": 12.0, "graph": True, "r": 60.0, "step": 14.0, "prio": 2},
-    "track": {"w": 6.0, "speed": 9.0, "graph": True, "r": 40.0, "step": 14.0, "prio": 1},
-    "trail": {"w": 3.5, "speed": 6.0, "graph": False, "r": 25.0, "step": 12.0, "prio": 0},
-}
 CLASS_NAMES = list(CLASSES)
 RAIL_TYPES = {"rail": "rail", "metro": "metro", "mover": "metro", "streetcar": "streetcar"}
 
@@ -575,7 +565,6 @@ class Country:
         reaches from inside: [(pos along the side, node id, best class)]."""
         nodes = self.plan["nodes"]
         x0, y0, x1, y1 = self.frame
-        widths = {"boulevard": 24, "avenue": 15, "street": 11, "quay": 10, "quarter": 9, "lane": 7}
         best = {}
         for a, b, cls, road in self.plan["edges"]:
             if road == "frame":
@@ -585,7 +574,7 @@ class Country:
                 on = {"w": abs(x - x0) < 0.5, "e": abs(x - x1) < 0.5, "n": abs(y - y0) < 0.5, "s": abs(y - y1) < 0.5}[side]
                 corner = (abs(x - x0) < 0.5 or abs(x - x1) < 0.5) and (abs(y - y0) < 0.5 or abs(y - y1) < 0.5)
                 if on and not corner:
-                    best[n] = max(best.get(n, 0), widths.get(cls, 0))
+                    best[n] = max(best.get(n, 0), CITY_RANK.get(cls, 0))
         out = []
         for n, w in best.items():
             x, y = nodes[n]
@@ -720,7 +709,7 @@ class Country:
         e_end = self._first_hit((east, north), (east, by1 + 600.0), self.ocean_drive) or (east, 700.0)
         belt = [w_end, (west, north), (east, north), e_end]
         for piece in lines_of(LineString(fillet(belt, 60.0, 8.0)).intersection(self.A.difference(self.P))):
-            self.add(list(piece.coords), "highway", "Bellerive Beltway", "beltway")
+            self.add(list(piece.coords), "freeway", "Bellerive Beltway", "beltway")
         self._mountain_roads()
         self.routes_geom = unary_union([s[0] for s in self.sources if s[3] == "route"])
         self._heights_roads()
@@ -1920,7 +1909,7 @@ class Country:
         towers = {}  # condo towers per tile: two at most keeps a tile's triangles down
         for pi, pc in enumerate(self.pieces):
             cls = pc["cls"]
-            if cls not in ("street", "avenue", "road", "highway", "lane"):
+            if cls not in ("street", "avenue", "road", "highway", "lane"):  # no lots front the freeway
                 continue
             line = LineString(pc["pts"])
             w = CLASSES[cls]["w"]
@@ -1957,7 +1946,7 @@ class Country:
                 if tag in ("arterial", "beltway", "route"):
                     style = "arterial"
             elif style == "mountain":
-                if cls == "highway" or tag in ("observatory", "fire_road", "beltway", "route"):
+                if cls in ("highway", "freeway") or tag in ("observatory", "fire_road", "beltway", "route"):
                     continue
             elif style == "shore":
                 if tag == "seabreeze":
@@ -2874,7 +2863,8 @@ class Country:
             "tile": TILE,
             "origin": list(self.origin),
             "plan_bounds": list(self.P.bounds),
-            "classes": [{"id": k, "w": v["w"], "speed": v["speed"]} for k, v in CLASSES.items()],
+            "classes": [{"id": k, "w": v["w"], "speed": v["speed"], "lanes": v["lanes"], "lane_w": v["lane_w"],
+                         "middle": v["middle"], "park": v["park"]} for k, v in CLASSES.items()],
             "zones": ZONES,
             "kinds": KINDS,
             "area": [ring(p.simplify(4.0)) for p in polys_of(self.A)],

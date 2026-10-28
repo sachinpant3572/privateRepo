@@ -8,6 +8,7 @@ const Npc = preload("res://scripts/npc.gd")
 const VehicleKit = preload("res://scripts/kits/vehicle_kit.gd")
 const Terrain = preload("res://scripts/terrain.gd")
 const Population = preload("res://scripts/population.gd")
+const StreetPlan = preload("res://scripts/street_plan.gd")
 
 var game
 var passed := 0
@@ -50,6 +51,7 @@ func _run() -> void:
 		"test_scripted_car_gets_unstuck", "test_heavy_vehicle_pushes_harder",
 		"test_vehicle_handling_differs",
 		"test_traffic_drives_every_kind",
+		"test_roads_have_two_lanes_each_way", "test_cars_knock_down_roadside_props",
 		"test_people_walk_past_sidewalk_props",
 		"test_places_line_the_streets",
 		"test_shop_visit_restores_the_street",
@@ -1500,6 +1502,144 @@ func test_vehicle_handling_differs() -> void:
 
 ## Every traffic kind, the box truck included, drives junction to junction
 ## through the streets around the spawn without getting stuck or wrecked.
+func test_cars_knock_down_roadside_props() -> void:
+	# Sachin: "make the side props [destroyable] by car and car wont stop
+	# after [destroying] them, right now [the] car stops after hitting the
+	# water [hydrant], any small tree or lamppost etc".
+	await _new_game(false)
+	var city = game.city
+	city.stream_now(city.spawn_point)
+	Controls.camera = null
+	var found := {}
+	for cell in city.get_children():
+		for body in cell.get_children():
+			if not body is StaticBody3D:
+				continue
+			for c in body.get_children():
+				if c is CollisionShape3D and c.has_meta("brk"):
+					var kind: String = c.get_meta("brk").kind
+					if kind in ["street_light", "hydrant", "street_tree", "traffic_light"] and not found.has(kind):
+						found[kind] = c
+	_check(found.size() >= 3, "street lights, hydrants and trees near the start can be knocked down (%s)" % [found.keys()])
+	for kind in found:
+		var shape: CollisionShape3D = found[kind]
+		var at: Vector3 = shape.global_position
+		at.y = 0.0
+		# Head for it from the middle of the nearest street.
+		var p := Vector2(at.x, at.z)
+		var best := INF
+		var road := Vector2.ZERO
+		for e in city.plan.edge_count():
+			if not city.plan.drivable(e):
+				continue
+			var q := Geometry2D.get_closest_point_to_segment(p, city.plan.pos(city.plan.edge_a[e]), city.plan.pos(city.plan.edge_b[e]))
+			if q.distance_to(p) < best:
+				best = q.distance_to(p)
+				road = q
+		var dir := Vector3(p.x - road.x, 0, p.y - road.y).normalized()
+		var start := at - dir * 12.0
+		var car = _player_car("sedan", start, 16.0, atan2(-dir.x, -dir.z))
+		car.global_position = start
+		Controls.override_vector = Vector2(dir.x, dir.z)
+		var kept := -1.0
+		for f in 90:
+			await _frames(1)
+			if kept < 0.0 and (car.global_position - at).dot(dir) > 2.5:
+				kept = car.speed
+				break
+		var info: Dictionary = shape.get_meta("brk")
+		_check(info.get("down", false) and kept > 11.0,
+			"a car at 16 m/s knocks down a %s and drives on at %.1f m/s" % [kind, kept])
+		car.queue_free()
+		await _frames(2)
+	Controls.override_vector = Vector2.ZERO
+
+
+func test_roads_have_two_lanes_each_way() -> void:
+	# Sachin: "4 cars can drive around in the same road at once comfortably,
+	# 2 in one lane 2 in opposite lane ... Some parts can have narrow roads,
+	# like inner streets, alleys etc, or road to mountains, but [the rest]
+	# should be either 4 lane or 6 or 8 lane, 6 and 8 lane [for] major
+	# highways and expressways."
+	await _new_game(false)
+	var city = game.city
+	var narrow := ["quarter", "quay", "lane"]
+	var bad: Array = []
+	for cls in StreetPlan.CLASSES:
+		var g: Dictionary = StreetPlan.CLASSES[cls]
+		var room: float = g.middle + g.lanes * g.lane_w + g.park
+		if room > g.width * 0.5 + 0.01 or (g.lanes > 0 and g.lane_w < 3.2):
+			bad.append([cls, "lanes do not fit", room, g.width])
+		if not narrow.has(cls) and not g.lanes in [2, 3, 4]:
+			bad.append([cls, g.lanes])
+	_check(bad.is_empty(), "city streets, avenues and boulevards are 4 or 6 lanes, 3.2 m a lane or more (old town, quay and walks narrow) %s" % [bad])
+	var c = city.country
+	var want := {"freeway": 4, "highway": 3, "avenue": 2, "street": 2, "road": 1, "lane": 1, "track": 1}
+	bad = []
+	for g in c.classes:
+		if want.has(g.id) and int(g.lanes) != want[g.id]:
+			bad.append([g.id, g.lanes])
+		if float(g.middle) + float(g.lanes) * float(g.lane_w) + float(g.park) > float(g.w) * 0.5 + 0.01:
+			bad.append([g.id, "lanes do not fit"])
+	_check(bad.is_empty(), "country: the freeway 8 lanes, highways 6, avenues and streets 4, county roads and tracks 2 %s" % [bad])
+	var cls_of := {}
+	for r in c.roads:
+		cls_of[r.name] = c.classes[r.cls].id
+	_check(cls_of.get("Bellerive Beltway") == "freeway" and cls_of.get("Canyon Freeway") == "highway" and cls_of.get("Crest Drive") == "road",
+		"the Beltway is the 8-lane freeway, the Canyon Freeway 6 lanes, Crest Drive 2 (%s, %s, %s)" % [cls_of.get("Bellerive Beltway"), cls_of.get("Canyon Freeway"), cls_of.get("Crest Drive")])
+	# Parked cars sit in the parking strip, clear of the curb lane.
+	var in_lane := 0
+	for spot in city.parked_spots.slice(1):
+		var p := Vector2(spot[0].x, spot[0].z)
+		var best := INF
+		var clear := 0.0
+		for e in city.plan.edge_count():
+			var a: Vector2 = city.plan.pos(city.plan.edge_a[e])
+			var b: Vector2 = city.plan.pos(city.plan.edge_b[e])
+			var d := Geometry2D.get_closest_point_to_segment(p, a, b).distance_to(p)
+			if d < best:
+				best = d
+				var g: Dictionary = StreetPlan.CLASSES[city.plan.edge_class(e)]
+				clear = g.middle + g.lanes * g.lane_w
+		if best < clear + 0.9:
+			in_lane += 1
+	_check(city.parked_spots.size() > 50 and in_lane == 0, "parked cars keep out of the lanes (%d of %d in a lane)" % [in_lane, city.parked_spots.size() - 1])
+	# Two cars side by side on a 4-lane street both drive on, neither held
+	# up by the other.
+	var edge := -1
+	var best_d := INF
+	for e in city.plan.edge_count():
+		if city.plan.edge_class(e) in ["street", "avenue"] and city.plan.drivable(e):
+			var a: Vector3 = city.node_pos(city.plan.edge_a[e])
+			var b: Vector3 = city.node_pos(city.plan.edge_b[e])
+			var d := a.distance_to(city.spawn_point)
+			if a.distance_to(b) > 90.0 and d < best_d and city.drive_node(city.plan.edge_a[e]) and city.drive_node(city.plan.edge_b[e]):
+				best_d = d
+				edge = e
+	var na: int = city.plan.edge_a[edge]
+	var nb: int = city.plan.edge_b[edge]
+	var dir: Vector3 = (city.node_pos(nb) - city.node_pos(na)).normalized()
+	var right := Vector3(-dir.z, 0, dir.x)
+	var pair := []
+	for lane in 2:
+		var car = Vehicle.new()
+		car.kind = "sedan" if lane == 0 else "suv"
+		car.city = city
+		car.position = city.lane_start(na, nb, lane) + dir * 20.0
+		car.rotation.y = atan2(-dir.x, -dir.z)
+		car.start_traffic(city, na, nb, lane)
+		game.add_child(car)
+		pair.append(car)
+	var starts := [pair[0].global_position, pair[1].global_position]
+	var gap_min := INF
+	for f in 150:
+		await _frames(1)
+		gap_min = minf(gap_min, absf((pair[1].global_position - pair[0].global_position).dot(right)))
+	var went := [(pair[0].global_position - starts[0]).dot(dir), (pair[1].global_position - starts[1]).dot(dir)]
+	_check(went[0] > 15.0 and went[1] > 15.0 and gap_min > 2.6,
+		"two cars abreast on %s drive on (%.0f m and %.0f m in 2.5 s), %.1f m apart at the closest" % [city.plan.edge_class(edge), went[0], went[1], gap_min])
+
+
 func test_traffic_drives_every_kind() -> void:
 	await _new_game(false)
 	var city = game.city
@@ -2883,7 +3023,8 @@ func test_bellerive_hills() -> void:
 				var side := Vector2(-d.y, d.x)
 				var hw: float = c.edge_width(e) * 0.5
 				var lane := mid + side * hw * 0.25
-				var edge_line := mid + side * (hw - (0.6 if c.edge_class(e) == "highway" else 0.5))
+				var geo: Dictionary = c.classes[c.edge_cls[e]]
+				var edge_line: Vector2 = mid + side * (geo.middle + geo.lanes * geo.lane_w + 0.15 if c.edge_class(e) == "highway" else hw - 0.5)
 				c.stream_now(Vector3(lane.x, 0.0, lane.y))
 				samples += 1
 				off_road = maxf(off_road, absf(_surface_top(c, lane) - Terrain.height(lane.x, lane.y)))

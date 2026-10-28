@@ -237,7 +237,7 @@ static func _done(ctx: Ctx, local: Array, building := true, into = null) -> void
 	var yaw := atan2(-x.basis.x.z, x.basis.x.x)
 	var target: Array = ctx.out if into == null else into
 	for col in local:
-		target.append([x * col[0], col[1], yaw + (col[2] if col.size() > 2 else 0.0)])
+		target.append([x * col[0], col[1], yaw + (col[2] if col.size() > 2 else 0.0)] + col.slice(3))
 	ctx.mb.xform = Transform3D.IDENTITY
 	if building:
 		ctx.buildings += 1
@@ -361,8 +361,7 @@ static func _street(ctx: Ctx, e: int, cls: String) -> void:
 			if ng >= 1.0:
 				mb.box(Vector3(ng_mid, 0.12, 0), Vector3(ng, 0.24, 6.4), PAVEMENT.darkened(0.1))
 				mb.box(Vector3(ng_mid, 0.25, 0), Vector3(maxf(ng - 0.4, 0.5), 0.02, 5.6), GRASS)
-			for side in [-1.0, 1.0]:
-				_dashes(mb, s0, run, side * (3.2 + (w * 0.5 - 3.2) * 0.5), WHITE_LINE)
+			_lane_lines(mb, s0, run, cls)
 			if line >= 0:
 				Props.rails(mb, Vector3(s0, 0.26, 0), Vector3(s0 + run, 0.26, 0), rusty)
 				if not rusty:
@@ -383,12 +382,13 @@ static func _street(ctx: Ctx, e: int, cls: String) -> void:
 				local.append([Vector3(ng_mid, 0.4, 0), Vector3(ng, 0.8, 6.0)])
 			_done(ctx, local, false, ctx.props)
 			mb.xform = frame
-		"avenue", "river":
+		"avenue", "river", "street":
+			# Four lanes: a double yellow line down the middle, dashes
+			# between the lanes, a solid line along the parking strip.
 			for z in [-0.12, 0.12]:
 				mb.box(Vector3(mid, 0.01, z), Vector3(run, 0.02, 0.12), MARKING)
-			for side in [-1.0, 1.0]:
-				_dashes(mb, s0, run, side * w * 0.25, WHITE_LINE)
-		"street", "quay":
+			_lane_lines(mb, s0, run, cls)
+		"quay":
 			_dashes(mb, s0, run, 0.0, MARKING)
 		"quarter":
 			# Old pavers between the curbs, no markings.
@@ -423,35 +423,42 @@ static func _street(ctx: Ctx, e: int, cls: String) -> void:
 		# Traffic keeps right: towards b on the +z side, towards a on -z.
 		var gap := 3.6 if zebra else 1.0
 		if s1 > 0.0:
-			_approach(mb, s0 + run - gap, 1.0, cls, w, style == "downtown" or style == "quarter", run > 32.0)
+			_approach(mb, s0 + run - gap, 1.0, cls, style == "downtown" or style == "quarter", run > 32.0)
 		if s0 > 0.0:
-			_approach(mb, s0 + gap, -1.0, cls, w, style == "downtown" or style == "quarter", run > 32.0)
+			_approach(mb, s0 + gap, -1.0, cls, style == "downtown" or style == "quarter", run > 32.0)
 	mb.xform = Transform3D.IDENTITY
+
+
+## Dashes between the lanes each way, and a solid line along the parking
+## strip, from the class's lanes (StreetPlan.CLASSES).
+static func _lane_lines(mb, s0: float, run: float, cls: String) -> void:
+	var lanes: Dictionary = StreetPlan.CLASSES[cls]
+	for side in [-1.0, 1.0]:
+		for k in range(1, lanes.lanes):
+			_dashes(mb, s0, run, side * (lanes.middle + lanes.lane_w * k), WHITE_LINE)
+		if lanes.park > 0.0:
+			mb.box(Vector3(s0 + run * 0.5, 0.01, side * (lanes.middle + lanes.lane_w * lanes.lanes)), Vector3(run, 0.02, 0.12), WHITE_LINE)
 
 
 ## Markings where traffic heading `heading` (+1 along the street frame's x,
 ## -1 against it) reaches a junction whose markings end at x: a stop bar
 ## across its half of the street, on cycling streets a green bike box ahead
 ## of the bar, and (if `arrows`) lane arrows behind it.
-static func _approach(mb, x: float, heading: float, cls: String, w: float, bikes: bool, arrows: bool) -> void:
+static func _approach(mb, x: float, heading: float, cls: String, bikes: bool, arrows: bool) -> void:
 	var side := heading # right-hand traffic: +x heading drives on +z
-	var inner := 3.2 if cls == "boulevard" else 0.3
-	var outer := w * 0.5 - 0.4
+	var geo: Dictionary = StreetPlan.CLASSES[cls]
+	var inner: float = geo.middle + 0.1
+	var outer: float = geo.middle + geo.lanes * geo.lane_w
 	if bikes and cls != "street":
 		mb.box(Vector3(x - heading * 1.4, 0.011, side * (inner + outer) * 0.5), Vector3(2.6, 0.02, outer - inner), BIKE_GREEN)
 		x -= heading * 2.9
 	mb.box(Vector3(x, 0.012, side * (inner + outer) * 0.5), Vector3(0.5, 0.02, outer - inner), WHITE_LINE)
 	if not arrows:
 		return
-	var lanes: Array
-	# Lane centres, the outer one kept clear of cars parked 1 m off the curb.
-	match cls:
-		"boulevard":
-			lanes = [5.4, 9.2]
-		"street":
-			lanes = [w * 0.22]
-		_:
-			lanes = [w * 0.125, w * 0.375 - 0.6]
+	# An arrow in each lane, the inner one a left turn.
+	var lanes: Array = []
+	for k in geo.lanes:
+		lanes.append(geo.middle + geo.lane_w * (k + 0.5))
 	for k in lanes.size():
 		var turn := -1 if k == 0 and lanes.size() > 1 else 0
 		_arrow(mb, Vector3(x - heading * 6.0, 0.012, side * lanes[k]), heading, turn)
@@ -506,7 +513,7 @@ static func _tram_wires(ctx: Ctx, s0: float, run: float, car: bool) -> void:
 		mb.xform = saved
 	var yaw := atan2(-mb.xform.basis.x.z, mb.xform.basis.x.x)
 	for col in local:
-		ctx.props.append([mb.xform * col[0], col[1], yaw + (col[2] if col.size() > 2 else 0.0)])
+		ctx.props.append([mb.xform * col[0], col[1], yaw + (col[2] if col.size() > 2 else 0.0)] + col.slice(3))
 
 
 ## How far from junction n a railing along side `side` (unit vector across
@@ -591,8 +598,7 @@ static func _bridge(ctx: Ctx, e: int) -> void:
 	var run := length - s0 - s1
 	for z in [-0.12, 0.12]:
 		mb.box(Vector3(s0 + run * 0.5, 0.01, z), Vector3(run, 0.02, 0.12), MARKING)
-	for sgn in [-1.0, 1.0]:
-		_dashes(mb, s0, run, sgn * w * 0.5, WHITE_LINE)
+	_lane_lines(mb, s0, run, "bridge")
 	var local: Array = []
 	var p0 := s0 - 0.5
 	var p1 := length - s1 + 0.5

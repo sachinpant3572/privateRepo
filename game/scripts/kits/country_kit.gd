@@ -352,7 +352,7 @@ static func _sub(kind: String, mb, out: Array, offset: Vector3, yaw: float, size
 	build(kind, mb, sub, size, rng)
 	mb.xform = saved
 	for col in sub:
-		out.append([rot * col[0] + offset, col[1], yaw + (col[2] if col.size() > 2 else 0.0)])
+		out.append([rot * col[0] + offset, col[1], yaw + (col[2] if col.size() > 2 else 0.0)] + col.slice(3))
 
 
 ## A square post from the ground to h, with a collider.

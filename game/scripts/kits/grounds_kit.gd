@@ -150,7 +150,7 @@ static func draw(kind: String, p: Array, tree_kinds: Array, mb, out: Array, rng:
 			_course(mb, local, w, d)
 	mb.xform = base
 	for col in local:
-		out.append([t * col[0], col[1], float(p[5]) + (col[2] if col.size() > 2 else 0.0)])
+		out.append([t * col[0], col[1], float(p[5]) + (col[2] if col.size() > 2 else 0.0)] + col.slice(3))
 
 
 # --- Grounds ------------------------------------------------------------------------

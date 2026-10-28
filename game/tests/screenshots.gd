@@ -4,6 +4,7 @@ extends Node
 
 const MainScene = preload("res://main.tscn")
 const Terrain = preload("res://scripts/terrain.gd")
+const Vehicle = preload("res://scripts/vehicle.gd")
 
 var out_dir := "user://"
 
@@ -58,6 +59,15 @@ func _run() -> void:
 	if OS.get_environment("SHOTS") == "hills":
 		# Just the roundabouts and the hills (quick look while working on them).
 		await _hills(game)
+		get_tree().quit()
+		return
+	if OS.get_environment("SHOTS") == "props":
+		await _props(game)
+		get_tree().quit()
+		return
+	if OS.get_environment("SHOTS") == "roads":
+		# Just the wide roads (quick look while working on them).
+		await _roads(game)
 		get_tree().quit()
 		return
 	await _shot("1_on_foot.png")
@@ -214,6 +224,87 @@ func _hills(game) -> void:
 		await get_tree().process_frame
 	await _shot("47_bellerive_hills_map.png")
 	game.hud.full_map.close()
+
+
+## A car through a street light, a tree and a hydrant: before, just after,
+## and the hydrant's gusher.
+func _props(game) -> void:
+	var city = game.city
+	city.stream_now(city.spawn_point)
+	await _frames(30)
+	var found := {}
+	for cell in city.get_children():
+		for body in cell.get_children():
+			if body is StaticBody3D:
+				for c in body.get_children():
+					if c is CollisionShape3D and c.has_meta("brk") and c.get_meta("brk").kind in ["street_light", "hydrant", "street_tree"]:
+						if not found.has(c.get_meta("brk").kind):
+							found[c.get_meta("brk").kind] = c
+	Controls.camera = null
+	var n := 59
+	for kind in found:
+		var at: Vector3 = found[kind].global_position
+		at.y = 0.0
+		var p := Vector2(at.x, at.z)
+		var best := INF
+		var road := Vector2.ZERO
+		for e in city.plan.edge_count():
+			if city.plan.drivable(e):
+				var q := Geometry2D.get_closest_point_to_segment(p, city.plan.pos(city.plan.edge_a[e]), city.plan.pos(city.plan.edge_b[e]))
+				if q.distance_to(p) < best:
+					best = q.distance_to(p)
+					road = q
+		var dir := Vector3(p.x - road.x, 0, p.y - road.y).normalized()
+		game.player.global_position = at - dir * 30.0
+		game.camera.fixed_focus = at
+		game.camera.room_size = 26.0
+		game.camera.snap()
+		await _frames(30)
+		await _shot("%d_%s_before.png" % [n, kind])
+		var car = Vehicle.new()
+		car.kind = "sedan"
+		game.add_child(car)
+		car.global_position = at - dir * 14.0
+		car.rotation.y = atan2(-dir.x, -dir.z)
+		car.driver = Vehicle.Driver.PLAYER
+		car.speed = 16.0
+		car.velocity = dir * 16.0
+		Controls.override_vector = Vector2(dir.x, dir.z)
+		await _frames(60)
+		Controls.override_vector = Vector2.ZERO
+		car.driver = Vehicle.Driver.NONE
+		await _frames(10)
+		await _shot("%d_%s_after.png" % [n + 1, kind])
+		car.queue_free()
+		n += 2
+	game.camera.fixed_focus = null
+	game.camera.room_size = 0.0
+
+
+## The 4- and 6-lane streets, avenues and boulevards, and the roads out
+## of town, with traffic on them.
+func _roads(game) -> void:
+	var stops := [
+		["53_aurum_boulevard", Vector2(600, 140), 60.0],
+		["54_gilt_streets", Vector2(180, 230), 90.0],
+		["55_midtown_avenue", Vector2(500, 230), 55.0],
+		["56_wards_streets", Vector2(1100, 640), 70.0],
+		["57_harbor_circle", Vector2(690, 1400), 90.0],
+		["58_quarter_streets", Vector2(560, 800), 60.0],
+	]
+	for stop in stops:
+		var at: Vector2 = stop[1]
+		var pos := Vector3(at.x, Terrain.height(at.x, at.y), at.y)
+		game.city.stream_now(pos)
+		game.player.global_position = pos
+		game.player.reset_physics_interpolation()
+		game.camera.fixed_focus = pos
+		game.camera.room_size = stop[2]
+		game.camera.snap()
+		await _frames(240)
+		await _shot(stop[0] + ".png")
+	game.camera.fixed_focus = null
+	game.camera.room_size = 0.0
 
 
 ## Middle of the street of road `road` nearest `near` (local metres), on

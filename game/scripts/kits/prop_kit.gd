@@ -21,9 +21,27 @@ const AD_COLORS := [Color(0.95, 0.5, 0.3), Color(0.4, 0.75, 0.95), Color(0.9, 0.
 const SCOOTERS := [Color(0.2, 0.75, 0.4), Color(0.95, 0.4, 0.2), Color(0.15, 0.15, 0.15)]
 
 
+## Where a breakable prop's mesh starts (see _breaks).
+static func _start(mb, glow) -> Array:
+	return [mb.verts.size(), glow.verts.size() if glow != null else 0]
+
+
+## Marks the prop built since `from` (_start) as one a car knocks down: its
+## colliders (the last `cols` in `out`) carry what Breakables needs, the
+## kind and the prop's vertex ranges in `mb` and `glow`.
+static func _breaks(mb, out: Array, from: Array, kind: String, glow, cols := 1) -> void:
+	var info := {"kind": kind, "v": Vector2i(from[0], mb.verts.size()), "g": Vector2i(from[1], glow.verts.size() if glow != null else from[1])}
+	for i in range(out.size() - cols, out.size()):
+		var col: Array = out[i]
+		if col.size() < 3:
+			col.append(0.0)
+		col.append(info)
+
+
 ## Black cast-iron gas lamp with a warm lantern (Lantern Quarter). With a
 ## `glow` builder, also the pool of light it throws at night.
 static func gas_lamp(mb, out: Array, p: Vector3, glow = null) -> void:
+	var from := _start(mb, glow)
 	var iron := MeshBuilder.glow(IRON, MeshBuilder.GLOSS)
 	mb.box(p + Vector3(0, 0.4, 0), Vector3(0.3, 0.5, 0.3), iron)
 	mb.cylinder(p + Vector3(0, 0.15, 0), 0.09, 3.1, iron, 4)
@@ -33,6 +51,7 @@ static func gas_lamp(mb, out: Array, p: Vector3, glow = null) -> void:
 	mb.box(p + Vector3(0, 3.8, 0), Vector3(0.55, 0.12, 0.55), iron)
 	mb.box(p + Vector3(0, 3.95, 0), Vector3(0.12, 0.2, 0.12), iron)
 	out.append([p + Vector3(0, 1.5, 0), Vector3(0.3, 3.0, 0.3)])
+	_breaks(mb, out, from, "gas_lamp", glow)
 
 
 ## LED street light: a slim steel pole with a tapered arm toward `dir`
@@ -40,6 +59,7 @@ static func gas_lamp(mb, out: Array, p: Vector3, glow = null) -> void:
 ## With a `banner` colour, two district banners hang off the pole on short
 ## arms across the curb line.
 static func street_light(mb, out: Array, p: Vector3, dir: Vector3, glow = null, banner = null) -> void:
+	var from := _start(mb, glow)
 	var steel := MeshBuilder.glow(STEEL, MeshBuilder.METAL)
 	mb.box(p + Vector3(0, 0.35, 0), Vector3(0.3, 0.4, 0.3), steel)
 	mb.cylinder(p + Vector3(0, 0.15, 0), 0.09, 6.2, steel, 5)
@@ -54,12 +74,14 @@ static func street_light(mb, out: Array, p: Vector3, dir: Vector3, glow = null, 
 			mb.box(p + along * side * 0.35 + Vector3(0, 4.7, 0), along * 0.6 + Vector3(0, 0.04, 0.04), steel)
 			mb.box(p + along * side * 0.38 + Vector3(0, 4.0, 0), along * 0.5 + Vector3(0, 1.3, 0) + dir.abs() * 0.03, flag if side < 0.0 else flag.lightened(0.15))
 	out.append([p + Vector3(0, 2.0, 0), Vector3(0.3, 4.0, 0.3)])
+	_breaks(mb, out, from, "street_light", glow)
 
 
 ## Mast-arm traffic signal: the pole stands at p, the arm reaches 5 m over
 ## the road toward `dir` and carries two signal heads (lenses on both
 ## faces along the street), a traffic camera and a street-name sign.
 static func traffic_light(mb, out: Array, p: Vector3, dir: Vector3) -> void:
+	var from := _start(mb, null)
 	var paint := MeshBuilder.glow(Color(0.2, 0.22, 0.22), MeshBuilder.GLOSS)
 	mb.cylinder(p + Vector3(0, 0.15, 0), 0.13, 6.0, paint, 6)
 	var along := Vector3(absf(dir.z), 0, absf(dir.x))
@@ -87,6 +109,7 @@ static func traffic_light(mb, out: Array, p: Vector3, dir: Vector3) -> void:
 	mb.box(cab + Vector3(0, 1.52, 0), along * 0.86 + dir.abs() * 0.56 + Vector3(0, 0.05, 0), MeshBuilder.glow(Color(0.7, 0.73, 0.7), MeshBuilder.METAL))
 	out.append([p + Vector3(0, 2.0, 0), Vector3(0.35, 4.0, 0.35)])
 	out.append([cab + Vector3(0, 0.75, 0), along * 0.8 + dir.abs() * 0.5 + Vector3(0, 1.5, 0)])
+	_breaks(mb, out, from, "traffic_light", null, 2)
 
 
 ## Bus shelter facing -Z: glass back and ends, a steel roof, a bench and a
@@ -114,12 +137,14 @@ static func bus_shelter(mb, out: Array, p: Vector3, rng: RandomNumberGenerator) 
 ## Electric-vehicle charging post with a lit status ring and a holstered
 ## cable.
 static func ev_charger(mb, out: Array, p: Vector3) -> void:
+	var from := _start(mb, null)
 	mb.box(p + Vector3(0, 0.2, 0), Vector3(0.6, 0.1, 0.45), MeshBuilder.glow(Color(0.6, 0.6, 0.6), MeshBuilder.CONCRETE))
 	mb.box(p + Vector3(0, 0.95, 0), Vector3(0.42, 1.5, 0.28), MeshBuilder.glow(Color(0.92, 0.93, 0.94), MeshBuilder.GLOSS))
 	mb.box(p + Vector3(0, 1.45, -0.15), Vector3(0.3, 0.32, 0.04), MeshBuilder.glow(Color(0.1, 0.12, 0.15), MeshBuilder.GLASS))
 	mb.box(p + Vector3(0, 1.72, 0), Vector3(0.44, 0.06, 0.3), MeshBuilder.glow(Color(0.2, 0.75, 1.0), MeshBuilder.GLOW_NEON))
 	mb.box(p + Vector3(0.24, 0.95, -0.05), Vector3(0.1, 0.25, 0.12), Color(0.12, 0.12, 0.12))
 	out.append([p + Vector3(0, 0.8, 0), Vector3(0.45, 1.6, 0.35)])
+	_breaks(mb, out, from, "ev_charger", null)
 
 
 ## Bike-share dock along local X: a kiosk with a screen, a docking rail and
@@ -165,6 +190,7 @@ static func scooter(mb, p: Vector3, yaw: float, color: Color) -> void:
 ## (the panel on top is what the camera sees), recycling (blue lid) and
 ## compost (green lid).
 static func bins(mb, out: Array, p: Vector3) -> void:
+	var from := _start(mb, null)
 	var body := MeshBuilder.glow(Color(0.42, 0.44, 0.46), MeshBuilder.METAL)
 	mb.box(p + Vector3(-0.7, 0.62, 0), Vector3(0.66, 1.05, 0.62), body)
 	mb.box(p + Vector3(-0.7, 1.17, 0), Vector3(0.66, 0.05, 0.62), MeshBuilder.glow(Color(0.85, 0.86, 0.88), MeshBuilder.METAL))
@@ -177,28 +203,34 @@ static func bins(mb, out: Array, p: Vector3) -> void:
 		mb.box(q + Vector3(0, 1.03, 0), Vector3(0.6, 0.06, 0.6), MeshBuilder.glow(lid, MeshBuilder.GLOSS))
 		mb.box(q + Vector3(0, 0.75, -0.29), Vector3(0.3, 0.3, 0.02), MeshBuilder.glow(lid.lightened(0.2), MeshBuilder.GLOSS))
 	out.append([p + Vector3(-0.05, 0.6, 0), Vector3(1.95, 1.2, 0.65)])
+	_breaks(mb, out, from, "bins", null)
 
 
 ## Wayfinding totem: a slim slab with a lit city map on its face (-Z).
 static func wayfinding(mb, out: Array, p: Vector3) -> void:
+	var from := _start(mb, null)
 	mb.box(p + Vector3(0, 1.3, 0), Vector3(0.9, 2.3, 0.2), MeshBuilder.glow(Color(0.18, 0.2, 0.24), MeshBuilder.GLOSS))
 	mb.box(p + Vector3(0, 1.4, -0.11), Vector3(0.7, 1.4, 0.04), MeshBuilder.glow(Color(0.85, 0.88, 0.8), MeshBuilder.GLOW_NEON))
 	mb.box(p + Vector3(0, 2.3, -0.12), Vector3(0.7, 0.2, 0.04), Color(0.95, 0.75, 0.2))
 	out.append([p + Vector3(0, 1.2, 0), Vector3(0.9, 2.4, 0.25)])
+	_breaks(mb, out, from, "wayfinding", null)
 
 
 ## Parking pay station.
 static func pay_station(mb, out: Array, p: Vector3) -> void:
+	var from := _start(mb, null)
 	mb.box(p + Vector3(0, 0.8, 0), Vector3(0.35, 1.3, 0.3), MeshBuilder.glow(Color(0.2, 0.3, 0.5), MeshBuilder.GLOSS))
 	mb.box(p + Vector3(0, 1.2, -0.16), Vector3(0.24, 0.2, 0.03), MeshBuilder.glow(Color(0.6, 0.85, 0.7), MeshBuilder.GLOW_NEON))
 	mb.box(p + Vector3(0, 1.62, 0.04), Vector3(0.5, 0.04, 0.42), MeshBuilder.glow(Color(0.1, 0.13, 0.22), MeshBuilder.SOLAR))
 	mb.box(p + Vector3(0, 1.52, 0.04), Vector3(0.06, 0.16, 0.06), MeshBuilder.glow(STEEL, MeshBuilder.METAL))
 	out.append([p + Vector3(0, 0.7, 0), Vector3(0.35, 1.4, 0.3)])
+	_breaks(mb, out, from, "pay_station", null)
 
 
 ## Fire hydrant: flanged base, barrel, side nozzles with caps and a
 ## domed bonnet (gloss red, a yellow-capped top nut).
 static func hydrant(mb, out: Array, p: Vector3) -> void:
+	var from := _start(mb, null)
 	var red := MeshBuilder.glow(Color(0.82, 0.15, 0.12), MeshBuilder.GLOSS)
 	mb.box(p + Vector3(0, 0.19, 0), Vector3(0.44, 0.08, 0.44), red)
 	mb.cylinder(p + Vector3(0, 0.15, 0), 0.17, 0.62, red, 6)
@@ -209,11 +241,13 @@ static func hydrant(mb, out: Array, p: Vector3) -> void:
 	mb.ball(p + Vector3(0, 0.78, 0), Vector3(0.2, 0.12, 0.2), red, 6, 2)
 	mb.box(p + Vector3(0, 0.92, 0), Vector3(0.1, 0.08, 0.1), Color(0.95, 0.85, 0.3))
 	out.append([p + Vector3(0, 0.5, 0), Vector3(0.45, 1.0, 0.45)])
+	_breaks(mb, out, from, "hydrant", null)
 
 
 ## Park bench facing -Z after turning by `yaw`: wooden slats (the siding
 ## code draws them) on a steel frame with armrests.
 static func bench(mb, out: Array, p: Vector3, yaw: float) -> void:
+	var from := _start(mb, null)
 	var saved: Transform3D = mb.xform
 	mb.xform = saved * Transform3D(Basis(Vector3.UP, yaw), p)
 	var wood := MeshBuilder.glow(Color(0.66, 0.46, 0.28), MeshBuilder.SIDING)
@@ -226,31 +260,37 @@ static func bench(mb, out: Array, p: Vector3, yaw: float) -> void:
 		mb.box(Vector3(side, 0.64, 0.0), Vector3(0.06, 0.05, 0.42), frame)
 	mb.xform = saved
 	out.append([p + Vector3(0, 0.5, 0), Vector3(1.8, 1.0, 0.6), yaw])
+	_breaks(mb, out, from, "bench", null)
 
 
 ## Litter bin: perforated steel (dark green) under a domed steel lid.
 static func trash_can(mb, out: Array, p: Vector3) -> void:
+	var from := _start(mb, null)
 	var green := MeshBuilder.glow(Color(0.2, 0.32, 0.26), MeshBuilder.GLOSS)
 	mb.cylinder(p + Vector3(0, 0.15, 0), 0.3, 0.85, green, 8)
 	for y in [0.35, 0.6, 0.85]:
 		mb.cylinder(p + Vector3(0, y, 0), 0.31, 0.04, MeshBuilder.glow(Color(0.12, 0.18, 0.15), MeshBuilder.GLOSS), 8)
 	mb.ball(p + Vector3(0, 1.0, 0), Vector3(0.33, 0.14, 0.33), MeshBuilder.glow(Color(0.55, 0.58, 0.6), MeshBuilder.METAL), 8, 2)
 	out.append([p + Vector3(0, 0.5, 0), Vector3(0.6, 1.0, 0.6)])
+	_breaks(mb, out, from, "trash_can", null)
 
 
 ## Postal drop box: navy with a domed top and a white panel.
 static func mailbox(mb, out: Array, p: Vector3) -> void:
+	var from := _start(mb, null)
 	var navy := MeshBuilder.glow(Color(0.16, 0.3, 0.62), MeshBuilder.GLOSS)
 	mb.box(p + Vector3(0, 0.6, 0), Vector3(0.5, 0.9, 0.45), navy)
 	mb.limb(p + Vector3(-0.25, 1.05, 0), p + Vector3(0.25, 1.05, 0), 0.22, 0.22, navy, 8)
 	mb.box(p + Vector3(0, 0.75, -0.23), Vector3(0.3, 0.16, 0.02), Color(0.92, 0.92, 0.9))
 	mb.box(p + Vector3(0, 0.12, 0), Vector3(0.56, 0.08, 0.5), Color(0.15, 0.15, 0.16))
 	out.append([p + Vector3(0, 0.6, 0), Vector3(0.5, 1.2, 0.45)])
+	_breaks(mb, out, from, "mailbox", null)
 
 
 ## A row of inverted-U steel bike racks along local X, with a bike or two
 ## locked to them.
 static func bike_rack(mb, out: Array, p: Vector3, rng: RandomNumberGenerator) -> void:
+	var from := _start(mb, null)
 	var steel := MeshBuilder.glow(Color(0.6, 0.62, 0.65), MeshBuilder.METAL)
 	for i in 3:
 		var x := (i - 1) * 0.9
@@ -260,6 +300,7 @@ static func bike_rack(mb, out: Array, p: Vector3, rng: RandomNumberGenerator) ->
 		if rng.randf() < 0.5:
 			bike(mb, p + Vector3(x + 0.18, 0, 0), [Color(0.15, 0.15, 0.17), Color(0.75, 0.2, 0.18), Color(0.85, 0.85, 0.82), Color(0.2, 0.45, 0.4)][rng.randi() % 4])
 	out.append([p + Vector3(0, 0.45, 0), Vector3(2.4, 0.9, 0.8)])
+	_breaks(mb, out, from, "bike_rack", null)
 
 
 ## Sidewalk works fenced off along local X: water-filled barriers in orange
@@ -311,6 +352,7 @@ static func oak(mb, out: Array, p: Vector3, rng: RandomNumberGenerator) -> void:
 ## Street tree in a sidewalk pit (downtown): a cast-iron grate flush with
 ## the paving, a slim trunk and an upright crown of clumps.
 static func street_tree(mb, out: Array, p: Vector3, rng: RandomNumberGenerator) -> void:
+	var from := _start(mb, null)
 	var s := rng.randf_range(0.9, 1.1)
 	var seed := rng.randi()
 	var leaf := _leaf(Color(0.3, 0.42, 0.2).lerp(Color(0.38, 0.48, 0.23), rng.randf()))
@@ -322,11 +364,13 @@ static func street_tree(mb, out: Array, p: Vector3, rng: RandomNumberGenerator) 
 	mb.clump(p + Vector3(0.45, 4.8, 0.2) * s, Vector3(1.1, 1.0, 1.1) * s, leaf.lightened(0.08), seed + 1, 6)
 	mb.clump(p + Vector3(-0.5, 4.5, -0.3) * s, Vector3(1.0, 0.9, 1.0) * s, leaf.darkened(0.06), seed + 2, 6)
 	out.append([p + Vector3(0, 1.0, 0), Vector3(0.3, 2.0, 0.3)])
+	_breaks(mb, out, from, "street_tree", null)
 
 
 ## Crepe myrtle: three slim, pale, splaying stems carrying bloom clusters
 ## (mostly pink, some white, lilac or watermelon red).
 static func crepe_myrtle(mb, out: Array, p: Vector3, rng: RandomNumberGenerator) -> void:
+	var from := _start(mb, null)
 	var roll := rng.randf()
 	var bloom := Color(0.88, 0.5, 0.68) if roll < 0.55 else (Color(0.86, 0.84, 0.84) if roll < 0.75 else (Color(0.68, 0.55, 0.82) if roll < 0.9 else Color(0.84, 0.28, 0.38)))
 	bloom = _leaf(bloom)
@@ -340,6 +384,7 @@ static func crepe_myrtle(mb, out: Array, p: Vector3, rng: RandomNumberGenerator)
 		mb.clump(tip + d * 0.15 + Vector3(0, 0.4, 0), Vector3(0.75, 0.62, 0.75), bloom.darkened(0.04 * i), seed + i, 7, 3, 0.25)
 	mb.clump(p + Vector3(0, 3.05, 0), Vector3(0.78, 0.58, 0.78), bloom.lightened(0.06), seed + 5, 7, 3, 0.25)
 	out.append([p + Vector3(0, 1.0, 0), Vector3(0.4, 2.0, 0.4)])
+	_breaks(mb, out, from, "crepe_myrtle", null)
 
 
 ## Concrete planter with a clipped shrub and a fountain of ornamental grass.
@@ -405,15 +450,19 @@ static func power_pole(mb, out: Array, p: Vector3, next = null) -> void:
 
 
 static func crate(mb, out: Array, p: Vector3, size := 1.1) -> void:
+	var from := _start(mb, null)
 	mb.box(p + Vector3(0, size * 0.5, 0), Vector3(size, size, size), Color(0.62, 0.45, 0.25))
 	mb.box(p + Vector3(0, size * 0.5, 0), Vector3(size + 0.04, size * 0.15, size + 0.04), Color(0.45, 0.32, 0.18))
 	out.append([p + Vector3(0, size * 0.5, 0), Vector3(size, size, size)])
+	_breaks(mb, out, from, "crate", null)
 
 
 static func barrel(mb, out: Array, p: Vector3, color := Color(0.25, 0.4, 0.65)) -> void:
+	var from := _start(mb, null)
 	mb.cylinder(p + Vector3(0, 0.15, 0), 0.38, 1.1, color, 6)
 	mb.cylinder(p + Vector3(0, 0.6, 0), 0.4, 0.08, color.darkened(0.3), 6)
 	out.append([p + Vector3(0, 0.6, 0), Vector3(0.8, 1.2, 0.8)])
+	_breaks(mb, out, from, "barrel", null)
 
 
 ## Shipping container, long side along X (6 m) unless `along_z`.
@@ -506,6 +555,7 @@ static func festoon(mb, a: Vector3, b: Vector3, rng: RandomNumberGenerator) -> v
 
 ## Café set on the sidewalk: round table, two chairs and a parasol.
 static func cafe_table(mb, out: Array, p: Vector3, parasol: Color) -> void:
+	var from := _start(mb, null)
 	# Chairs sit either side along local X.
 	mb.cylinder(p + Vector3(0, 0.15, 0), 0.05, 0.6, IRON, 4)
 	mb.cylinder(p + Vector3(0, 0.75, 0), 0.4, 0.05, Color(0.92, 0.9, 0.85), 8)
@@ -515,6 +565,7 @@ static func cafe_table(mb, out: Array, p: Vector3, parasol: Color) -> void:
 	mb.cylinder(p + Vector3(0, 0.8, 0), 0.03, 1.4, Color(0.9, 0.9, 0.88), 4)
 	mb.ball(p + Vector3(0, 2.3, 0), Vector3(1.2, 0.3, 1.2), parasol, 8, 2)
 	out.append([p + Vector3(0, 0.5, 0), Vector3(1.6, 1.0, 0.8)])
+	_breaks(mb, out, from, "cafe_table", null)
 
 
 ## A bollard (pedestrian lanes, plazas).

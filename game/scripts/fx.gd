@@ -25,6 +25,8 @@ func _ready() -> void:
 	_pools["smoke"] = _pool(10, _smoke_emitter)
 	_pools["splash"] = _pool(6, _splash_emitter)
 	_pools["debris"] = _pool(4, _debris_emitter)
+	_pools["leaves"] = _pool(3, _leaf_emitter)
+	_pools["gush"] = _pool(3, _gush_emitter)
 	_skids = _make_skids()
 	add_child(_skids)
 
@@ -53,6 +55,26 @@ func crash(pos: Vector3, impact: float, involves_player: bool) -> void:
 		shake(0.2 + 0.6 * strength)
 		if impact > 14.0:
 			hit_stop(0.06)
+
+
+## A car knocked a roadside prop of `kind` down at `pos` (Breakables):
+## debris, leaves off a tree, sparks off a lamp, a hydrant's gusher.
+func knock(pos: Vector3, kind: String, involves_player: bool) -> void:
+	_burst("debris", pos, 0.8)
+	match kind:
+		"street_tree", "crepe_myrtle":
+			_burst("leaves", pos + Vector3(0, 1.5, 0), 1.0)
+		"street_light", "gas_lamp", "traffic_light", "ev_charger":
+			_burst("spark", pos + Vector3(0, 0.8, 0), 1.4)
+		"hydrant":
+			var p: CPUParticles3D = _pools["gush"].pop_front()
+			_pools["gush"].push_back(p)
+			p.global_position = pos
+			p.one_shot = false
+			p.emitting = true
+			get_tree().create_timer(6.0, false).timeout.connect(func(): p.emitting = false)
+	if involves_player:
+		shake(0.12)
 
 
 func smoke(pos: Vector3, scale := 1.0) -> void:
@@ -193,6 +215,42 @@ func _debris_emitter() -> CPUParticles3D:
 	p.angular_velocity_max = 400.0
 	p.mesh = _unshaded(Color.WHITE, Vector2(0.25, 0.15))
 	p.color_ramp = _fade(Color(0.25, 0.25, 0.28), Color(0.15, 0.15, 0.17, 0.0))
+	return p
+
+
+func _leaf_emitter() -> CPUParticles3D:
+	var p := CPUParticles3D.new()
+	p.amount = 16
+	p.lifetime = 1.4
+	p.explosiveness = 1.0
+	p.direction = Vector3.UP
+	p.spread = 80.0
+	p.initial_velocity_min = 1.5
+	p.initial_velocity_max = 4.0
+	p.gravity = Vector3(0, -3.0, 0)
+	p.damping_min = 1.5
+	p.damping_max = 3.0
+	p.angular_velocity_min = -300.0
+	p.angular_velocity_max = 300.0
+	p.mesh = _unshaded(Color.WHITE, Vector2(0.22, 0.16))
+	p.color_ramp = _fade(Color(0.32, 0.48, 0.2), Color(0.38, 0.5, 0.22, 0.0))
+	return p
+
+
+## A burst hydrant's column of water (runs until Fx.knock stops it).
+func _gush_emitter() -> CPUParticles3D:
+	var p := CPUParticles3D.new()
+	p.amount = 70
+	p.lifetime = 1.3
+	p.direction = Vector3.UP
+	p.spread = 16.0
+	p.initial_velocity_min = 8.0
+	p.initial_velocity_max = 11.0
+	p.gravity = Vector3(0, -14, 0)
+	p.mesh = _unshaded(Color.WHITE, Vector2(0.4, 0.4))
+	p.scale_amount_min = 1.0
+	p.scale_amount_max = 2.2
+	p.color_ramp = _fade(Color(0.85, 0.92, 1.0, 0.85), Color(0.85, 0.92, 1.0, 0.0))
 	return p
 
 

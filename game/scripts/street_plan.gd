@@ -37,7 +37,7 @@ const MERGE := 8.0
 ## Curved roads are sampled this often before simplifying.
 const STEP := 26.0
 ## The River Road and Levee Road run this far out from the water's edge.
-const RIVER_ROAD := 9.0
+const RIVER_ROAD := 10.0
 const QUAY_SET := 6.0 # the quay's centreline back from the water
 ## Founders Circle's ring (centreline radius), the City Hall grounds (snapped
 ## to two rows of the Gilt grid; the Esplanade runs east from them between
@@ -71,13 +71,13 @@ const ARTERIALS := [
 ## Lot rectangle (along the front, deep) each landmark needs; blocks too
 ## small for theirs are joined with a neighbour.
 const LANDMARK_LOTS := {
-	"union_station": Vector2(40, 34), "aurum_tower": Vector2(30, 30), "bpd_lantern": Vector2(30, 24),
+	"union_station": Vector2(40, 32), "aurum_tower": Vector2(28, 27), "bpd_lantern": Vector2(30, 24),
 	"floodline_clinic": Vector2(28, 24), "lantern_square": Vector2(34, 30), "wharfside_courts": Vector2(34, 30),
 	"blue_lantern": Vector2(28, 22), "warehouse_9": Vector2(32, 26), "the_pit": Vector2(28, 30),
 	"streetcar_depot": Vector2(32, 26), "drowned_streetcar": Vector2(24, 20),
 	# Government buildings (kits/civic_kit.gd) and the waterfront set pieces.
-	"city_hall": Vector2(70, 56), "county_courthouse": Vector2(50, 40), "federal_building": Vector2(47, 39),
-	"public_library": Vector2(50, 36), "police_headquarters": Vector2(42, 34), "main_post_office": Vector2(64, 30),
+	"city_hall": Vector2(70, 56), "county_courthouse": Vector2(50, 36), "federal_building": Vector2(47, 32),
+	"public_library": Vector2(50, 36), "police_headquarters": Vector2(42, 32), "main_post_office": Vector2(64, 30),
 	"fire_headquarters": Vector2(36, 30), "ferry_building": Vector2(90, 24), "liberty_square": Vector2(30, 24),
 }
 ## Which way a landmark's door would rather face (outward from its block),
@@ -90,15 +90,20 @@ const LANDMARK_FACING := {
 }
 const DEFAULT_LOT := Vector2(22, 22)
 
+## Street classes. Each carries its lanes: `lanes` each way, `lane_w` wide,
+## starting `middle` out from the centreline (a median or the centre line),
+## and a `park` strip at the curb for parked cars. Streets, avenues and
+## boulevards are 4 and 6 lanes (2 and 3 each way); the old town's quarter
+## streets and the quay stay 2 lanes, the walking lanes none.
 const CLASSES := {
-	"boulevard": {"width": 24.0, "drive": true, "rank": 5},
-	"bridge": {"width": 16.0, "drive": true, "rank": 5},
-	"avenue": {"width": 15.0, "drive": true, "rank": 4},
-	"river": {"width": 14.0, "drive": true, "rank": 4},
-	"street": {"width": 11.0, "drive": true, "rank": 2},
-	"quarter": {"width": 9.0, "drive": true, "rank": 1},
-	"lane": {"width": 7.0, "drive": false, "rank": 0},
-	"quay": {"width": 10.0, "drive": true, "rank": 3},
+	"boulevard": {"width": 28.0, "drive": true, "rank": 5, "lanes": 3, "lane_w": 3.5, "middle": 3.2, "park": 0.0},
+	"bridge": {"width": 16.0, "drive": true, "rank": 5, "lanes": 2, "lane_w": 3.6, "middle": 0.2, "park": 0.0},
+	"avenue": {"width": 20.0, "drive": true, "rank": 4, "lanes": 2, "lane_w": 3.6, "middle": 0.2, "park": 2.4},
+	"river": {"width": 16.0, "drive": true, "rank": 4, "lanes": 2, "lane_w": 3.5, "middle": 0.2, "park": 0.0},
+	"street": {"width": 18.0, "drive": true, "rank": 2, "lanes": 2, "lane_w": 3.3, "middle": 0.2, "park": 2.2},
+	"quarter": {"width": 9.0, "drive": true, "rank": 1, "lanes": 1, "lane_w": 3.6, "middle": 0.6, "park": 0.0},
+	"lane": {"width": 7.0, "drive": false, "rank": 0, "lanes": 0, "lane_w": 0.0, "middle": 0.0, "park": 0.0},
+	"quay": {"width": 10.0, "drive": true, "rank": 3, "lanes": 1, "lane_w": 3.6, "middle": 0.6, "park": 0.0},
 }
 const ROAD_NAMES := {
 	"lantern": "Lantern Boulevard", "crescent": "Crescent Boulevard", "rampart": "Rampart Avenue",
@@ -1839,7 +1844,7 @@ func _merge_options(f: int, poly: PackedVector2Array, members: Array, claimed: D
 ## How well a joined block would hold `need`: its outline, pulled in by
 ## about a street half and a sidewalk.
 func _merged_fit(merged: PackedVector2Array, to_frame: Transform2D, need: Vector2) -> float:
-	var approx := _largest(Geometry2D.offset_polygon(merged, -8.5))
+	var approx := _largest(Geometry2D.offset_polygon(merged, -(CLASSES.street.width * 0.5 + SIDEWALK)))
 	if approx.size() < 3:
 		return 0.0
 	return _fit(largest_rect(to_frame * approx, need), need)

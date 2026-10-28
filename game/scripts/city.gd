@@ -27,8 +27,8 @@ const MAP_PATH := "res://data/world_map.json"
 const CITY_ID := "bellerive"
 ## The window is measured in blocks of this many metres (world_map.json).
 const PITCH := 52.0
-## A typical street's width, for code that needs a rough figure.
-const ROAD := 11.0
+## One lane each way, on a link between the plan and the country.
+const LINK_LANES := {"lanes": 1, "lane_w": 3.6, "middle": 0.6, "park": 0.0}
 const SIDEWALK := 3.0
 ## Pedestrians walk this far in from the curb.
 const WALK_INSET := 1.2
@@ -496,39 +496,50 @@ func nearest_node(pos: Vector3) -> int:
 	return -1
 
 
-## Width of the street from junction a to b (ROAD for a link between the
-## plan and the country, or no street).
-func _edge_width(a: int, b: int) -> float:
+## The lanes of the street from junction a to b (a street class's lane
+## fields, see StreetPlan.CLASSES); one lane each way on a link between the
+## plan and the country.
+func lanes_of(a: int, b: int) -> Dictionary:
 	if a >= COUNTRY_BASE and b >= COUNTRY_BASE:
 		var ce: int = country.edge_between(a - COUNTRY_BASE, b - COUNTRY_BASE)
-		return country.edge_width(ce) if ce >= 0 else ROAD
-	if a < COUNTRY_BASE and b < COUNTRY_BASE:
+		if ce >= 0:
+			return country.classes[country.edge_cls[ce]]
+	elif a < COUNTRY_BASE and b < COUNTRY_BASE:
 		var e: int = plan.edge_between(a, b)
-		return plan.edge_width(e) if e >= 0 else ROAD
-	return ROAD
+		if e >= 0:
+			return StreetPlan.CLASSES[plan.edge_class(e)]
+	return LINK_LANES
 
 
-## Where a car driving from junction `from` to `to` should aim: the
-## right-hand lane of that street, at `to`. `from` may be -1 (just the
-## junction).
-func lane_point(from: int, to: int) -> Vector3:
+## Lanes each way on the street from a to b.
+func lane_count(a: int, b: int) -> int:
+	return maxi(1, int(lanes_of(a, b).get("lanes", 1)))
+
+
+## Where a car driving from junction `from` to `to` in lane `lane` (0 the
+## curb lane, counting in toward the middle) should aim: that lane, at
+## `to`. `from` may be -1 (just the junction).
+func lane_point(from: int, to: int, lane := 0) -> Vector3:
 	if from < 0 or from == to:
 		return node_pos(to)
 	var seg := (node_pos(to) - node_pos(from)).normalized()
 	var right := Vector3(-seg.z, 0.0, seg.x)
-	return node_pos(to) + right * lane_offset(_edge_width(from, to))
+	return node_pos(to) + right * lane_offset(lanes_of(from, to), lane)
 
 
-## The right-hand lane at junction `at`, setting off towards `toward`.
-func lane_start(at: int, toward: int) -> Vector3:
+## Lane `lane` at junction `at`, setting off towards `toward`.
+func lane_start(at: int, toward: int, lane := 0) -> Vector3:
 	var seg := (node_pos(toward) - node_pos(at)).normalized()
 	var right := Vector3(-seg.z, 0.0, seg.x)
-	return node_pos(at) + right * lane_offset(_edge_width(at, toward))
+	return node_pos(at) + right * lane_offset(lanes_of(at, toward), lane)
 
 
-## Distance from the centreline to the middle of the right-hand lane.
-static func lane_offset(width: float) -> float:
-	return maxf(2.4, width * 0.22)
+## Distance from the centreline to the middle of lane `lane` (0 the curb
+## lane; past the last lane, the innermost).
+static func lane_offset(lanes: Dictionary, lane := 0) -> float:
+	var n := maxi(1, int(lanes.get("lanes", 1)))
+	var k := clampi(n - 1 - lane, 0, n - 1)
+	return float(lanes.get("middle", 0.6)) + float(lanes.get("lane_w", 3.6)) * (k + 0.5)
 
 
 ## Drivable neighbours of junction n (across the links between the plan's
@@ -879,9 +890,9 @@ func _pick_parking() -> void:
 		var b_n: int = plan.edge_b[e]
 		if not (plan.drivable(e) and drive_node(a_n) and drive_node(b_n)) or rng.randf() > 0.25:
 			continue
-		var cls: String = plan.edge_class(e)
-		if cls == "quarter" or cls == "bridge" or rail_on(e) >= 0:
-			continue # too narrow to park and pass, or no curb
+		var lanes: Dictionary = StreetPlan.CLASSES[plan.edge_class(e)]
+		if lanes.park <= 0.0 or rail_on(e) >= 0:
+			continue # no parking strip
 		var a := node_pos(a_n)
 		var b := node_pos(b_n)
 		var s0: float = plan.clearance(a_n, e) + 6.0
@@ -892,8 +903,9 @@ func _pick_parking() -> void:
 		var along := (b - a) / length
 		var right := Vector3(-along.z, 0, along.x)
 		var side := 1.0 if rng.randf() < 0.5 else -1.0
-		var w: float = plan.edge_width(e)
-		var p := a + along * rng.randf_range(s0, length - s1) + right * side * (w * 0.5 - PARK_FROM_CURB)
+		# In the middle of the parking strip, outside the curb lane.
+		var out: float = lanes.middle + lanes.lanes * lanes.lane_w + lanes.park * 0.5
+		var p := a + along * rng.randf_range(s0, length - s1) + right * side * out
 		if not plan.is_land(block_of(p + right * side * 4.0)):
 			continue # no curb on that side (water)
 		var facing := along * side
@@ -963,12 +975,14 @@ func _finish_task() -> void:
 func _add_cell(cell: int, built: Dictionary) -> void:
 	var root := Node3D.new()
 	root.name = "Cell_%d" % cell
+	var inst: MeshInstance3D = null
+	var glow: MeshInstance3D = null
 	if built.mesh.triangle_count() > 0:
-		var inst: MeshInstance3D = built.mesh.make_instance()
+		inst = built.mesh.make_instance()
 		inst.material_override = MeshBuilder.cutaway_material()
 		root.add_child(inst)
 	if built.glow.triangle_count() > 0:
-		var glow: MeshInstance3D = built.glow.make_instance()
+		glow = built.glow.make_instance()
 		glow.name = "Glow"
 		glow.material_override = MeshBuilder.glow_material()
 		glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -980,9 +994,14 @@ func _add_cell(cell: int, built: Dictionary) -> void:
 		var body := StaticBody3D.new()
 		body.collision_layer = group[1]
 		body.collision_mask = 0
+		# The meshes breakable props are cut from (Breakables).
+		body.set_meta("mesh", inst)
+		body.set_meta("glow", glow)
 		root.add_child(body)
 		for c in group[0]:
-			_add_shape(body, c[0], c[1], c[2] if c.size() > 2 else 0.0)
+			var shape := _add_shape(body, c[0], c[1], c[2] if c.size() > 2 else 0.0)
+			if c.size() > 3:
+				shape.set_meta("brk", c[3])
 	root.set_meta("buildings", built.buildings)
 	building_count += built.buildings
 	add_child(root)
@@ -996,7 +1015,7 @@ func _unload(cell: int) -> void:
 	root.queue_free()
 
 
-func _add_shape(body: StaticBody3D, center: Vector3, size: Vector3, yaw := 0.0) -> void:
+func _add_shape(body: StaticBody3D, center: Vector3, size: Vector3, yaw := 0.0) -> CollisionShape3D:
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
 	box.size = size
@@ -1004,6 +1023,7 @@ func _add_shape(body: StaticBody3D, center: Vector3, size: Vector3, yaw := 0.0) 
 	shape.position = center
 	shape.rotation.y = yaw
 	body.add_child(shape)
+	return shape
 
 
 func _exit_tree() -> void:

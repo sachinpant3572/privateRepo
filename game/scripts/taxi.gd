@@ -291,7 +291,16 @@ func plan_ride(pos: Vector3) -> Dictionary:
 		return {}
 	var city = game.city
 	var fwd: Vector3 = -cab.global_basis.z
-	var ahead: int = city.node_ahead(cab.global_position, fwd)
+	# The far end of the street the cab stands on, the way it faces: a cab
+	# pulled into the parking strip sits at an angle, so the junction
+	# straight ahead of its nose may be on another street.
+	var ahead: int = -1
+	var on := _curb_near(cab.global_position)
+	if not on.is_empty() and Vector2(cab.global_position.x - on.at.x, cab.global_position.z - on.at.z).length() < 14.0:
+		var along: Vector3 = city.node_pos(on.b) - city.node_pos(on.a)
+		ahead = on.b if along.dot(fwd) >= 0.0 else on.a
+	else:
+		ahead = city.node_ahead(cab.global_position, fwd)
 	if ahead < 0:
 		return {}
 	var plan := _approach(ahead, curb, pos)
@@ -649,12 +658,18 @@ func _curb_near(pos: Vector3) -> Dictionary:
 
 
 ## Where a cab driving from junction `from` toward `to` stops at `at`: in
-## the right-hand lane, nudged toward the curb. [stop, yaw]
+## the parking strip where the street has one, else the curb lane nudged
+## toward the curb. [stop, yaw]
 func _curb_stop(from: int, to: int, at: Vector3) -> Array:
 	var city = game.city
 	var off: Vector3 = city.lane_point(from, to) - city.node_pos(to)
+	var lanes: Dictionary = city.lanes_of(from, to)
+	if float(lanes.get("park", 0.0)) > 0.0:
+		off = off.normalized() * (float(lanes.middle) + float(lanes.lanes) * float(lanes.lane_w) + float(lanes.park) * 0.5)
+	else:
+		off *= CURB_SHIFT
 	var dir: Vector3 = city.node_pos(to) - city.node_pos(from)
-	return [at + off * CURB_SHIFT, atan2(-dir.x, -dir.z)]
+	return [at + off, atan2(-dir.x, -dir.z)]
 
 
 ## The shortest drive from `start` into junction `end` by any street but the

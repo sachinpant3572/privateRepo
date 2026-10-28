@@ -18,6 +18,8 @@ import numpy as np
 import shapely
 from shapely.geometry import LineString, Point, Polygon
 
+from road_classes import CLASSES
+
 # The zone: from 90 m north of the Beltway (y -330) to the ridge's back.
 OUTLINE = [(270, -430), (235, -800), (200, -1110), (165, -1260), (230, -1400), (400, -1580), (680, -1790), (1100, -1840),
            (1500, -1770), (1770, -1520), (1930, -1220), (2090, -950), (2210, -720), (2130, -600),
@@ -53,7 +55,7 @@ LETTERS_SIZE = (150.0, 26.0)
 MASTS = [(1106.0, -1250.0), (1132.0, -1232.0)]
 MAST_SIZE = (18.0, 18.0)
 
-GRADE = {"highway": 0.075, "road": 0.13, "street": 0.13, "lane": 0.14, "track": 0.25, "trail": 0.3}
+GRADE = {"freeway": 0.06, "highway": 0.075, "road": 0.13, "street": 0.13, "lane": 0.14, "track": 0.25, "trail": 0.3}
 BLEND = 22.0  # cut and fill fade out over this far beside a road's shoulder, or more:
 MAX_BANK = 0.4  # no cut or fill bank steeper than this (the camera looks down at 60 degrees)
 PAD_BLEND = 12.0
@@ -273,7 +275,7 @@ class Mountain:
         return float(a * (1 - fv) + b * fv)
 
 
-_HALF = {"highway": 8.0, "avenue": 7.0, "road": 5.0, "street": 5.0, "lane": 3.5, "track": 3.0, "trail": 1.75}
+_HALF = {k: c["w"] * 0.5 for k, c in CLASSES.items()}
 
 
 def _smooth(t):

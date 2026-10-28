@@ -8,7 +8,7 @@ import sys
 
 from PIL import Image, ImageDraw
 
-WIDTH = {"boulevard": 24, "bridge": 16, "avenue": 15, "river": 14, "street": 11, "quarter": 9, "lane": 7, "quay": 3}
+WIDTH = {"boulevard": 28, "bridge": 16, "avenue": 20, "river": 16, "street": 18, "quarter": 9, "lane": 7, "quay": 3}  # street_plan.gd CLASSES (the quay drawn thin)
 ROAD = {"boulevard": (70, 70, 78), "bridge": (90, 80, 70), "avenue": (60, 60, 66), "river": (60, 60, 66),
         "street": (55, 55, 60), "quarter": (95, 70, 60), "lane": (190, 170, 140), "quay": (230, 230, 225)}
 

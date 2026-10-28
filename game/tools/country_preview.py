@@ -43,7 +43,7 @@ KIND_COLORS = {
     "gas_station": (230, 200, 60),
 }
 LINE_PARTS = ("wall", "hedge", "fence", "gate", "trees")
-ROAD_COLORS = {"highway": (250, 240, 200), "avenue": (240, 240, 240), "road": (235, 225, 200), "street": (225, 225, 225),
+ROAD_COLORS = {"freeway": (250, 240, 200), "highway": (250, 240, 200), "avenue": (240, 240, 240), "road": (235, 225, 200), "street": (225, 225, 225),
                "lane": (215, 205, 180), "track": (150, 110, 70), "trail": (120, 80, 50)}
 
 

@@ -177,7 +177,7 @@ static func _done(ctx: Ctx, local: Array, into: Array) -> void:
 	var x: Transform3D = ctx.mb.xform
 	var yaw := atan2(-x.basis.x.z, x.basis.x.x)
 	for col in local:
-		into.append([x * col[0], col[1], yaw + (col[2] if col.size() > 2 else 0.0)])
+		into.append([x * col[0], col[1], yaw + (col[2] if col.size() > 2 else 0.0)] + col.slice(3))
 	ctx.mb.xform = Transform3D.IDENTITY
 
 
@@ -485,24 +485,29 @@ static func _road(ctx: Ctx, e: int) -> void:
 		mb.xform = frame
 		var piece := HILL_PIECE if ctx.hill else 0.0
 		var lift := HILL_MARK_LIFT if ctx.hill else 0.0
+		var geo: Dictionary = c.classes[c.edge_cls[e]]
+		var lanes := int(geo.get("lanes", 0))
+		var lane_w := float(geo.get("lane_w", 0.0))
+		var middle := float(geo.get("middle", 0.0))
 		match cls:
-			"highway":
-				for z in [-0.14, 0.14]:
-					_line(mb, s0, run, z, MARKING, piece, lift)
+			"freeway", "highway":
+				# A painted median between two yellow lines, dashes between
+				# the lanes, a solid edge line before the shoulder.
 				for side in [-1.0, 1.0]:
-					_line(mb, s0, run, side * (h - 0.6), WHITE_LINE, piece, lift)
-					_dashes(mb, s0, run, side * h * 0.5, WHITE_LINE, lift)
-			"avenue":
+					_line(mb, s0, run, side * (middle - 0.15), MARKING, piece, lift)
+					_line(mb, s0, run, side * (middle + lanes * lane_w + 0.15), WHITE_LINE, piece, lift)
+					for j in range(1, lanes):
+						_dashes(mb, s0, run, side * (middle + lane_w * j), WHITE_LINE, lift)
+			"avenue", "street":
 				for z in [-0.12, 0.12]:
 					_line(mb, s0, run, z, MARKING, piece, lift)
 				for side in [-1.0, 1.0]:
-					_dashes(mb, s0, run, side * h * 0.5, WHITE_LINE, lift)
+					for j in range(1, lanes):
+						_dashes(mb, s0, run, side * (middle + lane_w * j), WHITE_LINE, lift)
 			"road":
 				_dashes(mb, s0, run, 0.0, MARKING, lift)
 				for side in [-1.0, 1.0]:
 					_line(mb, s0, run, side * (h - 0.5), WHITE_LINE, piece, lift)
-			"street":
-				_dashes(mb, s0, run, 0.0, MARKING, lift)
 		mb.xform = Transform3D.IDENTITY
 	if bridge:
 		return

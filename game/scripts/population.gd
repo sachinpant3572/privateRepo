@@ -93,11 +93,12 @@ func _spawn_traffic(center: Vector3, r: float) -> void:
 		return
 	var to: int = options[rng.randi() % options.size()]
 	var car = _new_car()
-	car.position = game.city.lane_start(n, to)
+	var lane: int = rng.randi() % game.city.lane_count(n, to)
+	car.position = game.city.lane_start(n, to, lane)
 	var heading: Vector3 = game.city.node_pos(to) - game.city.node_pos(n)
 	car.rotation.y = atan2(-heading.x, -heading.z)
 	car.rng.seed = rng.randi()
-	car.start_traffic(game.city, n, to)
+	car.start_traffic(game.city, n, to, lane)
 	game.add_child(car)
 	cars.append(car)
 
