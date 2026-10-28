@@ -884,7 +884,10 @@ func _build_model() -> void:
 	var ground := MeshBuilder.new()
 	var glow := MeshBuilder.new()
 	var head := Color(0.6, 0.55, 0.38)
-	var lamps := [0.0] if shows_rider else [-_size.x * 0.33, _size.x * 0.33]
+	# lamp_x: how far out the headlamps sit, where a kind's differ (the
+	# tuk-tuk's twin lamps sit close together on its cowl).
+	var lamp_x: float = _spec.get("lamp_x", _size.x * 0.33)
+	var lamps := [0.0] if shows_rider else [-lamp_x, lamp_x]
 	for x in lamps:
 		ground.light_beam(Vector3(x, 0.05, -_size.z * 0.5), Vector3.FORWARD, 13.0, 3.2, head, 5)
 		glow.light_pool(Vector3(x, 0.7, -_size.z * 0.5 - 0.1), Vector2(0.5, 0.35), Color(1.0, 0.95, 0.8))

@@ -72,7 +72,7 @@ const KINDS := {
 	"tuk_tuk": {"name": "Pavan Autorick", "category": "autorickshaw", "size": Vector3(1.4, 1.75, 2.7),
 		"max_speed": 13.5, "accel": 7.0, "turn": 2.9, "mass": 0.45, "grip": 7.0, "drift": 1.6, "brake": 24.0,
 		"power_fade": 0.45, "steer_fade": 0.2, "steer_low": 3.0, "reverse": 4.0, "health": 60.0,
-		"roll": 0.0042, "pitch": 0.0024},
+		"roll": 0.0042, "pitch": 0.0024, "lamp_x": 0.17},
 	"cargo_trike": {"name": "Pavan Loadmate", "category": "cargo trike", "size": Vector3(1.5, 1.85, 3.4),
 		"max_speed": 12.5, "accel": 5.5, "turn": 2.6, "mass": 0.8, "grip": 6.5, "drift": 1.4, "brake": 22.0,
 		"power_fade": 0.5, "steer_fade": 0.3, "steer_low": 3.5, "reverse": 4.0, "health": 75.0,
