@@ -342,6 +342,8 @@ func _game_tab() -> void:
 		game.atmosphere.hour = fmod(game.atmosphere.hour + 3.0, 24.0)
 		tb.text = "Skip 3 hours (now %s)" % game.atmosphere.clock_text())
 	_row(tb, "Moves the clock on. The preview shows the new light and headlights.")
+	_row(phone._toggle("Blood", s.get("blood", true), func(on): s["blood"] = on; game.apply_settings()),
+		"Blood from fights and crashes: spatter, smears and pools on the ground. OFF shows none and clears what is there.")
 	var reset: Button = phone._button("New game (erase progress)", Callable())
 	reset.pressed.connect(func():
 		if reset.text.begins_with("Tap again"):
