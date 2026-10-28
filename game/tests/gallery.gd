@@ -220,15 +220,15 @@ func _vehicle_shots(close: bool) -> void:
 	shell.material_override = MeshBuilder.gloss_material()
 	add_child(shell)
 	print("vehicles: %d triangles" % [cars.triangle_count() + vehicle_gloss.triangle_count()])
-	await _view(Vector3(0, 0, 598), 28.0, "gallery_3_vehicles.png")
+	await _view(Vector3(0, 0, 602.5), 37.0, "gallery_3_vehicles.png")
 	await _view(Vector3(0, 0, 652), 30.0, "gallery_3b_trucks.png")
 	if close:
-		for r in 3:
+		for r in 4:
 			for half in 2:
 				await _view(Vector3(-9.5 + half * 19.5, 0, 589.0 + r * 9.0), 11.0, "gallery_3c_row%d_%d.png" % [r, half])
 		await _view(Vector3(-8.0, 0, 652), 15.0, "gallery_3c_trucks_0.png")
 		await _view(Vector3(8.0, 0, 652), 15.0, "gallery_3c_trucks_1.png")
-		await _view(Vector3(0, 0, 598), 28.0, "gallery_3d_overhead.png", 88.0)
+		await _view(Vector3(0, 0, 602.5), 37.0, "gallery_3d_overhead.png", 88.0)
 		await _view(Vector3(0, 0, 652), 30.0, "gallery_3d_trucks_overhead.png", 88.0)
 		await _view(Vector3(0, 0, 623), 68.0, "gallery_3e_driving_zoom.png")
 	for r in vehicle_riders:
@@ -252,13 +252,15 @@ func _view(center: Vector3, view: float, file: String, pitch := 60.0) -> void:
 
 
 ## Every model in a paint from its own palette, with Jules riding the bikes:
-## cars; utility and performance; two- and three-wheelers; trucks (a row of
-## their own further on, shot 3b).
+## cars; utility and performance; two- and three-wheelers; the open cars
+## (roof down with people in the seats, then again roof up), the people
+## mover and the bicycle; trucks (a row of their own further on, shot 3b).
 func _vehicles() -> MeshBuilder:
 	var mb := MeshBuilder.new()
 	var rows := [["compact", "sedan", "ev", "luxury", "taxi", "police"],
 		["crossover", "suv", "pickup", "van", "sports", "muscle"],
-		["super", "motorbike", "scooter", "tuk_tuk", "cargo_trike"]]
+		["super", "motorbike", "scooter", "tuk_tuk", "cargo_trike"],
+		["roadster", "cabriolet", "muv", "bicycle", "roadster|up", "cabriolet|up"]]
 	var trucks := [["box_truck", Vector3(-14.0, 0, 652.0)], ["tipper", Vector3(-4.0, 0, 652.0)],
 		["semi", Vector3(9.0, 0, 652.0)]]
 	var places := []
@@ -267,8 +269,11 @@ func _vehicles() -> MeshBuilder:
 			places.append([rows[r][i], Vector3(-16.0 + i * 6.5, 0, 589.0 + r * 9.0)])
 	places.append_array(trucks)
 	var listed := 0
+	var crew := RandomNumberGenerator.new()
+	crew.seed = 23
 	for i in places.size():
-		var kind: String = places[i][0]
+		var kind: String = places[i][0].get_slice("|", 0)
+		var again: bool = places[i][0].ends_with("|up") # a roof-up copy
 		# Every other model faces the camera, so a page shows fronts and backs.
 		var yaw := PI * 0.15 + (PI if i % 2 == 1 else 0.0)
 		if VehicleKit.KINDS.has(kind):
@@ -277,17 +282,35 @@ func _vehicles() -> MeshBuilder:
 			vehicle_gloss.xform = mb.xform
 			var palette: Array = VehicleKit.PALETTES.get(kind, VehicleKit.PAINTS)
 			VehicleKit.build(mb, kind, palette[(i * 3 + i / 6) % palette.size()], vehicle_gloss)
-			listed += 1
+			listed += 0 if again else 1
 			if VehicleKit.KINDS[kind].get("rider", false):
 				var rider := _person(Player.JULES, "ride", pos)
 				rider[0].skeleton.get_parent().rotation.y = yaw
+				if VehicleKit.KINDS[kind].get("pedal", false):
+					rider[1].pedal = PI * 0.5 # as the cranks are built
 				vehicle_riders.append(rider)
+			if VehicleKit.KINDS[kind].get("convertible", false):
+				VehicleKit.build_top(mb, kind, again, vehicle_gloss)
+				for seat in ([] if again else [0, 1, 3]):
+					if seat < VehicleKit.seat_count(kind):
+						_seat_person(CharacterKit.random_look(crew), mb.xform, kind, seat)
 	assert(listed == VehicleKit.KINDS.size(), "every vehicle kind is in the gallery")
 	for frame in 40:
 		for rider in vehicle_riders:
 			rider[0].pose(rider[1], 1.0 / 60.0)
 	mb.xform = Transform3D.IDENTITY
 	return mb
+
+
+## A person in seat `seat` of the open car `kind` placed at `at`.
+func _seat_person(look: Dictionary, at: Transform3D, kind: String, seat: int) -> void:
+	look.erase("bag")
+	var h: float = look.get("height", 1.0)
+	var p := _person(look, "", at * (VehicleKit.seat(kind, seat) + Vector3(0, 0.92 * (1.0 - h), 0)))
+	p[0].skeleton.get_parent().rotation.y = at.basis.get_euler().y
+	p[1].sit = true
+	p[1].car = 2 if seat == 0 else 1
+	vehicle_riders.append(p)
 
 
 ## People under the game camera, close up. Shot 4: Jules showing the

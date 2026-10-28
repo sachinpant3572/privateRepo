@@ -251,10 +251,12 @@ phone.
 - **Asset kits** (`scripts/kits/`): code-built, vertex-coloured low-poly
   buildings, props (live oaks, palms, crepe myrtles and street trees with
   clumped canopies; bins, benches, hydrants, signal cabinets, banners, bike
-  racks, sidewalk works), 20 vehicles, one per category (compact, sedan,
+  racks, sidewalk works), 24 vehicles, one per category (compact, sedan,
   EV, luxury, taxi, police, crossover, SUV, pickup, van, sports, muscle,
   supercar, motorbike, scooter, a tuk-tuk and a cargo trike, a 6-wheel
-  box truck, a 10-wheel tipper and an 18-wheel semi; fictional makes),
+  box truck, a 10-wheel tipper and an 18-wheel semi, a seven-seat MUV, a
+  bicycle and two convertibles, a two-seat roadster and a four-seat
+  cabriolet; fictional makes),
   each with its own mass, grip, brakes, power curve, steering and
   durability, body roll and bike lean (cabins, dashboards and seats are
   painted on the glass; the semi is one rigid body and only sets off on
@@ -265,8 +267,16 @@ phone.
   Burley/GGX shading and ACES tonemapping. `tests/lookdev.tscn` renders a
   few fixed spots for look reviews.
 - **On foot**: jog, sprint, punch; three quick hits make a punch-punch-kick
-  combo that knocks people down. Scooters can be ridden (the rider stays in
-  view).
+  combo that knocks people down. Scooters and bicycles can be ridden (the
+  rider stays in view; on a bicycle they pedal with the speed). Bicycles
+  stand parked only, never in traffic.
+- **Convertibles** (`scripts/convertible.gd`): the roadster and the
+  cabriolet carry a soft top, raised or folded behind the rear seats. Most
+  spawn open by day in dry weather and closed at night or in the rain. With
+  the top down the driver and passengers show in their seats (the player,
+  mission passengers, or an AI car's own driver and sometimes a passenger);
+  with it up they are hidden as in any car. The player raises or lowers it
+  with the ROOF button (or R) only when nearly stopped (under 1.5 m/s).
 - **Nothing hidden behind buildings**: when a building blocks the view of
   the player, it dissolves in a circle around them (city shader, `mesh_builder.gd`),
   and silhouettes show through walls: the player and their car in yellow,
@@ -397,7 +407,9 @@ those). `SHOTS=roads` shoots the wide roads (53 to 58), `SHOTS=props` a car
 through a lamp, a tree and a hydrant (59 to 64), `SHOTS=farm` Golden
 Flats' farmland (65 to 72), `SHOTS=routes` the way in to one home of
 each kind and setting (73), and `SHOTS=wealth` one home of each kind at each
-household tier it takes (74). `SHOTS=view` compares the classic and perspective cameras
+household tier it takes (74). `SHOTS=convertibles` shoots the open cars
+with the tops down and up, a bicycle with its rider and the MUV between a
+sedan and the van (95 to 98). `SHOTS=view` compares the classic and perspective cameras
 at the Aurum Tower, Midtown and Lantern Square, on foot and driving (80),
 the perspective camera backed out of a tower and with the view band
 turning buildings round the player see-through (81), and driving flat out

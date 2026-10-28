@@ -5,6 +5,8 @@ extends Node
 const MainScene = preload("res://main.tscn")
 const Terrain = preload("res://scripts/terrain.gd")
 const Vehicle = preload("res://scripts/vehicle.gd")
+const Npc = preload("res://scripts/npc.gd")
+const CharacterKit = preload("res://scripts/kits/character_kit.gd")
 
 var out_dir := "user://"
 
@@ -110,6 +112,11 @@ func _run() -> void:
 	if OS.get_environment("SHOTS") == "roads":
 		# Just the wide roads (quick look while working on them).
 		await _roads(game)
+		get_tree().quit()
+		return
+	if OS.get_environment("SHOTS") == "convertibles":
+		# Just the 0.23 kinds: the open cars, the bicycle and the MUV.
+		await _convertibles(game)
 		get_tree().quit()
 		return
 	await _shot("1_on_foot.png")
@@ -772,6 +779,95 @@ func _views(game) -> void:
 			await _frames(20)
 			await _shot("83_angle_%s_%d.png" % [spot[0], angle])
 	cam.set_angle(cam.PITCH_LOW, true)
+
+
+## The 0.23 kinds from the game camera: both open cars with the top down
+## and two aboard (Jules at the wheel of the roadster with a passenger, an
+## AI cabriolet with its own driver and passenger), the same with the tops
+## raised (nobody shows), Jules pedalling a bicycle beside a parked one,
+## and the MUV between a sedan and the van.
+func _convertibles(game) -> void:
+	var at := Vector2(690, 470)
+	var pos := Vector3(at.x, Terrain.height(at.x, at.y), at.y)
+	game.city.stream_now(pos)
+	game.player.global_position = pos + Vector3(0, 0, 6)
+	await _frames(10)
+	var made := []
+	for spec in [["roadster", Vector3(-2.3, 0, 0), Vehicle.Driver.NONE, Color(0.95, 0.75, 0.1)], ["cabriolet", Vector3(2.3, 0, 0.6), Vehicle.Driver.SCRIPT, Color(0.85, 0.8, 0.7)]]:
+		var car = Vehicle.new()
+		car.kind = spec[0]
+		car.body_color = spec[3]
+		game.add_child(car)
+		car.global_position = pos + spec[1]
+		car.driver = spec[2]
+		made.append(car)
+	await _frames(2)
+	made[1].convertible._company = true
+	game.player.enter_vehicle(made[0])
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var friend = Npc.new()
+	var look := CharacterKit.random_look(rng)
+	look.erase("bag")
+	friend.setup("Friend", look)
+	friend.position = pos + Vector3(-5, 0, 0)
+	game.add_child(friend)
+	friend.mount(made[0])
+	game.camera.fixed_focus = pos + Vector3(0, 0, 0.3)
+	game.camera.room_size = 11.0
+	game.camera.snap()
+	await _frames(40)
+	await _shot("95_open_cars_down.png")
+	game.hud.toggle_roof()
+	made[1].convertible.set_roof(true)
+	await _frames(60)
+	await _shot("96_open_cars_up.png")
+	game.player.exit_vehicle()
+	friend.dismount(pos + Vector3(-5, 0, 0))
+	for car in made:
+		car.queue_free()
+	made.clear()
+	var bike = Vehicle.new()
+	bike.kind = "bicycle"
+	game.add_child(bike)
+	bike.global_position = pos + Vector3(0, 0, 2)
+	var parked = Vehicle.new()
+	parked.kind = "bicycle"
+	game.add_child(parked)
+	parked.global_position = pos + Vector3(1.6, 0, 1.2)
+	parked.rotation.y = 0.3
+	made.append_array([bike, parked])
+	await _frames(2)
+	game.player.enter_vehicle(bike)
+	Controls.override_vector = Vector2(0, -1)
+	await _frames(50)
+	Controls.override_vector = null
+	game.camera.fixed_focus = bike.global_position + Vector3(0.6, 0, 0)
+	game.camera.room_size = 6.0
+	game.camera.snap()
+	await _frames(2)
+	await _shot("97_bicycle.png")
+	game.player.exit_vehicle()
+	for car in made:
+		car.queue_free()
+	made.clear()
+	for spec in [["sedan", -2.6, Color(0.2, 0.35, 0.7)], ["muv", 0.0, Color(0.7, 0.72, 0.75)], ["van", 2.7, Color(0.92, 0.92, 0.9)]]:
+		var car = Vehicle.new()
+		car.kind = spec[0]
+		car.body_color = spec[2]
+		game.add_child(car)
+		car.global_position = pos + Vector3(spec[1], 0, 0)
+		made.append(car)
+	game.player.global_position = pos + Vector3(4.6, 0, 1.5)
+	game.camera.fixed_focus = pos + Vector3(0.6, 0, 0.3)
+	game.camera.room_size = 11.0
+	game.camera.snap()
+	await _frames(30)
+	await _shot("98_muv_sedan_van.png")
+	for car in made:
+		car.queue_free()
+	game.camera.fixed_focus = null
+	game.camera.room_size = 0.0
 
 
 func _shot(file: String) -> void:

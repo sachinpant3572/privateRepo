@@ -1,6 +1,7 @@
 extends "res://scripts/humanoid.gd"
 ## The player: on foot, punching, and getting in and out of cars.
 
+const VehicleKit = preload("res://scripts/kits/vehicle_kit.gd")
 const JOG_SPEED := 4.2
 const SPRINT_SPEED := 7.0
 const ENTER_RANGE := 3.5
@@ -39,6 +40,8 @@ func _physics_process(delta: float) -> void:
 	if vehicle != null:
 		global_position = vehicle.global_position
 		rotation.y = vehicle.rotation.y
+		if riding and anim != null: # pedalling a bicycle
+			anim.pedal = VehicleKit.pedal_angle(vehicle.kind, anim.pedal, vehicle.speed, delta)
 		if controllable and Controls.just_pressed("interact"):
 			var game = get_tree().get_first_node_in_group("game") if passenger else null
 			if game != null and game.taxi != null:
@@ -151,6 +154,10 @@ func exit_vehicle(thrown := false) -> void:
 	GameLog.event("exit_car", {"car": car.kind, "thrown": thrown, "speed": absf(car.speed) * 3.6, "car_hp": car.health, "at": car.global_position})
 	vehicle = null
 	riding = false
+	sitting = false # in an open car's seat (convertible.gd)
+	if anim != null:
+		anim.car = 0
+		anim.pedal = -1.0
 	var was_passenger := passenger
 	passenger = false
 	if not was_passenger:

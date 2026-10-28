@@ -56,6 +56,9 @@ var settings_button: Button
 var sky_button: Button
 var _phone_pulse := false
 var _snack: Button
+## Raises or lowers an open car's roof (R), shown while the player drives
+## one; works only when nearly stopped (Convertible.can_toggle).
+var roof_button: Button
 ## The vehicle the player last sat in (instance id) and how long its model
 ## name still shows beside the speed.
 var _ride_id := 0
@@ -143,6 +146,15 @@ func _ready() -> void:
 	_snack.pressed.connect(func(): game.eat_snack())
 	root.add_child(_snack)
 
+	roof_button = Button.new()
+	roof_button.tooltip_text = "Raise or lower the roof when stopped (R)"
+	roof_button.add_theme_font_size_override("font_size", 18)
+	_anchor(roof_button, Vector2(1, 1), Rect2(-300, -392, 130, 56))
+	roof_button.focus_mode = Control.FOCUS_NONE
+	roof_button.visible = false
+	roof_button.pressed.connect(toggle_roof)
+	root.add_child(roof_button)
+
 	_objective = _label(root, 24)
 	_anchor(_objective, Vector2(0.5, 0), Rect2(-330, 14, 660, 64))
 	_objective.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -168,7 +180,7 @@ func _ready() -> void:
 	_build_retry()
 
 	touch = TouchControls.new()
-	touch.exclusions = [minimap, _dialogue, _phone_button, settings_button, _retry, _snack]
+	touch.exclusions = [minimap, _dialogue, _phone_button, settings_button, _retry, _snack, roof_button]
 	if game.interiors:
 		touch.exclusions.append(game.interiors.menu.frame)
 	root.add_child(touch)
@@ -206,6 +218,11 @@ func _process(delta: float) -> void:
 	var snacks: int = game.inventory.bag.size()
 	_snack.visible = snacks > 0
 	_snack.text = "SNACK x%d" % snacks
+	var top = _open_car()
+	roof_button.visible = top != null
+	if top != null:
+		roof_button.text = "ROOF DOWN" if top.car.roof_up else "ROOF UP"
+		roof_button.disabled = not top.can_toggle()
 	_stars.queue_redraw()
 	_shown_cash = move_toward(_shown_cash, game.cash, maxf(absf(game.cash - _shown_cash) * 3.0, 50.0) * delta)
 	_cash.text = "$%d" % int(_shown_cash)
@@ -286,9 +303,25 @@ func _unhandled_input(event: InputEvent) -> void:
 				game.eat_snack()
 			KEY_L:
 				_toggle_look_up()
+			KEY_R:
+				toggle_roof()
 			KEY_ENTER, KEY_KP_ENTER:
 				if _dialogue.visible:
 					_advance_dialogue()
+
+
+## The soft top (convertible.gd) of the open car the player drives, or null.
+func _open_car():
+	var car = game.player.vehicle
+	if car == null or game.player.passenger or car.convertible == null:
+		return null
+	return car.convertible
+
+
+## The roof button (R): raises or lowers the top if nearly stopped.
+func toggle_roof() -> bool:
+	var top = _open_car()
+	return top != null and top.toggle()
 
 
 func show_message(text: String) -> void:

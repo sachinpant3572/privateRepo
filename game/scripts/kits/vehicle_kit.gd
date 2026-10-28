@@ -10,6 +10,8 @@ extends RefCounted
 ## lights and markings stay on the matte `mb`. Without `gloss` everything
 ## goes into `mb` (the asset gallery).
 
+const Rig = preload("res://scripts/rig.gd")
+
 ## Every model: display name, category, collision size (width, height,
 ## length), top speed (m/s), acceleration (m/s²), turn rate (rad/s), plus
 ## any HANDLING values it changes. Keys are stable: missions and main.gd
@@ -85,6 +87,24 @@ const KINDS := {
 		"max_speed": 14.0, "accel": 3.4, "turn": 1.45, "mass": 16.0, "grip": 4.5, "drift": 1.0, "brake": 16.0,
 		"power_fade": 0.55, "steer_fade": 0.6, "steer_low": 6.0, "reverse": 3.5, "health": 420.0,
 		"roll": 0.0034, "pitch": 0.0028},
+	# Convertibles: the body is built open (tub, seats, windscreen frame);
+	# the soft top is a separate mesh (build_top), raised or folded.
+	"roadster": {"name": "Vesper Lido", "category": "convertible", "convertible": true, "size": Vector3(1.86, 1.2, 4.0),
+		"max_speed": 40.0, "corner_g": 13.0, "accel": 13.0, "turn": 2.85, "mass": 1.3, "grip": 9.5, "drift": 1.7, "slide": 0.2,
+		"brake": 37.0, "power_fade": 0.35, "steer_fade": 0.12, "steer_low": 4.5, "health": 85.0,
+		"roll": 0.0009, "pitch": 0.0009},
+	"cabriolet": {"name": "Aurelle Riviera", "category": "convertible", "convertible": true, "size": Vector3(1.96, 1.4, 4.8),
+		"max_speed": 35.0, "corner_g": 11.0, "accel": 11.0, "turn": 2.3, "mass": 1.95, "grip": 8.0, "drift": 1.5,
+		"power_fade": 0.42, "steer_fade": 0.25, "health": 115.0, "roll": 0.0014, "pitch": 0.0014},
+	"muv": {"name": "Kaito Septa", "category": "muv", "size": Vector3(1.9, 1.75, 4.6),
+		"max_speed": 28.0, "corner_g": 9.5, "accel": 9.0, "turn": 2.2, "mass": 1.9, "grip": 7.5, "drift": 1.3,
+		"power_fade": 0.5, "steer_fade": 0.28, "health": 110.0, "roll": 0.0022, "pitch": 0.0018},
+	# Pedal bike: about 31 km/h flat out, slow to get going; the rider shows
+	# and pedals (Rig.State.pedal).
+	"bicycle": {"name": "Ardeno Corso", "category": "bicycle", "size": Vector3(0.6, 1.1, 1.8),
+		"max_speed": 8.6, "corner_g": 7.0, "accel": 2.5, "turn": 3.6, "mass": 0.09, "grip": 8.0, "drift": 2.0, "brake": 9.0,
+		"power_fade": 0.15, "steer_fade": 0.1, "steer_low": 1.5, "reverse": 1.5, "health": 30.0,
+		"lean": 0.45, "rider": true, "pedal": true},
 }
 ## Kinds longer than this only set off on streets with two or more lanes
 ## each way (population.gd), so the semi starts on arterials and highways.
@@ -110,27 +130,30 @@ const LONG_HAUL := 10.0
 const HANDLING := {"mass": 1.5, "grip": 8.0, "corner_g": 11.0, "drift": 1.5, "slide": 0.0, "brake": 32.0, "power_fade": 0.5,
 	"steer_fade": 0.2, "steer_low": 5.0, "reverse": 8.0, "health": 100.0, "roll": 0.0012, "pitch": 0.0012,
 	"lean": 0.0, "rider": false}
-## Weighted pick list for civilian traffic. No two-wheelers: traffic has no
-## visible rider to put on them.
+## Weighted pick list for civilian traffic. No two-wheelers or bicycles:
+## traffic has no visible rider to put on them. Convertibles are rare (one
+## each), the people mover common.
 const CIVILIAN := ["sedan", "sedan", "sedan", "compact", "compact", "compact", "crossover", "crossover",
 	"crossover", "suv", "suv", "ev", "ev", "pickup", "pickup", "van", "van", "taxi", "taxi", "luxury",
-	"sports", "muscle", "super", "box_truck", "box_truck", "tuk_tuk", "cargo_trike", "tipper", "semi"]
+	"sports", "muscle", "super", "box_truck", "box_truck", "tuk_tuk", "cargo_trike", "tipper", "semi",
+	"roadster", "cabriolet", "muv", "muv"]
 ## Weighted pick list for curb spots: nothing longer than about 5.5 m (the
 ## spots are single gaps along the curb), so no box trucks.
 const PARKED := ["sedan", "sedan", "sedan", "compact", "compact", "compact", "crossover", "crossover", "suv",
 	"suv", "ev", "ev", "pickup", "pickup", "van", "luxury", "sports", "muscle", "super", "motorbike",
-	"motorbike", "scooter", "tuk_tuk", "cargo_trike"]
+	"motorbike", "scooter", "tuk_tuk", "cargo_trike", "roadster", "cabriolet", "muv", "muv", "bicycle", "bicycle"]
 const PARKED_MAX_LENGTH := 5.5
 ## Weighted pick lists for a country home's own car by household tier
-## (T0 to T5): old small cars, bikes and three-wheelers, then family cars,
-## then luxury.
+## (T0 to T5): old small cars, bikes, bicycles and three-wheelers, then
+## family cars and people movers, then luxury and convertibles.
 const PARKED_BY_TIER := [
-	["compact", "compact", "sedan", "pickup", "van", "scooter", "motorbike", "tuk_tuk", "cargo_trike"],
-	["compact", "compact", "sedan", "sedan", "pickup", "van", "motorbike", "tuk_tuk"],
-	["sedan", "sedan", "compact", "crossover", "crossover", "suv", "ev", "pickup", "van"],
-	["sedan", "crossover", "crossover", "suv", "suv", "ev", "ev", "pickup", "muscle"],
-	["luxury", "luxury", "suv", "ev", "sports"],
-	["luxury", "sports", "super", "luxury", "ev"],
+	["compact", "compact", "sedan", "pickup", "van", "scooter", "motorbike", "tuk_tuk", "cargo_trike", "bicycle",
+		"bicycle"],
+	["compact", "compact", "sedan", "sedan", "pickup", "van", "motorbike", "tuk_tuk", "muv", "bicycle"],
+	["sedan", "sedan", "compact", "crossover", "crossover", "suv", "ev", "pickup", "van", "muv", "muv", "bicycle"],
+	["sedan", "crossover", "crossover", "suv", "suv", "ev", "ev", "pickup", "muscle", "muv", "roadster"],
+	["luxury", "luxury", "suv", "ev", "sports", "roadster", "cabriolet"],
+	["luxury", "sports", "super", "luxury", "ev", "cabriolet", "roadster", "cabriolet"],
 ]
 const PAINTS := [
 	Color(0.82, 0.16, 0.16), Color(0.15, 0.35, 0.75), Color(0.95, 0.95, 0.95), Color(0.15, 0.15, 0.17),
@@ -161,6 +184,14 @@ const PALETTES := {
 		Color(0.92, 0.92, 0.9)],
 	"semi": [Color(0.8, 0.12, 0.12), Color(0.12, 0.25, 0.6), Color(0.95, 0.95, 0.95), Color(0.1, 0.1, 0.11),
 		Color(0.2, 0.45, 0.28), Color(0.95, 0.55, 0.15)],
+	"roadster": [Color(0.78, 0.1, 0.1), Color(0.1, 0.3, 0.2), Color(0.75, 0.77, 0.8), Color(0.95, 0.95, 0.93),
+		Color(0.98, 0.78, 0.15), Color(0.12, 0.3, 0.7), Color(0.08, 0.08, 0.09)],
+	"cabriolet": [Color(0.93, 0.92, 0.88), Color(0.78, 0.7, 0.55), Color(0.08, 0.12, 0.28), Color(0.4, 0.07, 0.12),
+		Color(0.66, 0.68, 0.7), Color(0.05, 0.05, 0.06), Color(0.1, 0.38, 0.4)],
+	"bicycle": [Color(0.1, 0.55, 0.55), Color(0.82, 0.12, 0.12), Color(0.95, 0.95, 0.95), Color(0.1, 0.1, 0.11),
+		Color(0.55, 0.85, 0.72), Color(0.98, 0.5, 0.1), Color(0.15, 0.35, 0.8)],
+	"muv": [Color(0.94, 0.94, 0.95), Color(0.66, 0.68, 0.7), Color(0.38, 0.4, 0.42), Color(0.1, 0.16, 0.32),
+		Color(0.42, 0.1, 0.12), Color(0.5, 0.38, 0.26), Color(0.08, 0.08, 0.09)],
 }
 ## Glass: a dark blue-grey, light enough that black paint still shows its
 ## window line; the interior is painted on it (dash, wheel, headrests).
@@ -250,8 +281,146 @@ static func build(mb, kind: String, paint: Color, gloss = null) -> void:
 			_tipper(mb, g, paint)
 		"semi":
 			_semi(mb, g, paint)
+		"roadster":
+			_roadster(mb, g, paint)
+		"cabriolet":
+			_cabriolet(mb, g, paint)
+		"muv":
+			_muv(mb, g, paint)
+		"bicycle":
+			_bicycle(mb, g, paint)
 		_:
 			_sedan(mb, g, paint)
+
+
+# --- Convertibles and the bicycle ----------------------------------------------
+
+## Hull stations [z, half width, sill y, top y] of the two convertibles (the
+## soft top is built on them too).
+const ROADSTER_ST := [[-2.0, 0.84, 0.2, 0.52], [-1.8, 0.92, 0.16, 0.62], [-1.25, 0.93, 0.16, 0.68], [-0.35, 0.92, 0.17, 0.75],
+	[0.75, 0.92, 0.17, 0.76], [1.3, 0.93, 0.17, 0.78], [1.75, 0.92, 0.19, 0.78], [2.0, 0.86, 0.24, 0.64]]
+const CABRIOLET_ST := [[-2.4, 0.9, 0.24, 0.72], [-2.22, 0.97, 0.21, 0.86], [-0.75, 0.98, 0.21, 0.94], [1.15, 0.98, 0.21, 0.96],
+	[1.6, 0.98, 0.22, 0.97], [2.2, 0.97, 0.24, 0.97], [2.4, 0.91, 0.3, 0.84]]
+
+## Where a seated person's node goes in an open car (car space; their hips
+## sit 0.5 m above it at look height 1, Rig.SIT_LIFT). Seat 0 is the
+## driver's, on the left.
+const SEATS := {
+	"roadster": [Vector3(-0.36, -0.17, 0.3), Vector3(0.36, -0.17, 0.3)],
+	"cabriolet": [Vector3(-0.4, -0.03, 0.0), Vector3(0.4, -0.03, 0.0), Vector3(-0.38, 0.0, 0.82), Vector3(0.38, 0.0, 0.82)],
+}
+
+## The open cars' cockpits and soft tops. cockpit: the open z range of the
+## hull; floor: the carpet's height; screen: the windscreen [base z, depth,
+## top half width, top y]; raised: the top's stations [z, half width, y]
+## from the windscreen header back to the deck (the last sits on the hull);
+## windows: which of its segments have side glass; stack: the folded top
+## [z, y, half width, radius] behind the seats.
+const TOPS := {
+	"roadster": {"st": ROADSTER_ST, "fabric": Color(0.07, 0.07, 0.08), "cockpit": Vector2(-0.35, 0.75), "floor": 0.18,
+		"screen": [-0.55, 0.32, 0.64, 1.04],
+		"raised": [[-0.23, 0.64, 1.04], [0.2, 0.66, 1.1], [0.45, 0.65, 1.09], [0.7, 0.6, 1.0], [0.92, 0.0, 0.0]],
+		"windows": [true, true, false, false], "stack": [0.88, 0.85, 0.66, 0.095]},
+	"cabriolet": {"st": CABRIOLET_ST, "fabric": Color(0.12, 0.11, 0.13), "cockpit": Vector2(-0.75, 1.15), "floor": 0.3,
+		"screen": [-0.9, 0.36, 0.7, 1.3],
+		"raised": [[-0.54, 0.7, 1.3], [0.2, 0.72, 1.37], [0.3, 0.72, 1.37], [0.9, 0.71, 1.35], [1.2, 0.67, 1.22], [1.55, 0.0, 0.0]],
+		"windows": [true, false, true, false, false], "stack": [1.27, 1.05, 0.72, 0.09]},
+}
+
+
+## Seat `i` of an open car (see SEATS); Vector3.ZERO past the last.
+static func seat(kind: String, i: int) -> Vector3:
+	var list: Array = SEATS.get(kind, [])
+	return list[i] if i < list.size() else Vector3.ZERO
+
+
+static func seat_count(kind: String) -> int:
+	return SEATS.get(kind, []).size()
+
+
+## Whether a convertible leaves the kerb or joins traffic with its roof up:
+## 60% have it down by day in the dry, 85% up at night or in the wet.
+static func roof_up_at_spawn(rng: RandomNumberGenerator, night: bool, wet: bool) -> bool:
+	return rng.randf() < (0.85 if night or wet else 0.4)
+
+
+## The point the top folds about: the raised top's rear edge on the deck,
+## or the folded stack's base.
+static func top_pivot(kind: String, up: bool) -> Vector3:
+	var t: Dictionary = TOPS[kind]
+	if up:
+		var z: float = t.raised[-1][0]
+		return Vector3(0, _at(t.st, z, 3), z)
+	var k: Array = t.stack
+	return Vector3(0, k[1] - k[3], k[0])
+
+
+## The soft top of open car `kind`: raised (fabric over bows, side glass
+## framed in fabric, a quarter light by each windscreen pillar, the rear
+## window) or folded into a strapped stack behind the seats. Fabric goes on
+## `mb`, glass on `gloss` (on `mb` without it).
+static func build_top(mb, kind: String, up: bool, gloss = null) -> void:
+	var g = gloss if gloss != null else mb
+	var t: Dictionary = TOPS[kind]
+	var st: Array = t.st
+	var fabric: Color = t.fabric
+	if not up:
+		var k: Array = t.stack
+		var hw: float = k[2]
+		var r: float = k[3]
+		mb.limb(Vector3(-hw, k[1], k[0]), Vector3(hw, k[1], k[0]), r, r, fabric, 8)
+		mb.box(Vector3(0, k[1] - r * 0.5, k[0] + r * 0.35), Vector3(hw * 2.0 - 0.08, r * 1.1, r * 2.0), fabric.lightened(0.05))
+		for x in [-hw * 0.55, hw * 0.55]:
+			mb.limb(Vector3(x - 0.025, k[1], k[0]), Vector3(x + 0.025, k[1], k[0]), r + 0.008, r + 0.008, TRIM, 8, false)
+		return
+	var rows: Array = t.raised
+	var zs := []
+	var secs := []
+	for i in rows.size():
+		var z: float = rows[i][0]
+		var wb := _at(st, z, 1) * 0.8
+		var yb := _at(st, z, 3)
+		var wr: float = rows[i][1]
+		var yr: float = rows[i][2]
+		if i == rows.size() - 1:
+			wr = wb
+			yr = yb
+		zs.append(z)
+		secs.append([Vector2(-wb, yb), Vector2(-wr, yr), Vector2(wr, yr), Vector2(wb, yb)])
+	_loft(zs, secs, func(_s: int, _e: int) -> Array: return [mb, fabric])
+	# Side glass inset in the fabric, the bows across, the rear window.
+	var windows: Array = t.windows
+	for s in windows.size():
+		if not windows[s]:
+			continue
+		for e in [0, 2]:
+			var a: Array = secs[s]
+			var b: Array = secs[s + 1]
+			var lo := 0 if e == 0 else 3
+			var hi := 1 if e == 0 else 2
+			var gq := _gq([Vector3(a[lo].x, a[lo].y, zs[s]), Vector3(a[hi].x, a[hi].y, zs[s]),
+				Vector3(b[hi].x, b[hi].y, zs[s + 1]), Vector3(b[lo].x, b[lo].y, zs[s + 1])])
+			_gq_decal(g, gq, 0.1, 0.84, 0.05, 0.95, GLASS)
+	for i in range(1, rows.size() - 1):
+		_strap(mb, secs[i], zs[i] - 0.02, 0.04, fabric.lightened(0.14))
+	var back := _glass_quad([zs, secs], rows.size() - 2)
+	_gq_decal(g, back, 0.2, 0.8, 0.14, 0.72, GLASS)
+	_gq_decal(g, back, 0.3, 0.37, 0.2, 0.62, SHEEN, 0.007)
+	# Quarter lights between the windscreen pillars and the top's sides.
+	var screen: Array = t.screen
+	var z0: float = screen[0]
+	var zh: float = zs[0]
+	for s in [-1.0, 1.0]:
+		_face(g, [Vector3(s * _at(st, z0, 1) * 0.8, _at(st, z0, 3), z0), Vector3(s * absf(secs[0][0].x), secs[0][0].y, zh),
+			Vector3(s * float(screen[2]), screen[3], zh)], Vector3(s, 0.3, 0), GLASS)
+
+
+## Turns the crank of a pedal bike `kind` by `speed` m/s over `delta` s
+## (Rig.PEDAL_RATE); -1 (no pedalling) for anything else.
+static func pedal_angle(kind: String, angle: float, speed: float, delta: float) -> float:
+	if not KINDS.get(kind, {}).get("pedal", false):
+		return -1.0
+	return fposmod(maxf(angle, 0.0) + maxf(speed, 0.0) * Rig.PEDAL_RATE * delta, TAU)
 
 
 # --- Kinds -------------------------------------------------------------------
@@ -1171,6 +1340,166 @@ static func _semi(mb, g, paint: Color) -> void:
 			_truck_wheel(mb, s * 1.26, z, 0.52, 0.6, true)
 
 
+## Two-seat roadster: long hood, a low raked windscreen in a chrome frame,
+## an open cockpit (leather seats with headrests, padded door tops, dash,
+## wheel, console) and a short deck; tan leather on red paint, oxblood on
+## the rest. The soft top is separate (build_top).
+static func _roadster(mb, g, paint: Color) -> void:
+	var st: Array = ROADSTER_ST
+	var t: Dictionary = TOPS.roadster
+	var cockpit: Vector2 = t.cockpit
+	var leather := Color(0.62, 0.48, 0.33) if paint.r > 0.6 and paint.g < 0.3 else Color(0.42, 0.12, 0.1)
+	_hull(mb, g, st, paint, cockpit)
+	_tub(mb, st, cockpit.x, cockpit.y, t.floor, leather, SEATS.roadster)
+	_windscreen(mb, g, st, t.screen, RIM)
+	_steering(mb, SEATS.roadster[0])
+	_wheels(mb, st, [-1.25, 1.3], 0.33, 0.27)
+	_lamps(mb, st, true, true, 0.3)
+	_seams(mb, st, paint, -1.78, 1.2, [-0.32, 0.62], [-0.48, 0.48], -0.58)
+	_mirrors(mb, st, -0.45, 0.03, Vector3(0.16, 0.1, 0.11), g, paint)
+	_side_decal(mb, st, -0.78, -0.52, 0.42, 0.5, TRIM) # wing vents
+	for x in [-0.42, 0.42]:
+		_disc(mb, Vector3(x, 0.32, 2.012), 0.045, Vector3.BACK, RIM, 8) # twin exhausts
+		_disc(mb, Vector3(x, 0.32, 2.016), 0.03, Vector3.BACK, TRIM, 8)
+
+
+## Four-seat luxury cabriolet: long hood with the upright chrome grille and
+## stand-up emblem, painted windscreen pillars, chrome belt and sill, an
+## open cabin with four leather seats and the soft top stowed behind them
+## (build_top); tan leather on dark paints, cognac on light ones.
+static func _cabriolet(mb, g, paint: Color) -> void:
+	var st: Array = CABRIOLET_ST
+	var t: Dictionary = TOPS.cabriolet
+	var cockpit: Vector2 = t.cockpit
+	var leather := Color(0.66, 0.52, 0.36) if paint.get_luminance() < 0.3 else Color(0.45, 0.26, 0.15)
+	_hull(mb, g, st, paint, cockpit)
+	_tub(mb, st, cockpit.x, cockpit.y, t.floor, leather, SEATS.cabriolet)
+	_windscreen(mb, g, st, t.screen, paint, g)
+	_steering(mb, SEATS.cabriolet[0])
+	_wheels(mb, st, [-1.5, 1.58], 0.36, 0.27)
+	_lamps(mb, st)
+	_seams(mb, st, paint, -2.2, 1.5, [-0.72, 0.5], [-0.45, 0.45], -0.92)
+	_side_decal(mb, st, -0.7, 1.45, 0.86, 0.885, RIM, 0.01) # chrome belt line
+	_side_decal(mb, st, -1.08, 1.16, 0.41, 0.44, RIM, 0.01) # chrome sill
+	_mirrors(mb, st, -0.98, 0.02, Vector3(0.18, 0.11, 0.12), g, paint)
+	_end_decal(mb, 2.4, 1.0, -0.4, 0.4, 0.62, 0.64, RIM, 0.01) # chrome strip between the tail lamps
+	# Upright chrome grille with black slats, stand-up emblem.
+	_end_decal(mb, -2.4, -1.0, -0.28, 0.28, 0.43, 0.64, RIM, 0.008)
+	for k in 6:
+		var x := -0.225 + k * 0.09
+		_end_decal(mb, -2.4, -1.0, x - 0.018, x + 0.018, 0.46, 0.61, TRIM, 0.012)
+	mb.box(Vector3(0, 0.81, -2.32), Vector3(0.05, 0.08, 0.05), RIM)
+
+
+## Seven-seat people mover (MUV): short sloping hood, a tall glass cabin
+## with a long roof, a sliding rear door on its rail, black B and C
+## pillars, the third row's glass, an upright tailgate under a roof
+## spoiler with the brake lamp, silver roof rails and a sunroof.
+static func _muv(mb, g, paint: Color) -> void:
+	var st := [[-2.3, 0.88, 0.28, 0.72], [-2.1, 0.94, 0.25, 0.86], [-1.2, 0.95, 0.25, 0.98], [2.05, 0.95, 0.25, 1.0],
+		[2.25, 0.93, 0.28, 1.0], [2.3, 0.9, 0.32, 0.95]]
+	var cab := [[-1.2, 0, 0], [-0.45, 0.8, 1.68], [0.2, 0.8, 1.72], [0.32, 0.8, 1.72], [1.1, 0.8, 1.72], [1.24, 0.8, 1.72],
+		[1.98, 0.78, 1.69], [2.25, 0, 0]]
+	_hull(mb, g, st, paint, Vector2(-1.2, 2.25))
+	var c := _cabin(g, st, cab, [[GLASS, GLASS], [paint, GLASS], [paint, TRIM], [paint, GLASS], [paint, TRIM], [paint, GLASS],
+		[GLASS, paint]])
+	_interior(g, c, 0, 6)
+	_glass_sheen(g, c, 0)
+	_glass_sheen(g, c, 6)
+	var roof_st := []
+	for i in range(1, cab.size() - 1):
+		roof_st.append([cab[i][0], cab[i][1], 0.0, cab[i][2]])
+	_top_decal(g, roof_st, -0.36, 0.36, -0.25, 0.2, GLASS, 0.006) # sunroof
+	_top_decal(g, roof_st, -0.1, 0.0, -0.22, 0.17, SHEEN, 0.01)
+	for s in [-1.0, 1.0]:
+		mb.limb(Vector3(s * 0.66, 1.745, -0.3), Vector3(s * 0.66, 1.745, 1.86), 0.022, 0.022, RIM, 4)
+		for z in [-0.3, 1.86]:
+			mb.box(Vector3(s * 0.66, 1.72, z), Vector3(0.06, 0.05, 0.12), TRIM)
+	_wheels(mb, st, [-1.45, 1.45], 0.35)
+	_lamps(mb, st, true, true, 0.3)
+	_seams(mb, st, paint, -2.12, -INF, [-1.15, 0.26, 1.18])
+	_side_decal(mb, st, 1.2, 2.02, 0.93, 0.95, TRIM) # sliding door rail
+	_side_decal(mb, st, -1.0, 1.0, 0.55, 0.6, TRIM) # rubbing strip
+	_mirrors(mb, st, -1.1, 0.03, Vector3(0.2, 0.13, 0.13), g, paint)
+	g.box(Vector3(0, 1.71, 1.99), Vector3(1.3, 0.04, 0.2), paint) # roof spoiler
+	_end_decal(mb, 2.09, 1.0, -0.2, 0.2, 1.665, 1.69, TAIL, 0.0) # high brake lamp
+	_glass_decal(g, c, 6, 0.48, 0.52, 0.08, 0.7, TRIM) # rear wiper
+
+
+## City bicycle: a diamond frame in paint with swept-back bars, spoked
+## wheels under painted mudguards, a sprung saddle, the chainring and
+## cranks (Rig.PEDAL_CRANK places the axle, so the rider's feet find the
+## pedals), a rear rack with a reflector, a lamp and a kickstand. The rider
+## sits on it (rider: true) and pedals (pedal: true).
+static func _bicycle(mb, g, paint: Color) -> void:
+	var r := 0.33
+	var back := Vector3(0, r, 0.36)
+	var front := Vector3(0, r, -0.66)
+	var bb := Vector3(0, Rig.PEDAL_CRANK.y, -Rig.PEDAL_CRANK.x)
+	var post := Vector3(0, 0.8, 0.04) # seat cluster
+	var head_lo := Vector3(0, 0.64, -0.55)
+	var head_hi := Vector3(0, 0.84, -0.49)
+	_bike_wheel(mb, back, r)
+	_bike_wheel(mb, front, r)
+	# Frame: down, seat and top tubes, the head tube; chain and seat stays
+	# and the fork blades on both sides.
+	g.limb(bb, head_lo + Vector3(0, 0.03, 0.01), 0.024, 0.022, paint, 6, false)
+	g.limb(bb, post, 0.02, 0.019, paint, 6, false)
+	g.limb(post, head_hi - Vector3(0, 0.04, 0.01), 0.019, 0.019, paint, 6, false)
+	g.limb(head_lo, head_hi, 0.026, 0.026, paint, 6)
+	for s in [-1.0, 1.0]:
+		var hub := back + Vector3(s * 0.06, 0, 0)
+		g.limb(bb + Vector3(s * 0.03, 0, 0.02), hub, 0.011, 0.009, paint, 4, false)
+		g.limb(post + Vector3(s * 0.025, -0.03, 0), hub, 0.01, 0.009, paint, 4, false)
+		g.limb(head_lo + Vector3(s * 0.035, 0, 0), front + Vector3(s * 0.05, 0, 0), 0.013, 0.01, paint, 4, false)
+	# Mudguards over the wheels.
+	for w in [[back, -0.1, 2.3], [front, 0.75, 2.9]]:
+		var c: Vector3 = w[0]
+		for k in 6:
+			var a0: float = lerpf(w[1], w[2], k / 6.0)
+			var a1: float = lerpf(w[1], w[2], (k + 1) / 6.0)
+			var d0 := Vector3(0, sin(a0), cos(a0)) * (r + 0.03)
+			var d1 := Vector3(0, sin(a1), cos(a1)) * (r + 0.03)
+			_face(g, [c + d0 + Vector3(-0.032, 0, 0), c + d0 + Vector3(0.032, 0, 0), c + d1 + Vector3(0.032, 0, 0),
+				c + d1 + Vector3(-0.032, 0, 0)], (d0 + d1).normalized(), paint)
+	# Seat post on springs, the saddle.
+	var saddle := Color(0.1, 0.09, 0.09)
+	mb.limb(post, post + Vector3(0, 0.07, 0.03), 0.012, 0.012, RIM, 4, false)
+	for x in [-0.05, 0.05]:
+		mb.limb(Vector3(x, 0.86, 0.12), Vector3(x, 0.89, 0.12), 0.012, 0.012, RIM, 4, false)
+	mb.box(Vector3(0, 0.905, 0.09), Vector3(0.17, 0.05, 0.13), saddle)
+	mb.box(Vector3(0, 0.9, -0.03), Vector3(0.07, 0.04, 0.15), saddle)
+	# Stem, bars swept back to the grips, brake levers, the lamp.
+	var bar_y := 1.0
+	mb.limb(head_hi, Vector3(0, bar_y, -0.5), 0.014, 0.014, RIM, 4, false)
+	mb.limb(Vector3(-0.12, bar_y, -0.5), Vector3(0.12, bar_y, -0.5), 0.012, 0.012, RIM, 4, false)
+	for s in [-1.0, 1.0]:
+		var bend := Vector3(s * 0.22, bar_y + 0.005, -0.42)
+		mb.limb(Vector3(s * 0.12, bar_y, -0.5), bend, 0.012, 0.012, RIM, 4, false)
+		mb.limb(bend, Vector3(s * 0.28, bar_y + 0.01, -0.37), 0.017, 0.017, TRIM, 4)
+		mb.limb(Vector3(s * 0.19, bar_y, -0.45), Vector3(s * 0.25, bar_y - 0.015, -0.49), 0.006, 0.006, TRIM, 3, false)
+	mb.box(Vector3(0, 0.68, -0.61), Vector3(0.07, 0.07, 0.05), HEAD)
+	# Chainring, cranks (the right one forward) and pedals, the chain and
+	# the rear sprocket.
+	_disc(mb, bb + Vector3(0.07, 0, 0), 0.1, Vector3.RIGHT, Color(0.3, 0.31, 0.33), 10)
+	_disc(mb, bb + Vector3(0.074, 0, 0), 0.035, Vector3.RIGHT, RIM, 6)
+	for s in [-1.0, 1.0]:
+		var foot := bb + Vector3(s * 0.085, 0, -s * Rig.PEDAL_ARM)
+		mb.limb(bb + Vector3(s * 0.085, 0, 0), foot, 0.015, 0.012, RIM, 4)
+		mb.box(foot + Vector3(s * 0.05, 0, 0), Vector3(0.09, 0.025, 0.06), TRIM)
+	for dy in [0.1, -0.1]:
+		mb.limb(bb + Vector3(0.07, dy, 0), back + Vector3(0.07, dy * 0.45, 0), 0.006, 0.006, SPOKE_GAP, 3, false)
+	_disc(mb, back + Vector3(0.075, 0, 0), 0.05, Vector3.RIGHT, Color(0.3, 0.31, 0.33), 8)
+	# Rear rack on its stays with the reflector; the kickstand.
+	var rack := Color(0.2, 0.2, 0.22)
+	mb.box(Vector3(0, 0.72, 0.5), Vector3(0.14, 0.02, 0.34), rack)
+	for s in [-1.0, 1.0]:
+		mb.limb(Vector3(s * 0.065, 0.72, 0.64), back + Vector3(s * 0.065, 0, 0.02), 0.008, 0.008, rack, 3, false)
+		mb.limb(Vector3(s * 0.06, 0.72, 0.36), post + Vector3(s * 0.03, -0.05, 0.02), 0.007, 0.007, rack, 3, false)
+	mb.box(Vector3(0, 0.69, 0.675), Vector3(0.09, 0.04, 0.02), TAIL)
+	mb.limb(bb + Vector3(-0.04, 0, 0.14), Vector3(-0.13, 0.012, 0.3), 0.009, 0.009, TRIM, 3)
+
+
 # --- Body building blocks ------------------------------------------------------
 
 ## Panoramic glass roof on about half the paints (fixed per colour).
@@ -1608,3 +1937,156 @@ static func _mirrors(mb, st: Array, z: float, dy := 0.02, size := Vector3(0.18, 
 		_face(mb, [Vector3(c.x - size.x * 0.4, c.y - size.y * 0.36, zb), Vector3(c.x + size.x * 0.4, c.y - size.y * 0.36, zb),
 			Vector3(c.x + size.x * 0.4, c.y + size.y * 0.36, zb), Vector3(c.x - size.x * 0.4, c.y + size.y * 0.36, zb)],
 			Vector3.BACK, SHEEN)
+
+
+## The open cockpit of a convertible from z0 (behind the windscreen) to z1
+## at the hull's rim (x = ±0.8 of the half width): the carpet, the inner
+## door panels (leather door cards over the dark lower part) with a padded
+## roll along their tops and across the back, both bulkheads, the dash with
+## its leather band, vents and the driver's gauges, the centre console with
+## the gear lever, and the seats at `seats` (see SEATS).
+static func _tub(mb, st: Array, z0: float, z1: float, floor_y: float, leather: Color, seats: Array) -> void:
+	var dark := Color(0.09, 0.09, 0.1)
+	var card := leather.darkened(0.3)
+	var w0 := _at(st, z0, 1) * 0.8
+	var w1 := _at(st, z1, 1) * 0.8
+	var y0 := _at(st, z0, 3)
+	var y1 := _at(st, z1, 3)
+	mb.box(Vector3(0, floor_y, (z0 + z1) * 0.5), Vector3(2.0 * maxf(w0, w1), 0.02, z1 - z0), Color(0.07, 0.065, 0.06))
+	var cuts := [z0]
+	for row in st:
+		if row[0] > z0 and row[0] < z1:
+			cuts.append(row[0])
+	cuts.append(z1)
+	var dz := 0.2 # dash depth
+	for s in [-1.0, 1.0]:
+		var hint := Vector3(-s, 0, 0)
+		for i in cuts.size() - 1:
+			var za: float = cuts[i]
+			var zb: float = cuts[i + 1]
+			var xa: float = s * _at(st, za, 1) * 0.8
+			var xb: float = s * _at(st, zb, 1) * 0.8
+			var ya := _at(st, za, 3)
+			var yb := _at(st, zb, 3)
+			_face(mb, [Vector3(xa, floor_y, za), Vector3(xb, floor_y, zb), Vector3(xb, yb - 0.2, zb), Vector3(xa, ya - 0.2, za)],
+				hint, INTERIOR)
+			_face(mb, [Vector3(xa, ya - 0.2, za), Vector3(xb, yb - 0.2, zb), Vector3(xb, yb, zb), Vector3(xa, ya, za)], hint, card)
+			var ra := Vector3(xa - s * 0.02, ya + 0.004, maxf(za, z0 + dz))
+			var rb := Vector3(xb - s * 0.02, yb + 0.004, zb)
+			mb.limb(ra, rb, 0.028, 0.028, card.lightened(0.12), 5, false)
+	_face(mb, [Vector3(-w0, floor_y, z0), Vector3(w0, floor_y, z0), Vector3(w0, y0, z0), Vector3(-w0, y0, z0)], Vector3.BACK, INTERIOR)
+	_face(mb, [Vector3(-w1, floor_y, z1), Vector3(w1, floor_y, z1), Vector3(w1, y1, z1), Vector3(-w1, y1, z1)], Vector3.FORWARD, card)
+	mb.limb(Vector3(-w1 + 0.02, y1 + 0.004, z1 - 0.025), Vector3(w1 - 0.02, y1 + 0.004, z1 - 0.025), 0.03, 0.03,
+		card.lightened(0.12), 5, false)
+	# Dash: its top just under the rim, the leather band, two vents and the
+	# gauges in a hood before the driver.
+	var top := y0 - 0.01
+	var back := z0 + dz
+	mb.box(Vector3(0, (floor_y + top) * 0.5, z0 + dz * 0.5), Vector3(w0 * 2.0 - 0.01, top - floor_y, dz), dark)
+	_end_decal(mb, back, 1.0, -w0 + 0.02, w0 - 0.02, top - 0.1, top - 0.035, leather)
+	for x in [-0.11, 0.11]:
+		_end_decal(mb, back, 1.0, x - 0.06, x + 0.06, top - 0.22, top - 0.14, RIM.darkened(0.35))
+	var dx: float = seats[0].x
+	mb.box(Vector3(dx, top + 0.02, back - 0.06), Vector3(0.34, 0.11, 0.13), dark.lightened(0.04))
+	for x in [dx - 0.075, dx + 0.075]:
+		_disc(mb, Vector3(x, top + 0.0, back + 0.008), 0.045, Vector3.BACK, Color(0.62, 0.64, 0.66), 8)
+	# Console from the dash to the front seats, the gear lever.
+	var zf: float = seats[0].z + 0.05
+	mb.box(Vector3(0, floor_y + 0.1, (back + zf) * 0.5), Vector3(0.2, 0.2, zf - back), dark)
+	var zg := back + 0.12
+	mb.limb(Vector3(0, floor_y + 0.2, zg), Vector3(0, floor_y + 0.31, zg + 0.04), 0.012, 0.012, RIM, 4, false)
+	mb.box(Vector3(0, floor_y + 0.32, zg + 0.045), Vector3(0.04, 0.04, 0.05), dark)
+	for p in seats:
+		_seat(mb, p, floor_y, leather)
+
+
+## A bucket seat for the person whose node sits at `node` (hips 0.5 m above
+## it, see SEATS): the cushion, the backrest reclined with a lighter
+## stitched panel, the headrest on two posts.
+static func _seat(mb, node: Vector3, floor_y: float, leather: Color) -> void:
+	var hip := node + Vector3(0, 0.5, 0)
+	var top := hip.y - 0.07
+	var bottom := minf(floor_y, top - 0.11)
+	mb.box(Vector3(hip.x, (top + bottom) * 0.5, hip.z - 0.1), Vector3(0.48, top - bottom, 0.44), leather)
+	var keep: Transform3D = mb.xform
+	mb.xform = keep * Transform3D(Basis(Vector3.RIGHT, 0.2), Vector3(hip.x, top, hip.z + 0.17))
+	mb.box(Vector3(0, 0.27, 0), Vector3(0.48, 0.54, 0.12), leather)
+	_face(mb, [Vector3(-0.16, 0.08, -0.062), Vector3(0.16, 0.08, -0.062), Vector3(0.16, 0.46, -0.062), Vector3(-0.16, 0.46, -0.062)],
+		Vector3.FORWARD, leather.lightened(0.12))
+	for x in [-0.08, 0.08]:
+		mb.limb(Vector3(x, 0.54, 0), Vector3(x, 0.6, 0), 0.01, 0.01, RIM, 4, false)
+	mb.box(Vector3(0, 0.67, 0), Vector3(0.28, 0.16, 0.11), leather)
+	mb.xform = keep
+
+
+## The windscreen of an open car on the hull's rim: glass (on `g`) with
+## the dash seen through its top and the sheen, a rear-view mirror, and the
+## frame (pillars and header) in `frame` on `shell` (`mb` when null).
+static func _windscreen(mb, g, st: Array, screen: Array, frame: Color, shell = null) -> void:
+	var z0: float = screen[0]
+	var z1: float = z0 + float(screen[1])
+	var wt: float = screen[2]
+	var yt: float = screen[3]
+	var wb := _at(st, z0, 1) * 0.8
+	var yb := _at(st, z0, 3)
+	var gq := _gq([Vector3(-wb, yb, z0), Vector3(wb, yb, z0), Vector3(wt, yt, z1), Vector3(-wt, yt, z1)])
+	_face(g, gq[0], gq[1], GLASS)
+	_gq_decal(g, gq, 0.03, 0.97, 0.55, 0.97, INTERIOR)
+	_sheen(g, gq)
+	var f = shell if shell != null else mb
+	for s in [-1.0, 1.0]:
+		f.limb(Vector3(s * wb, yb, z0), Vector3(s * wt, yt, z1), 0.025, 0.022, frame, 4)
+	f.limb(Vector3(-wt - 0.02, yt, z1), Vector3(wt + 0.02, yt, z1), 0.024, 0.024, frame, 4)
+	mb.box(Vector3(0, yt - 0.06, z1 + 0.03), Vector3(0.2, 0.06, 0.03), TRIM)
+
+
+## A steering wheel before the seat at `node` (see SEATS), tilted towards
+## the driver, on its column into the dash.
+static func _steering(mb, node: Vector3) -> void:
+	var col := Color(0.12, 0.12, 0.13)
+	var c := node + Vector3(0, 0.81, -0.44)
+	var n := Vector3(0, 0.62, 0.78).normalized()
+	var u := Vector3.RIGHT
+	var v := n.cross(u)
+	for k in 10:
+		var a0 := TAU * k / 10.0
+		var a1 := TAU * (k + 1) / 10.0
+		var d0 := u * cos(a0) + v * sin(a0)
+		var d1 := u * cos(a1) + v * sin(a1)
+		_face(mb, [c + d0 * 0.17, c + d1 * 0.17, c + d1 * 0.14, c + d0 * 0.14], n, col)
+	var lift := n * 0.003
+	_face(mb, [c - u * 0.145 - v * 0.03 + lift, c + u * 0.145 - v * 0.03 + lift, c + u * 0.145 + v * 0.01 + lift,
+		c - u * 0.145 + v * 0.01 + lift], n, col)
+	_face(mb, [c - u * 0.025 + lift, c + u * 0.025 + lift, c + u * 0.025 - v * 0.145 + lift, c - u * 0.025 - v * 0.145 + lift], n, col)
+	_disc(mb, c + n * 0.008, 0.05, n, col.lightened(0.12), 6)
+	mb.limb(c - n * 0.01, c - n * 0.3, 0.025, 0.03, col, 4)
+
+
+## A spoked bicycle wheel round `hub` (radius r): the tyre and the rim on
+## both faces with the tread between, eight spokes a side and the hub.
+## The tyre touches y = 0 straight under the hub.
+static func _bike_wheel(mb, hub: Vector3, r: float) -> void:
+	var n := 16
+	for side in [-1.0, 1.0]:
+		var out := Vector3(side, 0, 0)
+		var c := hub + out * 0.018
+		for i in n:
+			var a0 := TAU * i / n
+			var a1 := TAU * (i + 1) / n
+			var d0 := Vector3(0, sin(a0), cos(a0))
+			var d1 := Vector3(0, sin(a1), cos(a1))
+			_face(mb, [c + d0 * r, c + d1 * r, c + d1 * r * 0.88, c + d0 * r * 0.88], out, TYRE)
+			_face(mb, [c + d0 * r * 0.88, c + d1 * r * 0.88, c + d1 * r * 0.81, c + d0 * r * 0.81], out, RIM)
+		for k in 8:
+			var a: float = TAU * k / 8.0 + side * 0.2
+			var d := Vector3(0, sin(a), cos(a))
+			var t := Vector3(0, cos(a), -sin(a)) * 0.004
+			_face(mb, [c + d * 0.03 - t, c + d * 0.03 + t, c + d * r * 0.82 + t, c + d * r * 0.82 - t], out, STEEL)
+		_disc(mb, c + out * 0.004, 0.032, out, STEEL.darkened(0.25), 6)
+	for i in n:
+		var a0 := TAU * i / n
+		var a1 := TAU * (i + 1) / n
+		var d0 := Vector3(0, sin(a0), cos(a0))
+		var d1 := Vector3(0, sin(a1), cos(a1))
+		_face(mb, [hub + Vector3(-0.018, 0, 0) + d0 * r, hub + Vector3(0.018, 0, 0) + d0 * r, hub + Vector3(0.018, 0, 0) + d1 * r,
+			hub + Vector3(-0.018, 0, 0) + d1 * r], (d0 + d1).normalized(), TYRE)
