@@ -9,6 +9,11 @@ Docs only; no game code. Files: `ACTIVITY_IDEAS.md`, `STOCK_MARKET_DESIGN.md`,
   - GTA Online and GTA VI pass: `ACTIVITY_IDEAS.md` 4.11, sources A14-A22.
   - Stock market design and simulation: written by an opus xhigh agent (hard design step, per
     CLAUDE.md); `ACTIVITY_IDEAS.md` 4.12 links to it.
+- Request 3 ("Check GTA 3, Watch Dogs, and Sleeping Dogs, and GTA Liberty City too"): 4.13,
+  sources A23-A28. "Liberty City" was read as LCS plus GTA IV with TLAD and TBoGT.
+- Request 4 ("specify all planned activities here, in different terrains, regions and places"):
+  `ACTIVITY_ATLAS.md`. It adds nothing new; places not fixed by the world docs are marked
+  *suggested*.
 
 ## Decisions
 - GTA V story-mode parity was already done in `ACTIVITY_ROADMAP.md` section 1, so 4.11 covers
@@ -19,6 +24,9 @@ Docs only; no game code. Files: `ACTIVITY_IDEAS.md`, `STOCK_MARKET_DESIGN.md`,
   long for the catalogue.
 - Exploit claims must be proven by a seeded simulation, not just asserted.
 
+- 4.13 keeps Slash TV only as a non-lethal studio show; privacy invasions are out
+  (voyeurism); alcohol in minigames is swapped for a soda dare until Sachin says otherwise.
+
 ## Traps
 - WebFetch can't reach the wikis; only WebSearch summaries work, so labels stay 2 or U.
 - The single save file `user://solvera_save.json` (mission_manager.gd `save_game`) is the
@@ -26,5 +34,7 @@ Docs only; no game code. Files: `ACTIVITY_IDEAS.md`, `STOCK_MARKET_DESIGN.md`,
 - "Canal Street" and other real New Orleans names must not be used as placeholders.
 
 ## Open
+- Pending: section 5 rows N15-N20 and decisions 7-9 (stock market, laundering, alcohol),
+  after the stock-market agent returns; then the review gate.
 - Sachin's decisions: `ACTIVITY_IDEAS.md` section 7 and `STOCK_MARKET_DESIGN.md`'s open
   questions.
