@@ -31,18 +31,35 @@ const CORNER_RADIUS := 5.0
 ## Wheel steering (arrows, tilt): full lock aims this far (radians) off
 ## the nose, which _drive turns into full steer; seconds to reach it.
 const WHEEL_ANGLE := 0.5
-const STEER_IN := 0.22
+const STEER_IN := 0.16
 ## The tightest circle (m) any vehicle turns on, however slow.
 const MIN_RADIUS := 3.2
 ## Seconds the player's car takes to build up (or shed) a turn, as a real
 ## body takes a moment to start rotating: no snap into the bend.
-const YAW_IN := 0.12
+const YAW_IN := 0.09
 ## Game grip: each model's corner_g (its real tyres) times this. Real road
 ## grip on these short city blocks felt stiff (0.21, Sachin: "the handling
 ## is very stiff now, especially on corners"); the models keep their order.
 ## 18-wheelers keep their own grip: a quicker yaw swings the trailer's tail
 ## into walls (_grip).
 const CORNER_GRIP := 1.5
+## The player's car grips harder still (0.23, Sachin: "The handling is still
+## stiff around the corners"); traffic keeps CORNER_GRIP, so its junction
+## speeds do not change.
+const PLAYER_GRIP := 1.9
+## Brake-and-steer drift (0.23, "allow drifting with direction and brake
+## like other games offer"): brake while turning at least DRIFT_STEER of
+## full lock above DRIFT_MIN (m/s) and the tail steps out; the car keeps
+## sliding while the wheel stays turned, losing DRIFT_BLEED (m/s²), and
+## DRIFT_BRAKE more at full brake. It ends below DRIFT_END or when the
+## wheel straightens. Not on bicycles, motorbikes or trucks.
+const DRIFT_MIN := 9.0
+const DRIFT_STEER := 0.35
+const DRIFT_END := 5.0
+const DRIFT_BLEED := 2.5
+const DRIFT_BRAKE := 6.0
+## Seconds the tail takes to step out or grip again.
+const DRIFT_IN := 0.25
 ## How deep (m) another car must sink in before it is moved out
 ## (_handle_collisions), and the most it moves out each frame.
 const OVERLAP := 0.08
@@ -100,6 +117,10 @@ var _coast := false
 var _steer_in := 0.0
 ## The heading's turn rate (rad/s) of the player's car, eased by YAW_IN.
 var _yaw_rate := 0.0
+## In a brake-and-steer drift; `_slide` (0..1) is how far the tail is out.
+var drifting := false
+var _slide := 0.0
+var _drift_brake := 0.0
 
 var rng := RandomNumberGenerator.new()
 ## Bikes and scooters show their rider (see player.gd).
@@ -248,6 +269,9 @@ func _physics_process(delta: float) -> void:
 	braking = false
 	_wheel = false
 	_coast = false
+	_drift_brake = 0.0
+	if driver != Driver.PLAYER:
+		drifting = false
 	if not wrecked:
 		match driver:
 			Driver.PLAYER:
@@ -531,6 +555,8 @@ func _player_input() -> void:
 		_steer_in = move_toward(_steer_in, s, rate * get_physics_process_delta_time())
 		desired_dir = fwd.rotated(Vector3.UP, -_steer_in * WHEEL_ANGLE)
 		throttle = gas
+		if _drift_input(-_steer_in, brake):
+			return
 		if brake > 0.05:
 			_pedal_brake(brake, _steer_in)
 		else:
@@ -546,8 +572,31 @@ func _player_input() -> void:
 		throttle = maxf(throttle, gas)
 		if desired_dir == Vector3.ZERO:
 			desired_dir = fwd
+	var turn := 0.0
+	if desired_dir != Vector3.ZERO:
+		turn = clampf(fwd.signed_angle_to(desired_dir, Vector3.UP) * 2.0, -1.0, 1.0)
+	if _drift_input(turn, brake):
+		return
 	if brake > 0.05:
 		_pedal_brake(brake, 0.0)
+
+
+## Starts, holds or ends a brake-and-steer drift (DRIFT_MIN); `turn` is
+## the wheel, -1..1. True while drifting: the brake then scrubs speed in
+## the slide (_drive) instead of stopping the car.
+func _drift_input(turn: float, brake: float) -> bool:
+	var cls: String = _cls["class"]
+	if cls == "cycle" or cls == "two_wheeler" or cls == "truck":
+		drifting = false
+		return false
+	if not drifting and brake > 0.05 and speed > DRIFT_MIN and absf(turn) >= DRIFT_STEER:
+		drifting = true
+		GameLog.event("drift", {"car": kind, "speed": speed})
+	elif drifting and (speed < DRIFT_END or absf(turn) < 0.12):
+		drifting = false
+	if drifting:
+		_drift_brake = brake
+	return drifting
 
 
 ## The brake pedal: stops the car (still steering), then backs it up.
@@ -570,7 +619,9 @@ func _long_haul() -> bool:
 
 ## The game's grip multiplier on corner_g (CORNER_GRIP; none for 18-wheelers).
 func _grip() -> float:
-	return 1.0 if _long_haul() else CORNER_GRIP
+	if _long_haul():
+		return 1.0
+	return PLAYER_GRIP if driver == Driver.PLAYER else CORNER_GRIP
 
 
 func _traffic_ai() -> void:
@@ -684,6 +735,12 @@ func _drive(delta: float) -> void:
 	var yaw := 0.0
 	var pace := absf(speed)
 	var corner := 0.0 # how much the corner assist brakes, 0..1
+	var slide_to := 0.0
+	if drifting:
+		slide_to = 1.0 if _drift_brake > 0.05 else 0.75
+	_slide = move_toward(_slide, slide_to, delta / DRIFT_IN)
+	# How loose the rear is: the handbrake, or a drift.
+	var loose := maxf(_slide, 1.0 if handbrake else 0.0)
 	if desired_dir != Vector3.ZERO:
 		var angle := fwd.signed_angle_to(desired_dir, Vector3.UP)
 		# Traffic backs up only to get off a wall; a sharp turn it takes
@@ -697,7 +754,7 @@ func _drive(delta: float) -> void:
 			target = max_speed * throttle * lerpf(1.0, 0.45, absf(angle) / PI)
 			# Corner assist for the player only: AI drivers pick their own
 			# junction speeds.
-			if driver == Driver.PLAYER and not handbrake and not _wheel:
+			if driver == Driver.PLAYER and not handbrake and not _wheel and not drifting:
 				var mix := smoothstep(0.3, 0.9, absf(angle))
 				var assisted := lerpf(target, _corner_speed(), mix)
 				if assisted < target and assisted < pace:
@@ -705,12 +762,13 @@ func _drive(delta: float) -> void:
 				target = minf(target, assisted)
 		var grip_turn: float = clampf(pace / _spec.steer_low, 0.0, 1.0) * (1.0 - _spec.steer_fade * clampf(pace / max_speed, 0.0, 1.0))
 		steer = clampf(angle * 2.0, -1.0, 1.0)
-		var rate_want: float = steer * turn_rate * grip_turn * (1.6 if handbrake else 1.0)
+		var rate_want: float = steer * turn_rate * grip_turn * lerpf(1.0, 1.6, loose)
 		# The tyres hold only so much sideways pull (corner_g = v * yaw rate)
 		# and the wheels turn only so far: at speed the arc widens. The
 		# handbrake lets the tail come round past grip (a drift).
 		var cap: float = minf(_spec.corner_g * _grip() / maxf(pace, 0.1), pace / MIN_RADIUS + 0.3)
-		rate_want = clampf(rate_want, -cap * (1.8 if handbrake else 1.0), cap * (1.8 if handbrake else 1.0))
+		cap *= lerpf(1.0, 1.8, loose)
+		rate_want = clampf(rate_want, -cap, cap)
 		if driver == Driver.PLAYER:
 			_yaw_rate = lerpf(_yaw_rate, rate_want, 1.0 - exp(-delta / YAW_IN))
 		else:
@@ -736,7 +794,14 @@ func _drive(delta: float) -> void:
 		rate = _spec.brake
 	elif absf(target) < pace:
 		rate = COAST * 2.0
+	if drifting:
+		# Sliding: the throttle holds the drift, the brake scrubs it off,
+		# and the sideways tyres bleed speed either way.
+		rate = accel * 0.5 if target > speed else DRIFT_BRAKE * _drift_brake
+		_hard_brake = false
 	speed = move_toward(speed, target, rate * delta)
+	if _slide > 0.0:
+		speed = maxf(speed - DRIFT_BLEED * _slide * delta, 0.0)
 	if braking or handbrake:
 		speed = move_toward(speed, 0.0, (_spec.brake if braking else 10.0) * delta)
 	# Hills: slower up, faster down (none of it on the flat). A car stopped
@@ -751,7 +816,7 @@ func _drive(delta: float) -> void:
 			speed -= 9.8 * SLOPE_PULL * sin(_slope.y) * delta
 
 	var want := -global_basis.z * speed
-	var grip: float = _spec.drift if handbrake else _spec.grip
+	var grip: float = lerpf(_spec.grip, _spec.drift, loose)
 	# Power slides need power: none while the corner assist brakes.
 	if corner == 0.0:
 		grip *= 1.0 - _spec.slide * throttle * absf(steer) * clampf(pace / 10.0, 0.0, 1.0)
@@ -1067,7 +1132,7 @@ func _effects(delta: float) -> void:
 	var slip := 0.0
 	if moving > 6.0:
 		slip = absf(fwd.signed_angle_to(v / moving * signf(speed if speed != 0.0 else 1.0), Vector3.UP))
-	var skidding := not shows_rider and ((handbrake and moving > 6.0) or (slip > 0.3 and moving > 8.0) or _hard_brake)
+	var skidding := not shows_rider and ((handbrake and moving > 6.0) or (_slide > 0.3 and moving > 5.0) or (slip > 0.3 and moving > 8.0) or _hard_brake)
 	if skidding:
 		_skid_dist += moving * delta
 		if _skid_dist > 0.6:

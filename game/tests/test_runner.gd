@@ -62,6 +62,7 @@ func _run() -> void:
 		"test_vehicle_speed_ranks",
 		"test_player_driving_assists",
 		"test_driving_layouts",
+		"test_brake_and_steer_drifts",
 		"test_touch_driving_layouts",
 		"test_scripted_car_gets_unstuck", "test_heavy_vehicle_pushes_harder", "test_spawns_need_room", "test_overlap_resolves", "test_heavy_pushes_parked", "test_pinned_car_holds_still", "test_xray_only_when_hidden", "test_cab_stop_skips_parked_car",
 		"test_vehicle_classes_cover_every_kind", "test_suspension_bounces_and_settles", "test_side_hit_spins_and_dents", "test_hard_crash_throws_panel", "test_crash_throws_rider", "test_car_fire_then_explodes",
@@ -2945,6 +2946,56 @@ func test_touch_driving_layouts() -> void:
 
 
 ## A player-driven `kind` at `pos` heading -z turned by `yaw`, at `speed`.
+## Brake while turning at speed and the tail steps out: the car slides on
+## round the bend instead of stopping, and grips again once the wheel
+## straightens (0.23, Sachin: "allow drifting with direction and brake like
+## other games offer"). Braking in a straight line still stops; a bicycle
+## never drifts.
+func test_brake_and_steer_drifts() -> void:
+	await _free_game()
+	Controls.camera = null
+	Controls.scheme = "arrows"
+	var car = _player_car("sedan", Vector3(150.0, 0, 150.0), 20.0)
+	Input.action_press("gas")
+	Input.action_press("steer_left")
+	await _frames(12)
+	Input.action_release("gas")
+	Input.action_press("brake")
+	await _frames(12)
+	_check(car.drifting, "brake with the wheel at full lock at 72 km/h starts a drift")
+	Input.action_release("brake")
+	var slip := 0.0
+	for f in 40:
+		await get_tree().physics_frame
+		var flat := Vector3(car.velocity.x, 0.0, car.velocity.z)
+		if flat.length() > 2.0:
+			slip = maxf(slip, absf((-car.global_basis.z).signed_angle_to(flat, Vector3.UP)))
+	_check(slip > 0.3, "the tail steps out in the drift (slip %.2f rad)" % slip)
+	_check(car.speed > 6.0, "a drift slides on instead of stopping (%.1f m/s)" % car.speed)
+	print("drift: slip %.2f speed %.1f" % [slip, car.speed])
+	Input.action_release("steer_left")
+	await _frames(45)
+	_check(not car.drifting and car._slide < 0.05, "straightening the wheel ends the drift")
+	car.queue_free()
+	# Straight-line braking stops the car as before.
+	car = _player_car("sedan", Vector3(150.0, 0, 150.0), 20.0)
+	Input.action_press("brake")
+	await _frames(150)
+	_check(not car.drifting and car.speed < 1.0, "braking with the wheel straight stops the car (%.1f m/s)" % car.speed)
+	Input.action_release("brake")
+	car.queue_free()
+	car = _player_car("bicycle", Vector3(150.0, 0, 150.0), 10.0)
+	Input.action_press("steer_left")
+	await _frames(12)
+	Input.action_press("brake")
+	await _frames(10)
+	_check(not car.drifting, "a bicycle does not drift")
+	Input.action_release("brake")
+	Input.action_release("steer_left")
+	car.queue_free()
+	Controls.scheme = "stick"
+
+
 func _player_car(kind: String, pos: Vector3, speed: float, yaw := 0.0):
 	var car = _track_car(kind, pos, yaw)
 	car.driver = Vehicle.Driver.PLAYER

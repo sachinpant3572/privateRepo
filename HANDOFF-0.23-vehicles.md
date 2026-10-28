@@ -116,3 +116,20 @@ Each class has:
 | three_wheeler | 1.8 | 0.3 | 0.14 | 0.04 | 0.4 | 1.4 | |
 | two_wheeler | 2.2 | 0.5 | lean | 0 | 0 | 1.3 | 7 |
 | cycle | 2.5 | 0.6 | lean | 0 | 0 | 1.5 | 5 |
+
+## Follow-ups (Sachin's second 0.23 message)
+
+- Cornering: `PLAYER_GRIP` 1.9 for the player's car only (traffic keeps
+  CORNER_GRIP 1.5, so its junction speeds and tests are unchanged);
+  STEER_IN 0.22 -> 0.16, YAW_IN 0.12 -> 0.09. Sedan, 90 degrees at full
+  lock: arrows 15 m/s 1.98 s -> 1.47 s (offset 26 m -> 17 m), 22 m/s
+  2.47 s -> 1.92 s; stick 1.00 s -> 0.87 s, corner assist slows less
+  (min 9.1 -> 10.2 m/s).
+- Drift: brake while the wheel is at least 0.35 of lock above 9 m/s. The
+  tail steps out over 0.25 s (`_slide`, grip blends to the kind's drift
+  grip, yaw x1.6, cap x1.8, as the handbrake), speed bleeds 2.5 m/s² and
+  6 m/s² more at full brake, gas holds it; ends below 5 m/s or when the
+  wheel straightens. Works in all three layouts (stick: brake while the
+  stick points well off the nose). Not on bicycles, motorbikes or trucks
+  (a bike's lean model and a trailer would look wrong sideways). Test:
+  sedan at 72 km/h slips 0.49 rad and keeps 18.6 m/s.
