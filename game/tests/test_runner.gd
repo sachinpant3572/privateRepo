@@ -71,7 +71,7 @@ func _run() -> void:
 		"test_traffic_drives_into_the_country", "test_traffic_turns_round_at_barricades",
 		"test_country_kit_builds_every_kind",
 		"test_country_plots_square_to_their_roads", "test_estates_and_clusters", "test_grounds_kit_builds_every_part",
-		"test_bellerive_hills", "test_golden_flats_farmland", "test_every_home_has_a_way_in",
+		"test_bellerive_hills", "test_golden_flats_farmland", "test_every_home_has_a_way_in", "test_homes_by_wealth",
 	]
 	# ONLY=name1,name2 runs just those (handy while working on one test).
 	var only := OS.get_environment("ONLY")
@@ -3485,46 +3485,158 @@ func test_every_home_has_a_way_in() -> void:
 	var problems: Array[String] = []
 	# The same with the left third of the front blocked (rails, water): no
 	# route leaves through it. A farm's own buildings draw none of their own
-	# through its fence.
+	# through its fence. Every household tier too: its fences keep a gate.
 	for case: Array in [[4.0, 4.0, 4.0], [-1.0, 4.0, 4.0]]:
 		for kind: String in homes + ["hollis_farm"]:
 			var f: Vector2 = Kit.footprint(kind)
 			for s: float in [0.75, 1.0, 1.35]:
-				for seed in 4:
-					var size := f * s
-					var mb = MB.new()
-					var out: Array = []
-					var rng := RandomNumberGenerator.new()
-					rng.seed = seed
-					Kit.reach = case
-					Kit.routes_drawn.clear()
-					Kit.build(kind, mb, out, size, rng)
-					Kit.reach = [0.0, 0.0, 0.0]
-					var tag := "%s %.1fx%.1f seed %d reach %s" % [kind, size.x, size.y, seed, case]
-					var going_out := 0
-					for r: Vector4 in Kit.routes_drawn:
-						going_out += 1 if r.z > 0.0 else 0
-					if kind == "hollis_farm" and going_out != 1:
-						problems.append("%s: %d routes out (its farmhouse's own must stay inside)" % [tag, going_out])
-					for r: Vector4 in Kit.routes_drawn:
-						if r.z > 0.0 and case[0] < 0.0 and r.w < -0.34 * size.x * 0.5:
-							problems.append("%s: route %s out through the blocked side" % [tag, r])
-					var ahead := 0.0
-					for v: Vector3 in mb.verts:
-						ahead = maxf(ahead, -size.y * 0.5 - v.z)
-					if Kit.routes_drawn.is_empty() or ahead < 3.9:
-						problems.append("%s: no route out (%.1f m past the front)" % [tag, ahead])
-					for col in out:
-						var cc: Vector3 = col[0]
-						var cs: Vector3 = col[1]
-						# Front fence runs: long, thin, low, near the front edge.
-						if cs.x > 1.0 and cs.z < 0.9 and cs.y <= 2.0 and cc.z < -size.y * 0.5 + 1.6:
-							for r: Vector4 in Kit.routes_drawn:
-								# (routes that go out; a farm building's own are in its frame)
-								if r.z > 0.0 and minf(r.y, cc.x + cs.x * 0.5) - maxf(r.x, cc.x - cs.x * 0.5) > 0.05:
-									problems.append("%s: route %s through the fence at x %.1f" % [tag, r, cc.x])
+				for tier in range(-1, 6):
+					for seed in (4 if tier < 0 else 2):
+						var size := f * s
+						var mb = MB.new()
+						var out: Array = []
+						var rng := RandomNumberGenerator.new()
+						rng.seed = seed
+						Kit.reach = case
+						Kit.wealth = tier
+						Kit.routes_drawn.clear()
+						Kit.build(kind, mb, out, size, rng)
+						Kit.reach = [0.0, 0.0, 0.0]
+						Kit.wealth = -1
+						var tag := "%s %.1fx%.1f seed %d reach %s tier %d" % [kind, size.x, size.y, seed, case, tier]
+						var going_out := 0
+						for r: Vector4 in Kit.routes_drawn:
+							going_out += 1 if r.z > 0.0 else 0
+						if kind == "hollis_farm" and going_out != 1:
+							problems.append("%s: %d routes out (its farmhouse's own must stay inside)" % [tag, going_out])
+						for r: Vector4 in Kit.routes_drawn:
+							if r.z > 0.0 and case[0] < 0.0 and r.w < -0.34 * size.x * 0.5:
+								problems.append("%s: route %s out through the blocked side" % [tag, r])
+						var ahead := 0.0
+						for v: Vector3 in mb.verts:
+							ahead = maxf(ahead, -size.y * 0.5 - v.z)
+						if Kit.routes_drawn.is_empty() or ahead < 3.9:
+							problems.append("%s: no route out (%.1f m past the front)" % [tag, ahead])
+						for col in out:
+							var cc: Vector3 = col[0]
+							var cs: Vector3 = col[1]
+							# Front fence runs: long, thin, low, near the front edge.
+							if cs.x > 1.0 and cs.z < 0.9 and cs.y <= 2.0 and cc.z < -size.y * 0.5 + 1.6:
+								for r: Vector4 in Kit.routes_drawn:
+									# (routes that go out; a farm building's own are in its frame)
+									if r.z > 0.0 and minf(r.y, cc.x + cs.x * 0.5) - maxf(r.x, cc.x - cs.x * 0.5) > 0.05:
+										problems.append("%s: route %s through the fence at x %.1f" % [tag, r, cc.x])
 	Kit.routes_drawn.clear()
 	Kit.record_routes = false
 	for p in problems.slice(0, 60):
 		print("  " + p)
 	_check(problems.is_empty(), "every home kit runs a route out through a gate (%d problems)" % problems.size())
+
+
+## Homes by wealth (HANDOFF-wealth.md phase 1): every home lot has a
+## household tier in its kind's range, all six tiers are present, land value
+## rises with tier (estates, T5, beat T3: they trade the dearest ground for
+## the most of it) and so does private ground per household; the kits show
+## the tier, and a tile build hands it to them.
+func test_homes_by_wealth() -> void:
+	await _new_game(false)
+	var c = game.city.country
+	const RANGE := {"shack": [0, 1], "trailer_home": [0, 1], "stilt_house": [0, 2], "garden_apartments": [1, 2],
+		"rowhouse_row": [1, 3], "house": [1, 4], "cape_house": [2, 3], "farmhouse_small": [1, 2], "farmhouse": [2, 3],
+		"ranch_house": [2, 3], "adobe_farmhouse": [2, 3], "farmhouse_big": [3, 4], "condo_tower": [3, 4], "mansion": [4, 5]}
+	const UNITS := {"garden_apartments": 12, "rowhouse_row": 4}
+	var n := [0, 0, 0, 0, 0, 0]
+	var value := [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+	var land := [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+	var land_n := [0, 0, 0, 0, 0, 0]
+	var homes_in := {}
+	for l: Array in c.lots:
+		if int(l[8]) >= 0 and c.kinds[int(l[5])] in RANGE:
+			homes_in[int(l[8])] = homes_in.get(int(l[8]), 0) + 1
+	var wrong: Array[String] = []
+	for l: Array in c.lots:
+		var kind: String = c.kinds[int(l[5])]
+		var t := int(l[10]) if l.size() > 10 else -9
+		if kind not in RANGE:
+			if t != -1:
+				wrong.append("%s with tier %d" % [kind, t])
+			continue
+		var plot_type: String = c.plot_types[int(c.plots[int(l[8])][5])] if int(l[8]) >= 0 else ""
+		if t < RANGE[kind][0] or t > RANGE[kind][1] or (plot_type == "estate" and t != 5):
+			wrong.append("%s at (%d, %d) tier %d" % [kind, l[0], l[1], t])
+			continue
+		n[t] += 1
+		value[t] += float(l[11])
+		if kind == "condo_tower":
+			continue  # towers count their floors, not their ground
+		var q: Array = c.plots[int(l[8])] if int(l[8]) >= 0 else []
+		if plot_type == "estate" or plot_type == "parcel":
+			land[t] += float(q[3]) * float(q[4]) / homes_in[int(l[8])]
+		else:
+			land[t] += float(l[3]) * float(l[4]) / UNITS.get(kind, 1)
+		land_n[t] += 1
+	var rows: Array[String] = []
+	for t in 6:
+		value[t] /= maxf(1.0, n[t])
+		land[t] /= maxf(1.0, land_n[t])
+		rows.append("T%d %d homes, value %.2f, %.0f m2" % [t, n[t], value[t], land[t]])
+	print("  " + "; ".join(rows))
+	_check(wrong.is_empty(), "every home lot has a tier in its kind's range, others none (%d wrong: %s)" % [wrong.size(), wrong.slice(0, 4)])
+	_check(n.min() > 0, "all six household tiers live in Bellerive's country (%s)" % [n])
+	var rising := true
+	for t in range(1, 6):
+		rising = rising and value[t] > value[t - 1 if t < 5 else 3] and land[t] > land[t - 1]
+	_check(rising, "land value and private ground per household rise with tier")
+	# The kits: a T1 house is a worn rental behind chain-link with a beater;
+	# a T4 house is behind a hedge with a luxury car; a T5 mansion keeps two
+	# luxury cars, a T4 one.
+	c._finish_task()
+	var Kit = preload("res://scripts/kits/country_kit.gd")
+	var MB = preload("res://scripts/mesh_builder.gd")
+	var built := func(kind: String, tier: int) -> Array:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 3
+		Kit.wealth = tier
+		var out: Array = []
+		Kit.build(kind, MB.new(), out, Kit.footprint(kind), rng)
+		Kit.wealth = -1
+		return out
+	var count := func(out: Array, size: Vector3) -> int:
+		var k := 0
+		for col in out:
+			if (col[1] as Vector3).is_equal_approx(size):
+				k += 1
+		return k
+	const LUX := Vector3(1.9, 1.5, 4.9)
+	var poor: Array = built.call("house", 1)
+	var rich: Array = built.call("house", 4)
+	var chain := 0
+	var hedge := 0
+	for col in poor:
+		chain += 1 if is_equal_approx(col[1].y, 1.8) and minf(col[1].x, col[1].z) < 0.2 else 0
+	for col in rich:
+		hedge += 1 if is_equal_approx(col[1].y, 1.1) and is_equal_approx(minf(col[1].x, col[1].z), 0.8) else 0
+	_check(count.call(poor, LUX) == 0 and chain >= 4 and count.call(rich, LUX) == 1 and hedge >= 4,
+		"a T1 house has chain-link and no luxury car (%d runs), a T4 house a hedge and one (%d runs, %d cars)" % [chain, hedge, count.call(rich, LUX)])
+	_check(count.call(built.call("mansion", 5), LUX) == 2 and count.call(built.call("mansion", 4), LUX) == 1,
+		"a T5 mansion keeps two luxury cars, a T4 mansion one")
+	# A tile build hands each lot its tier: a T4 house there gets its car.
+	var rich_lot := -1
+	for i in c.lots.size():
+		var l: Array = c.lots[i]
+		if c.kinds[int(l[5])] == "house" and int(l[10]) == 4:
+			rich_lot = i
+			break
+	var tile_key := Vector2i(-99999, -99999)
+	for key: Vector2i in c.tiles:
+		for i in c.tiles[key].l:
+			if int(i) == rich_lot:
+				tile_key = key
+	var tile: Dictionary = preload("res://scripts/country_tiles.gd").build(c, tile_key)
+	var cars := 0
+	if rich_lot >= 0:
+		var at := Vector3(c.lots[rich_lot][0], 0.0, c.lots[rich_lot][1])
+		for col in tile.colliders:
+			if (col[1] as Vector3).is_equal_approx(LUX) and Vector3(col[0].x, 0.0, col[0].z).distance_to(at) < 15.0:
+				cars += 1
+	_check(rich_lot >= 0 and cars >= 1, "a tile build gives a T4 street house its luxury car (lot %d, %d cars)" % [rich_lot, cars])

@@ -684,19 +684,126 @@ static func _wheel(mb, p: Vector3, r: float, width: float, color := DARK) -> voi
 
 
 ## A plain modern car (parked dressing), nose toward -Z before yaw.
-static func _car(mb, out: Array, p: Vector3, yaw: float, color: Color, collide := true) -> void:
+## Car styles: a sedan, a faded beater with a primer door and a rusted
+## hood, a long low luxury car with a chrome waistline, and a dead car up
+## on blocks with its wheels gone.
+enum { CAR_SEDAN, CAR_BEATER, CAR_LUXURY, CAR_BLOCKS }
+const LUXURY_PAINTS := [Color(0.05, 0.05, 0.06), Color(0.93, 0.93, 0.91), Color(0.22, 0.24, 0.27), Color(0.08, 0.13, 0.26), Color(0.3, 0.07, 0.09)]
+const PRIMER := Color(0.55, 0.55, 0.53)
+
+static func _car(mb, out: Array, p: Vector3, yaw: float, color: Color, collide := true, style := CAR_SEDAN) -> void:
 	var saved: Transform3D = mb.xform
 	mb.xform = saved * Transform3D(Basis(Vector3.UP, yaw), p)
-	var paint := MeshBuilder.glow(color, MeshBuilder.GLOSS)
-	mb.box(Vector3(0, 0.62, 0), Vector3(1.8, 0.6, 4.3), paint)
-	mb.box(Vector3(0, 1.15, 0.25), Vector3(1.6, 0.5, 2.1), MeshBuilder.glow(Color(0.2, 0.25, 0.3), MeshBuilder.GLASS))
-	mb.box(Vector3(0, 1.42, 0.25), Vector3(1.5, 0.05, 1.9), paint)
+	var worn := style == CAR_BEATER or style == CAR_BLOCKS
+	var paint := _worn(color, 0) if worn else MeshBuilder.glow(color, MeshBuilder.GLOSS)
+	var length := 4.9 if style == CAR_LUXURY else 4.3
+	var lift := 0.22 if style == CAR_BLOCKS else 0.0
+	var glass := MeshBuilder.glow(Color(0.2, 0.25, 0.3), MeshBuilder.GLASS)
+	if style == CAR_LUXURY:
+		mb.box(Vector3(0, 0.58, 0), Vector3(1.9, 0.52, length), paint)
+		mb.box(Vector3(0, 1.06, 0.35), Vector3(1.66, 0.46, 2.5), glass)
+		mb.box(Vector3(0, 1.31, 0.35), Vector3(1.56, 0.05, 2.3), paint)
+		for x: float in [-0.96, 0.96]:
+			mb.box(Vector3(x, 0.74, 0), Vector3(0.02, 0.05, length - 0.6), MeshBuilder.glow(Color(0.85, 0.86, 0.88), MeshBuilder.METAL))
+	else:
+		mb.box(Vector3(0, 0.62 + lift, 0), Vector3(1.8, 0.6, length), paint)
+		mb.box(Vector3(0, 1.15 + lift, 0.25), Vector3(1.6, 0.5, 2.1), glass)
+		mb.box(Vector3(0, 1.42 + lift, 0.25), Vector3(1.5, 0.05, 1.9), paint)
+	if worn:
+		mb.box(Vector3(0.91, 0.62 + lift, 0.2), Vector3(0.02, 0.48, 1.0), PRIMER)
+		mb.box(Vector3(0, 0.93 + lift, -1.5), Vector3(1.1, 0.02, 0.8), RUST)
+	var axle := 1.6 if style == CAR_LUXURY else 1.35
 	for x: float in [-0.82, 0.82]:
-		for z: float in [-1.35, 1.35]:
-			_wheel(mb, Vector3(x, 0.34, z), 0.34, 0.22)
+		for z: float in [-axle, axle]:
+			if style == CAR_BLOCKS:
+				mb.box(Vector3(x, 0.2, z), Vector3(0.35, 0.4, 0.4), Color(0.6, 0.6, 0.58))
+			else:
+				_wheel(mb, Vector3(x, 0.34, z), 0.34, 0.22)
 	mb.xform = saved
 	if collide:
-		_col(out, p + Vector3(0, 0.75, 0), Vector3(1.8, 1.5, 4.3), yaw)
+		_col(out, p + Vector3(0, 0.75, 0), Vector3(1.9 if style == CAR_LUXURY else 1.8, 1.5, length), yaw)
+
+
+# --- Wealth (HANDOFF-wealth.md) -----------------------------------------------
+
+## The household tier on the lot being built, T0 (the poorest) to T5
+## (owners and CEOs), from lot element 10 (tools/wealth.py; country_tiles
+## sets it before each build). -1 when the lot has none (tests, galleries):
+## each kit then takes its usual look.
+static var wealth := -1
+
+## The tier to draw: `wealth` held to the kind's range, `usual` when unset.
+static func _wealth(lo: int, hi: int, usual: int) -> int:
+	return usual if wealth < 0 else clampi(wealth, lo, hi)
+
+
+## Paint gone chalky and grey on a poor household's home (T0 most, T1
+## some); the surface code in alpha stays.
+static func _worn(c: Color, t: int) -> Color:
+	if t > 1:
+		return c
+	var o := c.lerp(Color(0.56, 0.54, 0.5), 0.45 if t <= 0 else 0.25).darkened(0.12 if t <= 0 else 0.05)
+	o.a = c.a
+	return o
+
+
+## The household's car: a beater at T0-T1 (or a dead one on blocks), a
+## sedan at T2-T3, a luxury car at T4-T5.
+static func _wealth_car(mb, out: Array, p: Vector3, yaw: float, t: int, rng: RandomNumberGenerator) -> void:
+	if t >= 4:
+		_car(mb, out, p, yaw, _pick(LUXURY_PAINTS, rng), true, CAR_LUXURY)
+	elif t <= 1:
+		_car(mb, out, p, yaw, _pick(PAINTS, rng), true, CAR_BLOCKS if t == 0 and rng.randf() < 0.4 else CAR_BEATER)
+	else:
+		_car(mb, out, p, yaw, _pick(PAINTS, rng))
+
+
+## Yard junk round a poor home, about 2 m across from p toward `toward`
+## (+1 or -1 along x): a stack of old tyres, a dead washer and a rusty
+## barrel. Low enough to walk past, so no colliders.
+static func _junk(mb, p: Vector3, toward: float, rng: RandomNumberGenerator) -> void:
+	var tyre := Color(0.12, 0.12, 0.13)
+	for k in rng.randi_range(2, 4):
+		mb.cylinder(p + Vector3(0, k * 0.21, 0), 0.36, 0.2, tyre, 8)
+	mb.box(p + Vector3(toward * 0.95, 0.42, 0.15), Vector3(0.68, 0.84, 0.66), _worn(WHITE, 0))
+	mb.cylinder(p + Vector3(toward * 1.75, 0, -0.2), 0.3, 0.85, RUST.darkened(0.1), 8)
+
+
+## A blue tarp pinned over a leak, laid on a roof slope from `low` (at the
+## eave) up toward `high`, `width` across.
+static func _tarp(mb, low: Vector3, high: Vector3, width: float) -> void:
+	var up := (high - low)
+	var across := up.cross(Vector3.UP).normalized() * width * 0.5
+	var n := across.cross(up).normalized()
+	if n.y < 0.0:
+		n = -n
+	var lift := n * 0.06
+	mb.quad(low - across + lift, low + across + lift, high + across + lift, high - across + lift, n, Color(0.16, 0.36, 0.68))
+
+
+## Burglar bars over the windows a _windows call with the same a, b, n and
+## size drew.
+static func _bars(mb, a: Vector3, b: Vector3, n: int, size: Vector2, facing: Vector3) -> void:
+	var along_x := absf(facing.z) > 0.5
+	var across := Vector3(1, 0, 0) if along_x else Vector3(0, 0, 1)
+	var iron := Color(0.14, 0.14, 0.15)
+	for i in n:
+		var p := a.lerp(b, (i + 0.5) / n) + facing * 0.1
+		var k := maxi(2, int(size.x / 0.2))
+		for j in k + 1:
+			mb.box(p + across * lerpf(-size.x * 0.5, size.x * 0.5, float(j) / k), Vector3(0.04, size.y + 0.1, 0.04), iron)
+		for s: float in [-0.5, 0.5]:
+			mb.box(p + Vector3(0, s * size.y, 0), Vector3(size.x + 0.1, 0.05, 0.05) if along_x else Vector3(0.05, 0.05, size.x + 0.1), iron)
+
+
+## A window box of flowers `width` across at p (its top middle), on a wall
+## facing -Z: the mark of a home someone tends.
+static func _flower_box(mb, p: Vector3, width: float, rng: RandomNumberGenerator) -> void:
+	mb.box(p + Vector3(0, -0.12, -0.12), Vector3(width, 0.24, 0.24), MeshBuilder.glow(WHITE, MeshBuilder.SIDING))
+	var bloom: Color = [Color(0.92, 0.3, 0.42), Color(0.98, 0.78, 0.25), Color(0.85, 0.45, 0.85), Color(0.95, 0.5, 0.25)][rng.randi() % 4]
+	var n := maxi(2, int(width / 0.3))
+	for i in n:
+		mb.ball(p + Vector3(lerpf(-width * 0.5 + 0.15, width * 0.5 - 0.15, float(i) / (n - 1)), 0.06, -0.12), Vector3(0.16, 0.14, 0.14), bloom if i % 2 == 0 else LEAF, 5, 2)
 
 
 ## A pickup truck, nose toward -Z before yaw.
@@ -1268,6 +1375,8 @@ static func farmhouse_small(mb, out: Array, w: float, d: float, rng: RandomNumbe
 	var zf := -d * 0.5 + clampf(d * 0.25, 2.4, 4.0)
 	var cz := zf + bd * 0.5
 	var weathered := rng.randf() < 0.35
+	if wealth >= 0:
+		weathered = _wealth(1, 2, 2) <= 1  # T1 weathered boards, T2 painted
 	var siding: Color = OLD_WOOD if weathered else _pick(SIDINGS, rng)
 	var body := MeshBuilder.glow(siding, MeshBuilder.SIDING)
 	var roof: Color = MeshBuilder.glow(RUST if weathered else _pick(TIN_ROOFS, rng), MeshBuilder.SEAM_ROOF)
@@ -2006,11 +2115,12 @@ static func machine_shed(mb, out: Array, w: float, d: float, rng: RandomNumberGe
 ## Single-wide trailer on a skirted pad: a two-tone stripe, a deck at the
 ## door, propane tank, dish, a shed out back and a car on the gravel.
 static func trailer_home(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator) -> void:
+	var t := _wealth(0, 1, 1)  # T0: faded, a tarp on the roof, junk, a car on blocks
 	var tw := clampf(w * 0.36, 3.6, 4.6)
 	var tl := clampf(d * 0.68, 10.0, 20.0)
 	var tx := -w * 0.5 + 1.0 + tw * 0.5
 	var tz := d * 0.5 - 1.5 - tl * 0.5
-	var body: Color = [WHITE, Color(0.95, 0.9, 0.7), Color(0.75, 0.85, 0.9), Color(0.85, 0.9, 0.8), Color(0.9, 0.82, 0.78)][rng.randi() % 5]
+	var body: Color = _worn([WHITE, Color(0.95, 0.9, 0.7), Color(0.75, 0.85, 0.9), Color(0.85, 0.9, 0.8), Color(0.9, 0.82, 0.78)][rng.randi() % 5], t)
 	var stripe: Color = _pick(ACCENTS, rng)
 	_pad(mb, -w * 0.5, w * 0.5, -d * 0.5, d * 0.5, MeshBuilder.glow(LAWN.lerp(DIRT, 0.35), MeshBuilder.GRASS))
 	mb.box(Vector3(tx, 0.35, tz), Vector3(tw - 0.1, 0.7, tl - 0.1), Color(0.6, 0.55, 0.45))
@@ -2020,6 +2130,8 @@ static func trailer_home(mb, out: Array, w: float, d: float, rng: RandomNumberGe
 		mb.box(Vector3(tx + s * (tw * 0.5 + 0.02), 1.3, tz), Vector3(0.04, 0.35, tl), stripe)
 	mb.box(Vector3(tx, 1.3, tz - tl * 0.5 - 0.02), Vector3(tw, 0.35, 0.04), stripe)
 	_gable(mb, tx, tz, 3.4, tw + 0.2, tl + 0.1, 0.35, MeshBuilder.glow(TIN.lightened(0.15), MeshBuilder.SEAM_ROOF), MeshBuilder.glow(body, MeshBuilder.SIDING), true)
+	if t <= 0:
+		_tarp(mb, Vector3(tx + tw * 0.45, 3.44, tz + tl * 0.1), Vector3(tx + 0.1, 3.74, tz + tl * 0.1), tl * 0.3)
 	var dz := tz - tl * 0.18
 	var xr := tx + tw * 0.5
 	mb.box(Vector3(xr + 0.04, 1.75, dz), Vector3(0.08, 2.0, 0.9), body.darkened(0.3))
@@ -2056,8 +2168,10 @@ static func trailer_home(mb, out: Array, w: float, d: float, rng: RandomNumberGe
 		_gable(mb, sx, sz, 2.2, 2.7, 2.7, 0.8, MeshBuilder.glow(SHINGLES[0], MeshBuilder.ROOF), MeshBuilder.glow(shed, MeshBuilder.SIDING))
 	_pad(mb, tx - 1.6, tx + 1.6, -d * 0.5, tz - tl * 0.5, MeshBuilder.glow(GRAVEL, MeshBuilder.CONCRETE), 0.04)
 	if tz - tl * 0.5 + d * 0.5 > 5.5:
-		_car(mb, out, Vector3(tx, 0, tz - tl * 0.5 - 3.0), 0.0, _pick(PAINTS, rng))
+		_wealth_car(mb, out, Vector3(tx, 0, tz - tl * 0.5 - 3.0), 0.0, t, rng)
 	_rural_mailbox(mb, Vector3(tx + 2.2, 0, -d * 0.5 + 0.5))
+	if t <= 0:
+		_junk(mb, Vector3(w * 0.5 - 0.8, 0, -d * 0.5 + 2.5), -1.0, rng)
 	# Chain-link round the yard (a sagging rail fence on some), gated at the drive.
 	if rng.randf() < 0.6:
 		_lot_fence(mb, out, w, d, "chain", Color(0.66, 0.68, 0.7), [[tx, 4.0]])
@@ -2068,6 +2182,7 @@ static func trailer_home(mb, out: Array, w: float, d: float, rng: RandomNumberGe
 ## Bayou fishing shack: a weathered plank hut on a deck on piles, a rusty
 ## tin roof, crab traps, a cooler, a stovepipe and a jon boat.
 static func shack(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator) -> void:
+	var t := _wealth(0, 1, 0)  # T0: the window boarded over
 	const PH := 0.9
 	var x0 := -w * 0.5 + 0.6
 	var x1 := w * 0.5 - 0.6
@@ -2095,6 +2210,8 @@ static func shack(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator
 	var fz := sz - sd * 0.5 - 0.04
 	mb.box(Vector3(sx - sw * 0.2, PH + 1.0, fz), Vector3(0.9, 2.0, 0.08), WOOD.darkened(0.3))
 	mb.box(Vector3(sx + sw * 0.22, PH + 1.5, fz), Vector3(0.9, 0.8, 0.08), Buildings._window(rng, 0.6))
+	if t <= 0:
+		mb.box(Vector3(sx + sw * 0.22, PH + 1.5, fz - 0.06), Vector3(1.05, 0.95, 0.04), MeshBuilder.glow(Color(0.66, 0.55, 0.38), MeshBuilder.SIDING))
 	_beam(mb, Vector3(sx + sw * 0.22 - 0.5, PH + 1.95, fz - 0.05), Vector3(sx + sw * 0.22 + 0.5, PH + 2.0, fz - 0.7), 0.06, OLD_WOOD, 1.0)
 	mb.cylinder(Vector3(sx + sw * 0.3, PH + 2.8, sz + sd * 0.2), 0.12, 1.6, DARK, 5)
 	# Deck clutter: crab traps, a cooler, a chair, buoys on the wall.
@@ -2114,6 +2231,7 @@ static func shack(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator
 ## Bayou house up on piles: a wraparound deck under the hip roof, rails,
 ## a stair down to the yard, and a skiff parked underneath.
 static func stilt_house(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator) -> void:
+	var t := _wealth(0, 2, 1)  # T0 faded with a tarp, T1 faded, T2 fresh paint
 	const PH := 2.8
 	var hw := clampf(w * 0.62, 6.0, 11.0)
 	var hd := clampf(d * 0.5, 5.5, 10.0)
@@ -2135,11 +2253,15 @@ static func stilt_house(mb, out: Array, w: float, d: float, rng: RandomNumberGen
 		_beam(mb, Vector3(xa, PH - 0.2, dz0 + 0.25), Vector3(xb, 0.3, dz0 + 0.25), 0.12, pile)
 	var deck := MeshBuilder.glow(OLD_WOOD.lightened(0.1), MeshBuilder.SIDING)
 	mb.box(Vector3(0, PH, (dz0 + dz1) * 0.5), Vector3(dx1 - dx0, 0.18, dz1 - dz0), deck)
-	var paint: Color = [Color(0.55, 0.75, 0.72), Color(0.95, 0.85, 0.55), WHITE, Color(0.62, 0.72, 0.88), Color(0.85, 0.62, 0.55)][rng.randi() % 5]
+	var paint: Color = _worn([Color(0.55, 0.75, 0.72), Color(0.95, 0.85, 0.55), WHITE, Color(0.62, 0.72, 0.88), Color(0.85, 0.62, 0.55)][rng.randi() % 5], t)
 	var body := MeshBuilder.glow(paint, MeshBuilder.SIDING)
 	mb.box(Vector3(0, PH + 1.5, hz), Vector3(hw, 3.0, hd), body)
 	var roof: Color = _pick(TIN_ROOFS, rng)
 	_hip(mb, Vector3(0, PH + 3.0, (dz0 + dz1) * 0.5), dx1 - dx0 + 0.4, dz1 - dz0 + 0.4, 1.8, MeshBuilder.glow(roof, MeshBuilder.SEAM_ROOF))
+	if t <= 0:
+		var ze := dz0 - 0.2
+		var zc := (dz0 + dz1) * 0.5
+		_tarp(mb, Vector3(hw * 0.1, PH + 3.0 + 1.8 * 0.15, lerpf(ze, zc, 0.15)), Vector3(hw * 0.1, PH + 3.0 + 1.8 * 0.6, lerpf(ze, zc, 0.6)), minf(2.0, hw * 0.3))
 	for x: float in [dx0 + 0.1, 0.0, dx1 - 0.1]:
 		mb.box(Vector3(x, PH + 1.5, dz0 + 0.1), Vector3(0.14, 3.0, 0.14), TRIM)
 	var fz := hz - hd * 0.5
@@ -2885,6 +3007,9 @@ static func shopfront(mb, out: Array, w: float, d: float, rng: RandomNumberGener
 ## one side with its driveway, shuttered windows, foundation shrubs, a palm
 ## or crepe myrtle, and out back a screened pool cage or a patio.
 static func house(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator) -> void:
+	# T1 a worn rental behind chain-link, T2 as built, T3 kept up with a
+	# picket front, T4 behind a hedge with a luxury car and a pool.
+	var t := _wealth(1, 4, 2)
 	var bw := clampf(w * 0.55, 5.8, 13.0)
 	var gw := clampf(w * 0.24, 3.0, 4.2)
 	var side := _clear_side(-1.0 if rng.randf() < 0.5 else 1.0)
@@ -2900,8 +3025,8 @@ static func house(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator
 	var shutter := Color(0, 0, 0, 0)
 	if rng.randf() < 0.55:
 		shutter = (_pick(ACCENTS, rng) as Color).darkened(0.1)
-	var body: Color = paint if rng.randf() < 0.7 else MeshBuilder.glow(paint, MeshBuilder.SIDING)
-	_pad(mb, -w * 0.5, w * 0.5, -d * 0.5, d * 0.5, MeshBuilder.glow(LAWN, MeshBuilder.GRASS))
+	var body: Color = _worn(paint if rng.randf() < 0.7 else MeshBuilder.glow(paint, MeshBuilder.SIDING), t)
+	_pad(mb, -w * 0.5, w * 0.5, -d * 0.5, d * 0.5, MeshBuilder.glow(LAWN.lerp(DIRT, 0.45) if t <= 1 else LAWN, MeshBuilder.GRASS))
 	mb.box(Vector3(0, 0.1, cz), Vector3(total + 0.1, 0.2, bd + 0.1), MeshBuilder.glow(CONCRETE, MeshBuilder.CONCRETE))
 	mb.box(Vector3(mx, H * 0.5 + 0.1, cz), Vector3(bw, H - 0.2, bd), body)
 	mb.box(Vector3(gx, H * 0.5 + 0.1, cz), Vector3(gw, H - 0.2, bd), body)
@@ -2917,6 +3042,11 @@ static func house(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator
 	var rise := clampf(minf(total, bd) * 0.22, 1.3, 2.4)
 	_hip(mb, Vector3(0, H, cz), total + 1.0, bd + 1.0, rise, roof)
 	mb.box(Vector3(0, H - 0.05, cz), Vector3(total + 1.0, 0.15, bd + 1.0), trim)
+	if t <= 1 and rng.randf() < 0.4:
+		# A tarp over a leak on the front slope, clear of the hips.
+		var ze := cz - (bd + 1.0) * 0.5
+		var tx := mx + rng.randf_range(-0.6, 0.6)
+		_tarp(mb, Vector3(tx, H + rise * 0.15, lerpf(ze, cz, 0.15)), Vector3(tx, H + rise * 0.6, lerpf(ze, cz, 0.6)), minf(2.2, bw * 0.35))
 	# Garage door, front door, windows.
 	var front := fz - 0.04
 	mb.box(Vector3(gx, 1.25, front), Vector3(gw - 0.7, 2.3, 0.08), MeshBuilder.glow(WHITE, MeshBuilder.SIDING))
@@ -2926,6 +3056,8 @@ static func house(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator
 	var wx0 := mx - bw * 0.5
 	var wx1 := dx - side * 0.8
 	_windows(mb, Vector3(minf(wx0, wx1), 1.6, fz), Vector3(maxf(wx0, wx1), 1.6, fz), maxi(1, int(absf(wx1 - wx0) / 2.4)), Vector2(1.2, 1.3), rng, Vector3.FORWARD, 0.5, shutter)
+	if t <= 1 and rng.randf() < 0.75:
+		_bars(mb, Vector3(minf(wx0, wx1), 1.6, fz), Vector3(maxf(wx0, wx1), 1.6, fz), maxi(1, int(absf(wx1 - wx0) / 2.4)), Vector2(1.2, 1.3), Vector3.FORWARD)
 	_all_windows(mb, mx - bw * 0.5, mx + bw * 0.5, fz, fz + bd, 0.2, 1, H, 3.2, Vector2(1.1, 1.2), rng, 0.5)
 	mb.box(Vector3(-side * (total * 0.5 + 0.35), 0.35, cz + bd * 0.2), Vector3(0.6, 0.6, 0.8), MeshBuilder.glow(Color(0.8, 0.82, 0.84), MeshBuilder.METAL))
 	# Driveway and path.
@@ -2934,20 +3066,24 @@ static func house(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator
 	_route_out(mb, gx - gw * 0.5 + 0.2, gx + gw * 0.5 - 0.2, d, drive)
 	_pad(mb, dx - 0.6, dx + 0.6, fz - 2.0, fz, drive, 0.04)
 	_pad(mb, minf(dx, gx), maxf(dx, gx), fz - 2.0, fz - 0.8, drive, 0.04)
-	for k in 3:
-		var x := lerpf(mx - bw * 0.5 + 0.6, dx - side * 1.0, k / 2.0)
-		_bush(mb, Vector3(x, 0, fz - 0.6), 0.55, rng)
+	if t >= 2:
+		var nb := 3 if t == 2 else 5
+		for k in nb:
+			var x := lerpf(mx - bw * 0.5 + 0.6, dx - side * 1.0, k / float(nb - 1))
+			_bush(mb, Vector3(x, 0, fz - 0.6), 0.55 if t == 2 else 0.6, rng)
 	_rural_mailbox(mb, Vector3(gx - side * (gw * 0.5 + 0.4), 0, -d * 0.5 + 0.5))
-	if rng.randf() < 0.5:
+	if t <= 1 and rng.randf() < 0.65:
+		_junk(mb, Vector3(-side * (w * 0.5 - 1.2), 0, -d * 0.5 + 2.8), side, rng)
+	elif rng.randf() < 0.5 or t >= 4:
 		Props.palm(mb, out, Vector3(-side * (w * 0.5 - 3.0), 0, -d * 0.5 + 2.6), rng)
 	else:
 		Props.crepe_myrtle(mb, out, Vector3(-side * (w * 0.5 - 2.0), 0, -d * 0.5 + 2.2), rng)
-	if rng.randf() < 0.6:
-		_car(mb, out, Vector3(gx, 0, fz - 3.2), 0.0, _pick(PAINTS, rng))
+	if t >= 4 or rng.randf() < [0.75, 0.6, 0.8, 1.0][t - 1]:
+		_wealth_car(mb, out, Vector3(gx, 0, fz - 3.2), 0.0, t, rng)
 	# Back: a screened pool cage or a patio.
 	var back := fz + bd
 	var room := d * 0.5 - back
-	if room >= 6.0 and rng.randf() < 0.45:
+	if room >= 6.0 and rng.randf() < [0.0, 0.2, 0.55, 1.0][t - 1]:
 		var px0 := mx - minf(bw, 9.0) * 0.5
 		var px1 := mx + minf(bw, 9.0) * 0.5
 		var pz0 := back
@@ -2976,9 +3112,23 @@ static func house(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator
 	elif room >= 3.5:
 		_pad(mb, mx - 2.5, mx + 2.5, back, back + 3.0, MeshBuilder.glow(Color(0.82, 0.78, 0.7), MeshBuilder.PAVING), 0.05)
 		Props.cafe_table(mb, out, Vector3(mx, 0, back + 1.6), _pick(Buildings.PARASOLS, rng))
-	# A privacy fence round the sides and back; the front lawn stays open
-	# to the street, a low hedge along the front on some.
-	_lot_fence(mb, out, w, d, "board", [Color(0.62, 0.5, 0.36), Color(0.78, 0.72, 0.62), WHITE][rng.randi() % 3], [], false)
+	# A privacy fence round the sides and back. The front lawn stays open
+	# to the street, except chain-link round a T1 rental, a picket front on
+	# half the T3 homes, and a hedge all round at T4 with lit piers at the
+	# gate; each gated at the drive (its route is drawn above).
+	var gate := [[gx, gw + 0.4]]
+	if t <= 1:
+		_lot_fence(mb, out, w, d, "chain", Color(0.66, 0.68, 0.7), gate, true, 1.2, false)
+	elif t >= 4:
+		_lot_fence(mb, out, w, d, "hedge", LEAF, gate, true, 1.2, false)
+		var stucco := MeshBuilder.glow(Color(0.93, 0.9, 0.84), MeshBuilder.CONCRETE)
+		for s: float in [-1.0, 1.0]:
+			_solid(mb, out, Vector3(gx + s * (gw * 0.5 + 0.55), 0.8, -d * 0.5 + 1.2), Vector3(0.6, 1.6, 0.6), stucco)
+			mb.ball(Vector3(gx + s * (gw * 0.5 + 0.55), 1.75, -d * 0.5 + 1.2), Vector3(0.2, 0.2, 0.2), MeshBuilder.glow(Color(1.0, 0.9, 0.6), MeshBuilder.GLOW_LAMP), 6, 3)
+	elif t == 3 and rng.randf() < 0.5:
+		_lot_fence(mb, out, w, d, "picket", WHITE, gate, true, 1.2, false)
+	else:
+		_lot_fence(mb, out, w, d, "board", [Color(0.62, 0.5, 0.36), Color(0.78, 0.72, 0.62), WHITE][rng.randi() % 3], [], false)
 
 
 ## Magnolia Heights mansion: a white Greek Revival house with a two-storey
@@ -3051,6 +3201,9 @@ static func mansion(mb, out: Array, w: float, d: float, rng: RandomNumberGenerat
 	mb.cylinder(rc, 0.3, 1.8, MeshBuilder.glow(CONCRETE.lightened(0.15), MeshBuilder.CONCRETE), 6)
 	mb.cylinder(rc + Vector3(0, 1.8, 0), 0.8, 0.15, MeshBuilder.glow(CONCRETE.lightened(0.15), MeshBuilder.CONCRETE), 8)
 	_col(out, rc + Vector3(0, 0.5, 0), Vector3(fr * 1.6, 1.0, fr * 1.6))
+	# Cars on the loop: one luxury car at T4, two at T5 (owners and CEOs).
+	for k in _wealth(4, 5, 4) - 3:
+		_wealth_car(mb, out, rc + Vector3(r if k == 0 else -r, 0, 0), 0.0, 5, rng)
 	for s: float in ([] if in_grounds else [-1.0, 1.0]):
 		_solid(mb, out, Vector3(s * 2.3, 1.1, -d * 0.5 + 0.7), Vector3(0.9, 2.2, 0.9), MeshBuilder.glow(BRICKS[0], MeshBuilder.BRICK))
 		mb.ball(Vector3(s * 2.3, 2.5, -d * 0.5 + 0.7), Vector3(0.3, 0.3, 0.3), MeshBuilder.glow(Color(1.0, 0.9, 0.6), MeshBuilder.GLOW_LAMP), 6, 3)
@@ -3085,6 +3238,9 @@ static func mansion(mb, out: Array, w: float, d: float, rng: RandomNumberGenerat
 ## Garden apartments: a long two- or three-storey walk-up with an outside
 ## walkway on every floor, two stair towers, a hip roof and front parking.
 static func garden_apartments(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator) -> void:
+	# T1 cheap and run down (faded paint, chain-link, beaters, an overflowing
+	# dumpster), T2 kept up.
+	var t := _wealth(1, 2, 2)
 	var floors := 2 if rng.randf() < 0.5 else 3
 	const FH := 3.0
 	var H := floors * FH
@@ -3092,10 +3248,10 @@ static func garden_apartments(mb, out: Array, w: float, d: float, rng: RandomNum
 	var bd := clampf(d * 0.3, 7.5, 11.0)
 	var cz := d * 0.5 - 2.0 - bd * 0.5
 	var fz := cz - bd * 0.5
-	var paint: Color = _pick(PASTELS, rng)
-	var accent: Color = _pick(ACCENTS, rng)
+	var paint: Color = _worn(_pick(PASTELS, rng), t)
+	var accent: Color = _worn(_pick(ACCENTS, rng), t)
 	var roof: Color = _pick(SHINGLES, rng) if rng.randf() < 0.6 else MeshBuilder.glow(TERRACOTTA, MeshBuilder.SEAM_ROOF)
-	_pad(mb, -w * 0.5, w * 0.5, -d * 0.5, d * 0.5, MeshBuilder.glow(LAWN, MeshBuilder.GRASS))
+	_pad(mb, -w * 0.5, w * 0.5, -d * 0.5, d * 0.5, MeshBuilder.glow(LAWN.lerp(DIRT, 0.45) if t <= 1 else LAWN, MeshBuilder.GRASS))
 	_solid(mb, out, Vector3(0, H * 0.5, cz), Vector3(bl, H, bd), paint)
 	_hip(mb, Vector3(0, H, cz - 0.9), bl + 0.8, bd + 2.6, 2.2, roof)
 	var units := maxi(2, int(bl / 7.0))
@@ -3128,11 +3284,28 @@ static func garden_apartments(mb, out: Array, w: float, d: float, rng: RandomNum
 	_pad(mb, -w * 0.5 + 1.0, w * 0.5 - 1.0, -d * 0.5, fz - 4.4, MeshBuilder.glow(ASPHALT, MeshBuilder.ASPHALT), 0.04)
 	_route_out(mb, -2.6, 2.6, d, MeshBuilder.glow(ASPHALT, MeshBuilder.ASPHALT))
 	var n := int((w - 4.0) / 2.7)
-	_stalls(mb, -n * 1.35, fz - 4.6, n, 2.7, minf(5.5, fz - 4.6 + d * 0.5), -1.0)
+	var stall_d := minf(5.5, fz - 4.6 + d * 0.5)
+	_stalls(mb, -n * 1.35, fz - 4.6, n, 2.7, stall_d, -1.0)
+	# Tenants' cars nose-in, clear of the drive's middle stalls.
+	if stall_d >= 4.6:
+		for i in n:
+			var x := -n * 1.35 + 1.35 + i * 2.7
+			if absf(x) > 2.6 and rng.randf() < 0.45:
+				_wealth_car(mb, out, Vector3(x, 0, fz - 4.6 - stall_d * 0.5), PI, t, rng)
 	_solid(mb, out, Vector3(w * 0.5 - 2.0, 0.9, d * 0.5 - 1.6), Vector3(3.0, 1.8, 2.0), MeshBuilder.glow(CONCRETE, MeshBuilder.CONCRETE))
+	if t <= 1:
+		# Bags heaped on the dumpster pen, and burglar bars on the ground floor.
+		for k in 4:
+			mb.ball(Vector3(w * 0.5 - 2.9 + k * 0.6, 1.95, d * 0.5 - 1.6 + (k % 2) * 0.4 - 0.2), Vector3(0.35, 0.3, 0.35), Color(0.08, 0.08, 0.09), 6, 3)
+		for u in units:
+			var x := -bl * 0.5 + uw * (u + 0.5)
+			_bars(mb, Vector3(x, 1.6, fz), Vector3(x + uw * 0.5, 1.6, fz), 1, Vector2(1.4, 1.2), Vector3.FORWARD)
 	for s: float in [-1.0, 1.0]:
 		Props.crepe_myrtle(mb, out, Vector3(s * (w * 0.5 - 1.6), 0, cz), rng)
-	_lot_fence(mb, out, w, d, "board", Color(0.78, 0.72, 0.62), [], false)
+	if t <= 1:
+		_lot_fence(mb, out, w, d, "chain", Color(0.66, 0.68, 0.7), [], false)
+	else:
+		_lot_fence(mb, out, w, d, "board", Color(0.78, 0.72, 0.62), [], false)
 
 
 ## Strip mall: a row of shop units under one parapet with a feature tower,
@@ -3482,6 +3655,7 @@ static func deco_hotel(mb, out: Array, w: float, d: float, rng: RandomNumberGene
 ## Beach condo tower: ten to sixteen floors of balconies with glass rails,
 ## corner fins, a rooftop pool, a porte-cochère and palms.
 static func condo_tower(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator) -> void:
+	var t := _wealth(3, 4, 4)  # T4 has the roof pool deck and the garden pool
 	var floors := rng.randi_range(10, 16)
 	const FH := 3.2
 	var H := floors * FH + 1.0
@@ -3513,10 +3687,11 @@ static func condo_tower(mb, out: Array, w: float, d: float, rng: RandomNumberGen
 	# Roof: parapet, plant, a pool deck with loungers.
 	_flat_roof(mb, 0, cz, tw, td, H, rng, accent.darkened(0.2), true)
 	var pw := tw * 0.5
-	mb.box(Vector3(-tw * 0.15, H + 0.1, cz - td * 0.15), Vector3(pw + 2.0, 0.12, td * 0.45), MeshBuilder.glow(Buildings.DECK, MeshBuilder.SIDING))
-	mb.box(Vector3(-tw * 0.15, H + 0.18, cz - td * 0.15), Vector3(pw, 0.06, td * 0.25), POOL)
-	for k in 3:
-		mb.box(Vector3(-tw * 0.15 - pw * 0.4 + k * pw * 0.4, H + 0.3, cz - td * 0.15 - td * 0.18), Vector3(0.6, 0.15, 1.4), WHITE)
+	if t >= 4:
+		mb.box(Vector3(-tw * 0.15, H + 0.1, cz - td * 0.15), Vector3(pw + 2.0, 0.12, td * 0.45), MeshBuilder.glow(Buildings.DECK, MeshBuilder.SIDING))
+		mb.box(Vector3(-tw * 0.15, H + 0.18, cz - td * 0.15), Vector3(pw, 0.06, td * 0.25), POOL)
+		for k in 3:
+			mb.box(Vector3(-tw * 0.15 - pw * 0.4 + k * pw * 0.4, H + 0.3, cz - td * 0.15 - td * 0.18), Vector3(0.6, 0.15, 1.4), WHITE)
 	# Porte-cochère, drop-off, palms.
 	_canopy(mb, out, -4.0, 4.0, fz - 5.5, fz - 0.6, 4.6, 0.45, accent, MeshBuilder.glow(Buildings.MEMBRANES[0], MeshBuilder.ROOF), [Vector3(-3.6, 0, fz - 5.2), Vector3(3.6, 0, fz - 5.2)], WHITE)
 	_pad(mb, -6.0, 6.0, -d * 0.5, fz - 0.6, MeshBuilder.glow(ASPHALT, MeshBuilder.ASPHALT), 0.04)
@@ -3524,7 +3699,7 @@ static func condo_tower(mb, out: Array, w: float, d: float, rng: RandomNumberGen
 		Props.palm(mb, out, Vector3(s * (w * 0.5 - 3.2), 0, -d * 0.5 + 3.2), rng)
 		if d * 0.5 - bz > 5.0:
 			Props.palm(mb, out, Vector3(s * (w * 0.5 - 3.2), 0, d * 0.5 - 3.2), rng)
-	if d * 0.5 - bz > 7.0:
+	if t >= 4 and d * 0.5 - bz > 7.0:
 		var pz0 := bz + 2.5
 		var pz1 := d * 0.5 - 1.0
 		mb.box(Vector3(0, 0.07, (pz0 + pz1) * 0.5), Vector3(minf(tw * 0.6, 12.0), 0.04, pz1 - pz0 - 1.0), POOL)

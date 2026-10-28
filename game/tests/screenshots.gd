@@ -75,6 +75,11 @@ func _run() -> void:
 		await _routes(game)
 		get_tree().quit()
 		return
+	if OS.get_environment("SHOTS") == "wealth":
+		# Just one home of each kind at each household tier it takes.
+		await _wealth(game)
+		get_tree().quit()
+		return
 	if OS.get_environment("SHOTS") == "roads":
 		# Just the wide roads (quick look while working on them).
 		await _roads(game)
@@ -313,6 +318,35 @@ func _routes(game) -> void:
 		seen[key] = true
 		stops.append(["73_%02d_%s" % [stops.size(), key.replace("@", "_in_")], Vector2(l[0], l[1]), 34.0 if kind != "rowhouse_row" else 50.0])
 	stops.append(["73_%02d_rowhouse_city_edge" % stops.size(), Vector2(391, -121), 60.0])
+	for stop in stops:
+		var at: Vector2 = stop[1]
+		var pos := Vector3(at.x, Terrain.height(at.x, at.y), at.y)
+		game.city.stream_now(pos)
+		game.player.global_position = pos
+		game.player.reset_physics_interpolation()
+		game.camera.fixed_focus = pos
+		game.camera.room_size = stop[2]
+		game.camera.snap()
+		await _frames(90)
+		await _shot(stop[0] + ".png")
+	game.camera.fixed_focus = null
+	game.camera.room_size = 0.0
+
+
+## One home of each kind at each household tier (HANDOFF-wealth.md), the
+## street's lot centred: 74_<tier>_<kind>.
+func _wealth(game) -> void:
+	var c = game.city.country
+	var stops := []
+	var seen := {}
+	for l: Array in c.lots:
+		var t := int(l[10]) if l.size() > 10 else -1
+		var key := "T%d_%s" % [t, c.kinds[int(l[5])]]
+		if t < 0 or seen.has(key):
+			continue
+		seen[key] = true
+		stops.append(["74_%s" % key, Vector2(l[0], l[1]), 50.0 if c.kinds[int(l[5])] in ["rowhouse_row", "mansion", "condo_tower", "garden_apartments"] else 30.0])
+	stops.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
 	for stop in stops:
 		var at: Vector2 = stop[1]
 		var pos := Vector3(at.x, Terrain.height(at.x, at.y), at.y)

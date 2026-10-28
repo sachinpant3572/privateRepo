@@ -45,7 +45,9 @@ var roads: Array = []
 ## Country junction -> plan junction, and back (plan -> [country]).
 var links := {}
 var plan_links := {}
-## [x, y, yaw, w, d, kind index, landmark id, zone, plot (-1: none)].
+## [x, y, yaw, w, d, kind index, landmark id, zone, plot (-1: none), reach
+## [left, middle, right] (HANDOFF-routes.md), household tier (-1: not a home;
+## HANDOFF-wealth.md), land value 0..1].
 var lots: Array = []
 ## Road-square plots that hold grounds and lots (HANDOFF-plots.md):
 ## [x, y, yaw, w, d, type index, parts]; parts are [kind index, x, z, w, d,

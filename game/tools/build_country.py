@@ -34,6 +34,7 @@ from shapely.strtree import STRtree
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from road_classes import CLASSES, CITY_RANK  # noqa: E402
 import farmland  # noqa: E402
+import wealth  # noqa: E402
 from mountain import Mountain, roads as mountain_roads, OBSERVATORY, OBSERVATORY_SIZE, OBSERVATORY_ROAD_END, LETTERS, LETTERS_SIZE, MASTS, MAST_SIZE  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -2896,6 +2897,8 @@ class Country:
         self.ground_zones()
         self.mountain_terrain()
         self.lot_reach()
+        self.wealth = wealth.Wealth(self)
+        self.wealth.assign()
         self.polyline_outputs()
         self.tiles()
 
@@ -3005,6 +3008,7 @@ class Country:
                     if any(poly.intersects(h) for h in homes):
                         under.append((round(c[0]), round(c[1])))
         print("cluster footpaths under a home:", len(under), under[:5])
+        self.wealth.report()
         self.self_check()
         self.mountain_check()
 
@@ -3130,7 +3134,8 @@ class Country:
             t["k"] = [gx, gy]
             tiles.append(t)
         lots = [[round(l["x"], 2), round(l["y"], 2), round(l["yaw"], 4), l["w"], l["d"], KINDS.index(l["kind"]),
-                 l["id"], l["zone"], l["plot"], l.get("reach", [0.0, 0.0, 0.0])] for l in self.lots]
+                 l["id"], l["zone"], l["plot"], l.get("reach", [0.0, 0.0, 0.0]), l.get("tier", -1), l.get("value", 0.0)]
+                for l in self.lots]
         plots = [[round(p["x"], 2), round(p["y"], 2), round(p["yaw"], 4), round(p["w"], 2), round(p["d"], 2),
                   PLOT_TYPES.index(p["type"]),
                   [[PART_KINDS.index(q[0]), round(q[1], 2), round(q[2], 2), round(q[3], 2), round(q[4], 2),

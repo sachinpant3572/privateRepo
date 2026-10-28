@@ -660,6 +660,7 @@ static func _lot(ctx: Ctx, i: int) -> void:
 	var v0: int = ctx.mb.verts.size()
 	var o0 := ctx.out.size()
 	Kit.reach = l[9] if l.size() > 9 else [0.0, 0.0, 0.0]
+	Kit.wealth = int(l[10]) if l.size() > 10 else -1
 	Kit.route_step = 1.0 if ctx.hill else 0.0
 	Kit.route_out_verts.clear()
 	Kit.build(kind, ctx.mb, local, Vector2(l[3], l[4]), rng, l.size() > 8 and int(l[8]) >= 0 and c.plot_types[int(c.plots[int(l[8])][5])] == "estate")
@@ -672,6 +673,7 @@ static func _lot(ctx: Ctx, i: int) -> void:
 		_bend_routes(ctx, l)
 	Kit.route_out_verts.clear()
 	Kit.reach = [0.0, 0.0, 0.0]
+	Kit.wealth = -1
 
 
 ## A hill lot's routes past its front: from the pad's height at the front

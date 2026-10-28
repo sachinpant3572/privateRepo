@@ -358,8 +358,9 @@ Esplanade's arch (shots 37 to 41), and the traffic circles and the
 Bellerive Hills (45 to 52; `SHOTS=hills` before the command shoots just
 those). `SHOTS=roads` shoots the wide roads (53 to 58), `SHOTS=props` a car
 through a lamp, a tree and a hydrant (59 to 64), `SHOTS=farm` Golden
-Flats' farmland (65 to 72), and `SHOTS=routes` the way in to one home of
-each kind and setting (73).
+Flats' farmland (65 to 72), `SHOTS=routes` the way in to one home of
+each kind and setting (73), and `SHOTS=wealth` one home of each kind at each
+household tier it takes (74).
 
 The country is generated, not hand-made. After changing `data/world_map.json`
 or the street plan, dump the plan and rebuild it (needs `pip install shapely`):

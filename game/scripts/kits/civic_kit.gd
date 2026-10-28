@@ -1746,6 +1746,8 @@ static func painted_lady_row(mb, out: Array, w: float, d: float, rng: RandomNumb
 ## 6 m wide, alternating turret bays and front porches, painted cornices,
 ## small front yards behind low iron fences.
 static func rowhouse_row(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator) -> void:
+	# T1 faded fronts with barred ground floors, T2 as built, T3 window boxes.
+	var t := Kit._wealth(1, 3, 2)
 	var n := maxi(1, roundi(w / 6.0))
 	var uw := w / n
 	var fy := clampf(d * 0.25, 1.8, 4.0)
@@ -1763,7 +1765,7 @@ static func rowhouse_row(mb, out: Array, w: float, d: float, rng: RandomNumberGe
 		var x0 := -w * 0.5 + i * uw
 		var cx := x0 + uw * 0.5
 		var front: Array = ROW_FRONTS[(start + i * 2) % ROW_FRONTS.size()]
-		var face := Color(front[0], front[1])
+		var face := Kit._worn(Color(front[0], front[1]), t)
 		var floors := 2 if rng.randf() < 0.45 else 3
 		var H := 0.6 + floors * FH + 0.5
 		hmax = maxf(hmax, H)
@@ -1782,6 +1784,10 @@ static func rowhouse_row(mb, out: Array, w: float, d: float, rng: RandomNumberGe
 			Kit._hip(mb, Vector3(fx, H - 0.6, hf - 0.55), bwid + 0.3, 1.4, 1.2, MeshBuilder.glow(Color(0.3, 0.32, 0.35), MeshBuilder.SEAM_ROOF))
 			for f in floors:
 				Kit._windows(mb, Vector3(fx, 0.6 + f * FH + 1.6, hf - 1.1), Vector3(fx, 0.6 + f * FH + 1.6, hf - 1.1), 1, Vector2(bwid - 0.8, 1.8), rng, Vector3.FORWARD, 0.5)
+			if t <= 1:
+				Kit._bars(mb, Vector3(fx, 2.2, hf - 1.1), Vector3(fx, 2.2, hf - 1.1), 1, Vector2(bwid - 0.8, 1.8), Vector3.FORWARD)
+			elif t >= 3:
+				Kit._flower_box(mb, Vector3(fx, 0.6 + FH + 0.6, hf - 1.12), bwid - 0.6, rng)
 		else:
 			# A front porch: a low deck, two posts, a roof slab.
 			mb.box(Vector3(cx, 0.3, hf - 0.9), Vector3(uw - 0.2, 0.6, 1.8), MeshBuilder.glow(Color(0.6, 0.58, 0.55), MeshBuilder.CONCRETE))
@@ -1790,6 +1796,10 @@ static func rowhouse_row(mb, out: Array, w: float, d: float, rng: RandomNumberGe
 				Kit._post(mb, out, Vector3(cx + s * (uw * 0.5 - 0.3), 0.6, hf - 1.7), 2.8, 0.2, TRIM)
 			for f in floors:
 				Kit._windows(mb, Vector3(fx, 0.6 + f * FH + 1.6, hf), Vector3(fx, 0.6 + f * FH + 1.6, hf), 1, Vector2(1.1, 1.9), rng, Vector3.FORWARD, 0.5)
+			if t <= 1:
+				Kit._bars(mb, Vector3(fx, 2.2, hf), Vector3(fx, 2.2, hf), 1, Vector2(1.1, 1.9), Vector3.FORWARD)
+			elif t >= 3:
+				Kit._flower_box(mb, Vector3(fx, 0.6 + FH + 0.6, hf - 0.02), 1.3, rng)
 		mb.box(Vector3(dx, 0.6 + 1.15, hf - 0.05), Vector3(1.1, 2.3, 0.1), cor.darkened(0.1))
 		for f in floors - 1:
 			Kit._windows(mb, Vector3(dx, 0.6 + (f + 1) * FH + 1.6, hf), Vector3(dx, 0.6 + (f + 1) * FH + 1.6, hf), 1, Vector2(1.0, 1.8), rng, Vector3.FORWARD, 0.5)
@@ -1803,7 +1813,9 @@ static func rowhouse_row(mb, out: Array, w: float, d: float, rng: RandomNumberGe
 			_fence_panel(mb, Vector3(x0 + 0.1, 0, fz), Vector3(dx - 0.8, 0, fz), 0.65, iron)
 		if x0 + uw - 0.1 - (dx + 0.8) > 0.4:
 			_fence_panel(mb, Vector3(dx + 0.8, 0, fz), Vector3(x0 + uw - 0.1, 0, fz), 0.65, iron)
-		if not bay and rng.randf() < 0.5:
+		if t <= 1:
+			pass  # a bare front yard
+		elif not bay and rng.randf() < 0.5:
 			Kit._bush(mb, Vector3(fx, 0, -d * 0.5 + 0.9), 0.55, rng)
 		elif bay and fy > 2.5:
 			Kit._bush(mb, Vector3(fx, 0, -d * 0.5 + 0.8), 0.5, rng)
@@ -1814,6 +1826,7 @@ static func rowhouse_row(mb, out: Array, w: float, d: float, rng: RandomNumberGe
 ## dormers, a central door with shutters either side and a chimney; the
 ## siding, shutter and roof colours vary.
 static func cape_house(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator) -> void:
+	var t := Kit._wealth(2, 3, 2)  # T3: window boxes and a lamp post by the walk
 	var bw := clampf(w * 0.8, 6.0, 12.0)
 	var bd := clampf(d * 0.68, 5.0, 9.0)
 	var fz := -d * 0.5 + clampf(d * 0.24, 1.5, 4.0)
@@ -1847,6 +1860,8 @@ static func cape_house(mb, out: Array, w: float, d: float, rng: RandomNumberGene
 	mb.box(Vector3(0, 2.3, fz - 0.3), Vector3(0.3, 0.3, 0.2), MeshBuilder.glow(Props.LAMP_GLOW, MeshBuilder.GLOW_LAMP))
 	for s: float in [-1.0, 1.0]:
 		Kit._windows(mb, Vector3(s * bw * 0.24, 1.5, fz), Vector3(s * bw * 0.24, 1.5, fz), 1, Vector2(1.0, 1.3), rng, Vector3.FORWARD, 0.5, shutter)
+		if t >= 3:
+			Kit._flower_box(mb, Vector3(s * bw * 0.24, 0.8, fz - 0.02), 1.2, rng)
 		Kit._windows(mb, Vector3(s * bw * 0.5, 1.5, fz + 1.0), Vector3(s * bw * 0.5, 1.5, fz + bd - 1.0), 2, Vector2(0.9, 1.1), rng, Vector3(s, 0, 0), 0.4)
 		Kit._bush(mb, Vector3(s * bw * 0.36, 0, fz - 0.7), 0.6, rng)
 	Kit._windows(mb, Vector3(-bw * 0.5 + 1.0, 1.5, fz + bd), Vector3(bw * 0.5 - 1.0, 1.5, fz + bd), 3, Vector2(0.9, 1.1), rng, Vector3.BACK, 0.4)
@@ -1854,6 +1869,10 @@ static func cape_house(mb, out: Array, w: float, d: float, rng: RandomNumberGene
 	mb.box(Vector3(ch * (bw * 0.5 - 0.5), (WH + rise + 0.8) * 0.5, cz + 0.4), Vector3(0.8, WH + rise + 0.8, 0.9), MeshBuilder.glow(Kit.BRICKS[0], MeshBuilder.BRICK))
 	if w - bw > 2.4:
 		Props.crepe_myrtle(mb, out, Vector3((w * 0.5 - 1.8) * (-ch), 0, -d * 0.5 + 1.8), rng)
+	if t >= 3:
+		var lamp := Vector3(1.0, 0, -d * 0.5 + 0.6)
+		mb.cylinder(lamp, 0.05, 1.7, Color(0.12, 0.12, 0.13), 6)
+		mb.ball(lamp + Vector3(0, 1.8, 0), Vector3(0.16, 0.2, 0.16), MeshBuilder.glow(Props.LAMP_GLOW, MeshBuilder.GLOW_LAMP), 6, 3)
 
 
 # --- Attractions -------------------------------------------------------------------

@@ -75,6 +75,57 @@ keeps its planned size (the 4.7 km² outline in world_map.json), and every tier 
 Full plan: 4-5 sessions. Cheaper option: phase 1, plus only the residential tower and the cheap
 block, for 2-3 sessions.
 
+## Phase 1 as built (approach, 2026-10-28)
+
+- Country only. City homes already follow their district (projects, tents and SROs T0; shotguns and
+  barred bungalows T1; Creole townhouses and brownstones T3; painted ladies T4). They get a value
+  field when phase 3 places new city kinds.
+- The generator (`tools/wealth.py`, called after `lot_reach`) gives every home lot a value V and a
+  tier. Lot elements 10 and 11 hold the tier (-1 for a lot that is not a home) and V. No lot moves.
+  The spread uses its own hash noise, not the generator's rng, so later zones keep their layouts.
+  - V is the zone base, plus the coast, lakes and the river, height in the hills, and nearness to
+    downtown; minus freeways and highways, rails, industry (the docks, the truck stop, the
+    airstrip), and flood-prone ground by the bayou.
+  - Tier = round(6V - 0.5 + pocket noise of about 160 m + a little per-lot noise), clamped to the
+    kind's range. A shack is T0-T1, a house T1-T4, a mansion T4-T5, and an estate is always T5.
+- The kit reads `Kit.tier` (set by country_tiles like `Kit.reach`). Markers:
+  - upkeep: faded paint, a tarp on the roof, a boarded window, barred windows, junk, a dead lawn;
+  - cars: beaters, then sedans, then luxury cars;
+  - privacy: chain-link, then a board fence, then a picket front, then a hedge and a front wall;
+  - pools.
+- Checks:
+  - the generator prints homes per tier per zone, and mean V and land per household by tier;
+  - the test asserts that every tier is present, that mean V rises with tier, that land per
+    household rises with tier, and that a T1 house and a T4 house build differently.
+
+### Results (country.json regenerated; only the lots' elements 10 and 11 are new)
+
+| Tier | Homes | Mean V | Private ground per household (m²) |
+|---|---|---|---|
+| T0 poorest | 65 | 0.11 | 81 |
+| T1 low wage | 228 | 0.29 | 183 |
+| T2 regular employees | 820 | 0.41 | 371 |
+| T3 professionals | 388 | 0.57 | 528 |
+| T4 business owners | 133 | 0.76 | 544 |
+| T5 owners and CEOs | 21 | 0.74 | 5706 |
+
+- Where the tiers fall:
+  - T0-T1: the bayou camps and Saltgrass;
+  - T1-T2: the fringe rows, Wheaton and the east side;
+  - T3: the shore capes;
+  - T3-T4: the Heights flats, the hills, and the beach condos;
+  - T5: the estates.
+- Estates (T5) average V 0.74, under T4's 0.76: the Verdant Hills wine-country estates stand on
+  cheaper ground than a Heights house. So the check asks T5 to beat T3 on V, and to beat everyone on
+  ground.
+- Ground per household: an estate's or a parcel's area shared by its homes; otherwise the home's own
+  lot shared by its units. A cluster's yard is common ground. Towers are left out, since they are
+  measured by their floors.
+- Gaps phase 2 and 3 fill: the country has no dense poor block (T0 here is only bayou shacks) and no
+  T5 tower. The east side is nearly all T2, because its lots are all one size.
+- Markers that are not built: farm homes other than the small farmhouse (their size already speaks),
+  ranch and adobe houses, and the city.
+
 ## Open questions
 
 - Settled 2026-10-28: the city keeps its planned size.
