@@ -65,10 +65,15 @@ buildings, flying later, keep north-up and outlines): "Yes lets build this as be
 - E-1 Steeper tilt by sight, not by height: every 0.25 s `best_pitch` tries 65, 70, 75, 80 and 85°
   and takes the lowest from whose (unbacked) camera spot the player and all but one of up to seven
   open-ground points (a ring at 0.3 x size and the look-ahead point) are in sight; going lower needs all
-  in sight (no hunting); if none works, the one hiding least, steeper on a tie. Pitch eases (~1 s).
+  in sight; if none works, the one hiding least, steeper on a tie. Pitch eases (~1 s). Tipping up is at
+  once; tipping down waits 3 s after the last tip up and 4 agreeing checks, then one 5° step at a time
+  (review: at 28 m/s downtown the one-point margin alone reversed 9-12 times a minute, with flips like
+  65-85-65 inside 0.3 s; now 6 a minute, each after a hold, and camera pops 13 -> 3, as at a fixed 65°).
   Rejected first try: tilting by the tallest roof round the view (25 -> 80 m) left the hero hidden 18%
   downtown, no better than 65°, because the tower in the way is often not the tallest sampled.
   Speed does not tip it: at 75° the road ahead north-south fell from about 62 to 57 m.
+  Probe (120 spots, real tower back-out), downtown hero / street hidden: persp65 18-20% / 15-16%;
+  persp85 7% / 4-7%; picker 7% / 6% on foot, 11% at driving zoom; elsewhere hero 0%; ortho60 20%.
 - E-2 Speed zoom-out: DRIVE_SIZE 48 -> 62 m, reached at 28 m/s. Lead 1.1 s of velocity, capped per screen
   axis so the car stays on screen: east-west 0.6 x the half width, north-south 0.75 x the ground from the
   focus to the trailing edge (from the pitch and lens). Target: about 100 m ahead east-west, 60 m+
@@ -105,18 +110,18 @@ buildings, flying later, keep north-up and outlines): "Yes lets build this as be
   out (lamp halos then float); a low building can still hide a strip up to 4 m wide beside the player
   (`HIDE_MIN`); Zoom 130% loads about 1.7x the city cells (phone memory not measured).
 
-- About 50 m of road shows ahead at top speed to the north (more east and west). 100 m needs about
-  1.6x zoom at speed (GTA 2 style speed zoom-out); offer as a Settings option if Sachin wants it.
+- Phase 2 review leftovers: the ghost can cover the whole screen when the camera is backed out over
+  a tower (the band widens up to 3x); the picker scores the unbacked eye, so a pitch change can still
+  pop the camera out over a tower; city cells don't carry the ground mark (the city is flat, and the
+  band only touches what is above the player's feet). Phone frame rate and the 4x4 ghost pattern at
+  phone DPI are not measured.
 - A straight-down 90° "2D" view: about 1-2 hours for the camera, plus 0.5-1 session for roof signs
   and stronger hair and hat colours. Not started.
-- Aircraft do not exist yet; the band follows any vehicle the camera targets.
-- Sachin prefers moving the camera over cutting holes (Oct 28). Probe with the real tower back-out,
-  120 spots, downtown hero / street hidden: persp65 18-20% / 15-16%; persp75 15-17% / 10-11%;
-  persp85 7% / 4-5% (elsewhere 0-3%); ortho60 20% / 11-14%. A narrower 25° lens changed nothing.
-  Proposed: pitch steepens toward 85° near towers and at speed, speed zoom-out, and ghosted (part-
-  dithered) buildings instead of holes for what is left. Awaiting his pick.
+- Aircraft do not exist yet; the band follows any vehicle the camera targets (item 4: steep and high).
 
 ## Gates
 
-- `game/tests/run.sh`: 701 checks passed, 0 failed (61 tests; new `test_perspective_camera`).
-- Shots: tour (53), place shots (12), `SHOTS=view` (12) rendered with no errors.
+- `game/tests/run.sh`: 708 checks passed, 0 failed (61 tests; `test_perspective_camera` has 22 checks,
+  including a 40 s downtown drive: tilt turns back <= 8 a minute, 20:9 corners over loaded cells).
+- Shots: tour (53), place shots (12), `SHOTS=view` (16, with 82_drive) rendered with no errors.
+- Review of phase 2 (one serious: pitch hunting at speed) fixed; leftovers under Open.

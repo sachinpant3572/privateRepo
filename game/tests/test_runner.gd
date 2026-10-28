@@ -825,6 +825,69 @@ func test_perspective_camera() -> void:
 	_check(all_on, "the car stays on screen driving each way flat out")
 	_check(all_far, "the road shows far ahead on a 20:9 phone: %s" % ", ".join(report))
 	_check(all_loaded, "the screen's corners lie inside the cells loaded round the middle of the screen")
+	# A real drive along downtown streets at 28 m/s: the tilt settles instead of
+	# hunting, and the corners of a 20:9 screen are over loaded cells.
+	rng.seed = 11
+	var wide_x: float = (rect.size.y * 20.0 / 9.0 - rect.size.x) * 0.5
+	var t := 0.0
+	var turns := 0
+	var changes := 0
+	var last_dir := 0.0
+	var last_want: float = cam._pitch_want
+	var checked := 0
+	var unloaded := 0
+	var tries := 0
+	while t < 40.0 and tries < 300:
+		tries += 1
+		var a := Vector3(rng.randf_range(win.position.x, win.end.x), 0.0, rng.randf_range(win.position.y, win.end.y))
+		if not str(city.district_at(a).get("id", "")) in ["gilt_district", "midtown"]:
+			continue
+		var b := a + Vector3(rng.randf_range(-600.0, 600.0), 0.0, rng.randf_range(-600.0, 600.0))
+		var pts: PackedVector3Array = city.route(city.node_pos(city.nearest_node(a)), city.node_pos(city.nearest_node(b)))
+		if pts.size() < 4:
+			continue
+		car.global_position = pts[0]
+		car.velocity = Vector3.ZERO
+		# The player rides along, as in a real car: the city streams round them.
+		game.player.global_position = pts[0]
+		game.player.reset_physics_interpolation()
+		city.stream_now(pts[0])
+		cam.snap()
+		last_want = cam._pitch_want
+		last_dir = 0.0
+		for k in range(1, pts.size()):
+			var from: Vector3 = pts[k - 1]
+			var leg: Vector3 = pts[k] - from
+			leg.y = 0.0
+			var s := 0.0
+			while s < leg.length() and t < 40.0:
+				await game.get_tree().physics_frame
+				s += 28.0 / 60.0
+				t += 1.0 / 60.0
+				car.velocity = leg.normalized() * 28.0
+				car.global_position = Vector3(from.x, 0.0, from.z) + leg.normalized() * minf(s, leg.length())
+				game.player.global_position = car.global_position
+				var w: float = cam._pitch_want
+				if absf(w - last_want) > 0.1:
+					changes += 1
+					if last_dir != 0.0 and signf(w - last_want) != last_dir:
+						turns += 1
+					last_dir = signf(w - last_want)
+					last_want = w
+				if Engine.get_process_frames() % 15 == 0:
+					for c in [Vector2(-wide_x, 0.0), Vector2(rect.end.x + wide_x, 0.0), Vector2(-wide_x, rect.end.y), Vector2(rect.end.x + wide_x, rect.end.y)]:
+						var co: Vector3 = cam.project_ray_origin(c)
+						var cn: Vector3 = cam.project_ray_normal(c)
+						var cell: int = city.cell_at(co + cn * (-co.y / cn.y))
+						if cell >= 0:
+							checked += 1
+							if city.cell_node(cell) == null:
+								unloaded += 1
+	var per_min := turns / maxf(t, 1.0) * 60.0
+	_check(t > 30.0 and changes > 0 and per_min <= 8.0, "driving downtown the tilt changes %d times and turns back %.1f times a minute (%.0f s driven)" % [changes, per_min, t])
+	# A cell can be a frame or two behind in the build queue (seen 0-7 of 2,500
+	# points, all well inside the load radius), so allow 1%.
+	_check(checked > 100 and unloaded * 100 <= checked, "driving, the 20:9 screen's corners are over loaded cells (%d of %d not yet built)" % [unloaded, checked])
 	cam.target = game.player
 	drive.queue_free()
 	car.queue_free()

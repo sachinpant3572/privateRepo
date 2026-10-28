@@ -40,9 +40,16 @@ const PITCH_TALL := 85.0
 ## that keeps the player and the ground round the view in sight.
 const PITCHES := [65.0, 70.0, 75.0, 80.0, 85.0]
 const PITCH_EVERY := 0.25
+## Tipping up is at once; easing back down waits PITCH_HOLD seconds after the
+## last tip up and PITCH_VOTES checks in a row that agree, then goes one step
+## (5 degrees) at a time, so the camera doesn't hunt at driving speed.
+const PITCH_HOLD := 3.0
+const PITCH_VOTES := 4
 var perspective_pitch := PITCH_LOW
 var _pitch_want := PITCH_LOW
 var _pitch_t := 0.0
+var _pitch_hold := 0.0
+var _pitch_votes := 0
 var _player := Vector3.ZERO
 const PERSPECTIVE_FOV := 35.0
 ## Size of the see-through hole when a building blocks the view of the player.
@@ -111,7 +118,9 @@ func _process(delta: float) -> void:
 		var v: Vector3 = node.velocity
 		var speed := Vector2(v.x, v.z).length()
 		want_size = lerpf(FOOT_SIZE, DRIVE_SIZE, clampf(speed / DRIVE_SPEED, 0.0, 1.0)) * zoom
-		lead = _cap_lead(Vector3(v.x, 0.0, v.z) * LEAD_SECONDS, want_size)
+		# The smaller framing while the zoom eases, and the camera as backed out
+		# now, so the car stays on screen on the way there too.
+		lead = _cap_lead(Vector3(v.x, 0.0, v.z) * LEAD_SECONDS, minf(size, want_size), _back)
 	var look := pos
 	_player = pos
 	if zoom_override > 0.0:
@@ -154,6 +163,8 @@ func snap() -> void:
 		size = room_size
 	_player = target.focus_node().global_position
 	_pitch_t = 0.0
+	_pitch_hold = 0.0
+	_pitch_votes = 0
 	_update_pitch(0.0)
 	_frame(0.0)
 
@@ -164,16 +175,17 @@ func stream_point() -> Vector3:
 
 
 ## The ground the screen shows from the focus: [east-west half width, to the
-## bottom edge (south), to the top edge (north)], for a framing `frame`.
-func ground_extents(frame: float) -> Array[float]:
+## bottom edge (south), to the top edge (north)], for a framing `frame`, with
+## the camera backed out to at least `back_out` (which narrows the lens).
+func ground_extents(frame: float, back_out := 0.0) -> Array[float]:
 	var screen := get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(20.0, 9.0)
 	var half_w := frame * 0.5 * screen.x / maxf(screen.y, 1.0)
 	if not perspective:
 		var d := frame * 0.5 / sin(deg_to_rad(PITCH))
 		return [half_w, d, d]
 	var p := deg_to_rad(perspective_pitch)
-	var hf := deg_to_rad(PERSPECTIVE_FOV) * 0.5
-	var back := frame * 0.5 / tan(hf)
+	var back := maxf(frame * 0.5 / tan(deg_to_rad(PERSPECTIVE_FOV) * 0.5), back_out)
+	var hf := atan(frame * 0.5 / back)
 	var height := back * sin(p)
 	var behind := back * cos(p)
 	var south := behind - height / tan(p + hf) if p + hf < PI * 0.5 else behind + height * tan(p + hf - PI * 0.5)
@@ -183,8 +195,8 @@ func ground_extents(frame: float) -> Array[float]:
 
 ## The lead, capped so the car stays on screen: east-west to 0.6 of the half
 ## width, north-south to 0.75 of the ground behind the focus on that side.
-func _cap_lead(lead: Vector3, frame: float) -> Vector3:
-	var e := ground_extents(frame)
+func _cap_lead(lead: Vector3, frame: float, back_out := 0.0) -> Vector3:
+	var e := ground_extents(frame, back_out)
 	lead.x = clampf(lead.x, -e[0] * 0.6, e[0] * 0.6)
 	# Heading north (-z) the focus moves north and the car toward the bottom.
 	lead.z = clampf(lead.z, -e[1] * 0.75, e[2] * 0.75)
@@ -198,11 +210,25 @@ func _update_pitch(delta: float) -> void:
 	if not perspective:
 		return
 	_pitch_t -= delta
+	_pitch_hold -= delta
 	if fixed_focus != null:
 		_pitch_want = PITCH_LOW
 	elif _pitch_t <= 0.0 and is_inside_tree():
 		_pitch_t = PITCH_EVERY
-		_pitch_want = best_pitch(_player, _focus, _pitch_want)
+		var pick := best_pitch(_player, _focus, _pitch_want)
+		if delta <= 0.0:
+			_pitch_want = pick
+		elif pick > _pitch_want + 0.1:
+			_pitch_want = pick
+			_pitch_hold = PITCH_HOLD
+			_pitch_votes = 0
+		elif pick < _pitch_want - 0.1:
+			_pitch_votes += 1
+			if _pitch_hold <= 0.0 and _pitch_votes >= PITCH_VOTES:
+				_pitch_want = maxf(pick, _pitch_want - 5.0)
+				_pitch_votes = 0
+		else:
+			_pitch_votes = 0
 	perspective_pitch = _pitch_want if delta <= 0.0 else lerpf(perspective_pitch, _pitch_want, 1.0 - exp(-2.5 * delta))
 
 
@@ -291,7 +317,7 @@ func _clear_back(from: Vector3, base: float, slot := -1) -> float:
 	var frame := Engine.get_process_frames()
 	if slot >= 0 and _clear_memo.has(slot):
 		var m: Array = _clear_memo[slot]
-		if absf(m[1] - base) < 0.5 and absf(m[4] - perspective_pitch) < 0.5 and from.distance_squared_to(m[0]) < 2.25 and frame - int(m[3]) < 30:
+		if absf(m[1] - base) < 0.5 and absf(m[4] - perspective_pitch) < 2.0 and from.distance_squared_to(m[0]) < 2.25 and frame - int(m[3]) < 30:
 			return m[2]
 	var query := PhysicsPointQueryParameters3D.new()
 	query.collision_mask = L.WORLD
