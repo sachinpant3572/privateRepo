@@ -7821,7 +7821,10 @@ func test_exhaust_by_kind_and_norms() -> void:
 	# A cold start steams; warm on a dry day, a modern petrol car shows nothing.
 	Fx.puffs.clear()
 	var car = _player_car("sedan", Vector3(150.0, 0, 150.0), 0.0)
-	await _frames(40)
+	# A healthy engine: a rolled worn one would smoke grey, not steam.
+	car._roll_emissions()
+	car._emit.smoker = false
+	await _frames(60)
 	var steam := 0
 	for c in Fx.puffs.colors():
 		steam += int(c.r > 0.93)

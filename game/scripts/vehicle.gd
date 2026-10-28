@@ -1246,7 +1246,7 @@ func _exhaust(delta: float) -> void:
 	elif (_cold > 0.0 or air > 0.4) and pace < 10.0:
 		color = Emissions.VAPOUR
 		color.a *= clampf(maxf(_cold / COLD_START, air), 0.4, 1.0)
-		size = 0.18
+		size = 0.26
 		every = 0.12 if _load > 0.3 else 0.22
 	if color.a <= 0.0:
 		return

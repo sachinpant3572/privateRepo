@@ -21,7 +21,8 @@ var _grow := PackedFloat32Array()
 var _col := PackedColorArray()
 var _buf := PackedFloat32Array()
 var _game
-## Night darkens the puffs (they are unshaded): 1 by day.
+## Night darkens the puffs (they are unshaded): 1 by day; not to black,
+## as street and car lights catch the smoke.
 var _light := 1.0
 
 
@@ -115,7 +116,7 @@ func _process(delta: float) -> void:
 	if _game == null or not is_instance_valid(_game):
 		_game = get_tree().get_first_node_in_group("game")
 	if _game != null and _game.get("atmosphere") != null:
-		_light = lerpf(1.0, 0.32, _game.atmosphere.night_amount())
+		_light = lerpf(1.0, 0.5, _game.atmosphere.night_amount())
 	var i := 0
 	while i < _pos.size():
 		_age[i] += delta

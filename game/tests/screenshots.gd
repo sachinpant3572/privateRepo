@@ -54,7 +54,7 @@ func _run() -> void:
 	game.settings["camera_turn"] = "north"
 	game.missions_enabled = OS.get_environment("SHOTS") == "intro"
 	game.save_enabled = false
-	if OS.get_environment("SHOTS") == "blood":
+	if OS.get_environment("SHOTS") in ["blood", "exhaust"]:
 		game.population_enabled = false # a quiet street: only the people the shots put there
 	add_child(game)
 	if game.missions_enabled:
@@ -128,6 +128,11 @@ func _run() -> void:
 	if OS.get_environment("SHOTS") == "blood":
 		# A street fight's spatter, car hits' smears and pools (0.23).
 		await _blood(game)
+		get_tree().quit()
+		return
+	if OS.get_environment("SHOTS") == "exhaust":
+		# Exhaust by kind and norms, tyre smoke and tyre marks (0.23).
+		await _exhaust(game)
 		get_tree().quit()
 		return
 	await _shot("1_on_foot.png")
@@ -801,6 +806,156 @@ func _blood(game) -> void:
 	await _shot("blood_9_night_close_low.png")
 	game.camera.fixed_focus = null
 	game.camera.room_size = 0.0
+
+
+## A street with: an old diesel semi pulling away (soot), a sedan's
+## cold-start vapour at night, a drift's smoke and dark marks, and an ABS
+## sedan's faint marks beside a motorbike's locked-wheel ones.
+func _exhaust(game) -> void:
+	game.player.visible = false
+	game.player.process_mode = Node.PROCESS_MODE_DISABLED
+	game.Graphics.pick(game.settings, "high")
+	game.apply_settings()
+	Controls.scheme = "arrows"
+	# A low-rise street in the wards (39_wards_from_above), so the road is
+	# in the sun: dark rubber does not show in a downtown tower's shadow.
+	var at := Vector3(1080, 0, 620)
+	print("exhaust: street near %s" % at)
+	# The city streams round the (hidden) player.
+	game.player.global_position = at
+	game.city.stream_now(at)
+	var near: Array = game.city.nearest_sidewalk(at)
+	var loop: PackedVector3Array = game.city.sidewalk_loops[near[0]]
+	var walk: Vector3 = loop[near[1]]
+	var along: Vector3 = loop[(near[1] + 1) % loop.size()] - walk
+	along.y = 0.0
+	along = along.normalized()
+	var lane := walk
+	for side in [Vector3(-along.z, 0, along.x), Vector3(along.z, 0, -along.x)]:
+		for k in 30:
+			var p: Vector3 = walk + side * (0.5 * k)
+			if Fx.bloodwork._paving(Vector2(p.x, p.z)) <= 0.0:
+				if lane == walk:
+					lane = p + side * 3.0
+				break
+	var across := (lane - walk).normalized()
+	var yaw := atan2(-along.x, -along.z) # the nose (-z) along the street
+	var cam = game.camera
+	cam.room_size = 22.0
+
+	# 1-2: an old (pre-filter) diesel semi pulls away and shifts up.
+	var semi = _exhaust_car(game, "semi", lane - along * 30.0, yaw)
+	semi._roll_emissions()
+	semi._emit.old = true
+	semi._emit.smoker = false
+	semi._engine_on = true # warm: no cold-start vapour in this one
+	# The camera first: puffs further than 70 m from it are not made.
+	_exhaust_look(cam, semi.global_position + along * 4.0)
+	await _frames(3)
+	semi.drive_path(PackedVector3Array([lane + along * 60.0]), 0.95)
+	await _frames(70)
+	_exhaust_look(cam, semi.global_position)
+	await _frames(3)
+	await _shot("exhaust_1_diesel_pull.png")
+	await _frames(50)
+	_exhaust_look(cam, semi.global_position)
+	await _frames(3)
+	await _shot("exhaust_2_diesel_shift.png")
+	print("exhaust: semi speed %.1f, gear %d, %d puffs" % [semi.speed, semi._gear, Fx.puffs.count()])
+	semi.queue_free()
+	await _frames(240) # the soot clears
+
+	# 3-4: a sedan's cold start, at dawn and at night: white vapour at the
+	# tailpipe (a warm modern car shows nothing).
+	var shot := 3
+	for hour in [6.6, 22.0]:
+		game.atmosphere.hour = hour
+		var cold = _exhaust_car(game, "sedan", lane - along * 30.0, yaw)
+		cold._roll_emissions()
+		cold._emit.smoker = false
+		_exhaust_look(cam, cold.global_position + along * 2.0)
+		cam.room_size = 12.0
+		await _frames(3)
+		cold.driver = Vehicle.Driver.PLAYER
+		await _frames(90)
+		await _frames(3)
+		await _shot("exhaust_%d_cold_start_%s.png" % [shot, "dawn" if hour < 12.0 else "night"])
+		shot += 1
+		cold.queue_free()
+		await _frames(2)
+	cam.room_size = 22.0
+	game.atmosphere.hour = 12.5
+	Fx.puffs.clear()
+
+	# 5-6: a drift: tyre smoke and dark curving marks.
+	var drift = _exhaust_car(game, "sports", lane - along * 25.0 + across * 1.0, yaw)
+	var start: Vector3 = drift.global_position
+	_exhaust_look(cam, start + along * 8.0)
+	await _frames(3)
+	drift.driver = Vehicle.Driver.PLAYER
+	drift.speed = 20.0
+	drift.velocity = along * 20.0
+	Input.action_press("gas")
+	Input.action_press("steer_left")
+	await _frames(12)
+	Input.action_release("gas")
+	Input.action_press("brake")
+	await _frames(12)
+	Input.action_release("brake")
+	await _frames(30)
+	Input.action_release("steer_left")
+	# Framed over the lane it left (framed further out, the camera sits in
+	# the far side's buildings).
+	_exhaust_look(cam, start + along * (drift.global_position - start).dot(along) + across * 2.0)
+	await _frames(2)
+	await _shot("exhaust_5_drift.png")
+	await _frames(60)
+	# Back where it slid: the marks (and the smoke clearing).
+	_exhaust_look(cam, start + along * 12.0 + across * 1.0)
+	await _frames(2)
+	await _shot("exhaust_6_drift_marks.png")
+	drift.queue_free()
+	await _frames(2)
+
+	# 7: hard stops side by side: the sedan's ABS leaves faint broken marks,
+	# the motorbike (no ABS) locks up and marks dark.
+	# Kept near the near kerb: framed further out, the camera (65 degrees,
+	# no cutaway while its focus is fixed) sits inside the far side's towers.
+	var sedan = _exhaust_car(game, "sedan", lane - along * 20.0 + across * 0.5, yaw)
+	var bike = _exhaust_car(game, "motorbike", lane - along * 20.0 + across * 4.0, yaw)
+	_exhaust_look(cam, sedan.global_position + along * 4.0)
+	await _frames(3)
+	for v in [sedan, bike]:
+		v._engine_on = true
+		v.driver = Vehicle.Driver.PLAYER
+		v.speed = 20.0
+		v.velocity = along * 20.0
+	Input.action_press("brake")
+	await _frames(70)
+	Input.action_release("brake")
+	_exhaust_look(cam, sedan.global_position - along * 6.0 + across * 1.0)
+	await _frames(3)
+	await _shot("exhaust_7_abs_vs_locked.png")
+	print("exhaust: %d tyre marks, %d puffs" % [Fx._skid_total, Fx.puffs.count()])
+	Controls.scheme = "stick"
+	cam.fixed_focus = null
+	cam.room_size = 0.0
+
+
+func _exhaust_car(game, kind: String, pos: Vector3, yaw: float):
+	var car = Vehicle.new()
+	car.kind = kind
+	game.add_child(car)
+	pos.y = Terrain.height(pos.x, pos.z)
+	car.global_position = pos
+	car.rotation.y = yaw
+	return car
+
+
+func _exhaust_look(cam, at: Vector3) -> void:
+	at.y = Terrain.height(at.x, at.z)
+	cam.fixed_focus = at
+	cam.snap()
 
 
 ## A pedestrian standing still at `pos` facing `yaw`, on sidewalk loop
