@@ -7127,8 +7127,11 @@ func test_hard_crash_throws_panel() -> void:
 			if n.get_script() == CarDebris and not pieces.has(n):
 				pieces.append(n)
 	_check(pieces.size() >= 1, "a 72 km/h crash throws %d panel(s) off" % pieces.size())
+	# The oldest may be gone: at most CarDebris.MAX lie about, counting
+	# earlier tests' panels.
+	pieces = pieces.filter(func(n): return is_instance_valid(n))
 	if not pieces.is_empty():
-		var p = pieces[0]
+		var p = pieces[-1]
 		_check(p._resting and absf(p.global_position.y - Terrain.height(p.global_position.x, p.global_position.z)) < 0.1, "the panel comes to rest on the ground")
 	for n in pieces:
 		n.queue_free()

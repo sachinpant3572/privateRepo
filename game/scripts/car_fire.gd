@@ -12,6 +12,8 @@ const BLAST := 6.0
 ## Flames keep going this long after the blast.
 const AFTER := 5.0
 
+static var _puff: GradientTexture2D
+
 var car
 var exploded := false
 var _flames: CPUParticles3D
@@ -132,10 +134,27 @@ static func _quad(size: Vector2, glow: bool) -> QuadMesh:
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	mat.vertex_color_use_as_albedo = true
+	mat.albedo_texture = _soft()
 	if glow:
 		mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	q.material = mat
 	return q
+
+
+## A round puff, soft at the edge, so flames and smoke are not squares.
+static func _soft() -> GradientTexture2D:
+	if _puff == null:
+		var g := Gradient.new()
+		g.offsets = PackedFloat32Array([0.0, 0.55, 1.0])
+		g.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0.6), Color(1, 1, 1, 0)])
+		_puff = GradientTexture2D.new()
+		_puff.gradient = g
+		_puff.fill = GradientTexture2D.FILL_RADIAL
+		_puff.fill_from = Vector2(0.5, 0.5)
+		_puff.fill_to = Vector2(1.0, 0.5)
+		_puff.width = 64
+		_puff.height = 64
+	return _puff
 
 
 static func _ramp(colors: Array) -> Gradient:

@@ -457,8 +457,8 @@ func _crash(game) -> void:
 	var pos := Vector3(at.x, Terrain.height(at.x, at.y), at.y)
 	game.city.stream_now(pos)
 	game.player.global_position = pos + Vector3(-12, 0, 8)
-	game.camera.fixed_focus = pos
-	game.camera.room_size = 18.0
+	game.camera.fixed_focus = pos + Vector3(0, 0, 6)
+	game.camera.room_size = 22.0
 	game.camera.snap()
 	var parked = Vehicle.new()
 	parked.kind = "sedan"
@@ -474,6 +474,7 @@ func _crash(game) -> void:
 	car.driver = Vehicle.Driver.PLAYER
 	await _frames(20)
 	await _shot("93_crash_before.png")
+	game.camera.fixed_focus = pos
 	car.speed = 20.0
 	car.velocity = Vector3(0, 0, -20)
 	Controls.override_vector = Vector2(0, -1)
