@@ -81,7 +81,7 @@ func _run() -> void:
 		"test_country_plots_square_to_their_roads", "test_estates_and_clusters", "test_grounds_kit_builds_every_part",
 		"test_bellerive_hills", "test_golden_flats_farmland", "test_every_home_has_a_way_in", "test_homes_by_wealth",
 		"test_new_home_kinds_and_live_cars", "test_people_walk_the_suburbs", "test_suburb_home_cars_are_live",
-		"test_road_surfaces_and_roadworks", "test_boundaries_vary_by_household",
+		"test_road_surfaces_and_roadworks", "test_traffic_flows_past_roadworks", "test_boundaries_vary_by_household",
 	]
 	# ONLY=name1,name2 runs just those (handy while working on one test).
 	var only := OS.get_environment("ONLY")
@@ -4537,10 +4537,11 @@ func test_estates_and_clusters() -> void:
 		var cols: Array = built.colliders
 		var bad := cols.filter(func(col): return not (col[0].is_finite() and col[1].is_finite() and is_finite(col[2])))
 		_check(bad.is_empty() and cols.size() > 20, "the Hale Estate's tile builds with %d sound colliders" % cols.size())
-		# The boundary wall: long colliders lying along the plot's edges, square to it.
+		# The boundary wall: long colliders lying along the plot's edges, square
+		# to it, as high as the plot's wall look (GroundsKit._wall_look, 1.5-2.4 m).
 		var py := float(p[2])
 		var on_edge := func(col) -> bool:
-			if not (col[1].x > 20.0 and col[1].y > 1.5 and col[1].y < 2.0):
+			if not (col[1].x > 20.0 and col[1].y > 1.45 and col[1].y < 2.45):
 				return false
 			var r := Vector2(col[0].x - float(p[0]), col[0].z - float(p[1]))
 			var lx := r.x * cos(py) - r.y * sin(py)
@@ -5548,6 +5549,108 @@ func test_road_surfaces_and_roadworks() -> void:
 		% [best_d, frames / 60.0, "past" if past else "stuck", widest, zi - 0.25, burst, barriers.size()])
 	car.queue_free()
 	await _frames(1)
+
+
+## Traffic round the roadworks (brief: "no car stuck at roadworks over a
+## simulated run"): at the three works nearest the start, a car in every open
+## lane the works way, one the other way and one turning in from a side
+## street drive for 25 s. None may wreck, burst a barrier or stand still
+## (under 0.5 m/s) for more than 12 s in all; the works-way cars all pass.
+func test_traffic_flows_past_roadworks() -> void:
+	await _new_game(false)
+	var city = game.city
+	var plan = city.plan
+	var edges: Array = city.roadworks.keys()
+	edges.sort_custom(func(a: int, b: int) -> bool:
+		var ma: Vector3 = (city.node_pos(plan.edge_a[a]) + city.node_pos(plan.edge_b[a])) * 0.5
+		var mb: Vector3 = (city.node_pos(plan.edge_a[b]) + city.node_pos(plan.edge_b[b])) * 0.5
+		return ma.distance_to(city.spawn_point) < mb.distance_to(city.spawn_point))
+	var problems: Array[String] = []
+	var cars_run := 0
+	var passed_n := 0
+	for e: int in edges.slice(0, 3):
+		var wk: Dictionary = city.roadworks[e]
+		var sd: float = wk.side
+		var na: int = plan.edge_a[e]
+		var nb: int = plan.edge_b[e]
+		var pa: Vector3 = city.node_pos(na)
+		var pb: Vector3 = city.node_pos(nb)
+		var dir := (pb - pa).normalized()
+		var right := Vector3(-dir.z, 0, dir.x)
+		var works_at: Vector3 = pa + dir * (float(wk.x0) + float(wk.x1)) * 0.5
+		var from := na if sd > 0.0 else nb
+		var to := nb if sd > 0.0 else na
+		var xb: float = wk.x1 if sd > 0.0 else wk.x0
+		city.stream_now(works_at)
+		game.player.global_position = works_at - right * sd * (float(StreetPlan.CLASSES[plan.edge_class(e)].width) * 0.5 + 2.5) + Vector3(0, 0.5, 0)
+		game.player.reset_physics_interpolation()
+		await _frames(2)
+		var barriers: Array = []
+		for cell in city.get_children():
+			for body in cell.get_children():
+				if body is StaticBody3D:
+					for sh in body.get_children():
+						if sh is CollisionShape3D and sh.has_meta("brk") and sh.get_meta("brk").kind == "roadworks" \
+								and sh.global_position.distance_to(works_at) < 60.0:
+							barriers.append(sh)
+		# [from, to, lane, must pass the works]
+		var starts: Array = []
+		for k in city.lane_count(from, to):
+			starts.append([from, to, k, true])
+		starts.append([to, from, 0, false])
+		for m: int in city.next_nodes(from):
+			if m != to and m < city.COUNTRY_BASE:
+				starts.append([m, from, 0, false])
+				break
+		var cars: Array = []
+		var still := {}
+		var went := {}
+		var rng := RandomNumberGenerator.new()
+		rng.seed = e
+		for st: Array in starts:
+			var car = Vehicle.new()
+			car.kind = "sedan"
+			car.city = city
+			car.position = city.lane_start(st[0], st[1], st[2]) + Vector3(0, 0.3, 0)
+			var heading: Vector3 = city.node_pos(st[1]) - city.node_pos(st[0])
+			car.rotation.y = atan2(-heading.x, -heading.z)
+			car.rng.seed = rng.randi()
+			car.start_traffic(city, st[0], st[1], st[2])
+			game.add_child(car)
+			cars.append(car)
+			still[car] = 0
+			went[car] = false
+		for f in 1500:
+			await _frames(1)
+			for i in cars.size():
+				var car = cars[i]
+				if car.velocity.length() < 0.5:
+					still[car] += 1
+				if starts[i][3] and ((car.global_position - pa).dot(dir) - xb) * sd > 6.0:
+					went[car] = true
+		for i in cars.size():
+			var car = cars[i]
+			var tag := "works %d, car %d (%d->%d lane %d)" % [e, i, starts[i][0], starts[i][1], starts[i][2]]
+			cars_run += 1
+			if car.wrecked:
+				problems.append("%s wrecked" % tag)
+			if still[car] > 12 * 60:
+				problems.append("%s stood still %.1f s" % [tag, still[car] / 60.0])
+			if starts[i][3]:
+				if went[car]:
+					passed_n += 1
+				else:
+					problems.append("%s never got past the works" % tag)
+			car.queue_free()
+		var burst := barriers.filter(func(sh): return sh.get_meta("brk").get("down", false)).size()
+		if burst > 0 or barriers.is_empty():
+			problems.append("works %d: %d of %d barriers burst" % [e, burst, barriers.size()])
+		await _frames(1)
+	for p in problems:
+		print("  " + p)
+	_check(problems.is_empty() and cars_run >= 9 and passed_n >= 3,
+		"traffic round 3 roadworks: %d cars for 25 s each, %d past the works in the open lanes, none wrecked, stuck or through a barrier (%d problems)"
+		% [cars_run, passed_n, problems.size()])
 
 
 ## Boundaries and gates by household (Sachin, 2026-10-28: "every home does
