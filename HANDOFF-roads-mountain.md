@@ -36,7 +36,9 @@ Follows `HANDOFF-bellerive-ca.md` (C-1 to C-9), which is full; this note carries
 - M-3 **Every drivable edge street carries on**: east y 621 was blocked by the 40 m keep-clear round the
   Torque & Tone garage (a map landmark at local (1600,650)); now 25 m. DMV and east school moved east
   of Sunvale. Frame junctions: w 21/22, n 15/15, e 18/18, s 18/19; the two left are the levee path and
-  the quay (width 0, not streets).
+  the quay (width 0, not streets). So every drivable edge street carries on: 72 of 74 frame junctions
+  by this count (the earlier "72 of 75" was before the civic re-cut changed the frame). The test counts frame junctions
+  with a drivable street inward and the corners left out, 70 of 70, and now requires all of them.
 - M-4 **Taxi test** (intermittent "cab 20 m off"): from 17 of 153 start nodes a called cab stopped across
   Aurum Boulevard, because the near side's shortest route ran along the curb street (a U-turn). Fix:
   `_round_the_block` enters that end by another street; the far side costs 600 m (a block loop), not
@@ -79,6 +81,28 @@ Follows `HANDOFF-bellerive-ca.md` (C-1 to C-9), which is full; this note carries
 - **Cost**: a hill tile builds in about 19 ms (flat about 8 ms) on the worker thread, desktop.
 - Test: `test_bellerive_hills`. Shots 45-52 (`SHOTS=hills` runs just those).
 
+## Review fixes (one independent review, nothing blocking)
+
+- Hill roads followed a straight chord between nodes while cars follow the bilinear ground: up to
+  0.52 m off it, so grass showed through and lane lines were buried. Now road strips, junction
+  discs, drives and trails on hill tiles are cut into triangles of 4 m or less (`_flat`), solid lines
+  into 4 m pieces, kerbs into 4 m pieces, and markings sit 5 cm up. Measured in the test from the
+  built tiles: road 0.011 m off the ground at worst, edge lines 0.05-0.08 m above it.
+- A car stopped on a slope with nobody on the gas now holds, as if on its parking brake, and goes to
+  sleep (it crept about 1 cm/s downhill and never slept).
+- Traffic look-ahead measured its distance from the lane in 3D against a lane point at y 0; on the
+  hills that is the height, so it clamped to 2 m and traffic weaved. Now flat (x, z).
+- Taxi: the round-the-block loop is now one more option beside the U-turn (scored +400) instead of
+  replacing it, so a sparse country grid takes no long loop. City probe unchanged (stops on the
+  player's side from every start).
+- Observatory Road ends 7.5 m short of the lot (the generator keeps lots 2.5 m off a road's edge); a
+  drive (`paths`) now runs from its end to the forecourt. The dead-end exemption is narrowed from
+  "within 30 m of any landmark front" to "a road end where a drive carries on to a lot".
+- Not fixed: pads up to 1.06 m off flat at one mansion (a corner floats or sinks by that much at
+  most); grades over the class limits (freeway 10.7 %, Crest 17.4 %) from 8 m cells at bends; two
+  rare test checks that skip silently when no patron or seated diner exists (pre-existing; making them
+  fail instead would make the suite flaky).
+
 ## Traps
 
 - `profile_at` only answers within a road's shoulder; a pad needs `profile_near` (the fronting road).
@@ -86,3 +110,7 @@ Follows `HANDOFF-bellerive-ca.md` (C-1 to C-9), which is full; this note carries
   pokes through: lots on pads must rise rigidly.
 - Pads processed in order let a later one override an earlier neighbour: use nearest-pad.
 - Any change to the generator's RNG use shifts lots in every zone (fronting lots 1531 -> 1511).
+- A long box draped per vertex cuts a chord through curved ground: anything long on a hill tile
+  (road strips, lines, kerbs) must be cut into short pieces before `_drape`.
+- Sampling a mesh exactly where two pieces meet misses both (barycentric round-off): test points
+  sit off the middle of an edge.

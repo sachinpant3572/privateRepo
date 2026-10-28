@@ -907,6 +907,44 @@ func _place_player(node: int, offset: Vector3) -> void:
 	_place_player_at(game.city.node_pos(node) + offset)
 
 
+## Height of the highest country tile surface over p (x, z), leaving out
+## anything more than 1.5 m over the ground (lamps, wires, roofs). A road
+## is drawn by one tile but may reach into the next, so the tiles round
+## p's are searched too.
+func _surface_top(country, p: Vector2) -> float:
+	var top := -INF
+	var cap := Terrain.height(p.x, p.y) + 1.5
+	var key: Vector2i = country.tile_key(Vector3(p.x, 0.0, p.y))
+	var meshes: Array = []
+	for dx in range(-1, 2):
+		for dy in range(-1, 2):
+			var tile: Node3D = country.tile_node(key + Vector2i(dx, dy))
+			if tile != null:
+				meshes.append_array(tile.get_children())
+	for n in meshes:
+		if not n is MeshInstance3D or n.mesh == null:
+			continue
+		var xf: Transform3D = n.global_transform
+		for si in n.mesh.get_surface_count():
+			var arr: Array = n.mesh.surface_get_arrays(si)
+			var vs: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+			var idx = arr[Mesh.ARRAY_INDEX]
+			var count: int = idx.size() if idx != null else vs.size()
+			for k in range(0, count, 3):
+				var a: Vector3 = xf * vs[idx[k] if idx != null else k]
+				var b: Vector3 = xf * vs[idx[k + 1] if idx != null else k + 1]
+				var cc: Vector3 = xf * vs[idx[k + 2] if idx != null else k + 2]
+				if p.x < minf(a.x, minf(b.x, cc.x)) or p.x > maxf(a.x, maxf(b.x, cc.x)) or p.y < minf(a.z, minf(b.z, cc.z)) or p.y > maxf(a.z, maxf(b.z, cc.z)):
+					continue
+				var bc := Geometry3D.get_triangle_barycentric_coords(Vector3(p.x, 0, p.y), Vector3(a.x, 0, a.z), Vector3(b.x, 0, b.z), Vector3(cc.x, 0, cc.z))
+				if bc.x < 0.0 or bc.y < 0.0 or bc.z < 0.0:
+					continue
+				var y := a.y * bc.x + b.y * bc.y + cc.y * bc.z
+				if y <= cap:
+					top = maxf(top, y)
+	return top
+
+
 func _place_player_at(pos: Vector3) -> void:
 	var p = game.player
 	p.global_position = pos
@@ -2302,15 +2340,14 @@ func test_country_joins_the_city() -> void:
 		if on_frame[n] == 2 and inward.has(n):
 			meets += 1
 			carried += 1 if linked_to.has(n) else 0
-	_check(meets > 40 and carried >= meets * 0.9, "the city's streets carry on out past the frame (%d of %d)" % [carried, meets])
+	_check(meets > 40 and carried == meets, "every city street that meets the frame carries on out past it (%d of %d)" % [carried, meets])
 	# The suburbs and the coast road, to the Beltway and past it; farm lanes
-	# and tracks may end at a field, and a road up to a landmark (the
-	# observatory) at its door.
+	# and tracks may end at a field, and a road at a drive that carries on
+	# to its lot (Observatory Road at the observatory's forecourt).
 	var near_city: Rect2 = plan.bounds.grow(1100.0)
-	var doors: Array = []
-	for id in c.landmark_ids():
-		var front: Vector3 = c.landmark(id).front
-		doors.append(Vector2(front.x, front.z))
+	var drives: Array = []
+	for path in c.paths:
+		drives.append(Vector2(path[1][0], path[1][1]))
 	var dead: Array = []
 	for n in c.node_count():
 		var p: Vector2 = c.pos(n)
@@ -2318,7 +2355,7 @@ func test_country_joins_the_city() -> void:
 			continue
 		if c.edge_class(c.edges_of(n)[0]) in ["lane", "track"]:
 			continue
-		if doors.any(func(q): return q.distance_to(p) < 30.0):
+		if drives.any(func(q): return q.distance_to(p) < 1.0):
 			continue
 		var inside := true
 		for d in [Vector2(25, 0), Vector2(-25, 0), Vector2(0, 25), Vector2(0, -25)]:
@@ -2730,7 +2767,7 @@ func test_estates_and_clusters() -> void:
 	if hale >= 0:
 		var p: Array = c.plots[hale]
 		var key := Vector2i(floori(float(p[0]) / c.tile_size), floori(float(p[1]) / c.tile_size))
-		var built: Dictionary = Tiles.build(c, key)
+		var built: Dictionary = preload("res://scripts/country_tiles.gd").build(c, key)
 		var cols: Array = built.colliders
 		var bad := cols.filter(func(col): return not (col[0].is_finite() and col[1].is_finite() and is_finite(col[2])))
 		_check(bad.is_empty() and cols.size() > 20, "the Hale Estate's tile builds with %d sound colliders" % cols.size())
@@ -2824,6 +2861,40 @@ func test_bellerive_hills() -> void:
 			if n is MeshInstance3D:
 				top = maxf(top, (n.get_aabb() as AABB).end.y)
 		_check(top > pad + 8.0, "its tile is raised with the ground (top %.1f m)" % top)
+	# The road you see is the ground cars ride on (Terrain.height), with the
+	# grass under it and the lane lines just on top, along the hill roads.
+	var off_road := 0.0
+	var line_low := INF
+	var line_high := -INF
+	var samples := 0
+	for name in ["Canyon Freeway", "Crest Drive", "Observatory Road"]:
+		for r in c.roads:
+			if r.name != name:
+				continue
+			for k in range(0, r.nodes.size() - 1, 3):
+				var e: int = int(r.e0) + k
+				var na: Vector2 = c.node_pos[c.edge_a[e]]
+				var nb: Vector2 = c.node_pos[c.edge_b[e]]
+				# Off the middle, where two pieces of a line meet.
+				var mid := na.lerp(nb, 0.43)
+				if Terrain.height(mid.x, mid.y) < 15.0 or na.distance_to(nb) < 6.0 or c.bridge_edges.has(e):
+					continue
+				var d := (nb - na).normalized()
+				var side := Vector2(-d.y, d.x)
+				var hw: float = c.edge_width(e) * 0.5
+				var lane := mid + side * hw * 0.25
+				var edge_line := mid + side * (hw - (0.6 if c.edge_class(e) == "highway" else 0.5))
+				c.stream_now(Vector3(lane.x, 0.0, lane.y))
+				samples += 1
+				off_road = maxf(off_road, absf(_surface_top(c, lane) - Terrain.height(lane.x, lane.y)))
+				# Lines stop short of junctions.
+				if c.edge_class(e) in ["highway", "road"] and c.degree(c.edge_a[e]) == 2 and c.degree(c.edge_b[e]) == 2:
+					var lift := _surface_top(c, edge_line) - Terrain.height(edge_line.x, edge_line.y)
+					line_low = minf(line_low, lift)
+					line_high = maxf(line_high, lift)
+	_check(samples > 20, "hill roads sampled (%d edges)" % samples)
+	_check(off_road < 0.05, "the hill roads' surface is the ground cars ride on, with no grass through it (worst %.3f m off)" % off_road)
+	_check(line_low > 0.02 and line_high < 0.15, "their edge lines show just above the road (%.3f to %.3f m)" % [line_low, line_high])
 	# Up Crest Drive: from a node, toward the higher of its neighbours.
 	var road: Dictionary = {}
 	for r in c.roads:
@@ -2875,5 +2946,12 @@ func test_bellerive_hills() -> void:
 	_check(tilt > 0.03, "the body pitches up the slope (%.3f rad)" % tilt)
 	_check(c.road_distance(Vector2(q.x, q.z), 30.0) < 6.0, "and stays on the road")
 	await _press("interact")
+	# Left on the slope it stays put (as if on its parking brake) and stops
+	# simulating, rather than creeping downhill.
+	await _until(func(): return car.velocity == Vector3.ZERO, 900)
+	var parked: Vector3 = car.global_position
+	await _frames(180)
+	var crept: float = car.global_position.distance_to(parked)
+	_check(crept < 0.02 and car.velocity == Vector3.ZERO, "a car left on the slope stays put (%.3f m in 3 s)" % crept)
 	car.queue_free()
 	await _frames(2)

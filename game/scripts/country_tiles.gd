@@ -21,6 +21,13 @@ const GROUND_Y := -0.04
 const HILL_GROUND_DROP := 0.26
 ## Longest edge of a ground triangle on the hills (the height grid is 8 m).
 const HILL_TRI := 9.0
+## Longest edge of a road, junction or path triangle, and longest piece
+## of a lane marking, on the hills, so they follow the ground the cars
+## ride on (Terrain.height) instead of cutting a chord through it.
+const HILL_PIECE := 4.0
+## How far markings sit above the road on the hills, over what is left of
+## the chord between their ends.
+const HILL_MARK_LIFT := 0.05
 ## The hills' baked light (from the north-west, fairly low) and the colours
 ## their faces take (see _hill_shade).
 const HILL_LIGHT := Vector3(-0.45, 0.75, -0.48)
@@ -247,16 +254,22 @@ static func _strip(c, e: int, h0: float, h1: float, s0 := 0.0, s1 := 0.0) -> Pac
 	return _cw(PackedVector2Array([pa + ma * h0, pb + mb * h0, pb + mb * h1, pa + ma * h1]))
 
 
-static func _dashes(mb, s0: float, run: float, z: float, color: Color) -> void:
+static func _dashes(mb, s0: float, run: float, z: float, color: Color, lift := 0.0) -> void:
 	var t := s0 + 1.5
 	while t < s0 + run - 3.0:
-		mb.box(Vector3(t + 1.5, 0.01, z), Vector3(3.0, 0.02, 0.16), color)
+		mb.box(Vector3(t + 1.5, 0.01 + lift, z), Vector3(3.0, 0.02, 0.16), color)
 		t += 7.0
 
 
-static func _line(mb, s0: float, run: float, z: float, color: Color) -> void:
-	if run > 0.5:
-		mb.box(Vector3(s0 + run * 0.5, 0.01, z), Vector3(run, 0.02, 0.14), color)
+## A solid line; with `piece` set it is cut into pieces no longer than
+## that, so it can follow the hills.
+static func _line(mb, s0: float, run: float, z: float, color: Color, piece := 0.0, lift := 0.0) -> void:
+	if run <= 0.5:
+		return
+	var n := 1 if piece <= 0.0 else ceili(run / piece)
+	var l := run / n
+	for i in n:
+		mb.box(Vector3(s0 + l * (i + 0.5), 0.01 + lift, z), Vector3(l, 0.02, 0.14), color)
 
 
 static func _seg_distance(p: Vector2, a: Vector2, b: Vector2) -> float:
@@ -285,25 +298,39 @@ static func _ground(ctx: Ctx, parts: Array) -> void:
 
 ## A ground triangle on the hills, split until no edge is longer than
 ## HILL_TRI so it can follow the height grid (_drape lifts it).
-static func _hill_tri(mb, a: Vector2, b: Vector2, c: Vector2, color: Color) -> void:
+static func _hill_tri(mb, a: Vector2, b: Vector2, c: Vector2, color: Color, y := GROUND_Y, size := HILL_TRI) -> void:
 	var ab := a.distance_squared_to(b)
 	var bc := b.distance_squared_to(c)
 	var ca := c.distance_squared_to(a)
 	var longest := maxf(ab, maxf(bc, ca))
-	if longest <= HILL_TRI * HILL_TRI:
-		mb.tri(_v3(a, GROUND_Y), _v3(b, GROUND_Y), _v3(c, GROUND_Y), Vector3.UP, color)
+	if longest <= size * size:
+		mb.tri(_v3(a, y), _v3(b, y), _v3(c, y), Vector3.UP, color)
 	elif longest == ab:
 		var m := (a + b) * 0.5
-		_hill_tri(mb, a, m, c, color)
-		_hill_tri(mb, m, b, c, color)
+		_hill_tri(mb, a, m, c, color, y, size)
+		_hill_tri(mb, m, b, c, color, y, size)
 	elif longest == bc:
 		var m := (b + c) * 0.5
-		_hill_tri(mb, b, m, a, color)
-		_hill_tri(mb, m, c, a, color)
+		_hill_tri(mb, b, m, a, color, y, size)
+		_hill_tri(mb, m, c, a, color, y, size)
 	else:
 		var m := (c + a) * 0.5
-		_hill_tri(mb, c, m, b, color)
-		_hill_tri(mb, m, a, b, color)
+		_hill_tri(mb, c, m, b, color, y, size)
+		_hill_tri(mb, m, a, b, color, y, size)
+
+
+## A flat polygon at y; on the hills it is cut into small triangles so
+## _drape can lay it on the ground.
+static func _flat(ctx: Ctx, poly: PackedVector2Array, y: float, color: Color) -> void:
+	if not ctx.hill:
+		ctx.mb.flat(poly, y, color)
+		return
+	var idx := Geometry2D.triangulate_polygon(poly)
+	if idx.is_empty():
+		for k in range(1, poly.size() - 1):
+			idx.append_array([0, k, k + 1])
+	for k in range(0, idx.size(), 3):
+		_hill_tri(ctx.mb, poly[idx[k]], poly[idx[k + 1]], poly[idx[k + 2]], color, y, HILL_PIECE)
 
 
 ## Lays the tile on the hills: lots and plots rise as one piece to their
@@ -448,7 +475,7 @@ static func _road(ctx: Ctx, e: int) -> void:
 	if bridge:
 		_bridge(ctx, e, a, b, w)
 	else:
-		mb.flat(_strip(c, e, -h, h), ROAD_Y, road_color)
+		_flat(ctx, _strip(c, e, -h, h), ROAD_Y, road_color)
 	var s0 := _setback(c, na, e)
 	var s1 := _setback(c, nb, e)
 	var run := length - s0 - s1
@@ -456,32 +483,40 @@ static func _road(ctx: Ctx, e: int) -> void:
 	var frame := _frame(a, b, ROAD_Y)
 	if run > 1.0:
 		mb.xform = frame
+		var piece := HILL_PIECE if ctx.hill else 0.0
+		var lift := HILL_MARK_LIFT if ctx.hill else 0.0
 		match cls:
 			"highway":
 				for z in [-0.14, 0.14]:
-					_line(mb, s0, run, z, MARKING)
+					_line(mb, s0, run, z, MARKING, piece, lift)
 				for side in [-1.0, 1.0]:
-					_line(mb, s0, run, side * (h - 0.6), WHITE_LINE)
-					_dashes(mb, s0, run, side * h * 0.5, WHITE_LINE)
+					_line(mb, s0, run, side * (h - 0.6), WHITE_LINE, piece, lift)
+					_dashes(mb, s0, run, side * h * 0.5, WHITE_LINE, lift)
 			"avenue":
 				for z in [-0.12, 0.12]:
-					_line(mb, s0, run, z, MARKING)
+					_line(mb, s0, run, z, MARKING, piece, lift)
 				for side in [-1.0, 1.0]:
-					_dashes(mb, s0, run, side * h * 0.5, WHITE_LINE)
+					_dashes(mb, s0, run, side * h * 0.5, WHITE_LINE, lift)
 			"road":
-				_dashes(mb, s0, run, 0.0, MARKING)
+				_dashes(mb, s0, run, 0.0, MARKING, lift)
 				for side in [-1.0, 1.0]:
-					_line(mb, s0, run, side * (h - 0.5), WHITE_LINE)
+					_line(mb, s0, run, side * (h - 0.5), WHITE_LINE, piece, lift)
 			"street":
-				_dashes(mb, s0, run, 0.0, MARKING)
+				_dashes(mb, s0, run, 0.0, MARKING, lift)
 		mb.xform = Transform3D.IDENTITY
 	if bridge:
 		return
 	if cls in LIGHT_CLASSES:
 		# Sidewalks both sides, a street light on every other edge.
+		var t0 := s0 - 1.0 if s0 > 0.0 else 0.0
+		var t1 := s1 - 1.0 if s1 > 0.0 else 0.0
+		# On the hills in pieces, so the kerb follows the ground.
+		var pieces := maxi(1, ceili((length - t0 - t1) / HILL_PIECE)) if ctx.hill else 1
+		var step := (length - t0 - t1) / pieces
 		for side in [-1.0, 1.0]:
-			var poly := _strip(c, e, side * h, side * (h + SIDEWALK), s0 - 1.0 if s0 > 0.0 else 0.0, s1 - 1.0 if s1 > 0.0 else 0.0)
-			mb.prism(poly, GROUND_Y, KERB, MeshBuilder.glow(PAVEMENT, MeshBuilder.CONCRETE), CURB)
+			for i in pieces:
+				var poly := _strip(c, e, side * h, side * (h + SIDEWALK), t0 + step * i, t1 + step * (pieces - 1 - i))
+				mb.prism(poly, GROUND_Y, KERB, MeshBuilder.glow(PAVEMENT, MeshBuilder.CONCRETE), CURB)
 		if k % 2 == 0 and run > 8.0:
 			var side := 1.0 if k % 4 == 0 else -1.0
 			var local: Array = []
@@ -551,7 +586,7 @@ static func _junctions(ctx: Ctx) -> void:
 		if bridge:
 			continue
 		var color := DIRT if dirt else MeshBuilder.glow(ASPHALT, MeshBuilder.ASPHALT)
-		ctx.mb.flat(_circle(p, w * 0.5 + 0.6, 14), ROAD_Y + 0.003, color)
+		_flat(ctx, _circle(p, w * 0.5 + 0.6, 14), ROAD_Y + 0.003, color)
 
 
 static func _driveway(ctx: Ctx, path: Array) -> void:
@@ -561,14 +596,14 @@ static func _driveway(ctx: Ctx, path: Array) -> void:
 		return
 	var d := (b - a).normalized()
 	var n := Vector2(-d.y, d.x) * 1.75
-	ctx.mb.flat(_cw(PackedVector2Array([a - d + n, b + d + n, b + d - n, a - d - n])), ROAD_Y + 0.002, MeshBuilder.glow(GRAVEL, MeshBuilder.CONCRETE))
+	_flat(ctx, _cw(PackedVector2Array([a - d + n, b + d + n, b + d - n, a - d - n])), ROAD_Y + 0.002, MeshBuilder.glow(GRAVEL, MeshBuilder.CONCRETE))
 
 
 static func _polyline_quad(ctx: Ctx, a: Vector2, b: Vector2, w: float, y: float, color: Color) -> void:
 	var d := (b - a).normalized()
 	var n := Vector2(-d.y, d.x) * w * 0.5
 	var ext := d * w * 0.5
-	ctx.mb.flat(_cw(PackedVector2Array([a - ext + n, b + ext + n, b + ext - n, a - ext - n])), y, color)
+	_flat(ctx, _cw(PackedVector2Array([a - ext + n, b + ext + n, b + ext - n, a - ext - n])), y, color)
 
 
 ## Roads past the play area's edge: plain surfaces to look at.

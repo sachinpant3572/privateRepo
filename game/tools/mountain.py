@@ -45,6 +45,9 @@ RIDGES = [
 # Sites (x, y): the observatory's forecourt end, the letters' middle, the masts.
 OBSERVATORY = (1050.0, -909.0)
 OBSERVATORY_SIZE = (64.0, 44.0)
+# Where Observatory Road ends, a road shoulder short of the lot (a drive
+# carries on to the forecourt).
+OBSERVATORY_ROAD_END = (OBSERVATORY[0] - 20.0, OBSERVATORY[1] + OBSERVATORY_SIZE[1] * 0.5 + 8.5)
 LETTERS = (1330.0, -1085.0)
 LETTERS_SIZE = (150.0, 26.0)
 MASTS = [(1106.0, -1250.0), (1132.0, -1232.0)]
@@ -67,7 +70,7 @@ def roads(route_at):
              (1660, -1225), (1760, -1132), (1840, -1010), (1990, -800), route_at("Route 1 Gulf Highway", (2300, -560))]
     coyote = [(452, -338), (470, -500), (540, -650), (590, -820), (600, -980), (612, -1120), (650, -1250)]
     observatory = [(1010, -338), (1015, -470), (1100, -560), (1180, -640), (1190, -700), (1110, -712),
-                   (990, -760), (965, -820), (1000, -870), (OBSERVATORY[0] - 20.0, OBSERVATORY[1] + OBSERVATORY_SIZE[1] * 0.5 + 8.5)]
+                   (990, -760), (965, -820), (1000, -870), OBSERVATORY_ROAD_END]
     fire = [(1110, -1388), (1150, -1335), (1122, -1295), (1090, -1276), (1086, -1250)]
     trail = [(OBSERVATORY[0] + OBSERVATORY_SIZE[0] * 0.5 + 5.0, OBSERVATORY[1] + OBSERVATORY_SIZE[1] * 0.5 - 4.0), (1150, -930),
              (1230, -1010), (LETTERS[0] - LETTERS_SIZE[0] * 0.5 + 10.0, LETTERS[1] + LETTERS_SIZE[1] * 0.5 + 5.0)]

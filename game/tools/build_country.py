@@ -31,7 +31,7 @@ from shapely.prepared import prep
 from shapely.strtree import STRtree
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from mountain import Mountain, roads as mountain_roads, OBSERVATORY, OBSERVATORY_SIZE, LETTERS, LETTERS_SIZE, MASTS, MAST_SIZE  # noqa: E402
+from mountain import Mountain, roads as mountain_roads, OBSERVATORY, OBSERVATORY_SIZE, OBSERVATORY_ROAD_END, LETTERS, LETTERS_SIZE, MASTS, MAST_SIZE  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 WORLD = ROOT / "data" / "world_map.json"
@@ -903,6 +903,12 @@ class Country:
         south = yaw_facing(0.0, -1.0)
         placed = [site(OBSERVATORY[0], OBSERVATORY[1], "observatory", "lumen_observatory"),
                   site(LETTERS[0], LETTERS[1], "hill_letters", "hill_letters")]
+        if placed[0]:
+            # Observatory Road ends a road shoulder short of the lot: a drive
+            # carries on from its end up to the forecourt.
+            end = OBSERVATORY_ROAD_END
+            front = (end[0], OBSERVATORY[1] + OBSERVATORY_SIZE[1] * 0.5 - 1.0)
+            self.paths.append([[round(front[0], 2), round(front[1], 2)], [round(end[0], 2), round(end[1], 2)]])
         for i, m in enumerate(MASTS):
             placed.append(site(m[0], m[1], "radio_mast", "calder_mast_%d" % i))
         if not all(placed):

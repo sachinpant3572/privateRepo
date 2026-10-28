@@ -212,7 +212,7 @@ func drive_path(points: PackedVector3Array, throttle_amount := 0.6) -> void:
 	var fwd := -global_basis.z
 	while path_index < path.size() - 1:
 		var to := path[path_index] - global_position
-		if to.dot(fwd) >= 0.0 or to.length() > 30.0:
+		if to.dot(fwd) >= 0.0 or Vector2(to.x, to.z).length() > 30.0:
 			break
 		path_index += 1
 
@@ -465,7 +465,8 @@ func _traffic_ai() -> void:
 		# Far off the lane (a left turn across a boulevard), look nearer, so
 		# the car swings out to its lane before running down it rather than
 		# cutting the corner into the median's nose.
-		var off := (global_position - (a + ab * t)).length()
+		var lane_at := a + ab * t
+		var off := Vector2(global_position.x - lane_at.x, global_position.z - lane_at.z).length()
 		var ahead := clampf(TRAFFIC_LOOKAHEAD - off, 2.0, TRAFFIC_LOOKAHEAD)
 		aim = a + ab * minf(1.0, t + ahead / ab.length())
 	aim.y = global_position.y
@@ -575,9 +576,16 @@ func _drive(delta: float) -> void:
 	speed = move_toward(speed, target, rate * delta)
 	if braking or handbrake:
 		speed = move_toward(speed, 0.0, (_spec.brake if braking else 10.0) * delta)
-	# Hills: slower up, faster down (none of it on the flat).
+	# Hills: slower up, faster down (none of it on the flat). A car stopped
+	# with nobody on the gas stays put, as if on its parking brake, so a
+	# parked car neither creeps downhill nor keeps simulating.
 	if _slope.y != 0.0:
-		speed -= 9.8 * SLOPE_PULL * sin(_slope.y) * delta
+		if throttle == 0.0 and target == 0.0 and absf(speed) < 0.5:
+			speed = 0.0
+			if Vector2(velocity.x, velocity.z).length() < 0.3:
+				velocity = Vector3.ZERO
+		else:
+			speed -= 9.8 * SLOPE_PULL * sin(_slope.y) * delta
 
 	var want := -global_basis.z * speed
 	var grip: float = _spec.drift if handbrake else _spec.grip

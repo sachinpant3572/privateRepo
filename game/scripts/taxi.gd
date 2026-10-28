@@ -698,21 +698,24 @@ func _approach(start: int, curb: Dictionary, side_of: Vector3) -> Dictionary:
 			continue
 		if nodes.is_empty():
 			nodes = PackedInt64Array([start])
-		# Coming in along the curb street itself means turning back on it:
-		# come round the block into its end by another street instead.
+		# Coming in along the curb street itself means turning back on it (a
+		# U-turn at the junction). Coming round the block into its end by
+		# another street is the other way in; the shorter, with the U-turn
+		# costed, wins, so a sparse country grid takes no long loop.
 		var turns_back: bool = nodes.size() >= 2 and nodes[nodes.size() - 2] == dir[1]
+		var ways := [[nodes, turns_back]]
 		if turns_back:
 			var loop := _round_the_block(start, dir[0], dir[1])
 			if not loop.is_empty():
-				nodes = loop
-				turns_back = false
-		var length := 0.0
-		for k in range(1, nodes.size()):
-			length += city.node_pos(nodes[k - 1]).distance_to(city.node_pos(nodes[k]))
-		# The far side means crossing the street to the cab: worth a loop
-		# round the block on a grid.
-		var score := length + (0.0 if near_side else 600.0) + (400.0 if turns_back else 0.0)
-		options.append({"nodes": nodes, "stop": s[0], "yaw": s[1], "to": dir[1], "score": score})
+				ways.append([loop, false])
+		for way in ways:
+			var length := 0.0
+			for k in range(1, way[0].size()):
+				length += city.node_pos(way[0][k - 1]).distance_to(city.node_pos(way[0][k]))
+			# The far side means crossing the street to the cab: worth a loop
+			# round the block on a grid.
+			var score := length + (0.0 if near_side else 600.0) + (400.0 if way[1] else 0.0)
+			options.append({"nodes": way[0], "stop": s[0], "yaw": s[1], "to": dir[1], "score": score})
 	if options.is_empty():
 		return {}
 	options.sort_custom(func(x, y): return x.score < y.score)
