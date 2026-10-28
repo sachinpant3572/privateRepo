@@ -681,6 +681,8 @@ static func _bend_routes(ctx: Ctx, l: Array) -> void:
 	if Kit.route_out_verts.is_empty():
 		return
 	var pad := Terrain.height(float(l[0]), float(l[1]))
+	if pad <= 0.0:
+		return  # not lifted as a pad (_rigid): the drape bends it already
 	var to_local: Transform3D = Transform3D(Basis(Vector3.UP, float(l[2])), Vector3(l[0], 0.0, l[1])).affine_inverse()
 	var front := -float(l[4]) * 0.5
 	for r: Vector2i in Kit.route_out_verts:

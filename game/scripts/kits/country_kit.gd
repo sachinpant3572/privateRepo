@@ -221,26 +221,49 @@ static func _reach_at(x: float, w: float) -> float:
 	return maxf(0.0, r1 + (r2 - r0) * 0.5 * t + (r0 + r2 - 2.0 * r1) * 0.5 * t * t)
 
 
+## Whether x lies on a third of the front the generator found blocked.
+static func _blocked_at(x: float, w: float) -> bool:
+	if reach.size() < 3:
+		return false
+	var t := x / maxf(w * 0.5, 0.1)
+	return (t < -0.34 and float(reach[0]) < 0.0) or (t > 0.34 and float(reach[2]) < 0.0)
+
+
+## The side (-1 left, 1 right) a drive or side gate goes on: the rolled
+## one, unless the way out on that side is blocked.
+static func _clear_side(side: float) -> float:
+	if reach.size() >= 3 and float(reach[0 if side < 0.0 else 2]) < 0.0:
+		return -side
+	return side
+
+
 ## A drive or walk x0..x1 from the lot's front edge out to the road (when
 ## one lies ahead), and on into the lot to z_in when z_in is given. With
 ## `ruts` it is a dirt two-track: two wheel ruts and grass between.
 static func _route_out(mb, x0: float, x1: float, d: float, color: Color, z_in := NAN, ruts := false) -> void:
-	var r := maxf(_reach_at(x0, _lot_w), _reach_at(x1, _lot_w))
+	# Its way out: straight ahead, or, where that third of the front is
+	# blocked (rails, water), along the front outside the fence to the
+	# nearest clear part.
+	var lim := 0.34 * _lot_w * 0.5 - 0.02
+	var ox0 := x0
+	if reach.size() >= 3 and float(reach[0]) < 0.0 and ox0 < -lim:
+		ox0 = -lim
+	if reach.size() >= 3 and float(reach[2]) < 0.0 and ox0 + (x1 - x0) > lim:
+		ox0 = lim - (x1 - x0)
+	var ox1 := ox0 + (x1 - x0)
+	var r := maxf(_reach_at(ox0, _lot_w), _reach_at(ox1, _lot_w))
+	if _blocked_at(ox0, _lot_w) or _blocked_at(ox1, _lot_w):
+		r = 0.0
 	if record_routes:
-		routes_drawn.append(Vector3(x0, x1, r))
+		routes_drawn.append(Vector4(x0, x1, r, ox0))
 	var z0 := -d * 0.5 - r
 	var z1 := -d * 0.5 if is_nan(z_in) else z_in
 	if z1 - z0 < 0.1:
 		return
 	# The road's edge: the tucked end runs on under the road from there.
 	var ze := minf(-d * 0.5, z0 + ROUTE_TUCK + 0.05) if r > 0.0 else -d * 0.5
-	var spans: Array = [[x0, x1]]
-	if ruts:
-		var m := (x0 + x1) * 0.5
-		var half := (x1 - x0) * 0.5
-		spans = [[m - half * 0.55 - 0.35, m - half * 0.55 + 0.35], [m + half * 0.55 - 0.35, m + half * 0.55 + 0.35]]
 	var zf := maxf(ze, minf(z1, -d * 0.5))
-	for s: Array in spans:
+	for s: Array in _route_spans(ox0, ox1, ruts):
 		var v0: int = mb.verts.size()
 		if r > 0.0:
 			_pad(mb, s[0], s[1], z0, ze, color, ROUTE_OUT_Y)
@@ -254,8 +277,20 @@ static func _route_out(mb, x0: float, x1: float, d: float, color: Color, z_in :=
 				_pad(mb, s[0], s[1], a, b, color, 0.04)
 		if route_step > 0.0 and r > 0.0:
 			route_out_verts.append(Vector2i(v0, mb.verts.size()))
-		if z1 > zf:
+	if r > 0.0 and absf(ox0 - x0) > 0.01:
+		_pad(mb, minf(x0, ox0), maxf(x1, ox1), -d * 0.5, -d * 0.5 + 0.9, color, 0.04)
+	if z1 > zf:
+		for s: Array in _route_spans(x0, x1, ruts):
 			_pad(mb, s[0], s[1], zf, z1, color, 0.04)
+
+
+## A route's strips across x0..x1: one, or two wheel ruts.
+static func _route_spans(x0: float, x1: float, ruts: bool) -> Array:
+	if not ruts:
+		return [[x0, x1]]
+	var m := (x0 + x1) * 0.5
+	var half := (x1 - x0) * 0.5
+	return [[m - half * 0.55 - 0.35, m - half * 0.55 + 0.35], [m + half * 0.55 - 0.35, m + half * 0.55 + 0.35]]
 
 
 ## On the hills (set by country_tiles): the step routes past the lot's
@@ -263,9 +298,10 @@ static func _route_out(mb, x0: float, x1: float, d: float, color: Color, z_in :=
 static var route_step := 0.0
 static var route_out_verts: Array[Vector2i] = []
 ## The routes builds drew while record_routes is on (tests only, on the
-## main thread with no tile building): (x0, x1, reach) each.
+## main thread with no tile building): (x0, x1 through the gate, reach,
+## x0 of its way out) each.
 static var record_routes := false
-static var routes_drawn: Array[Vector3] = []
+static var routes_drawn: Array[Vector4] = []
 ## The width of the lot being built (for _reach_at); set by build().
 static var _lot_w := 10.0
 
@@ -437,7 +473,13 @@ static func _sub(kind: String, mb, out: Array, offset: Vector3, yaw: float, size
 	var rot := Basis(Vector3.UP, yaw)
 	mb.xform = saved * Transform3D(rot, offset)
 	var sub: Array = []
+	# A sub-building's front is inside the lot: no route out of it.
+	var saved_reach := reach
+	var saved_w := _lot_w
+	reach = [0.0, 0.0, 0.0]
 	build(kind, mb, sub, size, rng)
+	reach = saved_reach
+	_lot_w = saved_w
 	mb.xform = saved
 	for col in sub:
 		out.append([rot * col[0] + offset, col[1], yaw + (col[2] if col.size() > 2 else 0.0)] + col.slice(3))
@@ -1413,7 +1455,7 @@ static func ranch_house(mb, out: Array, w: float, d: float, rng: RandomNumberGen
 	if tier == 2:
 		_ranch_l(mb, out, w, d, rng)
 		return
-	var side := 1.0 if rng.randf() < 0.5 else -1.0 # the carport's end
+	var side := _clear_side(1.0 if rng.randf() < 0.5 else -1.0) # the carport's end
 	var cw := clampf(w * 0.24, 4.5, 6.0)
 	var bw := clampf(w - cw - 3.0, 8.0, 17.0)
 	var bd := clampf(d * 0.55 if tier > 0 else minf(d * 0.55, d - 4.6), 5.0 if tier == 0 else 6.5, 9.0)
@@ -1478,7 +1520,7 @@ static func ranch_house(mb, out: Array, w: float, d: float, rng: RandomNumberGen
 ## other, a planter bed along the front and a back patio with a grill and
 ## a table under an umbrella.
 static func _ranch_l(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator) -> void:
-	var side := 1.0 if rng.randf() < 0.5 else -1.0 # the garage's end
+	var side := _clear_side(1.0 if rng.randf() < 0.5 else -1.0) # the garage's end
 	var gw := 6.6
 	var bw := clampf(w - gw - 4.0, 12.0, 20.0)
 	var bd := clampf(d * 0.5, 7.0, 9.0)
@@ -1575,7 +1617,7 @@ static func adobe_farmhouse(mb, out: Array, w: float, d: float, rng: RandomNumbe
 		else:
 			_hacienda(mb, out, w, d, rng, st, fr)
 		return
-	var side := 1.0 if rng.randf() < 0.5 else -1.0 # the courtyard's side
+	var side := _clear_side(1.0 if rng.randf() < 0.5 else -1.0) # the courtyard's side
 	var bw := clampf(w * 0.58, 7.0, 13.0)
 	var bd := clampf(d * 0.45, 4.5, 8.0)
 	var cx := -side * (w * 0.5 - 1.2 - bw * 0.5)
@@ -2845,7 +2887,7 @@ static func shopfront(mb, out: Array, w: float, d: float, rng: RandomNumberGener
 static func house(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator) -> void:
 	var bw := clampf(w * 0.55, 5.8, 13.0)
 	var gw := clampf(w * 0.24, 3.0, 4.2)
-	var side := -1.0 if rng.randf() < 0.5 else 1.0
+	var side := _clear_side(-1.0 if rng.randf() < 0.5 else 1.0)
 	var total := bw + gw
 	var fz := -d * 0.5 + clampf(d * 0.3, 4.5, 8.0)
 	var bd := clampf(d * 0.4, 6.5, 11.0)

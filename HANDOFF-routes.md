@@ -58,8 +58,14 @@ Each home lot's front, measured straight ahead to the nearest road surface (`roa
   pad and checks route tops there sit on the ground.
 - `Kit.routes_drawn` records only while `Kit.record_routes` is on (tests); the test lets the tile
   worker finish first (`country._finish_task`).
-- A side ray that is blocked (lot, plot, water, rails) exports -1; `_reach_at` draws no route on
-  that third of the front (1 house today).
+- A side ray that is blocked (lot, plot, water, rails) exports -1 (1 house today, by a rail bed).
+  Kits that roll a drive side steer away from it (`_clear_side`: house, ranch, adobe). Otherwise
+  `_route_out` leaves by the gate, runs 0.9 m deep along the front outside the fence to the clear
+  middle third, and goes out there. The test builds every home kit with the left third blocked.
+  (Second review: using max() of the two span ends still drew over the rails.)
+- Composite farms (`_sub`) build their buildings with reach 0, so the farmhouse inside Hollis Farm
+  draws no drive of its own through the farm's fence; the test asserts one route out.
+- `_bend_routes` skips lots not lifted as a pad (pad height <= 0): the drape bends those already.
 - The test builds a real tile and checks a street house's drive runs out (catches the tile no longer
   passing `Kit.reach`; mutation-checked, as is the hill bend).
 - Adobe side-courtyard gate: its route runs on to the gate piers.

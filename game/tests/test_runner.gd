@@ -3423,7 +3423,7 @@ func test_every_home_has_a_way_in() -> void:
 	Kit.routes_drawn.clear()
 	preload("res://scripts/country_tiles.gd").build(c, tile_key)
 	var longest := 0.0
-	for r: Vector3 in Kit.routes_drawn:
+	for r: Vector4 in Kit.routes_drawn:
 		longest = maxf(longest, r.z)
 	_check(house >= 0 and longest > 3.0, "a tile build runs a street house's drive out to its road (house %d, longest route out %.1f m)" % [house, longest])
 	# On the hills the route bends from the lot's pad down (or up) to the
@@ -3472,35 +3472,48 @@ func test_every_home_has_a_way_in() -> void:
 	_check(hill >= 0 and off > 0.15 and on_ground > 0 and on_pad == 0,
 		"a hill house's drive meets its road (road edge %.2f m off the pad; route tops there on the ground %d, on the pad %d)" % [off, on_ground, on_pad])
 	var problems: Array[String] = []
-	for kind: String in homes:
-		var f: Vector2 = Kit.footprint(kind)
-		for s: float in [0.75, 1.0, 1.35]:
-			for seed in 4:
-				var size := f * s
-				var mb = MB.new()
-				var out: Array = []
-				var rng := RandomNumberGenerator.new()
-				rng.seed = seed
-				Kit.reach = [4.0, 4.0, 4.0]
-				Kit.routes_drawn.clear()
-				Kit.build(kind, mb, out, size, rng)
-				Kit.reach = [0.0, 0.0, 0.0]
-				var tag := "%s %.1fx%.1f seed %d" % [kind, size.x, size.y, seed]
-				var ahead := 0.0
-				for v: Vector3 in mb.verts:
-					ahead = maxf(ahead, -size.y * 0.5 - v.z)
-				if Kit.routes_drawn.is_empty() or ahead < 3.9:
-					problems.append("%s: no route out (%.1f m past the front)" % [tag, ahead])
-				for col in out:
-					var cc: Vector3 = col[0]
-					var cs: Vector3 = col[1]
-					# Front fence runs: long, thin, low, near the front edge.
-					if cs.x > 1.0 and cs.z < 0.9 and cs.y <= 2.0 and cc.z < -size.y * 0.5 + 1.6:
-						for r: Vector3 in Kit.routes_drawn:
-							if minf(r.y, cc.x + cs.x * 0.5) - maxf(r.x, cc.x - cs.x * 0.5) > 0.05:
-								problems.append("%s: route %s through the fence at x %.1f" % [tag, r, cc.x])
+	# The same with the left third of the front blocked (rails, water): no
+	# route leaves through it. A farm's own buildings draw none of their own
+	# through its fence.
+	for case: Array in [[4.0, 4.0, 4.0], [-1.0, 4.0, 4.0]]:
+		for kind: String in homes + ["hollis_farm"]:
+			var f: Vector2 = Kit.footprint(kind)
+			for s: float in [0.75, 1.0, 1.35]:
+				for seed in 4:
+					var size := f * s
+					var mb = MB.new()
+					var out: Array = []
+					var rng := RandomNumberGenerator.new()
+					rng.seed = seed
+					Kit.reach = case
+					Kit.routes_drawn.clear()
+					Kit.build(kind, mb, out, size, rng)
+					Kit.reach = [0.0, 0.0, 0.0]
+					var tag := "%s %.1fx%.1f seed %d reach %s" % [kind, size.x, size.y, seed, case]
+					var going_out := 0
+					for r: Vector4 in Kit.routes_drawn:
+						going_out += 1 if r.z > 0.0 else 0
+					if kind == "hollis_farm" and going_out != 1:
+						problems.append("%s: %d routes out (its farmhouse's own must stay inside)" % [tag, going_out])
+					for r: Vector4 in Kit.routes_drawn:
+						if r.z > 0.0 and case[0] < 0.0 and r.w < -0.34 * size.x * 0.5:
+							problems.append("%s: route %s out through the blocked side" % [tag, r])
+					var ahead := 0.0
+					for v: Vector3 in mb.verts:
+						ahead = maxf(ahead, -size.y * 0.5 - v.z)
+					if Kit.routes_drawn.is_empty() or ahead < 3.9:
+						problems.append("%s: no route out (%.1f m past the front)" % [tag, ahead])
+					for col in out:
+						var cc: Vector3 = col[0]
+						var cs: Vector3 = col[1]
+						# Front fence runs: long, thin, low, near the front edge.
+						if cs.x > 1.0 and cs.z < 0.9 and cs.y <= 2.0 and cc.z < -size.y * 0.5 + 1.6:
+							for r: Vector4 in Kit.routes_drawn:
+								# (routes that go out; a farm building's own are in its frame)
+								if r.z > 0.0 and minf(r.y, cc.x + cs.x * 0.5) - maxf(r.x, cc.x - cs.x * 0.5) > 0.05:
+									problems.append("%s: route %s through the fence at x %.1f" % [tag, r, cc.x])
 	Kit.routes_drawn.clear()
 	Kit.record_routes = false
-	for p in problems.slice(0, 8):
+	for p in problems.slice(0, 60):
 		print("  " + p)
 	_check(problems.is_empty(), "every home kit runs a route out through a gate (%d problems)" % problems.size())
