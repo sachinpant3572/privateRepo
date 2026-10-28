@@ -600,14 +600,15 @@ static func _works(ctx: Ctx, wk: Dictionary, cls: String, w: float, frame: Trans
 	var local: Array = []
 	var from: Array
 	mb.xform = frame
-	mb.box(Vector3((x0 + x1) * 0.5, 0.009, sd * zc), Vector3(span, 0.006, depth), MeshBuilder.glow(WORKS_DIRT, 1.0))
+	# Over the road paint (lines reach 0.02 m), so no line runs through the pit.
+	mb.box(Vector3((x0 + x1) * 0.5, 0.025, sd * zc), Vector3(span, 0.006, depth), MeshBuilder.glow(WORKS_DIRT, 1.0))
 	var fresh := span * rng.randf_range(0.25, 0.4)
-	mb.box(Vector3(xb - sd * fresh * 0.5, 0.012, sd * zc), Vector3(fresh, 0.006, depth), MeshBuilder.glow(Color(0.12, 0.12, 0.13), MeshBuilder.ASPHALT))
+	mb.box(Vector3(xb - sd * fresh * 0.5, 0.028, sd * zc), Vector3(fresh, 0.006, depth), MeshBuilder.glow(Color(0.12, 0.12, 0.13), MeshBuilder.ASPHALT))
 	var dug := span - fresh - 3.0
 	var tx := xa + sd * (2.5 + dug * 0.5)
 	var tz := sd * (zc + depth * 0.15)
-	mb.box(Vector3(tx, 0.013, tz), Vector3(dug, 0.006, 1.1), MeshBuilder.glow(Color(0.15, 0.11, 0.08), 1.0))
-	mb.box(Vector3(tx - sd * dug * 0.25, 0.02, tz), Vector3(2.4, 0.03, 1.5), MeshBuilder.glow(Color(0.33, 0.34, 0.35), MeshBuilder.METAL))
+	mb.box(Vector3(tx, 0.029, tz), Vector3(dug, 0.006, 1.1), MeshBuilder.glow(Color(0.15, 0.11, 0.08), 1.0))
+	mb.box(Vector3(tx - sd * dug * 0.25, 0.04, tz), Vector3(2.4, 0.03, 1.5), Color(0.27, 0.26, 0.25))
 	mb.clump(Vector3(tx + sd * dug * 0.15, 0.2, sd * (zc - depth * 0.22)), Vector3(1.2, 0.55, 0.7), WORKS_DIRT.darkened(0.15), rng.randi(), 7, 3)
 	var mx := xb - sd * maxf(fresh * 0.5, 2.2)
 	if rng.randf() < 0.5:
@@ -694,7 +695,7 @@ static func _cone(mb, p: Vector3, orange: Color, white: Color) -> void:
 ## from above, facing traffic that heads `heading` (+1 or -1 along x).
 static func _works_sign(mb, out: Array, p: Vector3, heading: float) -> void:
 	var from := Props._start(mb, null)
-	var t := deg_to_rad(40.0)
+	var t := deg_to_rad(58.0)
 	var u := Vector3(heading * sin(t), cos(t), 0)
 	var n := Vector3(-heading * cos(t), sin(t), 0)
 	var a := Vector3(0, 0, 1)
@@ -704,13 +705,13 @@ static func _works_sign(mb, out: Array, p: Vector3, heading: float) -> void:
 		mb.limb(p + Vector3(-heading * 0.25, 0, s * 0.4), c - u * 0.2 + a * s * 0.32 - n * 0.03, 0.025, 0.025, steel, 4, false)
 		mb.limb(p + Vector3(heading * 0.7, 0, s * 0.4), c + u * 0.4 + a * s * 0.2 - n * 0.03, 0.025, 0.025, steel, 4, false)
 	var black := Color(0.06, 0.06, 0.06)
-	mb.quad(c + u * 0.7, c + a * 0.7, c - u * 0.7, c - a * 0.7, n, black)
+	mb.quad(c + u * 0.88, c + a * 0.88, c - u * 0.88, c - a * 0.88, n, black)
 	var q := c + n * 0.01
-	mb.quad(q + u * 0.62, q + a * 0.62, q - u * 0.62, q - a * 0.62, n, MeshBuilder.glow(Color(0.98, 0.55, 0.1), MeshBuilder.GLOSS))
-	for line in [[0.2, 0.17], [0.0, 0.2], [-0.2, 0.24]]:
+	mb.quad(q + u * 0.78, q + a * 0.78, q - u * 0.78, q - a * 0.78, n, MeshBuilder.glow(Color(0.98, 0.55, 0.1), MeshBuilder.GLOSS))
+	for line in [[0.25, 0.21], [0.0, 0.25], [-0.25, 0.3]]:
 		var r: Vector3 = c + n * 0.02 + u * float(line[0])
 		var hw: float = line[1]
-		mb.quad(r + u * 0.045 - a * hw, r + u * 0.045 + a * hw, r - u * 0.045 + a * hw, r - u * 0.045 - a * hw, n, black)
+		mb.quad(r + u * 0.055 - a * hw, r + u * 0.055 + a * hw, r - u * 0.055 + a * hw, r - u * 0.055 - a * hw, n, black)
 	out.append([p + Vector3(heading * 0.2, 0.7, 0), Vector3(1.1, 1.4, 1.3)])
 	Props._breaks(mb, out, from, "roadworks", null)
 

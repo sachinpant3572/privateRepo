@@ -98,6 +98,14 @@ of them); everything in the main session (each call re-reads a context that woul
   always drawn open, each leaf with its own thin collider beside the way in; a sliding leaf
   never runs across a neighbouring walk gate.
 - civic_kit.gd fences are unchanged (not in WORLD's files).
+- Restart (18:23 interrupt): the WIP (df03178) was merged onto main (0c29a69) and tested; it
+  held up (955/956). Fixed since: estate wall test now takes the varied 1.5-2.4 m heights; the
+  pit's ground sits above the road paint (the strip line ran through it); steel plate matte
+  grey (METAL mirrored the blue sky); the ROAD WORK AHEAD sign bigger and leaning 58° so it
+  reads from above. New test `test_traffic_flows_past_roadworks`: 3 works, a car per open
+  lane, one the other way, one from a side street, 25 s; it fails (barriers burst) if the
+  lane closure in `lanes_of` is switched off. Shots: `res://tests/world_shots.tscn`
+  (COUNT=n roadworks, wide and close), `SHOTS=roads`, `SHOTS=wealth`, `SHOTS=farm`.
 
 ## Open questions
 
