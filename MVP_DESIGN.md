@@ -43,6 +43,16 @@ Settings > Angle (40-90°), Tilt near towers and Reset camera are there for
 trying angles out. See
 HANDOFF-perspective-camera.md. Full 3D is parked in TODO.md.
 
+**Update (Oct 28, 2026): the camera turns with the car.** Like Chinatown
+Wars, driving the view turns so the car heads up the screen (eased, rate
+capped at 90°/s, held while reversing or spinning), sits lower on screen at
+speed and flattens a little, showing about 72 m of road ahead in a sedan.
+The stick steers in a car (left/right = wheel, up = gas, down = brake and
+reverse), the minimap turns with the view, and tapping its N re-centres.
+On foot the view stops turning and squares to the streets when standing
+still. Settings > Camera turn: With car (default) or North up (the view
+above). See HANDOFF-heading-camera.md.
+
 **Decision (Oct 26, 2026): classic top-down view only.** North is up, and the
 camera looks down at 60° below the horizon, a 3/4 view that shows the fronts
 of buildings and people, like the Java-era Gangstar games, Stardew Valley, Crashlands and
@@ -85,7 +95,7 @@ The decisions and their costs are in `HANDOFF-modern-look.md`.
 
 | From the classic games (Java Gangstar, GTA 2 era) | From modern games |
 |---|---|
-| **Top-down camera**, north up, perspective or classic (in the prototype) | Smooth follow, lead ahead of cars, zoom out with speed (in the prototype) |
+| **Top-down camera**, turning with the car or north up, perspective or classic (in the prototype) | Smooth follow, lead ahead of cars, zoom out with speed (in the prototype) |
 | Wanted stars, instant carjacking, arcade driving | Day/night lighting, neon at night, weather (rain, storms, flooding) |
 | Big, readable characters and cars; clear colours | Particles: skid marks, tyre smoke, sparks, dust, splashes |
 | Arrows and markers to the next objective | Screen shake and hit-stop on punches and crashes, phone vibration |

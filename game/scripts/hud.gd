@@ -153,6 +153,7 @@ func _ready() -> void:
 	full_map.state = state
 	add_child(full_map)
 	minimap.opened.connect(full_map.open)
+	minimap.compass.connect(game.camera.recenter)
 
 	phone = Phone.new()
 	phone.game = game

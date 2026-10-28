@@ -47,6 +47,10 @@ const TILT_FULL := 0.42
 
 var camera: Camera3D
 var touch_vector := Vector2.ZERO # written by the on-screen joystick
+## Steer by stick: the wheel is fully over with the stick this many degrees
+## off straight up; pulled back further than STICK_BACK it brakes.
+const STICK_FULL := 60.0
+const STICK_BACK := 110.0
 var override_vector = null # tests set a Vector2 here to steer the player
 var scheme := "stick"
 var tilt_override = null # tests set a gravity Vector3 here to tilt the phone
@@ -108,13 +112,37 @@ func world_move() -> Vector3:
 	var v := move_vector()
 	if camera == null:
 		return Vector3(v.x, 0.0, v.y)
-	var axes: Array[Vector3] = camera.ground_axes()
+	var axes: Array[Vector3] = camera.input_axes()
 	return axes[0] * v.x - axes[1] * v.y
 
 
 ## The car steers by the wheel (arrows, tilt) rather than by pointing.
 func wheel_steering() -> bool:
 	return scheme != "stick"
+
+
+## Stick layout with the view turning behind the car: the stick drives the
+## car the way it looks on screen, relative to the car (HANDOFF-heading-camera.md
+## H-4). Pointing at a world direction instead would tie how fast the car
+## turns to how fast the view catches up.
+func stick_steers() -> bool:
+	return scheme == "stick" and camera != null and camera.has_method("turns") and camera.turns()
+
+
+## Steer by stick: [wheel -1..1, gas 0..1, brake 0..1]. Up the screen is
+## straight on; leaning the stick turns the wheel, fully at STICK_FULL
+## degrees; pulled back past STICK_BACK it brakes and, stopped, reverses.
+func stick_wheel() -> Array[float]:
+	var v := move_vector()
+	var amount := v.length()
+	if amount < 0.15:
+		return [0.0, 0.0, 0.0]
+	var angle := atan2(v.x, -v.y)
+	if absf(angle) <= deg_to_rad(STICK_BACK):
+		return [clampf(angle / deg_to_rad(STICK_FULL), -1.0, 1.0), amount, 0.0]
+	# Backing up, leaning the stick swings the tail that way.
+	var back := signf(angle) * (PI - absf(angle))
+	return [clampf(back / deg_to_rad(STICK_FULL), -1.0, 1.0), 0.0, amount]
 
 
 ## Gas pedal, 0..1. W and the stick's up count in the wheel layouts.

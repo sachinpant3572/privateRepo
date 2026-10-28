@@ -49,6 +49,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	var game = MainScene.instantiate()
+	game.settings["camera_turn"] = "north"
 	game.missions_enabled = false
 	game.save_enabled = false
 	add_child(game)

@@ -50,6 +50,7 @@ const MOODS := [
 
 func _run() -> void:
 	var game = MainScene.instantiate()
+	game.settings["camera_turn"] = "north"
 	game.missions_enabled = false
 	add_child(game)
 	game.atmosphere.hour = 12.5
@@ -574,6 +575,23 @@ func _views(game) -> void:
 			cam.snap()
 			await _frames(240)
 			await _shot("82_drive_%s_%s.png" % [spot[0], dir[0]])
+	# Settings > Camera turn: With car. The view turns so the car drives up
+	# the screen, sits lower at speed, and the minimap turns with it.
+	cam.turn_with_car = true
+	for shot: Array in [[spots[0], "east", Vector3.RIGHT], [spots[1], "south", Vector3.BACK], [spots[1], "west", Vector3.LEFT]]:
+		var pos: Vector3 = shot[0][1]
+		var dir: Vector3 = shot[2]
+		city.stream_now(pos + dir * 35.0)
+		game.player.global_position = pos
+		game.player.reset_physics_interpolation()
+		body.global_position = pos
+		body.rotation.y = atan2(-dir.x, -dir.z)
+		body.velocity = dir * 30.0
+		cam.snap()
+		await _frames(240)
+		await _shot("84_turn_%s_%s.png" % [shot[0][0], shot[1]])
+	cam.turn_with_car = false
+	cam.snap()
 	cam.target = game.player
 	drive.queue_free()
 	body.queue_free()

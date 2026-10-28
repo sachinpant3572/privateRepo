@@ -1,8 +1,10 @@
 extends Control
-## Round minimap in the top-left corner, north up like the camera: the baked
-## city map around the player, landmark icons, mission blips (pinned to the
-## rim when off the map), police while wanted, and the GPS line to the active
-## target. Zooms out with speed. Tap it to open the full map.
+## Round minimap in the top-left corner, turned the way the camera is (so up
+## on it is up the screen; the N on the rim shows north): the baked city map
+## around the player, landmark icons, mission blips (pinned to the rim when
+## off the map), police while wanted, and the GPS line to the active target.
+## Zooms out with speed. Tap it to open the full map; tap the N to swing the
+## view behind the car, or north up on foot (HANDOFF-heading-camera.md H-6).
 
 const MapImage = preload("res://scripts/map_image.gd")
 
@@ -11,6 +13,9 @@ shader_type canvas_item;
 uniform sampler2D map_tex : filter_linear;
 uniform vec2 center_uv = vec2(0.5);
 uniform vec2 extent_uv = vec2(0.1);
+// The ground directions (x, z) of the minimap's right and up.
+uniform vec2 axis_r = vec2(1.0, 0.0);
+uniform vec2 axis_u = vec2(0.0, -1.0);
 // The playable window inside the bake (xy min, zw max); past it the state.
 uniform vec4 city_uv_rect = vec4(0.0, 0.0, 1.0, 1.0);
 // Past the city's bake: the whole state (state_map.gd).
@@ -24,10 +29,11 @@ void fragment() {
 	if (d > 1.0) {
 		discard;
 	}
-	vec2 uv = center_uv + p * extent_uv;
+	vec2 g = axis_r * p.x - axis_u * p.y;
+	vec2 uv = center_uv + g * extent_uv;
 	vec4 c = texture(map_tex, uv);
 	if (any(lessThan(uv, city_uv_rect.xy)) || any(greaterThan(uv, city_uv_rect.zw))) {
-		c = texture(state_tex, state_center_uv + p * state_extent_uv);
+		c = texture(state_tex, state_center_uv + g * state_extent_uv);
 	}
 	float rim = smoothstep(0.92, 0.95, d);
 	COLOR = vec4(mix(c.rgb, vec3(0.06, 0.06, 0.08), rim), 0.93);
@@ -35,6 +41,7 @@ void fragment() {
 """
 
 signal opened
+signal compass
 
 var game
 var map: Dictionary # from MapImage.bake
@@ -49,6 +56,9 @@ var _route := PackedVector3Array()
 var _route_target = null
 var _route_time := 0.0
 var _blink := 0.0
+## The minimap's right and up as ground directions (x, z): the camera's.
+var _axis_r := Vector2(1.0, 0.0)
+var _axis_u := Vector2(0.0, -1.0)
 
 
 func _ready() -> void:
@@ -77,6 +87,11 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_blink += delta
+	var yaw: float = game.camera.yaw
+	_axis_r = Vector2(cos(yaw), -sin(yaw))
+	_axis_u = Vector2(-sin(yaw), -cos(yaw))
+	_mat.set_shader_parameter("axis_r", _axis_r)
+	_mat.set_shader_parameter("axis_u", _axis_u)
 	var focus: Node3D = game.player.focus_node()
 	var pos: Vector3 = focus.global_position
 	var speed := 0.0
@@ -98,7 +113,20 @@ func _gui_input(event: InputEvent) -> void:
 			or (event is InputEventScreenTouch and event.pressed)
 	if tapped:
 		accept_event()
-		opened.emit()
+		if event.position.distance_to(north_mark()) < 26.0:
+			compass.emit()
+		else:
+			opened.emit()
+
+
+## Where the N sits on the rim, in the minimap's own coordinates.
+func north_mark() -> Vector2:
+	return size * 0.5 + turn(Vector2(0.0, -1.0)) * (size.x * 0.5 - 12.0)
+
+
+## A ground direction (x, z) as a direction on the minimap.
+func turn(d: Vector2) -> Vector2:
+	return Vector2(d.dot(_axis_r), -d.dot(_axis_u))
 
 
 ## The active GPS target: the first marker that asks for one.
@@ -128,7 +156,7 @@ func _update_route(pos: Vector3, delta: float) -> void:
 
 func _to_screen(p: Vector3, center: Vector3) -> Vector2:
 	var r := size.x * 0.5
-	return size * 0.5 + Vector2(p.x - center.x, p.z - center.z) / view_radius * r
+	return size * 0.5 + turn(Vector2(p.x - center.x, p.z - center.z)) / view_radius * r
 
 
 func _draw_overlay() -> void:
@@ -176,10 +204,11 @@ func _draw_overlay() -> void:
 			_draw_blip(at, m)
 	# The player (or their car), pointing where they face.
 	var fwd: Vector3 = -focus.global_basis.z
-	MapImage.draw_arrow(_overlay, mid, Vector2(fwd.x, fwd.z), 10.0, Color(1.0, 0.85, 0.25))
+	MapImage.draw_arrow(_overlay, mid, turn(Vector2(fwd.x, fwd.z)), 10.0, Color(1.0, 0.85, 0.25))
 	var font := ThemeDB.fallback_font
-	_overlay.draw_circle(Vector2(mid.x, 12), 10.0, Color(0.06, 0.06, 0.08))
-	_overlay.draw_string(font, Vector2(mid.x - 5, 18), "N", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color.WHITE)
+	var n := north_mark()
+	_overlay.draw_circle(n, 10.0, Color(0.06, 0.06, 0.08))
+	_overlay.draw_string(font, n + Vector2(-5, 6), "N", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color.WHITE)
 
 
 func _draw_blip(at: Vector2, m: Dictionary) -> void:

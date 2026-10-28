@@ -6,6 +6,8 @@ city feels deep. ... Full 3D seems the best but we will have to overhaul all of 
 we can park it in TODO ... The only concern I have with top down true perspective is that now the
 hero and other things will be more hidden as buildings heights will block the view more."
 
+Follow-up: the camera turning with the car (task #54) is in HANDOFF-heading-camera.md.
+
 Then: "WE should also give an option is setting to allow players to zoom in or out to some degree",
 and "I think it is also better to complete hide the buildings whenever they are blocking any view,
 either walking, running, driving, racing or flying ... this does not give us a true perspective of

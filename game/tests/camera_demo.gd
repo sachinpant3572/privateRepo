@@ -60,6 +60,7 @@ func _process(_delta: float) -> void:
 
 func _run() -> void:
 	game = MainScene.instantiate()
+	game.settings["camera_turn"] = "north"
 	game.missions_enabled = false
 	add_child(game)
 	game.atmosphere.hour = 12.5

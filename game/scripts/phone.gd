@@ -247,6 +247,10 @@ func _cab() -> void:
 	_body.add_child(status)
 
 
+func _turn_label() -> String:
+	return "Camera turn: " + ("With car" if game.camera.turn_with_car else "North up")
+
+
 func _settings() -> void:
 	_clear("Settings")
 	var s: Dictionary = game.settings
@@ -283,6 +287,12 @@ func _settings() -> void:
 		game.apply_settings()
 		tilt_b.text = "Tilt near towers: " + ("ON" if game.camera.auto_tilt else "OFF"))
 	_body.add_child(tilt_b)
+	var turn_b := _button(_turn_label(), Callable())
+	turn_b.pressed.connect(func():
+		s["camera_turn"] = "north" if game.camera.turn_with_car else "car"
+		game.apply_settings()
+		turn_b.text = _turn_label())
+	_body.add_child(turn_b)
 	var reset_b := _button("Reset camera", Callable())
 	reset_b.pressed.connect(func():
 		s["angle"] = game.camera.PITCH_LOW

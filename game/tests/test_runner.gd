@@ -36,6 +36,7 @@ func _run() -> void:
 		"test_city_runs_with_population",
 		"test_camera_is_classic_top_down",
 		"test_perspective_camera",
+		"test_camera_turns_with_car",
 		"test_punch_combo_ends_in_knockdown_kick",
 		"test_minimap_routes_to_waypoint", "test_state_map_shows_the_whole_state",
 		"test_night_lights_the_city",
@@ -896,6 +897,169 @@ func test_perspective_camera() -> void:
 
 # --- Helpers -----------------------------------------------------------------
 
+## Settings > Camera turn "With car" (HANDOFF-heading-camera.md): the view
+## swings round behind the car the way Chinatown Wars' does, within comfort
+## limits, and the stick steers the car rather than pointing it.
+func test_camera_turns_with_car() -> void:
+	await _free_game()
+	var TopDownCamera = preload("res://scripts/top_down_camera.gd")
+	var cam = TopDownCamera.new()
+	add_child(cam)
+	var p = preload("res://scripts/player.gd").new()
+	p.process_mode = Node.PROCESS_MODE_DISABLED
+	add_child(p)
+	cam.target = p
+	Controls.camera = cam
+	var car = _player_car("sedan", Vector3(0, 0, 400.0), 0.0)
+	p.vehicle = car
+	cam.snap()
+	_check(cam.turns() and Controls.stick_steers() and absf(cam.yaw) < 0.01, "With car is the default: the view starts behind the car and the stick steers")
+	# Up is gas.
+	Controls.override_vector = Vector2(0, -1)
+	await _frames(120)
+	_check(car.speed > 12.0 and absf(cam.yaw) < 0.05, "stick up drives on (%.1f m/s) and the view stays put going straight" % car.speed)
+	# Leaning the stick right turns the car right; the view follows, never
+	# faster than 90 degrees a second.
+	var max_rate := 0.0
+	var last: float = cam.yaw
+	Controls.override_vector = Vector2(0.7, -0.7)
+	var turned := 0.0
+	var was: float = TopDownCamera._heading(-car.global_basis.z)
+	for f in 60:
+		await _frames(1)
+		var now: float = TopDownCamera._heading(-car.global_basis.z)
+		turned += wrapf(now - was, -PI, PI)
+		was = now
+		max_rate = maxf(max_rate, rad_to_deg(absf(wrapf(cam.yaw - last, -PI, PI))) * 60.0)
+		last = cam.yaw
+	_check(turned < -deg_to_rad(60.0), "leaning the stick right turns the car right (%.0f degrees)" % rad_to_deg(-turned))
+	Controls.override_vector = Vector2(0, -1)
+	for f in 150:
+		await _frames(1)
+		max_rate = maxf(max_rate, rad_to_deg(absf(wrapf(cam.yaw - last, -PI, PI))) * 60.0)
+		last = cam.yaw
+	var face: float = TopDownCamera._heading(-car.global_basis.z)
+	var lag: float = absf(wrapf(cam.yaw - face, -PI, PI))
+	_check(lag < deg_to_rad(4.0), "out of the turn the view settles behind the car (%.1f degrees off)" % rad_to_deg(lag))
+	_check(max_rate <= 90.5, "the view turns at most 90 degrees a second (%.0f)" % max_rate)
+	# Up the screen is now the car's way ahead, in the stick's frame too.
+	var up: Vector3 = cam.ground_axes()[1]
+	_check(up.dot(-car.global_basis.z) > 0.99 and cam.input_axes()[1].dot(up) > 0.99, "screen up is the car's heading, for the view and the stick")
+	# Stick down brakes, then backs up; the view does not flip round.
+	var held: float = cam.yaw
+	var moved_back := 0.0
+	Controls.override_vector = Vector2(0, 1)
+	var from: Vector3 = car.global_position
+	var drift := 0.0
+	for f in 420:
+		await _frames(1)
+		drift = maxf(drift, absf(wrapf(cam.yaw - held, -PI, PI)))
+	moved_back = (car.global_position - from).dot(-car.global_basis.z)
+	_check(car.velocity.dot(-car.global_basis.z) < -1.0, "stick down brakes and then backs up (%.1f m/s)" % car.velocity.dot(-car.global_basis.z))
+	_check(drift < deg_to_rad(5.0), "backing up, the view holds (%.1f degrees)" % rad_to_deg(drift))
+	# Stopped, turning the car in place does not turn the view.
+	Controls.override_vector = null
+	car.speed = 0.0
+	car.velocity = Vector3.ZERO
+	await _frames(10)
+	held = cam.yaw
+	car.rotation.y += PI * 0.5
+	await _frames(60)
+	_check(absf(wrapf(cam.yaw - held, -PI, PI)) < 0.02, "below 3 m/s the view holds")
+	# The compass (the minimap's N) swings it behind the car.
+	face = TopDownCamera._heading(-car.global_basis.z)
+	cam.recenter()
+	await _frames(150)
+	_check(absf(wrapf(cam.yaw - face, -PI, PI)) < 0.02, "the compass swings the view behind the car (%.1f to %.1f degrees)" % [rad_to_deg(cam.yaw), rad_to_deg(face)])
+	# North up: the view eases back and the stick points the car again.
+	cam.turn_with_car = false
+	await _frames(180)
+	_check(absf(cam.yaw) < 0.02 and not Controls.stick_steers(), "North up turns the view back and the stick points the way to go (%.1f degrees)" % rad_to_deg(cam.yaw))
+	cam.turn_with_car = true
+	# Inside a place the view is north up at once.
+	cam.fixed_focus = car.global_position
+	await _frames(2)
+	_check(cam.yaw == 0.0, "inside places the view is north up")
+	cam.fixed_focus = null
+	car.queue_free()
+	# Flat out the screen shows the road well ahead (Chinatown Wars players
+	# found too little of it): 3.3 s of it or more, 70 m or more in the fastest
+	# cars (a sedan saw 60 m, 2.9 s, before the wider, flatter framing).
+	for kind in ["sedan", "super"]:
+		var fast = _player_car(kind, Vector3(-200.0 if kind == "sedan" else 200.0, 0, 600.0), 0.0)
+		p.vehicle = fast
+		cam.snap()
+		Controls.override_vector = Vector2(0, -1)
+		await _frames(420)
+		var rect: Rect2 = cam.get_viewport().get_visible_rect()
+		var co: Vector3 = cam.project_ray_origin(Vector2(rect.size.x * 0.5, 0.0))
+		var cn: Vector3 = cam.project_ray_normal(Vector2(rect.size.x * 0.5, 0.0))
+		var top: Vector3 = co + cn * ((fast.global_position.y - co.y) / cn.y)
+		var ahead: float = (top - fast.global_position).dot(-fast.global_basis.z)
+		var want: float = 70.0 if kind == "super" else fast.speed * 3.3
+		_check(ahead > want, "%s flat out at %.1f m/s: the screen shows %.0f m ahead, %.1f s (%.0f m framed, %.0f degrees)" % [kind, fast.speed, ahead, ahead / fast.speed, cam.size, cam.perspective_pitch])
+		Controls.override_vector = null
+		fast.queue_free()
+	# On foot: walking never turns the view; standing still squares it up.
+	p.vehicle = null
+	p.global_position = Vector3(0, 0, 300.0)
+	cam.yaw = deg_to_rad(37.0)
+	cam._yaw_goal = cam.yaw
+	cam._yaw_rate = 0.0
+	cam._yaw_chasing = false
+	cam._yaw_forced = false
+	Controls.override_vector = Vector2(1, 0)
+	await _frames(120)
+	_check(absf(cam.yaw - deg_to_rad(37.0)) < 0.01, "on foot, walking leaves the view where it is")
+	Controls.override_vector = null
+	await _frames(80)
+	var frame: Vector3 = cam.input_axes()[0]
+	Controls.override_vector = Vector2(1, 0)
+	var turning: float = cam.yaw
+	await _frames(20)
+	_check(absf(cam.yaw - turning) > 0.05 and cam.input_axes()[0].dot(frame) > 0.9999, "squaring up while the stick is held, the stick's frame holds (view %.0f -> %.0f degrees)" % [rad_to_deg(turning), rad_to_deg(cam.yaw)])
+	Controls.override_vector = null
+	await _frames(150)
+	_check(absf(cam.yaw) < 0.02, "standing still, the view squares up with the streets (%.1f degrees)" % rad_to_deg(cam.yaw))
+	p.queue_free()
+	cam.queue_free()
+	Controls.camera = null
+	# In the game: the setting, the bad-value fallback and the minimap.
+	await _new_game(false)
+	cam = game.camera
+	_check(not cam.turn_with_car, "the test games start north up")
+	game.settings["camera_turn"] = 42
+	game.apply_settings()
+	_check(cam.turn_with_car, "a bad saved Camera turn falls back to With car")
+	var car2 = _spawn_car(_home(), Vector3(0, 0, -3), -PI * 0.5)
+	_place_player(_home(), Vector3.ZERO)
+	await _frames(2)
+	await _press("interact")
+	cam.snap()
+	await _frames(2)
+	var mm = game.hud.minimap
+	var north: Vector2 = mm.turn(Vector2(0, -1))
+	var arrow: Vector2 = mm.turn(Vector2(1, 0))
+	_check(game.player.vehicle == car2 and absf(cam.yaw + PI * 0.5) < 0.02 and north.dot(Vector2(-1, 0)) > 0.99 and arrow.dot(Vector2(0, -1)) > 0.99, "driving east, the minimap turns with the view: the car points up, N sits on the left")
+	cam.yaw = 0.3
+	cam._yaw_rate = 0.0
+	var tap := InputEventMouseButton.new()
+	tap.button_index = MOUSE_BUTTON_LEFT
+	tap.pressed = true
+	tap.position = mm.north_mark()
+	mm._gui_input(tap)
+	await _frames(150)
+	_check(absf(cam.yaw + PI * 0.5) < 0.02 and not game.hud.full_map.visible, "tapping the N swings the view behind the car (and does not open the map; %.1f degrees)" % rad_to_deg(cam.yaw))
+	# City routes with the view turning (the car swings at each corner): the
+	# wider, flatter view still only shows cells the city streams in.
+	var drive: Dictionary = await _route_drive(cam, car2, 7, LOW_RISE + ["gilt_district", "midtown"], [], 30.0)
+	_check(drive.corners > 100 and drive.outside == 0, "driving city routes with the view turning, every 20:9 screen corner is over a cell the city streams in (%d of %d missing, %d still in the build queue)" % [drive.outside, drive.corners, drive.queued])
+	game.settings["camera_turn"] = "north"
+	game.apply_settings()
+	await _frames(180)
+	_check(absf(cam.yaw) < 0.02, "Settings > Camera turn North up turns the view back (%.1f degrees)" % rad_to_deg(cam.yaw))
+
+
 func test_punch_combo_ends_in_knockdown_kick() -> void:
 	await _new_game(false)
 	var p = game.player
@@ -1108,6 +1272,7 @@ func test_lantern_lights_ambush() -> void:
 func _new_story_game() -> void:
 	await _free_game()
 	game = MainScene.instantiate()
+	game.settings["camera_turn"] = "north"
 	game.population_enabled = false
 	game.save_enabled = false
 	add_child(game)
@@ -1127,6 +1292,7 @@ func _talk_until(cond: Callable, limit: int) -> void:
 func _new_game(with_population: bool) -> void:
 	await _free_game()
 	game = MainScene.instantiate()
+	game.settings["camera_turn"] = "north"
 	game.population_enabled = with_population
 	game.missions_enabled = false
 	add_child(game)
@@ -1193,6 +1359,7 @@ func _route_drive(cam, car: CharacterBody3D, seed: int, from: Array, to: Array, 
 				s += 30.0 / 60.0
 				out.t += 1.0 / 60.0
 				car.velocity = leg.normalized() * 30.0
+				car.rotation.y = atan2(-leg.x, -leg.z)
 				car.global_position = Vector3(start.x, 0.0, start.z) + leg.normalized() * minf(s, leg.length())
 				game.player.global_position = car.global_position
 				var w: float = cam._pitch_want

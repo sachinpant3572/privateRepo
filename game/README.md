@@ -276,7 +276,9 @@ phone.
 - **Classic top-down camera**: north up, tilted to a 3/4 view (60°) so the
   fronts of buildings and people show, like Stardew Valley and the Java-era
   Gangstar games. Leads ahead of
-  cars and zooms out with speed.
+  cars and zooms out with speed. Driving, the view turns with the car like
+  GTA Chinatown Wars (Settings > Camera turn: With car or North up); tap the
+  minimap's N to swing it back behind the car.
 - **HUD**: minimap, health, wanted stars (flashing while police can't see
   you), cash, clock, phone, objective, speed, prompts, FPS and draw-call
   readout.
@@ -289,13 +291,14 @@ phone.
 
 | Action | Touch | Keyboard | Gamepad |
 |---|---|---|---|
-| Move / steer | Left half of screen (floating stick) | WASD / arrows | Left stick |
+| Move / steer (stick layout in a car with the camera turning: left/right steer, up gas, down brake and reverse) | Left half of screen (floating stick) | WASD / arrows | Left stick |
 | Gas / brake (held at a stop: reverse) | GAS / BRAKE pedals | W / S (arrows and tilt layouts) | RT / LT |
 | Punch | PUNCH | Space / J | X |
 | Run / handbrake | RUN / DRIFT | Shift | A |
 | Get in / out, search, go into a place, shop | ENTER / EXIT / SEARCH / BUY / ORDER | E / F | Y |
 | Eat a snack from the bag | SNACK | H | |
 | Map | Tap the minimap | M | Back |
+| Re-centre the turning camera | Tap the minimap's N | | |
 | Phone | PHONE | P | |
 | Hail a cab (one passing within 15 m) | TAXI | T | B |
 | Skip a line of dialogue | Tap it | Enter | |
@@ -365,7 +368,7 @@ at the Aurum Tower, Midtown and Lantern Square, on foot and driving (80),
 the perspective camera backed out of a tower and with the view band
 turning buildings round the player see-through (81), and driving flat out
 east and north through Midtown and past the Aurum Tower (82), and Settings > Angle at
-45, 55, 65, 75 and 90° with tilt off at the Aurum Tower and Lantern Square (83). `res://tests/occlusion_probe.tscn`
+45, 55, 65, 75 and 90° with tilt off at the Aurum Tower and Lantern Square (83), and the camera turning with the car flat out east, south and west (84). `res://tests/occlusion_probe.tscn`
 (headless) measures how much of the hero and the street each camera
 setting hides (HANDOFF-perspective-camera.md).
 

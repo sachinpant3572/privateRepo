@@ -36,7 +36,7 @@ var taxi
 var inventory = Inventory.new()
 var respawning := false
 var cash := 0
-var settings := {"shadows": true, "show_fps": true, "weather": "auto", "detail": "high", "controls": "stick", "view": "perspective", "zoom": 1.0, "angle": 65.0, "auto_tilt": true}
+var settings := {"shadows": true, "show_fps": true, "weather": "auto", "detail": "high", "controls": "stick", "view": "perspective", "zoom": 1.0, "angle": 65.0, "auto_tilt": true, "camera_turn": "car"}
 ## Player-set map waypoint (a road node position) or null.
 var waypoint = null
 
@@ -138,10 +138,19 @@ func apply_settings() -> void:
 	var a = settings.get("angle", 65.0)
 	var t = settings.get("auto_tilt", true)
 	camera.set_angle(float(a) if (a is float or a is int) and camera.ANGLES.has(float(a)) else camera.PITCH_LOW, t if t is bool else true)
+	# Camera turn: with the car (Chinatown Wars) or north up. A change eases round.
+	var turn := str(settings.get("camera_turn", "car")) != "north"
+	if turn != camera.turn_with_car:
+		camera.turn_with_car = turn
+		camera.recenter()
 	var reach := maxf(camera.zoom, 1.0)
-	# A camera flatter than 65 degrees sees further up the screen.
+	# A camera flatter than 65 degrees sees further up the screen. Turning
+	# with the car it widens and flattens at speed, up the short side.
 	if persp:
-		reach *= maxf(1.0, sin(deg_to_rad(camera.PITCH_LOW)) / sin(deg_to_rad(camera.base_pitch)))
+		var pitch: float = camera.base_pitch - (camera.TURN_FLATTEN if turn else 0.0)
+		reach *= maxf(1.0, sin(deg_to_rad(camera.PITCH_LOW)) / sin(deg_to_rad(maxf(pitch, camera.ANGLES[0]))))
+		if turn:
+			reach *= camera.TURN_DRIVE_SIZE / camera.DRIVE_SIZE
 	City.LOAD_RADIUS = 105.0 * reach
 	City.UNLOAD_RADIUS = 150.0 * reach
 	Country.LOAD_RADIUS = 130.0 * reach

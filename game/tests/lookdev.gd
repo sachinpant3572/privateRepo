@@ -27,6 +27,7 @@ func _run() -> void:
 	var out_dir: String = args[0] if not args.is_empty() else "user://"
 	var only := args.slice(1)
 	var game = MainScene.instantiate()
+	game.settings["camera_turn"] = "north"
 	game.missions_enabled = false
 	add_child(game)
 	game.atmosphere.minutes_per_second = 0.0
