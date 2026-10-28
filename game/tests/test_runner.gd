@@ -3577,11 +3577,15 @@ func test_suburb_home_cars_are_live() -> void:
 	_place_player_at(city.spawn_point)
 	await _frames(240)
 	var open := 0
+	var closed := 0
 	for idx in range(first, city.parked_spots.size()):
 		var p: Vector3 = city.parked_spots[idx][0]
-		if city.parked_spots[idx][2] and keys.has(c.tile_key(p)) and not c.loaded_tiles().has(c.tile_key(p)):
-			open += 1
-	_check(open == 0, "spots close with their tiles (%d left open)" % open)
+		if keys.has(c.tile_key(p)) and not c.loaded_tiles().has(c.tile_key(p)):
+			if city.parked_spots[idx][2]:
+				open += 1
+			else:
+				closed += 1
+	_check(closed > 0 and open == 0, "spots close with their tiles (%d closed, %d left open)" % [closed, open])
 
 
 ## Banks, the coast and the play area's fence are walls: a car driven at
@@ -3753,8 +3757,12 @@ func test_country_kit_builds_every_kind() -> void:
 		if not sizes.has(ls):
 			sizes.append(ls)
 	var problems: Array[String] = []
-	for kind: String in Kit.KINDS:
+	# The shady kinds (shady_kit) are built through Kit.build too; their
+	# yards and blocks are compounds, held to the big-lot budget.
+	var shady: Array = preload("res://scripts/kits/shady_kit.gd").kinds()
+	for kind: String in Kit.KINDS + shady:
 		var f: Vector2 = Kit.footprint(kind)
+		var budget := 8000 if f.x * f.y >= 5000.0 or kind in shady else 5000
 		if not (f.x > 0.0 and f.y > 0.0):
 			problems.append("%s: footprint %s" % [kind, f])
 			continue
@@ -3766,7 +3774,7 @@ func test_country_kit_builds_every_kind() -> void:
 			Kit.build(kind, mb, out, size, rng)
 			var tris: int = mb.triangle_count()
 			var tag := "%s %.1fx%.1f" % [kind, size.x, size.y]
-			if tris <= 0 or tris > (5000 if f.x * f.y < 5000.0 else 8000):
+			if tris <= 0 or tris > budget:
 				problems.append("%s: %d triangles" % [tag, tris])
 			var hx := size.x * 0.5 + 1.0
 			var hz := size.y * 0.5 + 1.0

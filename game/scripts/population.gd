@@ -120,7 +120,9 @@ func _update_parked(center: Vector3) -> void:
 		if _parked.has(idx) or (spots[idx].size() > 2 and not spots[idx][2]):
 			continue
 		var d: float = spots[idx][0].distance_to(center)
-		if d < PARK_SPAWN and (_first_pass or not _in_view(spots[idx][0])) and not _occupied(spots[idx][0]):
+		# A home's stalls and garage bays stand about 2.6 m apart: a car in
+		# the next one does not block this one.
+		if d < PARK_SPAWN and (_first_pass or not _in_view(spots[idx][0])) and not _occupied(spots[idx][0], 2.0 if spots[idx].size() > 3 else 4.0):
 			var car = _new_car(true, spots[idx][3] if spots[idx].size() > 3 else -1)
 			car.city = game.city
 			car.position = spots[idx][0]
@@ -136,12 +138,13 @@ func refill() -> void:
 	_first_pass = true
 
 
-## Whether a vehicle or the player already stands on a curb spot.
-func _occupied(spot: Vector3) -> bool:
-	if game.player.global_position.distance_to(spot) < 4.0:
+## Whether a vehicle or the player already stands within `radius` of a
+## parking spot.
+func _occupied(spot: Vector3, radius := 4.0) -> bool:
+	if game.player.global_position.distance_to(spot) < radius:
 		return true
 	for v in get_tree().get_nodes_in_group("vehicles"):
-		if v.global_position.distance_to(spot) < 4.0:
+		if v.global_position.distance_to(spot) < radius:
 			return true
 	return false
 
