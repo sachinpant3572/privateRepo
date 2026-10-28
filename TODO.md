@@ -106,6 +106,36 @@ Design rules to adopt:
 - Next: turn these rules into build tasks (the driving ones are code: auto-accelerate, alignment
   assist, resizable layout).
 
+## Wednesday, Oct 28, 2026: dialogue and voiceover plan
+
+Status: **not started** (plan written). Sachin: "Also, plan meticulousyl and thoroughly for
+immaculate, fully realistic player, and NPC dialogues, during free roam or during missions, and plan
+voiceovers too in the late stages of the game. Or see how rockstar and other studios famous for open
+world games plan such things and then add the same to our TODO."
+
+- Plan, with studio research and sources: `DIALOGUE_VO_PLAN.md` (sections 1 and 13 first).
+- Core: every line gets an ID in a data table from day one; a rule matcher (most specific rule wins,
+  with cooldowns and memory) picks lines; one speech manager owns priority, interrupt and resume.
+- Text first, voice last: barks and subtitles now, non-verbal sounds next, recorded VO only after
+  the script is locked. No cloned or AI voice of a real actor without written consent and pay.
+- Phases (effort in sessions):
+  - [ ] 0. Line table and build tool, fact store, selector, speech manager, story box, bark
+    bubbles, Dialogue settings; m01-m03 moved to line IDs (3-4)
+  - [ ] 1. Ambient barks wired to `senses.gd`; bump and carjack lines; overheard conversations;
+    repetition metrics and lint in tests (3)
+  - [ ] 2. Conversations with interrupt and resume; mission barks; phone calls and messages from
+    the table; retry variants (2-3)
+  - [ ] 3. Jules's barks; GREET / PROVOKE / CALM DOWN; NPC memory and faction reputation (2-3)
+  - [ ] 4. Writing pass for all of Act 1, reviewed by Sachin (4-6)
+  - [ ] 5. Shot generator for in-engine scenes; choice panel for missions 6 and 13 (2-3)
+  - [ ] 6. Localization pipeline and a first language (2, plus translator time)
+  - [ ] 7. Non-verbal efforts for every voice type; radio DJ and news rules (2)
+  - [ ] 8. VO pilot: casting, main cast for missions 1-3, Ogg pipeline, asset pack (3-4, plus
+    studio time)
+  - [ ] 9. Full Act 1 VO, cutscene mouth shapes, dubs if chosen (external, months)
+- Open questions for Sachin are in section 14 of the plan (rating, languages, VO budget, AI voice
+  stance, fixed or custom Jules).
+
 ## Wednesday, Oct 28, 2026: full 3D camera (parked)
 
 Status: **parked**. The perspective top-down camera is built instead (HANDOFF-perspective-camera.md).
