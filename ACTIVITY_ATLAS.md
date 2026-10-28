@@ -4,11 +4,13 @@ Sachin, 2026-10-28: "Once you are done with the research specify all planned act
 different terrains, regions and places."
 
 This atlas lists, by place, every activity planned so far in:
-- `ACTIVITY_ROADMAP.md` packages R-1 to R-27 and its section 1 checklist;
-- `ACTIVITY_IDEAS.md` sections 2 to 4.13;
+- `ACTIVITY_ROADMAP.md` packages R-1 to R-32 and its section 1 checklist;
+- `ACTIVITY_IDEAS.md` sections 2 to 4.14;
 - `STOCK_MARKET_DESIGN.md`.
 
-It adds no new activities. Each line points back to where the activity is specified.
+Parts A-C add no new activities; each line points back to where the activity is specified.
+Part D, written on Sachin's follow-up, spreads activities over the whole map and adds regional
+styles, signature activities and city activity packs.
 
 **How to read it**
 - References: "2.3" or "4.11" is a section of `ACTIVITY_IDEAS.md`; "R-21" is a roadmap
@@ -43,6 +45,7 @@ It adds no new activities. Each line points back to where the activity is specif
   - the comedy club and cabaret with fictional acts (4.13).
 - Sport and games: storm-themed rooftop mini-golf (2.3); rooftop parkour races (2.8).
 - Martial arts: the karate dojo (IS-4, R-17).
+- Hobby: *suggested*: a hobby shop with the pocket-racer league (4.14).
 - Shopping and food:
   - vintage clothes, a barber, restaurants, a café, a corner store (IS-1, IS-2);
   - the weekend flea market in Lantern Square (2.6, 4.7).
@@ -82,6 +85,9 @@ It adds no new activities. Each line points back to where the activity is specif
   - base jumping from the Aurum Tower, an illegal jump that earns a star (4.11).
 - Fitness: the Gilt gym for kickboxing, reps, a trainer and a rival (2.2, IS-4).
 - Shows: the studio gauntlet game show, non-lethal (4.13).
+- Chaos and gigs: Sludge Avenger on Aurum show homes and billboards; bodyguard gigs for
+  fictional celebrities (4.14).
+- Yoga: *suggested*: the first yoga studio (R-28).
 - Crime:
   - Aurum and Halberd armoured convoys (4.13);
   - the armoured van ambush (2.7);
@@ -96,6 +102,8 @@ It adds no new activities. Each line points back to where the activity is specif
 - Homes to buy on the phone (R-22).
 - Burglary of wealthy homes (R-23).
 - *suggested*: the tennis club (R-21); the estate courts already exist as scenery.
+- Jobs: the dawn paper route by bike and mowing lawns (4.14).
+- *suggested*: the cat café that takes shelter cats (4.14).
 
 **Floodline Wards** (shotgun houses, storm scars, street courts; High Water)
 - Sport:
@@ -112,6 +120,8 @@ It adds no new activities. Each line points back to where the activity is specif
 - Bounce and hip-hop radio station (2.1).
 - Water: diving for storm wrecks, with salvage, lore and Lost Tapes (4.1).
 - Pets: the pet shelter, where you adopt a dog or cat (4.1, R-3).
+- 4.14 additions: storm-debris yard clean-up, the can run, sandlot baseball, and crew defence
+  of a building site.
 - Events:
   - hurricane season, with evacuation, looters, boat rescues and a blackout (4.7, N12);
   - *suggested*: the crawfish festival and eating contest (4.7, 2.11).
@@ -148,9 +158,12 @@ It adds no new activities. Each line points back to where the activity is specif
   - the "longest wheelie along the levee road" pop-up challenge (4.11);
   - the bike leg of the transform race (4.11).
 - Base jumping from the Solvera Line bridges (4.11).
+- The paint-trail quad run along the levee and into the bayou (4.14); the levee duathlon (R-29).
 
 **Liberty Green** (park)
 - Outdoor fitness: calisthenics (2.2).
+- The travelling fair, one week each season (4.14, R-32), and the summer water-balloon fight
+  (4.14).
 - Games:
   - "king of the table" table tennis (2.5);
   - skate park, with tricks and S-K-A-T-E (4.1);
@@ -193,7 +206,9 @@ It adds no new activities. Each line points back to where the activity is specif
   - the roaming black-market van at about 20 spots (4.11);
   - crimes detected through the Street Cam app (4.13);
   - hit-and-run chases (4.13);
-  - camera busts (4.13).
+  - camera busts (4.13);
+  - neighbour errands on the phone's street board (4.14);
+  - the Shakedown, a debt collector who roams at night (4.14).
 - One relay mast per district, with a puzzle that reveals its activities (4.13).
 - Business and crime:
   - money fronts and laundering through the car wash, food truck and café (4.11, decision 8);
@@ -209,7 +224,8 @@ It adds no new activities. Each line points back to where the activity is specif
 - Keepy-uppy on the sand (4.13).
 - Lifeguard shift job (E5 list, section 3).
 - Jet ski (4.10, R-26).
-- *suggested*: yoga on the beach (RM 1.1, no package yet).
+- Yoga at sunrise (R-28); the Brisa Beach sprint triathlon (R-29); the fun pier with a Ferris
+  wheel and a coaster (R-32).
 
 **Saltgrass Parish and the Glades** (phase 2; swamp, airboats; Cypress Bend, Gator Point)
 - Airboat tours and the gator farm (WORLD_V3 section 3).
@@ -222,16 +238,17 @@ It adds no new activities. Each line points back to where the activity is specif
 - Speedboat runs and the smuggling war (WORLD_V3 2.4).
 - Secrets: Smugglers' Cove and the Sunken Casino dive (WORLD_V3 section 3).
 - *suggested*: sea fishing from a boat (4.1).
+- Spearfishing with an old fisherman (4.14).
 
 ### A3. The countryside
 
 | Region | Phase | Planned activities |
 |---|---|---|
-| Golden Flats County (farms) | 2 | Rent planes at the crop-duster strip; *suggested* flight school there (RM 1.1). The building-site job and the wrecking ball on the Solvera Line works (2.7, 4.5). Off-road racing on section-line tracks (2.8, R-14) |
+| Golden Flats County (farms) | 2 | Rent planes at the crop-duster strip; flight school there (R-30). The building-site job and the wrecking ball and wrecking-crew score runs on the Solvera Line works (2.7, 4.5, 4.14). Off-road racing on section-line tracks (2.8, R-14) |
 | Verdant Hills (vineyards) | 2 | *suggested*: road-cycling time trials on the Old Post Road (E3, R-26 bikes); fishing at Bluegill Lake (4.1) |
 | Hollow Mesa County (desert) | 3 | Off-road racing (2.8); ghost-town and Old Salt Mine exploration; Dust Rider ambushes (roadside events, WORLD_V3 section 3); landmark photos at Mesa Arch (R-7) |
 | Fort Granite (military) | 3 | The Vault (secret) and stealing jets (WORLD_V3); instant high wanted level |
-| Cinder County (mountains) | 3 | Parachute jumps (RM 1.1); *suggested*: base jumping from the peaks (4.11); a hill-climb race up the observatory switchbacks (E3); the Silver Train secret |
+| Cinder County (mountains) | 3 | Parachute jumps (R-31); *suggested*: base jumping from the peaks (4.11); a hill-climb race up the observatory switchbacks (E3); the Silver Train secret |
 | Miravel Shores (lake and dam) | 3 | Boat rentals; the drowned-village dive (secret); *suggested*: lake fishing (4.1) |
 | Red Pine County (forest) | 3 | Off-road on logging roads; wildlife photography in place of hunting (RM 1.1, 4.1 photography); the fire-lookout and campground |
 | Sovereign County (parkland) | 5 | Estates and Signal Hill; *suggested*: a second golf course (2.3) |
@@ -258,6 +275,7 @@ It adds no new activities. Each line points back to where the activity is specif
 **Steelhaven** (phase 6; motor city)
 - *suggested*: street-art pasting and graffiti on the Polka Dot Block (4.8, 4.13).
 - *suggested*: scrap runs at the Old Ostrander Plant (on E5).
+- *suggested*: a snowball fight and snow shovelling in winter (4.14).
 - The empty Loop as a chase set piece (mission idea).
 
 **Porto Brisa** (expansion 1)
@@ -281,13 +299,15 @@ It adds no new activities. Each line points back to where the activity is specif
   - the race creator (4.11);
   - the car marketplace (R-13).
 - Collections: hidden packages, graffiti tags, landmark photos and the collection log (R-7, E7),
-  plus the Lost Tapes, capsule toys and fight manuals.
+  plus the Lost Tapes, capsule toys, fight manuals and oddball snaps (4.14).
 - Jobs anywhere:
   - taxi, courier, delivery rider, tow truck, valet (R-16);
   - bike courier and news photographer (4.3);
   - getaway driver for hire (2.7);
-  - recruit crew from the street (4.13).
-- Character: friends and dating (R-24); the pet (4.1); stats (R-17); looks (R-8).
+  - recruit crew from the street (4.13);
+  - the "Street Patrol" reality cop show (4.14).
+- Character: friends and dating (R-24); the pet (4.1); stats (R-17); personality traits (4.14);
+  looks (R-8).
 - Making things:
   - graffiti, livery and outfit editors (4.8);
   - safehouse decorating, the rooftop garden and home cooking (4.1, 4.8, 2.11);
@@ -319,17 +339,119 @@ It adds no new activities. Each line points back to where the activity is specif
 | Mountains | Cinder County | Parachute jumps, hill climb, base jumping, secrets |
 | Lake and forest | Miravel, Red Pine, Verdant Hills | Boat rentals, lake fishing, wildlife photography, logging-road off-road, cycling |
 | Military | Fort Granite and four small sites | The Vault, jets, high-wanted runs |
-| Air | everywhere, from phase 3 | Flight school, skydiving, airship, helicopter rentals, RC planes, drone races |
+| Air | everywhere, from phase 3 | Flight school (R-30), parachute jumps (R-31), airship, helicopter rentals, the chopper spotter (4.14), RC planes, drone races |
 | Indoors | venues across all cities | Gyms, The Pit, dojos, bowling, escape rooms, arcades and cafés, cinema, clubs, comedy club, karaoke, restaurants, shops, night classes |
 | Underground and secret | Flood Tunnels, Vault, Silver Train, Sunken Casino, drowned village | Exploration, lore, the hardest collectibles |
 
 ## Part C. Gaps this atlas shows
 
 - **Bellerive carries most of the content**. The other cities have mostly mission ideas and few
-  repeatable activities, so each city phase should bring at least one engine re-skin of its
-  own: desert golf for Las Brasas, cable-car and ferry jobs for Concordia, scrap and street art
-  for Steelhaven.
-- **Many indoor venues have no fixed place yet** (A1, "Across the city"). Fix them when the
-  interiors roll is next changed (`INTERIORS_SERVICES_PLAN.md`).
-- **Some RM 1.1 gaps have no package**: yoga, triathlon, flight school, parachute jumps and
-  fairground rides. Each needs a package or a "no".
+  repeatable activities. Answered by Part D: each place gets the core set in its own style, a
+  signature activity and a city activity pack (D5).
+- **Many indoor venues have no fixed place yet** (A1, "Across the city"). Answered by Part D4:
+  each venue has a first home in Bellerive and repeats in other cities on the bigger map. The
+  Bellerive homes still need fixing when the interiors roll is next changed
+  (`INTERIORS_SERVICES_PLAN.md`).
+- **Some RM 1.1 gaps had no package**: yoga, triathlon, flight school, parachute jumps and
+  fairground rides. Sachin: "We will build packages for these too." They are now roadmap
+  packages R-28 to R-32 (about 8 sessions).
+
+## Part D. Spreading activities over the whole map (Sachin, 2026-10-28)
+
+Sachin, on the gaps in Part C: "We need to spread out the activities over the whole map, just
+like we have in real life. We can also repeat activities but in different styles, like learning
+a different martial art in other part of the map." On the unplaced indoor venues: "thats why we
+need a bigger map." On the five RM 1.1 gaps: "We will build packages for these too."
+
+Part D is the plan for that. Unlike Parts A-C, it adds new things: regional styles of existing
+activities, one signature activity per place, homes for the indoor venues across the cities, and
+six city activity packs. Everything here is *suggested* (a proposal, open to change), and each
+place opens with its world phase.
+
+### D1. The rule
+
+Each city, and each countryside region where people live, gets:
+1. **the core set**, in its own style: a gym or fight school, a race, places to eat, a calm
+   hobby, a shift job, an indoor venue and a weekly event (E9). The engines (E1-E9) stay the
+   same; the place, the rules, the rivals and the rewards change;
+2. **one signature activity** found nowhere else, so each trip has a reason;
+3. **repeats with a twist**: the same activity in a second place plays differently (a new
+   martial art, a new track, a new house rule), and a few rewards exist only there, so the
+   player wants both.
+
+### D2. Regional styles: the same activity in different places
+
+| Activity | Bellerive (phase 1-2) | Las Brasas (4) | Concordia (5) | Steelhaven (6) | Porto Brisa (exp. 1) | California city (exp. 2) | Countryside (2-6) |
+|---|---|---|---|---|---|---|---|
+| **Martial arts** (2.9) | Boxing at The Pit, kickboxing in Gilt, karate in the Lantern Quarter, kung fu in the Wards | Muay Thai at a Dust Yards fight gym; cage fights at the Colosseo on fight nights | Judo at a Midtown club; krav maga taught by an ex-Halberd trainer | Wrestling at the Local 12 union hall; old-school boxing in a firehouse gym | Capoeira on the beach at Praia Dourada; Brazilian jiu-jitsu in Morro Alto | Screen fighting at a stunt school in the studio district (flashy chains for the cameras) | Kalaripayattu from a hermit master near Pinecrest (Cinder County); silat in Serena Town (the Keys) |
+| **Gym and fitness** (2.2) | Gilt gym; calisthenics on Liberty Green; muscle beach at Brisa Beach | Resort spa gym; a dawn run before the heat | Commons Park running loop; rowing on Sovereign Bay | Iron-and-chalk gym in Plant Row; ice hockey pickup games | Beach footvolley and outdoor bars on the sand | Beach gym, canyon trail runs | Mountain biking in Cinder County; canoeing in Red Pine |
+| **Racing** (2.8, E3) | Street races, airboats, soapbox derby, regatta | Night races on the Blaze; desert rally on Route 40 | Hill climbs up the cable-car streets; a night circuit around Midtown | Drag strip on the empty avenues; muscle cars on the Plant Row test track | Downhill bike race through Morro Alto | Freeway runs, canyon-road touge | Crop-duster air race (Golden Flats); logging-road rally (Red Pine); hill climb (Cinder Peak); land-sailing on the Hollow Mesa dry lakes |
+| **Eating out** (2.11, IS-1) | Creole, Cuban, seafood; crawfish boil | Buffet eating challenges; 24-hour diners | Bistros, food trucks, the Castellane family restaurant | Diners, coney stands, the Market Sheds | Churrasco, juice bars, beach kiosks | Taco trucks, a burger stand with a secret menu | Truck stops (Ridley Crossing), the county-fair pie contest |
+| **Music and nights out** (2.1, R-10) | Blue Lantern jazz, the brass band, karaoke | Resort shows, a lounge singer gig, a DJ residency | Theatre on the Slant; a busking spot on the Mall | Garage-rock bars; warehouse dance nights in Plant Row (fictional acts) | Samba school; carnival parade | A recording studio and film premieres | A barn dance in Golden Flats |
+| **Calm hobbies** (4.1) | Bayou fishing, birdwatching, chess on Moreau Square | Neon photography at the Sign Yard; desert golf | Speed-chess hustlers in Commons Park; museum quiz trails | Ice fishing on the lake in winter; street-art walks on the Polka Dot Block | Kite flying on the beach | Surfing, the pier | Lake fishing (Bluegill, Miravel), stargazing, wildlife photography |
+| **Shift jobs** (E5) | Taxi, delivery, streetcar, crane, lifeguard, paper route | Valet on the Blaze; Doubler bus driver; chapel limo driver | Bike courier in Midtown; tour guide on the Mall; cable-car gripman | Scrap runs; an assembly-line minigame at the Ostrander plant; snow plough in winter | Moto-taxi up the hill; beach vendor | Film extra and stunt double; pizza delivery | Crop dusting; trucking from Ridley Crossing; park ranger at Miravel Pines |
+| **Weekly event** (E9) | Friday car meet; fight night at The Pit; the second-line march | Fight night at the Colosseo; Skyhook night flights | Saturday market on the Wharfline; the chess open | Market Sheds Saturday; the comeback auto show | Carnival week; Sunday football | Studio premiere night; beach volleyball tournament | County fair (Golden Flats); rodeo at Sable Junction (Hollow Mesa) |
+
+### D3. Signature activities: one per place
+
+| Place | Phase | Signature (only here) | Engine |
+|---|---|---|---|
+| Bellerive core | 1 | The second-line march and the jazz club (already planned) | E2, R-25 |
+| Brisa Beach | 2 | The fun pier: Ferris wheel, coaster and midway games all year (R-32) | E1, R-32 |
+| Saltgrass Parish | 2 | Airboat racing through the Glades (already planned) | E3 |
+| Golden Flats | 2 | Flight school at the crop-duster strip (R-30) and the county fair with a tractor pull | R-30, E9 |
+| Verdant Hills | 2 | Hot-air balloon rides over the vineyards, with a balloon race on festival weekend | E3 |
+| Hollow Mesa | 3 | Land-sailing on the dry lakes; the Sable Junction rodeo (a mechanical bull on E2 timing, and barrel racing) | E3, E2 |
+| Cinder County | 3 | Parachute jumps and the climbing crag on Granite Dome (R-31) | R-31 |
+| Miravel Shores | 3 | The lake triathlon (R-29) and wakeboarding behind a rented boat | R-29, E3 |
+| Red Pine County | 3 | Lumberjack games at the sawmill: axe throwing, log rolling, a chainsaw-free sawing race | E1, E2 |
+| The Keys | 4 | Spearfishing (4.14) and sea fishing | E4 |
+| Las Brasas | 4 | Desert golf at Ember Heights and the Skyhook airship (already planned) | E4 |
+| Concordia | 5 | Ride the cable cars on the outside; the gripman shift job | E5 |
+| Steelhaven | 6 | Drag racing on the empty avenues; ice hockey in winter | E3, E1 |
+| Corran County | 6 | The lighthouse trail and storm chasing in season (already planned) | 4.3 |
+| Porto Brisa | exp. 1 | Hang gliding off Morro Alto onto the beach | flight |
+| California city | exp. 2 | Surfing and stunt work in the film studios | E2, E5 |
+
+### D4. Homes for the indoor venues
+
+Indoor venues are interiors behind a door (`INTERIORS_SERVICES_PLAN.md`), so each needs a
+façade spot, not much map. The bigger map (World v3) gives every city its own set, so a venue
+has a first home in Bellerive and a repeat elsewhere with a different style and its own
+rewards.
+
+| Venue | First home (Bellerive) | Repeats, in another style |
+|---|---|---|
+| Bowling alley (4.2) | Gilt: neon lanes | Steelhaven Market Sheds: retro union-league lanes with a Friday league; Las Brasas Blaze: glow bowling in a resort |
+| Pool hall and darts (R-21) | Lantern Quarter | Steelhaven union-hall bar; a Foggy Row pub in Concordia with a quiz night |
+| Escape rooms (4.2) | Gilt: a storm-themed set | Concordia, the Slant: a museum-vault theme; Las Brasas Old Town: a count-room theme |
+| Laser tag and paintball (4.2) | Laser tag in the Wards; paintball in Ironwharf's container maze | Laser tag in the Old Ostrander Plant (Steelhaven, the biggest arena); outdoor paintball in the Bottle Flats ghost town |
+| Trampoline park and climbing wall (4.2) | Ironwharf | A climbing gym in Bayview Heights (Concordia); real rock on Granite Dome (R-31) |
+| Batting cage (4.2) | Wards, beside sandlot baseball (4.14) | A Steelhaven ballpark with a home-run derby |
+| Cinema (R-10) | Lantern Quarter | Stage plays on the Slant (Concordia); a drive-in at Wheaton (Golden Flats); premieres in the California city |
+| Arcades and gaming cafés (R-11, 2.10) | One per Bellerive district | Old Town Brasas: a retro neon arcade; Midtown Concordia: an e-sports arena; Steelhaven: a basement LAN café. Each city has one café game only it hosts |
+| Comedy club (4.13) | Lantern Quarter | Political satire on the Slant; a Las Brasas lounge act |
+| Karaoke (2.1) | Bellerive bars | A Las Brasas karaoke lounge; samba karaoke in Porto Brisa |
+| Ice rink (*new*) | none (too warm) | Commons Park winter rink (Concordia); the Steelhaven hockey rink |
+| Night classes (4.6) | Bellerive community college | Concordia State University extension: economics (deeper charts in the market app), law (cheaper bail), languages |
+| Shooting range (IS-6) | Ironwharf | A desert range with moving targets outside Las Brasas |
+| Cat café and pocket-racer hobby shop (4.14) | Magnolia Heights; Lantern Quarter | A Steelhaven hobby shop with its own mini-car track |
+
+### D5. City activity packs (costs)
+
+Each pack re-skins the engines for one place: D2's styles, the D3 signature, the D4 venues.
+Costs are rough sessions of activity content, on top of the world phase that builds the place
+(`WORLD_V3_PLAN.md` section 7) and the engines.
+
+| Pack | Place | Contents | Cost |
+|---|---|---|---|
+| CP-1 | Bellerive's phase 2 edges and the countryside of phases 2-3 | Brisa Beach, Saltgrass, Golden Flats, Verdant Hills, Hollow Mesa, Cinder, Miravel and Red Pine signatures and styles (the R-28 to R-32 packages are costed separately) | 3.5 |
+| CP-2 | Las Brasas and the Keys | Muay Thai and cage fights, Blaze races, buffet challenges, valet and chapel jobs, glow bowling, escape room, retro arcade, desert range, spearfishing | 2.5 |
+| CP-3 | Concordia | Judo and krav maga, hill climbs, rowing, speed chess, gripman and tour-guide jobs, Slant theatre and comedy, escape room, e-sports arena, ice rink, the university | 2.5 |
+| CP-4 | Steelhaven and Corran | Wrestling and firehouse boxing, drag strip, hockey, ice fishing, assembly line and snow plough, union-league bowling, LAN café, Ostrander laser tag | 2.5 |
+| CP-5 | Porto Brisa | Capoeira and jiu-jitsu, downhill bike race, footvolley, samba school and carnival, moto-taxi, hang gliding | 2.5 |
+| CP-6 | California city | Stunt school, surfing, freeway and canyon races, film-extra jobs, premieres, beach volleyball | 2.5 |
+
+**Total**: about **16 sessions**, spread over the world phases (each pack ships with its phase).
+**Cheaper option**: the signature activity plus the martial art and one venue per place, about
+**1 session per pack, 6 in all**; the rest of each pack later.

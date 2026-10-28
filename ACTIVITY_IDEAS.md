@@ -463,6 +463,63 @@ is not already planned. All facts come from guide and wiki search summaries (2 [
 - drinking games and drunk-driving effects: alcohol is kept as bar scenery, with a soda swap for
   minigames, unless Sachin says otherwise.
 
+### 4.14 Bully, Saints Row and Yakuza: what they add (pass of 2026-10-28)
+
+Sachin asked to check Bully, Saints Row and Yakuza too. Section 1 already took one lesson from
+each (Bully's classes, Saints Row 2's scored chaos, Yakuza's business sims and Like a Dragon's
+long loops). This pass reads their full activity lists: Bully and its Scholarship Edition; Saints
+Row 2, The Third and the 2022 reboot; Yakuza 0 to 6, Kiwami 2, Like a Dragon and Infinite Wealth.
+Same rule as 4.11: only what is not already planned. Facts come from guide and wiki search
+summaries (2 [A29]-[A31]); details remembered but not confirmed by a search are marked U.
+
+**Already in our plans, so not repeated here**:
+- Bully (2 [A29]): classes as minigames (4.6 night classes); go-kart and bike races (2.8, R-14);
+  arcade games (R-11); collectibles (R-7).
+- Saints Row (2 [A30]): Insurance Fraud (4.5 fender-bender fraud); Chop Shop (4.11 daily
+  wanted-car list); Demolition Derby (2.8, 4.11 arena show); Hitman's target list as the
+  non-lethal bail bonds version (4.11); Zombie Uprising, a game inside the game (our café games,
+  2.10); the reboot's ventures, such as a garage, a food truck and a laundromat (E6, and the
+  money fronts in 4.11); its activities sorted by district (this is what `ACTIVITY_ATLAS.md`
+  does); Tank Mayhem (the tank row in roadmap 1.1, for Fort Granite in phase 3).
+- Yakuza and Like a Dragon (2 [A31]): karaoke (2.1); the batting cage (4.2); disco dancing (R-10
+  dance rhythm game); darts, bowling and arcade classics (R-21, R-11); go-karts (2.8);
+  taxi jobs and Crazy Delivery (R-16 shift jobs); busking (2.1); vocational exams (4.6);
+  business sims (4.4, E6); Dondoko Island (the "buy back the Wards" renovation in 4.4); Sujimon
+  (the collection log, E7); the Miss Match dating app (R-24); Revelations, learning a move from
+  an odd sight (U; our fight manuals in 2.9 do the same job).
+
+| Idea | From (label, source) | Solvera version | Engine / needs |
+|---|---|---|---|
+| **Paper route** | Bully: newspaper delivery missions on a bike (2 [A29]) | A dawn route on a bike through Magnolia Heights: flick papers onto porches on the beat of your speed, with bonuses for the doormat and for dodging dogs and sprinklers. The paper prints a front page about your latest big deed | E5, E3 |
+| **Yard jobs** | Bully: lawn mowing for pay (U); snow shovelling in winter (U) | Mow lawns in Magnolia Heights; after a storm, clear branches and debris from Wards yards (pays in High Water reputation too). Snow shovelling waits for Steelhaven's winter (phase 6) | E5 |
+| **Neighbour errands** | Bully: 50 errands for townsfolk, some of which unlock clothes (2 [A29]) | Named neighbours post small jobs on a phone "street board": fetch a lost cat, carry a sousaphone to the march, fix a fence. Each neighbour's chain ends in a **unique reward** (a jacket, a discount, a shortcut key) | R-5, E7 |
+| **Travelling fair** | Bully: the carnival's games pay tickets for prizes (2 [A29]); roadmap 1.1 lists fairground rides as missing; now roadmap package 32 | A fair on Liberty Green for one week each season (E9): ring toss, high striker, a water-pistol race, a dunk tank with Aurum's mascot, a Ferris wheel and bumper cars. Tickets are earned only, never bought (section 6) | E1, E9, R-32 |
+| **Sludge Avenger** | Saints Row 2 "Septic Avenger": spray sewage on buildings to drop their value (2 [A6][A30]) | A pump truck from the flood works sprays mud on Aurum show homes and billboards against the clock. Each soaked block lowers Aurum's land value slightly (wealth phase 1). Cartoon mess only, never on people | E3, R-22 |
+| **Wrecking crew** | Saints Row 2 "Mayhem": damage property for a cash score (2 [A30]) | Grows 4.5's wrecking ball into a timed score run: a rival developer pays you to wreck one Aurum building site's props (fences, cones, portable toilets) with a digger or a pickup. Multipliers for chains | E3, physics props |
+| **Bodyguard gigs** | Saints Row 2 "Crowd Control": guard a VIP from fans; it unlocks clothing discounts (2 [A30]) | Walk a fictional celebrity through the Gilt District while fans, paparazzi and a rival's goons rush in; shove, block and steer. Pays in shop discounts | R-5, light combat |
+| **Reality cop show** | Saints Row 2 "FUZZ": a reality TV show films you as a cop (2 [A30]) | "Street Patrol" films your vigilante jobs (R-9). Clean, **non-lethal** arrests score style points; a good episode airs on the city news and lowers your police heat for a day | R-9, R-13 news |
+| **Paint-trail quad run** | Saints Row 2 "Trail Blazing": a quad bike leaving a trail of fire through targets (2 [A30]); fire swapped out | A quad on the levee and in the bayou leaves a trail of coloured powder; drive it through marked targets (Aurum signs, festival floats) before the timer ends | E3 |
+| **Chopper spotter** | Saints Row 2 "Heli Assault": cover a friend's car from a helicopter (2 [A30]) | Ride in a friend's helicopter and guide their getaway: mark roadblocks, call turns, drop smoke. No shooting. Waits for helicopters | E3, helicopters (roadmap) |
+| **Pocket racers** | Yakuza 0 and Kiwami "Pocket Circuit": build tiny cars from parts found around town, race them on tracks (2 [A31]) | A hobby shop in the Lantern Quarter runs a mini-car league. Parts come from capsule toys, side jobs and hidden spots; you tune (motor, tyres, weight) and the race runs itself. Good for short phone sessions | E3 (auto race), E7 |
+| **The Shakedown** | Yakuza 0 "Mr. Shakedown": a strong roaming enemy who takes your cash if he wins; beat him to win it back with extra (2 [A31]) | A huge debt collector roams at night. Lose and he takes 10% of your **pocket cash** (never bank or stock holdings); beat him for that cash back plus a bonus. A soft money sink that makes carrying cash a choice | combat (R-17) |
+| **Crew defence** | Yakuza Kiwami 2 "Clan Creator": top-down battles defending sites with a crew (2 [A31]) | Defend a Wards building site or your club with the crew you recruited (4.13), each with a skill. Runs on the Levee Line tower-defence engine (2.10) | 2.10 Levee Line, 4.13 crew |
+| **Cat café** | Yakuza 6: a cat café you help run; you find cats around town (U) | A cat café in Magnolia Heights that takes shelter cats. Find strays, bring them in, and the café earns more; regulars can adopt them. Ties to the pet shelter (4.1) | E6, animals (R-3) |
+| **Spearfishing** | Yakuza 6: spearfishing with a fisherman (2 [A31]) | An old fisherman takes you out off the Keys (phase 4): aim and fire at fish swimming past in waves; rare fish go in the collection log | E4, diving, E7 |
+| **Water-balloon fight** | Yakuza 5: a snowball-fight arena (U) | A summer water-balloon fight in Liberty Green for teams; a snowball version in Steelhaven later | E1, light combat |
+| **Can run** | Like a Dragon "Can Quest": collect cans on a bike against the clock (2 [A31]) | Collect recyclables around the Wards with a bike cart before rival collectors take them; trade them in at the recycling yard. Pairs with the dumpster dash (4.13) | E3, E5 |
+| **Oddball snaps** | Infinite Wealth "Sicko Snap": photograph strange people around town (2 [A31]) | A list of odd sights to photograph (a man walking a gator on a leash, a dog in the brass band); each one goes in the photo log (E7) with a gag caption | phone camera, E7 |
+| **Personality traits** | Like a Dragon: personality stats such as kindness, charisma and confidence that rise from activities and open jobs and dialogue (U) | Five traits (Nerve, Charm, Smarts, Heart, Style) rise from hobbies: karaoke raises Charm, chess raises Smarts, volunteering raises Heart. Some jobs, dates and story options need a level. Gives every small activity a reason | stats (R-17), E8 |
+| **Sandlot baseball** | Yakuza 6: a local baseball team you manage (U) | Coach a Wards amateur team: pick the lineup and hit in the batting cage minigame at the big moments. Wins raise the Wards' mood | E4 batting, E6 |
+
+**Keep out**, from the same games:
+- Saints Row 2's Snatch (pimping), Escort (sexual) and Drug Trafficking;
+- Yakuza's hostess and cabaret clubs and its adult live chat (4.13's cabaret is a stage show
+  only, with no hostesses);
+- casinos, pachinko, mahjong and Koi Koi (the gambling decision);
+- Hitman's killing contracts (only the alive-pays-more bail bonds version stays);
+- Trail Blazing's fire on people, and any harm to bystanders in chaos runs;
+- Bully's fights with children: no Solvera activity sets the player against kids.
+
 ## 5. Picking: the next wave after the roadmap's first wave
 
 Scored the same way as the roadmap: liveliness (1-5) divided by cost. Most rows build on the
@@ -612,3 +669,25 @@ depends on, including later ones.
 - [A28] Sleeping Dogs side activities: https://www.trueachievements.com/game/Sleeping-Dogs/walkthrough/6 ·
   https://www.gamepressure.com/sleepingdogs/secondary-missions/z23ee5 ·
   https://segmentnext.com/sleeping-dogs-all-random-events
+- [A29] Bully side activities (errands, paper route, carnival, races, classes):
+  https://bully.fandom.com/wiki/100%25_Completion ·
+  https://skillnation.in/posts/bully-scholarship-edition-100/ ·
+  https://www.wand.com/en/maps/bully-scholarship-edition/bullworth/checklist ·
+  https://tcrf.net/Bully_(PlayStation_2)
+- [A30] Saints Row activities (SR2, The Third, the 2022 reboot):
+  https://www.supercheats.com/guides/saints-row-2/activities ·
+  https://www.trueachievements.com/game/Saints-Row-2/walkthrough/4 ·
+  https://www.giantbomb.com/wiki/Games/Saints_Row_2 ·
+  https://saintsrow.wiki/wiki/Activities_in_Saints_Row ·
+  https://saintsrow.wiki/wiki/Activities_in_Saints_Row:_The_Third ·
+  https://saintsrow.wiki/wiki/Tank_Mayhem ·
+  https://www.gamepressure.com/saints-row-v/list-of-all-side-activities/zd102d6 ·
+  https://www.gamepressure.com/saints-row-v/list-of-all-ventures/zf102d8
+- [A31] Yakuza and Like a Dragon minigames:
+  https://www.gamepressure.com/yakuza-6/minigames-list/z6aca1 ·
+  https://samurai-gamers.com/yakuza-like-a-dragon/mini-games/ ·
+  https://www.gamepressure.com/like-a-dragon-infinite-wealth/all-mini-games/ze11219 ·
+  https://www.gematsu.com/2023/12/like-a-dragon-infinite-wealth-details-minigames ·
+  https://www.gamerguides.com/like-a-dragon-infinite-wealth/guide/minigames/sicko-snap ·
+  https://blogs.tuni.fi/playlab/game-reviews/yakuza-kiwami-2-gangster-drama-with-lots-of-minigames/ ·
+  https://www.sportskeeda.com/esports/7-great-mini-games-yakuza-like-dragon-franchise
