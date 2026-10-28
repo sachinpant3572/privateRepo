@@ -6,6 +6,10 @@ extends "res://scripts/humanoid.gd"
 ## door and are freed. Hit them and they run out (and the shopkeeper calls
 ## the police: one star).
 ##
+## Everyone inside listens (Senses): a fight or a crash makes customers stop
+## and look, film or phone it in, or (the timid) hurry out of the door;
+## staff hold their post and look, call it in, duck or cower.
+##
 ## Positions are world space; the room kit's spots are room space, so the
 ## interior manager hands them over with `origin` added.
 
@@ -19,7 +23,10 @@ const SLIDE_TIME := 0.45
 enum Step { WALK, ACT, OUT }
 
 ## Staff never move; `gesture` is what they do.
-var staff := false
+var staff := false:
+	set(v):
+		staff = v
+		category = "shopkeeper" if v else "general"
 var origin := Vector3.ZERO
 var hub := Vector3.ZERO
 var door := Vector3.ZERO
@@ -40,12 +47,20 @@ var _slide_yaw := 0.0
 var _slide_out := false
 var _last_pos := Vector3.ZERO
 var _fleeing := false
+## The player hit this one and the crime has been reported.
+var _reported := false
+
+## Reactions that stop a customer where they stand.
+const HALT := ["look", "film", "call", "cheer", "shout", "duck", "cower", "hands_up", "startle"]
 
 
 func _ready() -> void:
 	super()
 	add_to_group("patrons")
 	walk_speed = WALK
+	var h := hash(get_instance_id()) % 10
+	personality = "calm" if h < 5 else ("curious" if h < 7 else ("timid" if h < 9 else "brave"))
+	listen()
 
 
 ## Seats are inside benches and chairs: no collisions at all, or the body
@@ -91,6 +106,11 @@ func is_seated() -> bool:
 func _think(delta: float) -> void:
 	if staff:
 		velocity = Vector3.ZERO
+		return
+	if reaction in HALT and _slide < 0.0 and not sitting and _step != Step.ACT:
+		# Stops dead to watch.
+		walk(Vector3.ZERO, 0.0, delta)
+		face(reaction_pos - global_position, delta)
 		return
 	if _slide >= 0.0:
 		_slide += delta / SLIDE_TIME
@@ -141,6 +161,7 @@ func _follow(delta: float) -> void:
 		if _path.is_empty() and _step == Step.WALK:
 			_begin_act()
 		return
+	style = "panic" if _fleeing else ""
 	walk(to.normalized(), WALK * (2.4 if _fleeing else 1.0), delta)
 	var moved := global_position.distance_to(_last_pos)
 	stuck_time = stuck_time + delta if moved < WALK * delta * 0.2 else maxf(stuck_time - delta, 0.0)
@@ -199,13 +220,49 @@ func _yaw_to(p: Vector3) -> float:
 
 
 func _on_hit(attacker) -> void:
-	if attacker == null or not attacker.is_in_group("player") or _fleeing:
+	if attacker == null or not attacker.is_in_group("player") or _reported:
 		return
+	_reported = true
 	Wanted.report_crime(1)
-	_fleeing = true
 	if staff:
+		_fleeing = true
 		gesture = "cower"
 		return
+	_leave()
+
+
+## Indoors nobody runs over to a scene: staff keep to their post, and
+## customers who would run or keep away leave by the door instead.
+func _choose_reaction(kind: String, near: bool, source, data: Dictionary) -> String:
+	if _fleeing:
+		return "ignore"
+	var r := super(kind, near, source, data)
+	match r:
+		"approach", "help", "investigate":
+			return "look"
+		"hurry":
+			return "ignore"
+		"flee", "avoid":
+			if staff:
+				return "cower" if Senses.danger(kind) >= 3 else "call"
+	return r
+
+
+func _on_reaction(_p: Dictionary) -> void:
+	if not staff and reaction in ["flee", "avoid"]:
+		_leave()
+
+
+## A reaction gesture shows over the staff's work and a diner's meal.
+func shown_gesture() -> String:
+	return _act_gesture if _act_gesture != "" else super()
+
+
+## Gives up the remaining stops and heads out of the door in a hurry.
+func _leave() -> void:
+	if _fleeing or staff:
+		return
+	_fleeing = true
 	stops.clear()
 	if sitting or (_slide >= 0.0 and not _slide_out):
 		# Out of the seat the way they got in, then out of the door.

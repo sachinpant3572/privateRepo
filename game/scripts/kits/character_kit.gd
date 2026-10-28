@@ -60,9 +60,19 @@ const BOTTOMS := [["jeans", 34, 26], ["joggers", 18, 12], ["cargo", 12, 6], ["tr
 const HEADWEAR := [["", 72], ["cap", 12], ["cap_back", 6], ["beanie", 9], ["bucket", 6]]
 const BAGS := [["", 50, 42], ["backpack", 22, 15], ["crossbody", 18, 18], ["tote", 4, 22]]
 
+## Kinds of people on the street (pedestrian.gd picks one, senses.gd decides
+## how each reacts); category_look() dresses each so it reads from above.
+const CATEGORIES := ["general", "office", "worker", "tourist", "gang", "elderly", "athlete", "shopkeeper", "medic"]
+const GREYS := [Color(0.5, 0.5, 0.5), Color(0.68, 0.68, 0.66), Color(0.82, 0.81, 0.78), Color(0.93, 0.92, 0.88)]
+## Knitwear for cardigans.
+const KNITS := [Color(0.86, 0.82, 0.72), Color(0.76, 0.68, 0.55), Color(0.64, 0.48, 0.32), Color(0.42, 0.13, 0.17),
+	Color(0.36, 0.38, 0.24), Color(0.58, 0.58, 0.6), Color(0.38, 0.46, 0.56), Color(0.17, 0.29, 0.22)]
+const APRONS := [Color(0.13, 0.17, 0.28), Color(0.36, 0.25, 0.18), Color(0.17, 0.29, 0.22), Color(0.42, 0.13, 0.17),
+	Color(0.92, 0.91, 0.88), Color(0.09, 0.09, 0.1)]
+
 ## Tops worn over another layer: the jacket colour is the outside, the shirt
 ## shows at the neck or the open front.
-const OUTERWEAR := ["jacket", "hoodie", "bomber", "denim", "puffer", "blazer", "suit", "delivery"]
+const OUTERWEAR := ["jacket", "hoodie", "bomber", "denim", "puffer", "blazer", "suit", "delivery", "cardigan"]
 ## How much a top stands off the body (puffers are fat).
 const BULK := {"puffer": 1.12, "puffer_vest": 1.1, "bomber": 1.05, "hoodie": 1.04, "delivery": 1.06, "denim": 1.03,
 	"hivis": 1.05}
@@ -157,6 +167,138 @@ static func random_look(rng: RandomNumberGenerator, outfit := "") -> Dictionary:
 	return look
 
 
+## A random look for a kind of person (CATEGORIES), dressed so the kind reads
+## from the street camera: office workers in suits with lanyards and
+## briefcases, workers in hi-vis and boots, tourists with cameras, sun hats and
+## shopping, gang members in hoodies with bandanas and chains, the elderly in
+## cardigans with grey hair, glasses and canes, athletes in running kit,
+## shopkeepers in aprons, medics in scrubs. look.category says which; a
+## general look that came out as scrubs, hi-vis or a suit takes that category.
+static func category_look(rng: RandomNumberGenerator, cat := "general") -> Dictionary:
+	var look: Dictionary
+	match cat:
+		"office":
+			look = random_look(rng, _pick(rng, ["suit", "suit", "blazer", "blazer", "polo"]))
+			if look.bottoms in ["joggers", "cargo", "shorts", "leggings"]:
+				look.bottoms = "trousers"
+				look.pants = _pick(rng, [NEUTRALS[0], NEUTRALS[2], NEUTRALS[12]])
+			if rng.randf() < 0.55:
+				look["lanyard"] = _pick(rng, [ACCENTS[2], ACCENTS[3], ACCENTS[6], NEUTRALS[0]])
+			if rng.randf() < 0.5:
+				look["bag"] = "briefcase"
+				look["bag_color"] = _pick(rng, [NEUTRALS[0], NEUTRALS[9], NEUTRALS[8]])
+			look.headwear = ""
+			look.erase("headphones")
+		"worker":
+			look = random_look(rng, "hivis" if rng.randf() < 0.6 else _pick(rng, ["tee", "tee", "jacket", "hoodie"]))
+			if look.outfit != "hivis":
+				look.shoe_style = "boots"
+				look.shoes = _pick(rng, BOOTS)
+				look.bottoms = _pick(rng, ["cargo", "cargo", "jeans"])
+				look.pants = _pants_color(rng, look.bottoms)
+				if look.headwear == "" and rng.randf() < 0.4:
+					look.headwear = "cap"
+		"tourist":
+			look = random_look(rng, _pick(rng, ["tee", "tee", "polo", "tank", "jacket"]))
+			if look.outfit != "jacket" and look.bottoms != "skirt" and rng.randf() < 0.6:
+				look.bottoms = "shorts"
+				look.pants = _pants_color(rng, "shorts")
+			if rng.randf() < 0.6:
+				look["camera"] = _pick(rng, [NEUTRALS[0], NEUTRALS[0], NEUTRALS[3]])
+			if look.headwear == "" and rng.randf() < 0.5:
+				look.headwear = _pick(rng, ["bucket", "bucket", "cap"])
+				look.hat = _cloth(rng, 0.4)
+			if rng.randf() < 0.5:
+				look["sunglasses"] = true
+				look.erase("glasses")
+			var r := rng.randf()
+			if r < 0.3:
+				look["bag"] = "shopping"
+				look["bag_color"] = _pick(rng, ACCENTS)
+				look.erase("phone")
+			elif r < 0.7:
+				look["bag"] = "backpack"
+				look["bag_color"] = _cloth(rng, 0.4)
+		"gang":
+			look = random_look(rng, _pick(rng, ["hoodie", "hoodie", "bomber", "tank", "jersey", "tee"]))
+			var crew: Color = _pick(rng, [ACCENTS[3], ACCENTS[2], ACCENTS[1], NEUTRALS[0]])
+			look.bottoms = _pick(rng, ["joggers", "joggers", "jeans", "cargo"])
+			look.pants = _pants_color(rng, look.bottoms)
+			look.shoe_style = "sneakers"
+			look.hat = crew if rng.randf() < 0.6 else NEUTRALS[0]
+			look.headwear = "bandana" if rng.randf() < 0.45 else _pick(rng, ["cap_back", "beanie", "cap", ""])
+			if rng.randf() < 0.55:
+				look["chain"] = Color(0.92, 0.76, 0.3) if rng.randf() < 0.7 else Color(0.82, 0.82, 0.85)
+				look.erase("necklace")
+			if look.get("bag", "") not in ["", "crossbody"]:
+				look.erase("bag")
+			look.erase("glasses")
+		"elderly":
+			look = random_look(rng, _pick(rng, ["cardigan", "cardigan", "cardigan", "polo", "jacket", "blazer"]))
+			look.hair_color = _pick(rng, GREYS)
+			if look.hair in ["fade", "afro", "locs", "curly", "ponytail"]:
+				look.hair = _pick(rng, ["short", "bald", "bob", "bun"])
+			if look.bottoms != "skirt":
+				look.bottoms = "trousers"
+				look.pants = _pick(rng, [NEUTRALS[2], NEUTRALS[3], NEUTRALS[6], NEUTRALS[9], NEUTRALS[12]])
+			look.shoe_style = "dress" if rng.randf() < 0.5 else "sneakers"
+			look.shoes = _pick(rng, [NEUTRALS[0], NEUTRALS[9], NEUTRALS[4], NEUTRALS[6]])
+			look.height = look.height * 0.96
+			if look.headwear in ["cap_back", "beanie"]:
+				look.headwear = ""
+			if rng.randf() < 0.5:
+				look["glasses"] = true
+				look.erase("sunglasses")
+			if rng.randf() < 0.35:
+				look["cane"] = _pick(rng, [Color(0.36, 0.25, 0.18), NEUTRALS[0], Color(0.55, 0.4, 0.25)])
+			if look.get("bag", "") == "backpack":
+				look.bag = "tote"
+			for k in ["headphones", "print", "phone", "socks"]:
+				look.erase(k)
+		"athlete":
+			look = random_look(rng, _pick(rng, ["tank", "tank", "tee", "jersey"]))
+			look.bottoms = _pick(rng, ["shorts", "shorts", "leggings", "joggers"])
+			look.pants = _pants_color(rng, look.bottoms)
+			look.shoe_style = "sneakers"
+			look.shoes = _pick(rng, ACCENTS) if rng.randf() < 0.6 else NEUTRALS[4]
+			look.sole = NEUTRALS[4]
+			look.headwear = ""
+			if rng.randf() < 0.5:
+				look["headband"] = _pick(rng, [ACCENTS[0], ACCENTS[2], ACCENTS[3], ACCENTS[7], NEUTRALS[4]])
+			elif rng.randf() < 0.4:
+				look.headwear = "cap"
+			if look.hair in ["long", "locs"] and rng.randf() < 0.7:
+				look.hair = "ponytail"
+			look["socks"] = NEUTRALS[4]
+			for k in ["bag", "phone", "necklace", "glasses"]:
+				look.erase(k)
+			if rng.randf() < 0.35:
+				look["headphones"] = _pick(rng, [NEUTRALS[0], NEUTRALS[4], look.shoes])
+		"shopkeeper":
+			look = random_look(rng, _pick(rng, ["polo", "tee", "tee", "polo"]))
+			look["apron"] = _pick(rng, APRONS)
+			look.headwear = ""
+			for k in ["bag", "print", "phone", "headphones"]:
+				look.erase(k)
+		"medic":
+			look = random_look(rng, "scrubs")
+			if rng.randf() < 0.7:
+				look["lanyard"] = _pick(rng, [ACCENTS[2], ACCENTS[6], NEUTRALS[4]])
+			look.shoe_style = "sneakers"
+			look.shoes = _pick(rng, [NEUTRALS[4], NEUTRALS[4], NEUTRALS[0]])
+		_:
+			look = random_look(rng)
+			match look.outfit:
+				"scrubs":
+					cat = "medic"
+				"hivis", "delivery":
+					cat = "worker"
+				"suit":
+					cat = "office"
+	look["category"] = cat
+	return look
+
+
 ## Makes the rest of a random look suit its top: work clothes, suits, summer
 ## and winter wear.
 static func _fit_outfit(rng: RandomNumberGenerator, look: Dictionary, col: int) -> void:
@@ -239,6 +381,13 @@ static func _fit_outfit(rng: RandomNumberGenerator, look: Dictionary, col: int) 
 				look.bottoms = "trousers" if rng.randf() < 0.5 else "jeans"
 		"hoodie":
 			look.jacket = _cloth(rng, 0.25)
+		"cardigan":
+			look.jacket = _pick(rng, KNITS)
+			look.shirt = _pick(rng, [NEUTRALS[4], NEUTRALS[6], Color(0.7, 0.8, 0.92), NEUTRALS[3]])
+			if look.bottoms in ["shorts", "leggings", "joggers", "cargo"]:
+				look.bottoms = "trousers"
+				look.pants = _pants_color(rng, look.bottoms)
+			look.erase("print")
 	if look.outfit not in ["dress", "tank", "jersey", "suit", "blazer", "scrubs", "hivis"] and look.bottoms == "shorts" and rng.randf() < 0.5:
 		look.shoe_style = "slides" if rng.randf() < 0.3 else "sneakers"
 	if look.shoe_style == "sneakers" and look.outfit not in ["delivery", "jersey"] and rng.randf() < 0.12:
@@ -316,8 +465,8 @@ static func build_rig(look: Dictionary) -> Skeleton3D:
 ## - outfit, the top: tee, tank, polo, jersey, hoodie, jacket (open zip
 ##   jacket), bomber, denim (denim jacket), puffer, puffer_vest (or vest),
 ##   blazer (over a tee), suit, dress, scrubs, hivis (vest over a tee),
-##   delivery (rider jacket and cube bag), uniform (police; duty_vest false
-##   leaves off the vest).
+##   delivery (rider jacket and cube bag), cardigan (open knit over a shirt),
+##   uniform (police; duty_vest false leaves off the vest).
 ## - shirt: the top's colour, or the layer under a jacket; jacket: the outer
 ##   layer; accent: trim, stripes and numbers; print: a logo block on the
 ##   chest (back_print adds one on the back); number: jersey number; tie;
@@ -329,15 +478,22 @@ static func build_rig(look: Dictionary) -> Skeleton3D:
 ## - shoe_style: sneakers, boots, slides, dress, heels; shoes: upper colour;
 ##   sole; shoe_accent: the side stripe.
 ## - skin, hair (style), hair_color, beard, headwear (cap, cap_back, beanie,
-##   bucket, helmet, hardhat, police) and hat (its colour); the old hair
-##   styles cap, beanie and police still work.
-## - glasses, sunglasses, headphones (colour), necklace (colour), bag
-##   (backpack, crossbody, tote, cube) and bag_color, phone (colour; held in
-##   the right hand), build (shoulder width), height.
+##   bucket, helmet, hardhat, police, bandana) and hat (its colour); the old
+##   hair styles cap, beanie and police still work; headband (colour).
+## - glasses, sunglasses, headphones (colour), necklace (colour), chain (a
+##   heavy chain, colour), lanyard (colour, with an ID card), camera (colour,
+##   on a neck strap), apron (colour), cane (colour, in the right hand), bag
+##   (backpack, crossbody, tote, cube, briefcase, shopping: a bag in each
+##   hand) and bag_color, phone (colour; held in the right hand), build
+##   (shoulder width), height.
+## - hero: finer limbs and head for the player; stripes (colour): racing
+##   stripes over the shoulders and down the sleeves and a band across the
+##   back, so the hero reads from above.
 static func build(mb, look: Dictionary) -> void:
 	var o := _spec(look)
 	_hips(mb, look, o)
 	_torso(mb, look, o)
+	_extras(mb, look, o)
 	mb.set_bone(bone_index("Neck"))
 	_tube(mb, Vector3(0, 1.42, 0), Vector3(0, 1.58, 0), 0.07, 0.065, o.skin)
 	if look.has("necklace"):
@@ -380,6 +536,7 @@ static func _spec(look: Dictionary) -> Dictionary:
 		"w": look.get("build", 1.0),
 		"bulk": bulk,
 		"shoe_style": look.get("shoe_style", "dress" if outfit == "suit" else ("boots" if outfit == "uniform" else "sneakers")),
+		"sides": 8 if look.get("hero", false) else 6,
 	}
 
 
@@ -442,7 +599,7 @@ static func _torso(mb, look: Dictionary, o: Dictionary) -> void:
 		_band(mb, 0.95, 0.205 * w, 0.148, 0.07, jacket)
 	elif not tucked and not quilted:
 		var hem := top
-		if outfit in ["jacket", "bomber", "hoodie", "delivery"]:
+		if outfit in ["jacket", "bomber", "hoodie", "delivery", "cardigan"]:
 			hem = accent if outfit == "bomber" else jacket.darkened(0.18)
 		_band(mb, 1.0, 0.198 * w * maxf(bulk, 1.02), 0.138 * bulk, 0.045, hem)
 		if outfit == "hivis":
@@ -499,10 +656,17 @@ static func _torso(mb, look: Dictionary, o: Dictionary) -> void:
 			_panel(mb, 0.0, 1.22, 1.1, 0.1, 0.125, -1.0, jacket.darkened(0.12), w, bulk, 1, 0.016, 3)
 			if look.has("print"):
 				_print(mb, look, w, bulk, 1.33)
-		"jacket", "denim", "blazer", "suit":
+		"jacket", "denim", "blazer", "suit", "cardigan":
 			# Open front showing the layer under it.
 			var inner := shirt
-			_panel(mb, 0.0, 1.47, 1.03, 0.075 if outfit in ["blazer", "suit"] else 0.06, 0.03 if outfit in ["blazer", "suit"] else 0.055, -1.0, inner, w, bulk, 3)
+			var vee := outfit in ["blazer", "suit", "cardigan"]
+			_panel(mb, 0.0, 1.47, 1.03, 0.075 if vee else 0.06, 0.03 if vee else 0.055, -1.0, inner, w, bulk, 3)
+			if outfit == "cardigan":
+				# Button band and buttons down the left front, shirt collar.
+				_strip(mb, [_surf(-0.07, 1.46, -1.0, w, bulk, 0.016), _surf(-0.033, 1.25, -1.0, w, bulk, 0.016), _surf(-0.03, 1.03, -1.0, w, bulk, 0.016)], 0.009, jacket.darkened(0.15))
+				for y in [1.24, 1.15, 1.06]:
+					_panel(mb, -0.034, y + 0.012, y - 0.012, 0.012, 0.012, -1.0, jacket.lightened(0.45), w, bulk, 1, 0.02)
+				_tube(mb, Vector3(0, 1.455, 0), Vector3(0, 1.5, 0), 0.085, 0.082, shirt)
 			if outfit in ["blazer", "suit"]:
 				for side in [-1.0, 1.0]:
 					_strip(mb, [_surf(side * 0.09, 1.47, -1.0, w, bulk, 0.02), _surf(side * 0.04, 1.2, -1.0, w, bulk, 0.02)], 0.02, jacket.darkened(0.2))
@@ -519,7 +683,7 @@ static func _torso(mb, look: Dictionary, o: Dictionary) -> void:
 					_panel(mb, side * 0.13, 1.35, 1.31, 0.045, 0.045, -1.0, jacket.darkened(0.15), w, bulk, 1, 0.017)
 				_strip(mb, [_surf(-0.2, 1.38, 1.0, w, bulk), _surf(0.0, 1.4, 1.0, w, bulk), _surf(0.2, 1.38, 1.0, w, bulk)], 0.008, jacket.lightened(0.3))
 				_tube(mb, Vector3(0, 1.455, 0), Vector3(0, 1.5, 0), 0.085, 0.082, shirt.darkened(0.15))
-			else:
+			elif outfit == "jacket":
 				# Zip jacket: stand collar and zip edges.
 				_tube(mb, Vector3(0, 1.45, 0), Vector3(0, 1.53, 0), 0.096, 0.092, jacket.darkened(0.08))
 				for side in [-1.0, 1.0]:
@@ -541,6 +705,61 @@ static func _torso(mb, look: Dictionary, o: Dictionary) -> void:
 		"uniform":
 			_uniform(mb, look, o)
 	_bag(mb, look, o)
+
+
+## Worn over the top: apron, lanyard, chain, camera and the hero's stripes.
+static func _extras(mb, look: Dictionary, o: Dictionary) -> void:
+	var w: float = o.w
+	var bulk: float = o.bulk
+	mb.set_bone(bone_index("Chest"))
+	if look.has("apron"):
+		var col: Color = look.apron
+		# Bib with a pocket, and the strap round the neck.
+		_panel(mb, 0.0, 1.4, 1.06, 0.1, 0.15, -1.0, col, w, bulk, 2, 0.022)
+		_panel(mb, 0.0, 1.31, 1.23, 0.06, 0.06, -1.0, col.darkened(0.15), w, bulk, 1, 0.027)
+		for side in [-1.0, 1.0]:
+			_strip(mb, [_surf(side * 0.09, 1.4, -1.0, w, bulk, 0.022), Vector3(side * 0.085, 1.5, -0.03), Vector3(side * 0.075, 1.53, 0.05)], 0.012, col.darkened(0.2))
+	if look.has("lanyard"):
+		var card := _surf(0.0, 1.27, -1.0, w, bulk, 0.026)
+		for side in [-1.0, 1.0]:
+			_strip(mb, [_surf(side * 0.075, 1.46, -1.0, w, bulk, 0.024), _surf(side * 0.03, 1.34, -1.0, w, bulk, 0.024), card + Vector3(side * 0.008, 0.03, 0)], 0.008, look.lanyard)
+		_panel(mb, 0.0, 1.29, 1.21, 0.032, 0.032, -1.0, Color(0.95, 0.95, 0.95), w, bulk, 1, 0.03)
+	if look.has("chain"):
+		var pts := []
+		for k in 7:
+			var a := PI * k / 6.0
+			pts.append(_surf(-cos(a) * 0.085, 1.47 - sin(a) * 0.12, -1.0, w, bulk, 0.026))
+		_strip(mb, pts, 0.011, look.chain)
+		_panel(mb, 0.0, 1.36, 1.31, 0.022, 0.022, -1.0, look.chain.lightened(0.25), w, bulk, 1, 0.031)
+	if look.has("camera"):
+		var col: Color = look.camera
+		var p := _surf(0.0, 1.24, -1.0, w, bulk, 0.0)
+		for side in [-1.0, 1.0]:
+			_strip(mb, [_surf(side * 0.08, 1.46, -1.0, w, bulk, 0.024), _surf(side * 0.065, 1.29, -1.0, w, bulk, 0.024)], 0.008, Color(0.1, 0.1, 0.11))
+		_block(mb, p + Vector3(0, 0, -0.04), Vector3(0.14, 0.085, 0.06), col)
+		_block(mb, p + Vector3(0, -0.005, -0.085), Vector3(0.055, 0.055, 0.04), Color(0.15, 0.15, 0.16))
+		mb.box(p + Vector3(0, -0.005, -0.106), Vector3(0.036, 0.036, 0.004), Color(0.3, 0.42, 0.6))
+		mb.box(p + Vector3(0.045, 0.046, -0.04), Vector3(0.03, 0.008, 0.025), Color(0.85, 0.85, 0.85))
+	if look.has("stripes"):
+		# Two stripes over each shoulder and a band across the back.
+		var col: Color = look.stripes
+		for side in [-1.0, 1.0]:
+			for z in [-0.024, 0.024]:
+				_strip(mb, [Vector3(side * 0.1 * w, 1.49, z), Vector3(side * 0.18 * w, 1.453, z), Vector3(side * 0.24 * w, 1.477, z),
+					Vector3(side * (0.24 * w + 0.068), 1.452, z)], 0.009, col)
+		_panel(mb, 0.0, 1.42, 1.37, 0.19, 0.2, 1.0, col, w, bulk, 1, 0.016, 4)
+	if look.has("apron"):
+		# The apron's skirt hangs from the waist tie.
+		var col: Color = look.apron
+		mb.set_bone(bone_index("Hips"))
+		var a := Vector3(-0.16 * w, 1.06, -0.15)
+		var b := Vector3(0.16 * w, 1.06, -0.15)
+		var c := Vector3(0.19 * w, 0.6, -0.19)
+		var d := Vector3(-0.19 * w, 0.6, -0.19)
+		var n := Vector3(0, 0.09, -1).normalized()
+		mb.quad(a, b, c, d, n, col)
+		mb.quad(Vector3(-0.08, 0.86, -0.176), Vector3(0.08, 0.86, -0.176), Vector3(0.08, 0.77, -0.184), Vector3(-0.08, 0.77, -0.184), n, col.darkened(0.15))
+		_band(mb, 1.05, 0.195 * w, 0.14, 0.022, col.darkened(0.25))
 
 
 ## Quilted puffer bands: [height, half width, half depth] each.
@@ -628,6 +847,19 @@ static func _bag(mb, look: Dictionary, o: Dictionary) -> void:
 			var p := _surf(0.13, 1.08, -1.0, w, bulk, 0.0)
 			_block(mb, p + Vector3(0, 0, -0.035), Vector3(0.2, 0.12, 0.07), col)
 			mb.box(p + Vector3(0, 0.035, -0.072), Vector3(0.19, 0.035, 0.01), col.darkened(0.2))
+		"briefcase":
+			mb.set_bone(bone_index("LeftHand"))
+			_block(mb, Vector3(-0.3, 0.6, 0.0), Vector3(0.08, 0.27, 0.38), col)
+			mb.box(Vector3(-0.3, 0.75, 0.0), Vector3(0.025, 0.06, 0.11), col.darkened(0.35))
+			mb.box(Vector3(-0.342, 0.69, 0.0), Vector3(0.004, 0.025, 0.22), Color(0.75, 0.68, 0.45))
+		"shopping":
+			# A paper bag in each hand (walk style "carry" holds them clear).
+			for side in [-1.0, 1.0]:
+				mb.set_bone(bone_index("LeftHand" if side < 0 else "RightHand"))
+				var bc: Color = col if side < 0 else Color(0.78, 0.66, 0.48)
+				_block(mb, Vector3(side * 0.31, 0.6, 0.0), Vector3(0.1, 0.27, 0.24), bc)
+				for z in [-0.06, 0.06]:
+					_strip(mb, [Vector3(side * 0.31, 0.735, z), Vector3(side * 0.3, 0.84, z * 0.2)], 0.008, bc.darkened(0.3), Vector3(side * -0.69, 0.78, 0), Vector3.ONE)
 		"tote":
 			mb.set_bone(bone_index("LeftHand"))
 			var hand := Vector3(-0.3, 0.83, 0)
@@ -647,6 +879,7 @@ static func _arms(mb, look: Dictionary, o: Dictionary) -> void:
 	var outfit: String = o.outfit
 	var puff := 1.22 if outfit == "puffer" else (1.08 if outfit in ["hoodie", "bomber", "delivery"] else 1.0)
 	var cuff: Color = sleeve.darkened(0.2)
+	var sides: int = o.sides
 	if outfit == "bomber":
 		cuff = o.accent
 	for side in [-1.0, 1.0]:
@@ -656,11 +889,14 @@ static func _arms(mb, look: Dictionary, o: Dictionary) -> void:
 		var wr := Vector3(side * 0.29, 0.9, 0)
 		mb.set_bone(bone_index(prefix + "UpperArm"))
 		if sleeves == "long":
-			_tube(mb, sh, el, 0.075 * puff, 0.065 * puff, sleeve)
+			_tube(mb, sh, el, 0.075 * puff, 0.065 * puff, sleeve, sides)
+			if look.has("stripes"):
+				for z in [-0.022, 0.022]:
+					_strip(mb, [sh + Vector3(side * 0.08 * puff, -0.03, z), el + Vector3(side * 0.07 * puff, 0, z)], 0.009, look.stripes, sh.lerp(el, 0.5) + Vector3(0, 0, z), Vector3.ONE)
 			if outfit == "puffer":
 				mb.ball(sh.lerp(el, 0.5), Vector3(0.095, 0.05, 0.095), sleeve, 6, 2)
 		else:
-			_tube(mb, sh, el, 0.068, 0.058, skin)
+			_tube(mb, sh, el, 0.068, 0.058, skin, sides)
 			if sleeves == "short":
 				var hem := sh.lerp(el, 0.45)
 				_tube(mb, sh, hem, 0.086, 0.08, sleeve)
@@ -675,14 +911,22 @@ static func _arms(mb, look: Dictionary, o: Dictionary) -> void:
 		mb.set_bone(bone_index(prefix + "LowerArm"))
 		var fore := sleeve if sleeves == "long" else skin
 		mb.ball(el, Vector3(0.062, 0.062, 0.062) * (puff if sleeves == "long" else 1.0), fore, 5, 3)
-		_tube(mb, el, wr, 0.06 * (puff if sleeves == "long" else 1.0), 0.05, fore)
+		_tube(mb, el, wr, 0.06 * (puff if sleeves == "long" else 1.0), 0.05, fore, sides)
 		if sleeves == "long":
+			if look.has("stripes"):
+				for z in [-0.02, 0.02]:
+					_strip(mb, [el + Vector3(side * 0.066 * puff, 0, z), Vector3(side * 0.29, 0.95, 0) + Vector3(side * 0.06, 0, z)], 0.008, look.stripes, el.lerp(wr, 0.5) + Vector3(0, 0, z), Vector3.ONE)
 			if outfit == "puffer":
 				mb.ball(el.lerp(wr, 0.5), Vector3(0.08, 0.045, 0.08), sleeve, 6, 2)
 			_tube(mb, Vector3(side * 0.29, 0.94, 0), wr, 0.063, 0.063, cuff)
 
 		mb.set_bone(bone_index(prefix + "Hand"))
-		mb.ball(Vector3(side * 0.29, 0.84, -0.01), Vector3(0.06, 0.07, 0.06), skin, 6, 3)
+		# Mitten hand, palm to the thigh, and the thumb forward.
+		mb.ball(Vector3(side * 0.292, 0.835, -0.005), Vector3(0.046, 0.072, 0.058), skin, 6, 3)
+		mb.ball(Vector3(side * 0.268, 0.858, -0.048), Vector3(0.022, 0.036, 0.022), skin, 4, 2)
+		if side > 0 and look.has("cane"):
+			_tube(mb, Vector3(0.296, 0.82, -0.03), Vector3(0.32, 0.0, -0.13), 0.013, 0.012, look.cane, 4)
+			_tube(mb, Vector3(0.296, 0.875, 0.025), Vector3(0.296, 0.865, -0.06), 0.015, 0.015, look.cane, 4)
 		if side > 0 and look.has("phone"):
 			# Screen faces the palm side (forward), so it faces up when texting.
 			mb.box(Vector3(0.29, 0.8, -0.065), Vector3(0.075, 0.15, 0.016), look.phone)
@@ -698,6 +942,7 @@ static func _legs(mb, look: Dictionary, o: Dictionary) -> void:
 	var leg: Color = look.get("tights", skin) if bare else pants
 	var fit: Array = LEG_FIT.get("bare" if bare or bottoms == "shorts" else bottoms, LEG_FIT.trousers)
 	var socks: Color = look.get("socks", Color(0, 0, 0, 0))
+	var sides: int = o.sides
 	for side in [-1.0, 1.0]:
 		var prefix := "Left" if side < 0 else "Right"
 		var x: float = side * 0.11
@@ -706,11 +951,11 @@ static func _legs(mb, look: Dictionary, o: Dictionary) -> void:
 		var ankle := Vector3(x, 0.1, 0)
 		mb.set_bone(bone_index(prefix + "UpperLeg"))
 		if bottoms == "shorts":
-			_tube(mb, hip, knee, fit[0], fit[1], skin)
-			_tube(mb, hip, Vector3(x, 0.6, 0), 0.108, 0.1, pants)
+			_tube(mb, hip, knee, fit[0], fit[1], skin, sides)
+			_tube(mb, hip, Vector3(x, 0.6, 0), 0.108, 0.1, pants, sides)
 			_tube(mb, Vector3(x, 0.63, 0), Vector3(x, 0.6, 0), 0.101, 0.101, pants.darkened(0.15))
 		else:
-			_tube(mb, hip, knee, fit[0], fit[1], leg)
+			_tube(mb, hip, knee, fit[0], fit[1], leg, sides)
 		if bottoms == "cargo":
 			mb.box(Vector3(side * 0.205, 0.68, 0.0), Vector3(0.03, 0.14, 0.12), pants.darkened(0.12))
 		if bottoms == "joggers" and look.has("stripe"):
@@ -719,7 +964,7 @@ static func _legs(mb, look: Dictionary, o: Dictionary) -> void:
 		mb.set_bone(bone_index(prefix + "LowerLeg"))
 		var lower := skin if bottoms == "shorts" else leg
 		mb.ball(knee, Vector3(fit[1], 0.07, fit[1]) * 0.98, lower, 5, 3)
-		_tube(mb, knee, ankle, fit[2], fit[3], lower)
+		_tube(mb, knee, ankle, fit[2], fit[3], lower, sides)
 		match bottoms:
 			"jeans":
 				# Turn-ups showing the lighter inside of the denim.
@@ -763,6 +1008,8 @@ static func _shoe(mb, look: Dictionary, o: Dictionary, side: float) -> void:
 			_block(mb, Vector3(x, 0.025, -0.05), Vector3(0.145, 0.05, 0.3), sole)
 			mb.box(Vector3(x, 0.141, -0.1), Vector3(0.06, 0.008, 0.11), col.lightened(0.5) if col.v < 0.8 else col.darkened(0.12))
 			mb.box(Vector3(x + side * 0.066, 0.085, -0.04), Vector3(0.008, 0.045, 0.13), look.get("shoe_accent", col.darkened(0.25)))
+			# Heel tab, seen from behind as people walk away.
+			mb.box(Vector3(x, 0.125, 0.087), Vector3(0.07, 0.06, 0.006), look.get("shoe_accent", col.darkened(0.25)))
 
 
 static func _head(mb, look: Dictionary, o: Dictionary) -> void:
@@ -777,10 +1024,14 @@ static func _head(mb, look: Dictionary, o: Dictionary) -> void:
 			headwear = style
 		style = "short"
 	var c := Vector3(0, 1.69, 0)
-	mb.ball(c, Vector3(0.17, 0.19, 0.17), skin, 8, 5)
+	var fine: bool = look.get("hero", false)
+	# Skull, longer front to back than across, and a narrower jaw and chin.
+	mb.ball(c + Vector3(0, 0.015, 0.008), Vector3(0.162, 0.18, 0.178), skin, 10 if fine else 8, 6 if fine else 5)
+	mb.ball(c + Vector3(0, -0.085, -0.03), Vector3(0.125, 0.1, 0.13), skin, 8 if fine else 6, 3)
 	for side in [-1.0, 1.0]:
 		mb.ball(c + Vector3(side * 0.165, -0.01, 0.01), Vector3(0.03, 0.05, 0.03), skin.darkened(0.08), 4, 2)
 		mb.box(c + Vector3(side * 0.065, 0.015, -0.16), Vector3(0.035, 0.045, 0.02), Color(0.08, 0.07, 0.07))
+		mb.box(c + Vector3(side * 0.064, 0.06, -0.16), Vector3(0.062, 0.016, 0.02), hair.darkened(0.3))
 	mb.box(c + Vector3(0, -0.035, -0.175), Vector3(0.045, 0.06, 0.04), skin.darkened(0.15))
 	mb.box(c + Vector3(0, -0.1, -0.155), Vector3(0.08, 0.018, 0.02), skin.darkened(0.4))
 	if look.get("sunglasses", false):
@@ -801,9 +1052,12 @@ static func _head(mb, look: Dictionary, o: Dictionary) -> void:
 		if style in ["long", "ponytail", "locs", "bob"]:
 			_hair(mb, style, c, hair, skin, true)
 		_hat(mb, headwear, c, hat)
+	if look.has("headband") and headwear == "":
+		var r := 0.27 if style == "afro" else (0.215 if style in ["curly", "bob", "long"] else 0.205)
+		_tube(mb, c + Vector3(0, 0.03, 0.015), c + Vector3(0, 0.085, 0.015), r, r * 0.985, look.headband, 8)
 	if look.has("headphones"):
 		var hp: Color = look.headphones
-		var top := 0.27 if headwear in ["beanie", "helmet", "hardhat", "bucket"] or style == "afro" else 0.235
+		var top := 0.27 if headwear in ["beanie", "helmet", "hardhat", "bucket", "bandana"] or style == "afro" else 0.235
 		for side in [-1.0, 1.0]:
 			mb.limb(c + Vector3(side * 0.165, 0.0, 0.0), c + Vector3(side * 0.215, 0.0, 0.0), 0.06, 0.058, hp, 6)
 			var arc := []
@@ -880,6 +1134,13 @@ static func _hat(mb, headwear: String, c: Vector3, hat: Color) -> void:
 				brim.append(Vector2(cos(a) * 0.25, 0.01 + sin(a) * 0.27))
 			mb.flat(brim, c.y + 0.07, hat.darkened(0.1))
 			_strip(mb, [c + Vector3(0, 0.215, -0.16), c + Vector3(0, 0.258, 0.0), c + Vector3(0, 0.215, 0.17)], 0.022, hat.lightened(0.2), c + Vector3(0, 0.1, 0), Vector3.ONE)
+		"bandana":
+			# A do-rag knotted at the back: the colour reads from above.
+			mb.ball(c + Vector3(0, 0.085, 0.02), Vector3(0.184, 0.135, 0.186), hat, 8, 3)
+			_tube(mb, c + Vector3(0, 0.075, 0.02), c + Vector3(0, 0.105, 0.02), 0.202, 0.2, hat.darkened(0.15), 8)
+			mb.ball(c + Vector3(0, 0.09, 0.22), Vector3(0.035, 0.03, 0.03), hat.darkened(0.1), 4, 2)
+			for side in [-1.0, 1.0]:
+				_strip(mb, [c + Vector3(side * 0.015, 0.08, 0.235), c + Vector3(side * 0.05, -0.04, 0.24)], 0.017, hat.darkened(0.1), c, Vector3.ONE)
 		"police":
 			mb.limb(c + Vector3(0, 0.08, 0), c + Vector3(0, 0.2, 0), 0.19, 0.21, hat, 8)
 			mb.box(c + Vector3(0, 0.09, -0.21), Vector3(0.26, 0.03, 0.12), hat.darkened(0.3))

@@ -12,6 +12,9 @@ const JULES := {
 	"bottoms": "jeans", "pants": Color(0.18, 0.3, 0.55), "shoes": Color(0.95, 0.95, 0.95),
 	"shoe_accent": Color(0.82, 0.16, 0.18), "skin": Color(0.6, 0.42, 0.28),
 	"hair": "fade", "hair_color": Color(0.08, 0.06, 0.05), "build": 1.05,
+	# Finer mesh and white racing stripes over the shoulders and across the
+	# back, so the hero reads at a glance from the street camera.
+	"hero": true, "stripes": Color(0.96, 0.96, 0.94),
 }
 
 var vehicle = null
@@ -49,10 +52,15 @@ func _physics_process(delta: float) -> void:
 func _think(delta: float) -> void:
 	if not controllable:
 		velocity = Vector3.ZERO
+		style = ""
 		return
 	var dir := Controls.world_move()
-	var speed := SPRINT_SPEED if Input.is_action_pressed("sprint") else JOG_SPEED
+	var sprinting := Input.is_action_pressed("sprint")
+	var speed := SPRINT_SPEED if sprinting else JOG_SPEED
 	walk(dir, speed, delta)
+	# Badly hurt, Jules runs holding his side; sprinting pumps the arms.
+	var moving := dir.length_squared() > 0.01
+	style = "limp" if health < max_health * 0.3 else ("sprint" if sprinting and moving else "")
 	if Controls.just_pressed("attack"):
 		punch()
 	if Controls.just_pressed("interact"):

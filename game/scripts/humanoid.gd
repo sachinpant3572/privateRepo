@@ -3,11 +3,18 @@ extends CharacterBody3D
 ## punches (and the player's punch-punch-kick combo), knockdowns, and a
 ## skeletal cartoon model from CharacterKit animated by Rig.
 ## Subclasses put their behaviour in _think() and react to hits in _on_hit().
+##
+## People who call listen() also perceive the street (Senses): an event in
+## range is turned into a reaction class for this person's category and
+## personality, queued, and started on the first physics tick at or after
+## its reaction time; the look, one-shot action or gesture starts on that
+## same tick. Subclasses move the body for it in _on_reaction().
 
 const Terrain = preload("res://scripts/terrain.gd")
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const CharacterKit = preload("res://scripts/kits/character_kit.gd")
 const Rig = preload("res://scripts/rig.gd")
+const Senses = preload("res://scripts/senses.gd")
 const L = preload("res://scripts/layers.gd")
 
 signal died(who)
@@ -36,24 +43,47 @@ var xray_color := Color(0, 0, 0, 0)
 
 ## Third hit of a quick combo is a kick that knocks down.
 var can_kick := false
-## Cutscene, mission and indoor poses: phone, talk, wave, hands_up, cower,
-## point, search, eat, browse, work, pay. Empty for normal movement.
+## Cutscene, mission and indoor poses (Rig.GESTURES). Empty for normal
+## movement; reactions show theirs only while this is empty.
 var gesture := ""
+## Gait (Rig.STYLES): "" walks plainly.
+var style := ""
+## A gesture the body does on its own (a pause on the street); reactions
+## show over it, `gesture` over both.
+var activity := ""
 ## Sitting on a scooter or bike (set by the vehicle).
 var riding := false
 ## Sitting on a chair, stool or bench (indoors).
 var sitting := false
+## Who this is to Senses.choose(): Senses.CATEGORIES, Senses.PERSONALITIES.
+var category := "general"
+var personality := "calm"
 
 var dead := false
 var dead_time := 0.0
 var knocked_time := 0.0
 var punch_timer := 0.0
 var combat_time := 0.0
-## The skeleton; its child "Body" is the skinned mesh.
+## Who landed the last blow before death (null for none or a vehicle).
+var killer = null
+## The model: Skeleton3D; its child "Body" is the skinned mesh.
 var model: Skeleton3D
 var body_mesh: MeshInstance3D
 var rig
 var anim
+
+## The reaction playing (a Senses.HOLD key) or "", the event kind behind it,
+## where it was, who caused it, its data, and seconds left.
+var reaction := ""
+var reaction_kind := ""
+var reaction_pos := Vector3.ZERO
+var reaction_source = null
+var reaction_data := {}
+var reaction_time := 0.0
+## Physics clock (seconds): reactions are queued for a time on it, and
+## reacted_at is when the current one started.
+var clock := 0.0
+var reacted_at := -1.0
 
 var _combo := 0
 var _combo_time := 0.0
@@ -62,6 +92,22 @@ var _kick_t := -1.0
 var _punch_left := false
 var _flinch := 0.0
 var _anim_skip := 0.0
+var _pending := {}
+var _action := ""
+var _action_t := -1.0
+var _action_side := 1.0
+var _act_gesture := ""
+var _act_gesture_time := 0.0
+var _look_at := Vector3.ZERO
+var _look_time := 0.0
+var _look_pitch := 0.0
+var _look := 0.0
+var _last_yaw := 0.0
+var _turn := 0.0
+var _last_speed := 0.0
+var _accel := 0.0
+var _face_down := false
+var _knock_total := 0.0
 
 
 func _ready() -> void:
@@ -77,19 +123,24 @@ func _ready() -> void:
 	add_child(shape)
 	_build_model()
 	health = max_health
+	_last_yaw = rotation.y
 
 
 func _physics_process(delta: float) -> void:
+	clock += delta
 	punch_timer = maxf(punch_timer - delta, 0.0)
 	if dead:
 		dead_time += delta
 		velocity = velocity.move_toward(Vector3.ZERO, 12.0 * delta)
+		_drop_reactions()
 	elif knocked_time > 0.0:
 		knocked_time -= delta
 		velocity = velocity.move_toward(Vector3.ZERO, 12.0 * delta)
+		_drop_reactions()
 		if knocked_time <= 0.0:
 			_set_standing_layers()
 	else:
+		_update_reaction(delta)
 		_think(delta)
 	velocity.y = 0.0
 	move_and_slide()
@@ -142,9 +193,11 @@ func punch() -> void:
 		return
 	best.take_hit(self, punch_damage * (2.0 if kick else 1.0), forward() * (2.2 if kick else 1.0))
 	if kick and not best.dead:
-		best.knock_down(1.6)
+		best.knock_down(1.6, forward())
 	Fx.hit(best.global_position, kick, is_in_group("player") or best.is_in_group("player"))
 	landed_hit.emit(best, kick)
+	# Everyone around sees and hears the fight (not the two in it).
+	Senses.emit(get_tree(), "fight", best.global_position, self, {"from": global_position, "victim": best})
 
 
 func _melee_target(reach: float):
@@ -167,13 +220,18 @@ func take_hit(attacker, damage: float, push: Vector3) -> void:
 		return
 	health -= damage
 	velocity += push * 3.0
+	if push.length_squared() > 0.0001:
+		# Struck from behind, the body goes down on its front.
+		_face_down = push.dot(forward()) > 0.0
 	_flinch = 1.0
 	combat_time = 2.5
+	_drop_reactions()
 	_on_hit(attacker)
 	if health <= 0.0:
+		killer = attacker
 		_die()
 	elif damage >= 25.0:
-		knock_down(1.5)
+		knock_down(1.5, push)
 
 
 func hit_by_vehicle(vehicle, impact_speed: float) -> void:
@@ -182,13 +240,21 @@ func hit_by_vehicle(vehicle, impact_speed: float) -> void:
 	var away: Vector3 = global_position - vehicle.global_position
 	away.y = 0.0
 	velocity = away.normalized() * impact_speed * 0.6 + vehicle.velocity * 0.4
+	_face_down = away.dot(forward()) > 0.0
 	take_hit(vehicle.driver_node(), impact_speed * 3.5, Vector3.ZERO)
 	if not dead:
-		knock_down(2.0)
+		knock_down(2.0, away)
+	Senses.emit(get_tree(), "crash", global_position, self, {"loud": clampf(impact_speed / 10.0, 0.4, 1.2)})
 
 
-func knock_down(seconds: float) -> void:
+## Down for `seconds`; the last stretch of it is spent getting up. `push`,
+## when given, decides the fall: away from the facing goes onto the back,
+## along it onto the front.
+func knock_down(seconds: float, push := Vector3.ZERO) -> void:
 	knocked_time = seconds
+	_knock_total = seconds
+	if push.length_squared() > 0.0001:
+		_face_down = push.dot(forward()) > 0.0
 	collision_layer = L.DOWNED
 	collision_mask = L.WORLD | L.PROPS
 
@@ -206,6 +272,7 @@ func revive(at: Vector3) -> void:
 	dead = false
 	dead_time = 0.0
 	knocked_time = 0.0
+	killer = null
 	health = max_health
 	velocity = Vector3.ZERO
 	global_position = at
@@ -232,6 +299,186 @@ func set_xray(color: Color) -> void:
 	body_mesh.material_override = MeshBuilder.xray_material(color) if color.a > 0.0 else MeshBuilder.material()
 
 
+# --- Perception and reactions -------------------------------------------------
+
+## Joins the "perceivers" group, so Senses.emit() reaches this person.
+func listen() -> void:
+	add_to_group("perceivers")
+
+
+## Whether events reach this person now: standing, alive and in the world.
+func can_perceive() -> bool:
+	return not dead and knocked_time <= 0.0 and visible and is_inside_tree()
+
+
+## Senses calls this for an event `distance` metres away. The reaction is
+## chosen now and starts after Senses.delay(). A more dangerous event
+## replaces a queued or playing reaction and a lesser one never does; for an
+## equally dangerous one see _replaces().
+func perceive(kind: String, pos: Vector3, source, distance: float, data := {}) -> void:
+	if not can_perceive() or data.get("victim") == self:
+		return
+	var r := _choose_reaction(kind, Senses.is_near(kind, distance), source, data)
+	if r == "" or r == "ignore":
+		return
+	var danger := Senses.danger(kind)
+	if not _pending.is_empty() and not _replaces(r, danger, String(_pending.reaction), int(_pending.danger)):
+		return
+	if reaction != "":
+		if kind == reaction_kind and source == reaction_source:
+			# The same thing going on: keep reacting to it a while longer.
+			reaction_time = maxf(reaction_time, float(Senses.HOLD.get(reaction, 2.0)) * 0.6)
+			reaction_pos = pos
+			return
+		if not _replaces(r, danger, reaction, Senses.danger(reaction_kind)):
+			return
+	_pending = {
+		"kind": kind, "reaction": r, "pos": pos, "source": source, "data": data, "danger": danger,
+		"at": clock + Senses.delay(kind, distance, personality, category),
+	}
+
+
+## Whether reaction `r` to an event of `danger` takes over from `old` (queued
+## or playing) for an event of `old_danger`. Between equally dangerous
+## events only two things change what someone does: a move to get away or
+## take cover (Senses.ESCAPE: a scream sends an onlooker running, but it
+## does not stop a cheer to look round), and a fuller reaction taking over
+## from a bare look (hearing the victim scream, then seeing the punch).
+func _replaces(r: String, danger: int, old: String, old_danger: int) -> bool:
+	if danger != old_danger:
+		return danger > old_danger
+	if r in Senses.ESCAPE:
+		return old not in Senses.ESCAPE
+	return old == "look" and r != "look"
+
+
+## The reaction class for an event; subclasses narrow it (Senses.choose).
+func _choose_reaction(kind: String, near: bool, _source, _data: Dictionary) -> String:
+	return Senses.choose(category, personality, kind, near)
+
+
+## Seconds until the queued reaction starts, or -1 when none is queued.
+func pending_in() -> float:
+	return -1.0 if _pending.is_empty() else float(_pending.at) - clock
+
+
+## The queued reaction class, or "".
+func pending_reaction() -> String:
+	return "" if _pending.is_empty() else String(_pending.reaction)
+
+
+func _update_reaction(delta: float) -> void:
+	if reaction != "":
+		reaction_time -= delta
+		if reaction_time <= 0.0:
+			_end_reaction()
+	if not _pending.is_empty() and clock >= float(_pending.at) - 0.0001:
+		var p := _pending
+		_pending = {}
+		_start_reaction(p)
+
+
+func _start_reaction(p: Dictionary) -> void:
+	if reaction != "":
+		_end_reaction()
+	reaction = p.reaction
+	reaction_kind = p.kind
+	reaction_pos = p.pos
+	reaction_source = p.source
+	reaction_data = p.data
+	reaction_time = float(Senses.HOLD.get(reaction, 2.0))
+	reacted_at = clock
+	var from: Vector3 = p.data.get("from", p.pos)
+	look_toward(from, minf(reaction_time, 3.0), -0.35 if reaction_kind == "body" else 0.0)
+	var v := get_instance_id() % 2 == 0
+	match reaction:
+		"startle":
+			play_action("startle", side_of(from))
+		"dodge":
+			play_action("dodge", float(p.data.get("side", -side_of(from))))
+		"duck":
+			play_action("duck")
+		"cower":
+			act_gesture("cower", reaction_time)
+		"hands_up":
+			act_gesture("hands_up", reaction_time)
+		"film":
+			act_gesture("film", reaction_time)
+		"call":
+			act_gesture("call", reaction_time)
+		"cheer":
+			act_gesture("cheer" if v else "clap", reaction_time)
+		"shout":
+			act_gesture("shake_fist" if v else "argue", reaction_time)
+	_on_reaction(p)
+
+
+func _end_reaction() -> void:
+	var was := reaction
+	reaction = ""
+	reaction_kind = ""
+	reaction_source = null
+	reaction_data = {}
+	reaction_time = 0.0
+	_act_gesture = ""
+	_act_gesture_time = 0.0
+	if was != "":
+		_on_reaction_end(was)
+
+
+## Drops queued and playing reactions (hit, knocked down or dead).
+func _drop_reactions() -> void:
+	_pending = {}
+	if reaction != "":
+		_end_reaction()
+	_action = ""
+	_action_t = -1.0
+
+
+## Subclass hooks: a reaction starts (move the body for it) and ends.
+func _on_reaction(_p: Dictionary) -> void:
+	pass
+
+
+func _on_reaction_end(_was: String) -> void:
+	pass
+
+
+## Turns the head (and some of the chest) toward `pos` for `seconds`.
+func look_toward(pos: Vector3, seconds: float, pitch := 0.0) -> void:
+	_look_at = pos
+	_look_time = seconds
+	_look_pitch = pitch
+
+
+## Plays a one-shot Rig.ACTIONS move; `side` +1 is the body's right.
+func play_action(action_name: String, side := 1.0) -> void:
+	if not Rig.ACTIONS.has(action_name):
+		return
+	_action = action_name
+	_action_t = 0.0
+	_action_side = 1.0 if side >= 0.0 else -1.0
+
+
+## Holds a gesture for `seconds` (shown while `gesture` is empty).
+func act_gesture(g: String, seconds: float) -> void:
+	_act_gesture = g
+	_act_gesture_time = seconds
+
+
+## The gesture showing now.
+func shown_gesture() -> String:
+	if gesture != "":
+		return gesture
+	return _act_gesture if _act_gesture != "" else activity
+
+
+## +1 when `pos` is on this body's right, -1 on its left.
+func side_of(pos: Vector3) -> float:
+	var to := pos - global_position
+	return 1.0 if to.dot(global_basis.x) >= 0.0 else -1.0
+
+
 ## Animation runs every rendered frame (not per physics tick) so limbs stay
 ## smooth on 90 and 120 Hz screens.
 func _process(delta: float) -> void:
@@ -246,6 +493,16 @@ func _process(delta: float) -> void:
 		_kick_t += delta / KICK_TIME
 		if _kick_t > 1.0:
 			_kick_t = -1.0
+	if _action_t >= 0.0:
+		_action_t += delta / float(Rig.ACTIONS[_action])
+		if _action_t > 1.0:
+			_action_t = -1.0
+			_action = ""
+	if _act_gesture_time > 0.0:
+		_act_gesture_time -= delta
+		if _act_gesture_time <= 0.0:
+			_act_gesture = ""
+	_look_time -= delta
 	if not visible:
 		return
 	var d2 := _player_distance_squared()
@@ -256,19 +513,56 @@ func _process(delta: float) -> void:
 		return
 	delta = _anim_skip
 	_anim_skip = 0.0
-	anim.speed = Vector2(velocity.x, velocity.z).length()
+	var speed := Vector2(velocity.x, velocity.z).length()
+	if delta > 0.0:
+		var yaw_rate := angle_difference(_last_yaw, rotation.y) / delta
+		_turn = lerpf(_turn, yaw_rate, 1.0 - exp(-8.0 * delta))
+		_accel = lerpf(_accel, (speed - _last_speed) / delta, 1.0 - exp(-6.0 * delta))
+	_last_yaw = rotation.y
+	_last_speed = speed
+	_look = move_toward(_look, 1.0 if _look_time > 0.0 else 0.0, delta * 4.0)
+	var down := dead or knocked_time > 0.0
+	anim.speed = speed
 	anim.run_speed = run_speed
 	anim.punch = _punch_t
 	anim.punch_left = _punch_left
 	anim.kick = _kick_t
 	anim.flinch = _flinch
 	anim.guard = combat_time > 0.0
-	anim.down = dead or knocked_time > 0.0
+	anim.down = down
+	anim.dead = dead
+	anim.face_down = _face_down
+	anim.getup = _getup_progress()
 	anim.ride = riding
 	anim.sit = sitting
-	anim.gesture = gesture
-	anim.texting = look.has("phone") and combat_time <= 0.0
+	anim.gesture = shown_gesture()
+	anim.style = style
+	anim.action = _action
+	anim.action_t = _action_t
+	anim.action_side = _action_side
+	anim.texting = look.has("phone") and combat_time <= 0.0 and anim.gesture == ""
+	anim.turn = _turn
+	anim.accel = _accel
+	anim.idle = reaction == ""
+	anim.idle_seed = get_instance_id() % 997
+	anim.look_amount = _look if not down else 0.0
+	if _look > 0.0:
+		var to: Vector3 = (_look_at - global_position) * global_basis
+		anim.look_yaw = atan2(-to.x, -to.z)
+		anim.look_pitch = _look_pitch
 	rig.pose(anim, delta)
+
+
+## 0..1 through getting up at the end of a knockdown, -1 otherwise. Long
+## knockdowns get the full Rig.GETUP_TIME, short ones a quicker scramble;
+## the fall itself always plays out first.
+func _getup_progress() -> float:
+	if dead or knocked_time <= 0.0:
+		return -1.0
+	var length := minf(clampf(_knock_total - Rig.FALL_TIME - 0.3, 0.6, Rig.GETUP_TIME), _knock_total - Rig.FALL_TIME)
+	if length <= 0.0 or knocked_time >= length:
+		return -1.0
+	return clampf(1.0 - knocked_time / length, 0.0, 1.0)
 
 
 func _player_distance_squared() -> float:
