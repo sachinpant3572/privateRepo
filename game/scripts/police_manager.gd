@@ -86,11 +86,19 @@ func _spawn_car_nearby(center: Vector3) -> void:
 		game.population.out_of_view)
 	if n < 0:
 		return
-	var pos: Vector3 = game.city.node_pos(n)
-	var to := center - pos
-	var yaw := atan2(-to.x, -to.z)
-	if Vehicle.room_for(get_tree(), pos, yaw, VehicleKit.size_of("police"), 1.0):
-		spawn_car_at(pos, yaw)
+	# The junction itself, or, when a car already waits there (often the
+	# only junction in range), a spot up each road leaving it.
+	var spots: Array = [game.city.node_pos(n)]
+	for m in game.city.next_nodes(n):
+		var along: Vector3 = game.city.node_pos(m) - spots[0]
+		if along.length() > 12.0:
+			spots.append(spots[0] + along.normalized() * 9.0)
+	for pos: Vector3 in spots:
+		var to := center - pos
+		var yaw := atan2(-to.x, -to.z)
+		if Vehicle.room_for(get_tree(), pos, yaw, VehicleKit.size_of("police"), 1.0):
+			spawn_car_at(pos, yaw)
+			return
 
 
 func _on_officer_deployed(car) -> void:

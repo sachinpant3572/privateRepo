@@ -20,6 +20,9 @@ The video shows the Gorran Longhaul 18 at night with 1 star. The HUD reads
 - Fixes:
   - `Vehicle.room_for` / `footprints_meet`: a 2D SAT footprint check, used by
     traffic, parked and police spawns (`PARK_FOOTPRINT` for curb spots).
+  - Police cars: when the junction picked is taken (often the only one in
+    range, so before this two police cars spawned inside each other), the
+    spawn tries a spot 9 m up each road leaving it.
   - The camera's lead and turn, and the HUD speed, now read `Vehicle.motion`
     (real flat velocity eased over 0.12 s), not the commanded `velocity`.
   - Safety net in `_handle_collisions`: a parked or lighter car sunk more
@@ -70,7 +73,10 @@ The video shows the Gorran Longhaul 18 at night with 1 star. The HUD reads
 ## 5. Logger
 
 Built by a background agent in a worktree: `game/scripts/game_log.gd`,
-`game/LOGGING.md`, and an export button in Settings > Game. See LOGGING.md.
+`game/LOGGING.md`, a Log section in Settings > Game (on/off, BUG button,
+Report issue, Export, Copy) and a BUG button on the HUD. See LOGGING.md.
+Merge fixes: the settings-tab test counts the Log rows (heading and status
+carry meta `section`); the changed-settings diff compares types first.
 
 ## Traps
 

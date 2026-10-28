@@ -369,6 +369,7 @@ func _log_section() -> void:
 	var s: Dictionary = game.settings
 	var lg = game.game_log
 	var head: Label = phone._text("Log", 22, phone.ACCENT)
+	head.set_meta("section", true)
 	_list.add_child(head)
 	var status: Label = phone._text(lg.last_status if lg.last_status != "" else "Nothing exported yet.", 16, Color(1.0, 0.85, 0.4))
 	var say := func(): status.text = lg.last_status
@@ -395,6 +396,7 @@ func _log_section() -> void:
 		lg.copy_to_clipboard()
 		say.call())
 	_row(cb, "Copies the newest part (up to 200 KB) to paste into a chat.")
+	status.set_meta("section", true)
 	_list.add_child(status)
 
 

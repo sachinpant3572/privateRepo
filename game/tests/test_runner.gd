@@ -1368,7 +1368,7 @@ func test_settings_page_tabs_and_preview() -> void:
 	var want := {"Camera": ["View: ", "Look down near towers: ", "Camera turn: ", "Reset camera", "Distance", "Drive zoom-out", "Angle"],
 		"Graphics": ["Quality", "Bloom: ", "Smooth edges: ", "Vivid colour: ", "Real lights: ", "Detail: ", "Shadows: ", "FPS limit", "Show FPS: "],
 		"Controls": ["Driving: "],
-		"Game": ["Weather: ", "Skip 3 hours", "New game"]}
+		"Game": ["Weather: ", "Skip 3 hours", "New game", "Log: ", "BUG button: ", "Report issue", "Export log", "Copy log"]}
 	for t in page.TABS:
 		page.show_tab(t)
 		await _idle(1)
@@ -1377,7 +1377,8 @@ func test_settings_page_tabs_and_preview() -> void:
 			if _find_button(page._list, w) == null and not page.steppers.has(w):
 				missing.append(w)
 		var hinted := true
-		var kids: Array = page._list.get_children()
+		# The Log section's heading and status line sit outside the rows.
+		var kids: Array = page._list.get_children().filter(func(k): return not k.has_meta("section"))
 		for i in range(0, kids.size(), 3):
 			hinted = hinted and kids[i + 1] is Label and kids[i + 1].text.length() > 20
 		_check(missing.is_empty() and hinted and kids.size() == want[t].size() * 3 and page._tabs[t].button_pressed, "tab %s has its settings, each with a hint (missing %s)" % [t, missing])

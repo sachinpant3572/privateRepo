@@ -197,7 +197,7 @@ func settings_applied(settings: Dictionary) -> void:
 		return
 	var changed := {}
 	for k in settings:
-		if not _settings.has(k) or _settings[k] != settings[k]:
+		if not _settings.has(k) or typeof(_settings[k]) != typeof(settings[k]) or _settings[k] != settings[k]:
 			changed[k] = settings[k]
 	for k in _settings:
 		if not settings.has(k):
