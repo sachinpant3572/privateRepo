@@ -106,6 +106,37 @@ Design rules to adopt:
 - Next: turn these rules into build tasks (the driving ones are code: auto-accelerate, alignment
   assist, resizable layout).
 
+## Wednesday, Oct 28, 2026: NPC interactions, conversations and daily routines
+
+Status: **not started** (later; Sachin: "Add this to todo as it is not important as of now").
+Sachin: "Also, add NPC interactions, dialogues to start with them, and each NPC should have a
+routine of their own, so player can notice then doing things and also explore what they do."
+
+- Talk to any NPC: an interact prompt near a person opens a short exchange (greet, ask, provoke,
+  buy, ask directions); lines come from the dialogue plan's line table (`DIALOGUE_VO_PLAN.md`,
+  phases 0, 1 and 3).
+- Daily routines: each NPC gets a home, a job or school and a schedule (sleep, commute, work,
+  lunch, errands, evening out) on the game clock, so the same people turn up at the same places
+  and the player can follow one and see where they go and what they do.
+- Situation behaviour (`npc.gd`, `senses.gd`) stays on top: a routine pauses for danger, rain or
+  a crowd, and resumes after.
+- Cost: plan it after dialogue phase 0; routines need persistent NPC identities beyond the
+  streaming bubble (a few hundred named locals per district, simulated cheaply when off screen).
+
+## Later expansions: parks, fairs and amusement parks
+
+Status: **later expansions** (Sachin, 2026-10-28: "Add parks, fairs of different kinds, amidement
+parks, roller coasters etc in later expansions.")
+
+- Extends package 32 in `ACTIVITY_ROADMAP.md` (a travelling fair on Liberty Green and a fun pier
+  with a coaster on Brisa Beach).
+- Parks of different kinds: city parks, waterfront promenades, skate parks, dog parks, state and
+  national parks with trails.
+- Fairs of different kinds: county and farm fairs in Golden Flats, street fairs and food festivals,
+  carnival in the Quarter, a seasonal travelling midway (on the weather and calendar plan).
+- Amusement parks: a full theme park with roller coasters, a Ferris wheel, drop towers, water
+  rides and dark rides, rideable by the player.
+
 ## Wednesday, Oct 28, 2026: dialogue and voiceover plan
 
 Status: **not started** (plan written). Sachin: "Also, plan meticulousyl and thoroughly for
