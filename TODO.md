@@ -1,5 +1,51 @@
 # TODO
 
+## Wednesday, Oct 28, 2026: Solvera weather, seasons and a yearly calendar
+
+Status: **not started**. Sachin: "We have to build a robust weather system, yesrly calendar
+with different seasons, and day and night cycle too. We will have rain, snow, spring, summer,
+winters, autumn etc all showijg clearly and changing the region accordingly. All of these have
+to be implemented in the best way possible. Add these to TODO so that we take it up later on."
+
+What exists today (`game/scripts/atmosphere.gd`, README "Day and night" and "Weather"), to build
+on rather than replace:
+- day and night at one game minute per real second (a 24-minute day), with the sun's shadows,
+  lit windows, street lights, neon and headlights done in the city shader, not real lights;
+- weather: clear, cloudy, rain and storms with lightning, wet ground and puddles that mirror
+  the sky, rain and splashes round the camera, a Settings switch;
+- the world is the 12 x 9 km state with four cities and 16 regions, including the Bellerive
+  Hills. It is in `game/data/world_map.json`. Neither that file nor `WORLD_V3_PLAN.md` has
+  climate data yet; the cities are themed on Miami and New Orleans (Bellerive), DC (Concordia),
+  Detroit (Steelhaven) and Las Vegas (Las Brasas).
+
+To build:
+- **A yearly calendar**: date, day of week, months and the four seasons, saved with the game
+  and shown on the phone and HUD. Set how long a game year runs in real time.
+- **Seasons that show clearly**:
+  - spring: blossom and fresh green;
+  - summer: lush, harsh light, heat haze;
+  - autumn: turning leaves and leaf litter;
+  - winter: bare trees and grey light.
+  - Each season changes the ground, foliage, sky, light, day length and sunrise and sunset
+    times, the people's clothes, traffic and events.
+- **Weather in more kinds**:
+  - rain, storms, snow, sleet, fog, wind and heat;
+  - snow that settles and melts on roads, roofs and the hills, with tyre tracks;
+  - puddles that freeze to ice, and roads that are slippery while they stay icy;
+  - weather that changes driving, walking, visibility and how NPCs behave (umbrellas, people
+    staying indoors).
+- **By region**: each region and city has its own climate and odds of each weather in each
+  season, and the look changes as you cross from one region to another. A Florida-style
+  Bellerive should rarely see snow, while Steelhaven, Concordia and the mountains should get
+  real winters. Decide with Sachin how much snow Bellerive gets.
+- **Day and night**: tie day length and the sun's path to the date, add a moon phase and
+  stars, and do a pass on dawn and dusk.
+- **"In the best way possible"**: before building, research how open-world games do this
+  (GTA, Red Dead, Forza Horizon's seasons, Zelda, Stardew Valley's seasonal recolours). Then
+  plan it within mobile budgets: shader-driven snow and foliage tints, no real lights, and
+  the frame rate checked on a low-end phone. Write the decisions into a HANDOFF note and add
+  tests and screenshot stops for each season and weather.
+
 ## Tuesday, Oct 27, 2026: Solvera feature wishlist (GTA 6-scale content)
 
 Status: **not started**. Sachin shared a post listing what GTA 6 packs in and said: "I want all
