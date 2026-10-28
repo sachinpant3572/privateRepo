@@ -369,7 +369,8 @@ passive by construction, and the blackout isn't modelled (so the insider rows ar
 
 ## 11. Decisions (Sachin approved the design on 2026-10-28: "Sure")
 
-The ten answers below are the recommended ones, taken as the defaults; Sachin can overrule any.
+The first ten answers below are the recommended ones, taken as the defaults; Sachin can overrule
+any. Item 11 follows from his laundering answer.
 
 1. **Shorts, leverage, options**: recommend none at launch (6.8).
 2. **Paydays**: recommend five, `payday_move` 0.30, `tip_cap_w` 17 W (p90 7.6 W; 20 W gives 8.9).

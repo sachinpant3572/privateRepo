@@ -572,9 +572,10 @@ depends on, including later ones.
 | N24 | Street and car extras (4.11, 4.13) | Car meet with rep and a test track, transform races, arena car-combat show, arm wrestling, backyard wrestling league, TV at the safehouse, street-art pasting, the soda dare at darts | R-11, R-13, R-14, R-15, R-17, R-21, R-26, N1 | 2.5 | 3 |
 | N25 | Outdoors and phone extras (4.11, 4.13) | Kayaking, the illegal base jump (wanted star; the jumps are R-31's), wildlife photography challenge (the bayou, the Glades, Red Pine), bayou wildlife rescue, studio gauntlet show, camera-mast puzzles, AR phone games | R-3, R-11, R-13, R-14, R-17, R-19, R-24, R-26, R-31 (parachute) | 2.5 | 3 |
 | N26 | Story unlock framework (`PROGRESSION_UNLOCKS.md`) | Unlock registry and save key, "Opening soon" hoardings that turn into venues, opening-day events, the phone's "New in town" page, first-visit discovery | none | 2 | 4 |
+| N27 | Franchise branches and showrooms (`PROGRESSION_UNLOCKS.md` section 3.3) | "For lease" lots in every place; gym, garage-and-showroom, café and club-front branches that open the place's activity, add local rep and a daily wash allowance (never income above the business cap); six showroom catalogues (used, luxury, boats, aircraft, exotic, muscle) with buy and test drive | N8, N20, N26 | 2 | 4 |
 
 - **All 14**: about **31 sessions**, on top of the roadmap's 57.
-- **N15-N26** (added with 4.11-4.14 and the story unlocks): about **31 sessions** more with the lite stock market (N17;
+- **N15-N27** (added with 4.11-4.14 and the story unlocks): about **33 sessions** more with the lite stock market (N17;
   the full market adds 3.5). The roadmap's new packages 28-32 (yoga, triathlon, flight school, parachute
   jumps, fairground) add about 8, and the city activity packs in `ACTIVITY_ATLAS.md` Part D
   about 19 (cheaper: 7), both spread over the world phases. Every item in 4.11-4.14 now sits in
@@ -647,7 +648,8 @@ Answered by Sachin on 2026-10-28:
 10. **City activity packs**: the cheaper version first (about 7 sessions; `ACTIVITY_ATLAS.md` D5
     lists exactly what it buys); the full packs (about 19) stay costed for later.
 11. **Story unlocks** (new, 2026-10-28): activities, showrooms and regions open with the story
-    and with exploration (`PROGRESSION_UNLOCKS.md`; N26). Its open points are in that doc.
+    and with exploration (`PROGRESSION_UNLOCKS.md`; N26, with franchise branches and showrooms in N27). Its open
+    points are in that doc.
 
 ## 8. Sources
 
