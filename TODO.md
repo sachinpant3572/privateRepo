@@ -1,5 +1,33 @@
 # TODO
 
+## HIGH PRIORITY. Wednesday, Oct 28, 2026: fix what players disliked in GTA Chinatown Wars
+
+Status: **open, high priority.** Sachin: "These are the negative feedback regarding Chinatowan Wars,
+one of the games that is the inpirstion for this game of mine. We have to ensure all these issues are
+addressed properly, either though confirmed positive fixes done by isers through Mods or devise ways
+by looking into other games that manages to fix this issue, or devise our own ways. Keep this in TODO
+on high priority please." Also: "The mobile version they released had some fixes, we need to check
+those too to see if they wwre found to be reliable by the players."
+
+Complaints as Sachin listed them (not yet verified), and where Solvera stands today:
+
+| # | Complaint about Chinatown Wars | Solvera today | Still to do |
+|---|---|---|---|
+| 1 | Touch driving slippery and imprecise; DS touch minigames gimmicky | Three driving layouts with pedals (HANDOFF-driving-feel.md); steering by stick when the camera turns with the car (HANDOFF-heading-camera.md) | Check the mobile ports' control fixes and how players rated them; consider steering assists that reviewers credit; play-test on a phone |
+| 2 | Top-down view put off players who wanted modern GTA's third-person view | Perspective top-down, a camera that turns with the car, settings for angle, zoom and turn | Full 3D stays parked (entry below); find what makes top-down feel modern rather than retro |
+| 3 | Triad bosses felt one-note or cartoonish | Cast in WORLD_BIBLE.md (Victor Hale, Mama Odette, Lua Ferreira, Duke Calloway, Simone Kessler) | Give each boss a want, a fear, a line they won't cross and a turn of their own; review ACT1_MISSIONS.md for it |
+| 4 | Huang Lee a detached, sarcastic "straight man" | Jules Moreau has a stake: a missing cousin (Teo), home ground, a past as a getaway driver (WORLD_BIBLE.md) | Write Jules's voice so the player cares; choices that show who Jules is |
+| 5 | Predictable revenge plot, twists easy to spot in a small cast | Four acts, three endings set by faction choices (Crown, Ashes, Light); Dex's betrayal already planned | Plant twists fairly but not obviously; enough cast that the traitor isn't the only suspect |
+| 6 | Characters with promise killed off early (Ling Shan) | none yet | Rule: a character the marketing or opening builds up gets an arc that pays off |
+| 7 | Repetitive touch minigames for car theft and lock-picking | Instant carjacking; minigames only as optional activities (ACTIVITY_ROADMAP.md) | Keep every core action one tap; any minigame skippable, varied or short |
+| 8 | Mandatory drug dealing felt tedious | Drug dealing excluded for tone (ACTIVITY_ROADMAP.md) | Make sure no money system becomes a forced grind (stock market, businesses, heists stay optional) |
+| 9 | Sold less than Liberty City Stories and Vice City Stories | not a design flaw as such | Note from research why (platform, the top-down look in marketing) and what it means for Solvera |
+
+Next steps:
+- Research (running 2026-10-28): the iOS and Android ports' fixes and patch history, how players
+  rated them, fan mods and other games' fixes for each complaint. Results go below.
+- Then turn each row into a design rule, and into a build task where it needs code.
+
 ## Wednesday, Oct 28, 2026: full 3D camera (parked)
 
 Status: **parked**. The perspective top-down camera is built instead (HANDOFF-perspective-camera.md).
