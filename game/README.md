@@ -250,11 +250,14 @@ phone.
 - **Asset kits** (`scripts/kits/`): code-built, vertex-coloured low-poly
   buildings, props (live oaks, palms, crepe myrtles and street trees with
   clumped canopies; bins, benches, hydrants, signal cabinets, banners, bike
-  racks, sidewalk works), 16 vehicles in 13 categories (compact, sedan,
-  EV, luxury, taxi, police, crossover, SUV, pickup, van, box truck,
-  sports, muscle, supercar, motorbike, scooter; fictional makes), each
-  with its own mass, grip, brakes, power curve, steering and durability,
-  body roll and bike lean, and people (skin, hair and clothes mixed per
+  racks, sidewalk works), 20 vehicles, one per category (compact, sedan,
+  EV, luxury, taxi, police, crossover, SUV, pickup, van, sports, muscle,
+  supercar, motorbike, scooter, a tuk-tuk and a cargo trike, a 6-wheel
+  box truck, a 10-wheel tipper and an 18-wheel semi; fictional makes),
+  each with its own mass, grip, brakes, power curve, steering and
+  durability, body roll and bike lean (cabins, dashboards and seats are
+  painted on the glass; the semi is one rigid body and only sets off on
+  streets with two or more lanes each way), and people (skin, hair and clothes mixed per
   pedestrian). No textures: a surface code in each vertex colour's alpha
   picks the material in the city shader (glass, metal, asphalt, concrete,
   pavers, brick, siding, seam metal, roof membrane, solar, grass), with
@@ -356,7 +359,9 @@ cd game && xvfb-run -a -s "-screen 0 1280x720x24" godot --rendering-driver openg
 ```
 
 The same command with `res://tests/gallery.tscn` renders the asset gallery
-(every building, landmark, vehicle and prop, and posed people), and with
+(every building, landmark, vehicle and prop, and posed people; `-- <out_dir>
+vehicles` shoots only the vehicles: every kind, each row and the trucks close
+up, from nearly overhead and from the driving camera's distance), and with
 `res://tests/mission_shots.tscn` shots of the missions, the phone and the
 dialogue, with `res://tests/place_shots.tscn` the storefronts by day
 and night, the rooms, the shop menu, a diner meal and the Places app, and

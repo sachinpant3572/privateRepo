@@ -55,6 +55,7 @@ func _run() -> void:
 		"test_scripted_car_gets_unstuck", "test_heavy_vehicle_pushes_harder",
 		"test_vehicle_handling_differs",
 		"test_traffic_drives_every_kind",
+		"test_vehicle_models_in_budget_and_grounded", "test_three_wheelers_and_big_trucks",
 		"test_roads_have_two_lanes_each_way", "test_cars_knock_down_roadside_props",
 		"test_people_walk_past_sidewalk_props",
 		"test_places_line_the_streets",
@@ -2572,8 +2573,9 @@ func test_roads_have_two_lanes_each_way() -> void:
 		"two cars abreast on %s drive on (%.0f m and %.0f m in 2.5 s), %.1f m apart at the closest" % [city.plan.edge_class(edge), went[0], went[1], gap_min])
 
 
-## Every traffic kind, the box truck included, drives junction to junction
-## through the streets around the spawn without getting stuck or wrecked.
+## Every traffic kind, the three-wheelers and the box truck, tipper and
+## 18-wheeler included, drives junction to junction through the streets
+## around the spawn without getting stuck or wrecked.
 func test_traffic_drives_every_kind() -> void:
 	await _new_game(false)
 	var city = game.city
@@ -2588,14 +2590,20 @@ func test_traffic_drives_every_kind() -> void:
 	var center: Vector3 = city.spawn_point
 	for kind in kinds:
 		var n := -1
-		for attempt in 100:
+		var options: Array = []
+		# The 18-wheeler sets off only on two or more lanes each way, as in
+		# Population._new_traffic_car.
+		var wide_only: bool = VehicleKit.size_of(kind).z > VehicleKit.LONG_HAUL
+		for attempt in 200:
 			n = city.random_node_between(center, 15.0, 160.0, rng)
 			# Start apart, so cars don't set off into each other.
 			var clear: bool = used.keys().all(func(u): return city.node_pos(u).distance_to(city.node_pos(n)) > 25.0) if n >= 0 else false
-			if clear and not city.next_nodes(n).is_empty():
+			options = city.next_nodes(n) if n >= 0 else []
+			if wide_only:
+				options = options.filter(func(m): return city.lane_count(n, m) >= 2)
+			if clear and not options.is_empty():
 				break
 		used[n] = true
-		var options: Array = city.next_nodes(n)
 		var to: int = options[rng.randi() % options.size()]
 		var car = Vehicle.new()
 		car.kind = kind
@@ -2610,10 +2618,12 @@ func test_traffic_drives_every_kind() -> void:
 	var passed := {}
 	var prev := {}
 	var went := {}
+	var starts := {}
 	for car in cars:
 		prev[car] = car._next_node
 		passed[car] = 0
 		went[car] = 0.0
+		starts[car] = car.global_position
 	for f in 1800:
 		var was := {}
 		for car in cars:
@@ -2625,10 +2635,104 @@ func test_traffic_drives_every_kind() -> void:
 				prev[car] = car._next_node
 				passed[car] += 1
 	# Three junctions, or a fair distance where the blocks are long (Midtown's
-	# are 120 m between avenues).
+	# are 120 m between avenues); a slow truck (about 8 m/s in traffic) can
+	# pass just one between two long blocks, so 180 m from where it set off
+	# counts too.
 	for car in cars:
-		_check((passed[car] >= 3 or (passed[car] >= 2 and went[car] > 200.0)) and not car.wrecked,
-			"traffic %s passed %d junctions, %.0f m in 30 s (wrecked: %s)" % [car.kind, passed[car], went[car], car.wrecked])
+		var net: float = car.global_position.distance_to(starts[car])
+		var on: bool = passed[car] >= 3 or (passed[car] >= 2 and went[car] > 200.0) or (passed[car] >= 1 and net > 180.0)
+		_check(on and not car.wrecked,
+			"traffic %s passed %d junctions, %.0f m (%.0f m from the start) in 30 s (wrecked: %s)" % [car.kind, passed[car], went[car], net, car.wrecked])
+
+
+## Every vehicle kind builds, in every paint of its palette, within its
+## triangle budget (1500 for cars, bikes and three-wheelers, 3000 for the
+## trucks), keeps to its footprint (mirrors, roof signs and bumpers may
+## stand a little proud) with nothing below the ground, and stands on
+## every axle: tyres touching y = 0 on both sides, or on the middle line
+## for a single front or rear wheel.
+func test_vehicle_models_in_budget_and_grounded() -> void:
+	await _free_game()
+	var axles := {"box_truck": 2, "tipper": 3, "semi": 5}
+	for kind: String in VehicleKit.KINDS:
+		var size: Vector3 = VehicleKit.size_of(kind)
+		var budget := 3000 if size.z > 6.0 else 1500
+		var palette: Array = VehicleKit.PALETTES.get(kind, VehicleKit.PAINTS)
+		var most := 0
+		var least := 1 << 30
+		var lo := Vector3(INF, INF, INF)
+		var hi := -lo
+		var feet := {} # axle (z in cm) -> sides touching the ground
+		for paint: Color in palette:
+			var mb := MeshBuilder.new()
+			var g := MeshBuilder.new()
+			VehicleKit.build(mb, kind, paint, g)
+			var tris: int = mb.triangle_count() + g.triangle_count()
+			most = maxi(most, tris)
+			least = mini(least, tris)
+			for m in [mb, g]:
+				for i in m.verts.size():
+					var v: Vector3 = m.verts[i]
+					lo = lo.min(v)
+					hi = hi.max(v)
+					if v.y < 0.005 and m.colors[i].is_equal_approx(VehicleKit.TYRE):
+						var side := "mid" if absf(v.x) < 0.3 else ("left" if v.x < 0.0 else "right")
+						var at: Dictionary = feet.get(roundi(v.z * 100.0), {})
+						at[side] = true
+						feet[roundi(v.z * 100.0)] = at
+		_check(least > 200 and most <= budget, "%s builds in %d-%d triangles (budget %d)" % [kind, least, most, budget])
+		var proud := Vector3(hi.x - size.x * 0.5, hi.y - size.y, hi.z - size.z * 0.5).max(Vector3(-lo.x - size.x * 0.5, 0, -lo.z - size.z * 0.5))
+		_check(lo.y > -0.001 and proud.x < 0.18 and proud.y < 0.25 and proud.z < 0.16,
+			"%s fits its %s footprint (lowest y %.3f, proud by %s)" % [kind, size, lo.y, proud])
+		var balanced: bool = feet.values().all(func(at): return at.has("mid") != (at.has("left") and at.has("right")))
+		_check(feet.size() == axles.get(kind, 2) and balanced,
+			"%s stands on %d axles, tyres down on both sides or the middle: %s" % [kind, axles.get(kind, 2), feet])
+
+
+## The three-wheelers park at the curb and at the poorest homes; the
+## tipper and the 18-wheeler only drive. Only the 18-wheeler is longer than
+## VehicleKit.LONG_HAUL, and traffic never sets one off down a one-lane
+## street, only on two or more lanes each way.
+func test_three_wheelers_and_big_trucks() -> void:
+	await _new_game(false)
+	for kind in ["tuk_tuk", "cargo_trike", "tipper", "semi"]:
+		_check(VehicleKit.CIVILIAN.has(kind) and not VehicleKit.spec(kind).rider, "%s drives in traffic" % kind)
+	for kind in ["tuk_tuk", "cargo_trike"]:
+		_check(VehicleKit.PARKED.has(kind) and VehicleKit.PARKED_BY_TIER[0].has(kind), "%s parks at the curb and at T0 homes" % kind)
+	var parks_big := false
+	for pool: Array in [VehicleKit.PARKED] + VehicleKit.PARKED_BY_TIER:
+		parks_big = parks_big or pool.has("tipper") or pool.has("semi")
+	_check(not parks_big, "tippers and 18-wheelers never park at a curb or a home")
+	var long: Array = VehicleKit.KINDS.keys().filter(func(k): return VehicleKit.size_of(k).z > VehicleKit.LONG_HAUL)
+	_check(long == ["semi"], "only the 18-wheeler is long haul, got %s" % [long])
+	var city = game.city
+	var plan = city.plan
+	var narrow := Vector2i(-1, -1)
+	var wide := Vector2i(-1, -1)
+	for e in plan.edge_count():
+		var a: int = plan.edge_a[e]
+		var b: int = plan.edge_b[e]
+		if not StreetPlan.CLASSES[plan.edge_class(e)].drive:
+			continue
+		if city.lane_count(a, b) == 1 and narrow.x < 0:
+			narrow = Vector2i(a, b)
+		elif city.lane_count(a, b) >= 2 and wide.x < 0:
+			wide = Vector2i(a, b)
+	_check(narrow.x >= 0 and wide.x >= 0, "the plan has one-lane and wider streets")
+	if narrow.x < 0 or wide.x < 0:
+		return
+	var pop = game.population
+	var on_narrow := {}
+	var on_wide := {}
+	for i in 600:
+		for pair in [[narrow, on_narrow], [wide, on_wide]]:
+			var car = pop._new_traffic_car(pair[0].x, pair[0].y)
+			pair[1][car.kind] = true
+			car.free()
+	_check(on_wide.has("semi") and on_wide.has("tipper") and on_wide.has("tuk_tuk"),
+		"600 picks on a %d-lane street include the 18-wheeler, tipper and tuk-tuk: %s" % [city.lane_count(wide.x, wide.y), on_wide.keys()])
+	_check(not on_narrow.has("semi") and on_narrow.has("tipper") and on_narrow.has("cargo_trike"),
+		"600 picks on a one-lane street: no 18-wheeler, still tippers and trikes: %s" % [on_narrow.keys()])
 
 
 ## A vehicle on the empty test track (no game loaded).
