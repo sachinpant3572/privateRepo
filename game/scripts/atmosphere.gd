@@ -58,17 +58,30 @@ var _splash: CPUParticles3D
 var rng := RandomNumberGenerator.new()
 
 
+## Fits the shadow cascades to the camera (TopDownCamera). In perspective the
+## camera is 40-80 m from the ground it frames, so the cascades step out from
+## the nearest tower tops to the ground at the top of the screen. The classic
+## camera sits 220 m back (TopDownCamera.DISTANCE), so the ground is 205-235 m
+## away; the splits put the sharpest cascade that holds all of it there, and
+## the nearer ones only hold tower tops.
+func set_view(perspective: bool) -> void:
+	if perspective:
+		sun.directional_shadow_max_distance = 160.0
+		sun.directional_shadow_split_1 = 0.3
+		sun.directional_shadow_split_2 = 0.5
+		sun.directional_shadow_split_3 = 0.75
+	else:
+		sun.directional_shadow_max_distance = 300.0
+		sun.directional_shadow_split_1 = 0.45
+		sun.directional_shadow_split_2 = 0.62
+		sun.directional_shadow_split_3 = 0.8
+
+
 func _ready() -> void:
 	rng.randomize()
 	sun = DirectionalLight3D.new()
 	sun.shadow_enabled = true
-	# The camera sits 220 m back (TopDownCamera.DISTANCE), so the ground is
-	# 205-235 m away. Splits put the sharpest cascade that holds all of it
-	# there; the nearer ones only hold tower tops.
-	sun.directional_shadow_max_distance = 300.0
-	sun.directional_shadow_split_1 = 0.45
-	sun.directional_shadow_split_2 = 0.62
-	sun.directional_shadow_split_3 = 0.8
+	set_view(true)
 	sun.shadow_blur = 1.5
 	add_child(sun)
 	env = Environment.new()

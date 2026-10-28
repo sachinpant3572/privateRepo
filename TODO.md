@@ -1,5 +1,17 @@
 # TODO
 
+## Wednesday, Oct 28, 2026: full 3D camera (parked)
+
+Status: **parked**. The perspective top-down camera is built instead (HANDOFF-perspective-camera.md).
+Sachin: "Full 3D seems the best but we will have to overhaul all of our 3D models wihich is very time
+intensive. So we can park it in TODO as one of the things to do when token costs come down very much
+and good 3D Models are very quick to build and use."
+
+- Estimate from the camera demo (HANDOFF-camera-demo.md): about 6-10 sessions: a third-person camera,
+  distant low-detail buildings, phone performance, interior ceilings, street-level gaps in the
+  models, and tests. The demo's `scripts/chase_camera.gd` is the starting point.
+- Start only on Sachin's word, when both conditions above hold.
+
 ## Wednesday, Oct 28, 2026: a California city as expansion 2
 
 Status: **not started** (a later expansion). Sachin asked which city was our California. The

@@ -40,8 +40,8 @@ const PARK_FROM_CURB := 1.0
 ## Scenery round the window, in metres.
 const MARGIN := 110.0
 ## Cells load when their bounding box comes this close, and unload past
-## UNLOAD_RADIUS. Static so a far-seeing camera (the camera demo) can widen
-## them.
+## UNLOAD_RADIUS. Static so a far-seeing camera (Settings > Zoom, the camera
+## demo) can widen them.
 static var LOAD_RADIUS := 105.0
 static var UNLOAD_RADIUS := 150.0
 const CELL_GRID := 50.0

@@ -80,6 +80,12 @@ func _run() -> void:
 		await _wealth(game)
 		get_tree().quit()
 		return
+	if OS.get_environment("SHOTS") == "view":
+		# The same spots in the classic view and in perspective
+		# (HANDOFF-perspective-camera.md).
+		await _views(game)
+		get_tree().quit()
+		return
 	if OS.get_environment("SHOTS") == "roads":
 		# Just the wide roads (quick look while working on them).
 		await _roads(game)
@@ -472,6 +478,75 @@ func _walk_to_car(game) -> void:
 	await _frames(2)
 	Input.action_release("interact")
 	await _frames(2)
+
+
+## Downtown by the Aurum Tower, Midtown's towers and the low-rise Lantern
+## Square, on foot and (downtown) at the driving zoom, in the classic view
+## and in perspective.
+func _views(game) -> void:
+	var city = game.city
+	var midtown := Vector3.ZERO
+	for d in city.districts:
+		if d.get("id", "") == "midtown":
+			var c: Vector2 = (d.rect as Rect2).get_center() - city.map_origin
+			midtown = Vector3(c.x, 0, c.y)
+	var spots := [
+		["aurum", city.landmark_front("aurum_tower"), [26.0, 48.0]],
+		["midtown", city.node_pos(city.nearest_node(midtown)), [26.0, 48.0]],
+		["lantern", city.landmark_front("lantern_square"), [26.0]],
+	]
+	var cam = game.camera
+	for spot: Array in spots:
+		var pos: Vector3 = spot[1]
+		city.stream_now(pos)
+		game.player.global_position = pos
+		game.player.reset_physics_interpolation()
+		for sz: float in spot[2]:
+			for mode: Array in [["classic", false], ["perspective", true]]:
+				cam.perspective = mode[1]
+				game.atmosphere.set_view(mode[1])
+				cam.zoom_override = sz
+				cam.size = sz
+				cam.snap()
+				await _frames(20)
+				await _shot("80_%s_%d_%s.png" % [spot[0], sz, mode[0]])
+	# Perspective only: a spot where the camera backs out of a tower, and
+	# one where a building hides the player and the cutaway opens.
+	cam.perspective = true
+	game.atmosphere.set_view(true)
+	cam.zoom_override = 26.0
+	var space: PhysicsDirectSpaceState3D = cam.get_world_3d().direct_space_state
+	var query := PhysicsPointQueryParameters3D.new()
+	query.collision_mask = 1
+	var base: float = 13.0 / tan(deg_to_rad(cam.PERSPECTIVE_FOV) * 0.5)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	var win: Rect2 = city.window
+	var want := {"tower": true, "hidden": true}
+	for i in 900:
+		if want.is_empty():
+			break
+		var at := Vector3(rng.randf_range(win.position.x, win.end.x), 0, rng.randf_range(win.position.y, win.end.y))
+		if not str(city.district_at(at).get("id", "")) in ["gilt_district", "midtown"]:
+			continue
+		city.stream_now(at)
+		await _frames(1)
+		if not space.intersect_ray(PhysicsRayQueryParameters3D.create(at + Vector3(0, 200, 0), at + Vector3(0, 0.3, 0), 1)).is_empty():
+			continue
+		query.position = at + cam.global_basis.z * base
+		var inside := not space.intersect_point(query, 1).is_empty()
+		game.player.global_position = at
+		game.player.reset_physics_interpolation()
+		cam.snap()
+		await _frames(3)
+		var hidden: bool = cam._view_blocked(at)
+		var kind := "tower" if inside and want.has("tower") else ("hidden" if hidden and want.has("hidden") else "")
+		if kind == "":
+			continue
+		want.erase(kind)
+		await _frames(30)
+		await _shot("81_%s_perspective.png" % kind)
+	cam.zoom_override = 0.0
 
 
 func _shot(file: String) -> void:

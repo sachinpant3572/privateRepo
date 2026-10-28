@@ -4,6 +4,7 @@ extends Node3D
 ## BUSTED and WASTED, cash, the bag and settings.
 
 const City = preload("res://scripts/city.gd")
+const Country = preload("res://scripts/country.gd")
 const Player = preload("res://scripts/player.gd")
 const Vehicle = preload("res://scripts/vehicle.gd")
 const TopDownCamera = preload("res://scripts/top_down_camera.gd")
@@ -35,7 +36,7 @@ var taxi
 var inventory = Inventory.new()
 var respawning := false
 var cash := 0
-var settings := {"shadows": true, "show_fps": true, "weather": "auto", "detail": "high", "controls": "stick"}
+var settings := {"shadows": true, "show_fps": true, "weather": "auto", "detail": "high", "controls": "stick", "view": "perspective", "zoom": 1.0}
 ## Player-set map waypoint (a road node position) or null.
 var waypoint = null
 
@@ -126,6 +127,17 @@ func apply_settings() -> void:
 	atmosphere.weather_changes = w == "auto"
 	if w != "auto":
 		atmosphere.set_weather(w)
+	var persp: bool = settings.get("view", "perspective") != "classic"
+	camera.perspective = persp
+	atmosphere.set_view(persp)
+	# Zoomed out, the city and country load further round the player.
+	var z: float = settings.get("zoom", 1.0)
+	camera.zoom = z if camera.ZOOMS.has(z) else 1.0
+	var reach := maxf(camera.zoom, 1.0)
+	City.LOAD_RADIUS = 105.0 * reach
+	City.UNLOAD_RADIUS = 150.0 * reach
+	Country.LOAD_RADIUS = 130.0 * reach
+	Country.UNLOAD_RADIUS = 210.0 * reach
 	var scheme: String = settings.get("controls", "stick")
 	Controls.scheme = scheme if Controls.SCHEMES.has(scheme) else "stick"
 	if missions:

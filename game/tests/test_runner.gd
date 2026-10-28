@@ -35,6 +35,7 @@ func _run() -> void:
 		"test_wasted_respawns_at_hospital",
 		"test_city_runs_with_population",
 		"test_camera_is_classic_top_down",
+		"test_perspective_camera",
 		"test_punch_combo_ends_in_knockdown_kick",
 		"test_minimap_routes_to_waypoint", "test_state_map_shows_the_whole_state",
 		"test_night_lights_the_city",
@@ -646,6 +647,100 @@ func test_camera_is_classic_top_down() -> void:
 	Controls.override_vector = null
 	var moved: Vector3 = game.player.global_position - start
 	_check(moved.z < -2.0 and absf(moved.x) < 0.5, "screen-up walks north, moved %s" % moved)
+
+
+## The perspective view (HANDOFF-perspective-camera.md): on by default,
+## framing the same ground as the classic view, never inside a building
+## downtown, opening the cutaway when a building hides the player, and
+## switching to the classic view from Settings.
+func test_perspective_camera() -> void:
+	var L = preload("res://scripts/layers.gd")
+	var MB = preload("res://scripts/mesh_builder.gd")
+	await _new_game(false)
+	var cam = game.camera
+	_place_player(_home(), Vector3.ZERO)
+	await _frames(5)
+	_check(cam.perspective and cam.projection == Camera3D.PROJECTION_PERSPECTIVE, "the camera sees in perspective by default")
+	var framed: float = 2.0 * cam.global_position.distance_to(cam._focus) * tan(deg_to_rad(cam.fov) * 0.5)
+	_check(absf(framed - cam.size) < cam.size * 0.01, "perspective frames %.1f m at the player, the zoom asks %.1f" % [framed, cam.size])
+	# Downtown spots where the usual camera spot would be inside a tower.
+	var city = game.city
+	var space: PhysicsDirectSpaceState3D = cam.get_world_3d().direct_space_state
+	var query := PhysicsPointQueryParameters3D.new()
+	query.collision_mask = L.WORLD
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	var win: Rect2 = city.window
+	var base: float = cam.FOOT_SIZE * 0.5 / tan(deg_to_rad(cam.PERSPECTIVE_FOV) * 0.5)
+	var inside_spots := 0
+	var outside := 0
+	var framing_kept := 0
+	var blocked_spot = null
+	for i in 900:
+		if inside_spots >= 6 and blocked_spot != null:
+			break
+		var at := Vector3(rng.randf_range(win.position.x, win.end.x), 0, rng.randf_range(win.position.y, win.end.y))
+		if not str(city.district_at(at).get("id", "")) in ["gilt_district", "midtown"]:
+			continue
+		city.stream_now(at)
+		await get_tree().physics_frame
+		if not space.intersect_ray(PhysicsRayQueryParameters3D.create(at + Vector3(0, 200, 0), at + Vector3(0, 0.3, 0), L.WORLD)).is_empty():
+			continue
+		query.position = at + cam.global_basis.z * base
+		var inside := not space.intersect_point(query, 1).is_empty()
+		if not inside and (blocked_spot != null or inside_spots >= 6):
+			continue
+		_place_player_at(at)
+		await _frames(3)
+		if blocked_spot == null and cam._view_blocked(game.player.global_position):
+			blocked_spot = at
+		if not inside:
+			continue
+		inside_spots += 1
+		query.position = cam.global_position
+		if space.intersect_point(query, 1).is_empty():
+			outside += 1
+		framed = 2.0 * cam.global_position.distance_to(cam._focus) * tan(deg_to_rad(cam.fov) * 0.5)
+		if absf(framed - cam.size) < cam.size * 0.02:
+			framing_kept += 1
+	_check(inside_spots >= 3, "found downtown spots where the usual camera spot is inside a tower: %d" % inside_spots)
+	_check(outside == inside_spots and framing_kept == inside_spots, "the camera backs out of the tower at all of them (%d of %d) and frames the same ground (%d)" % [outside, inside_spots, framing_kept])
+	_check(blocked_spot != null, "found a downtown spot where a building hides the player")
+	if blocked_spot != null:
+		_place_player_at(blocked_spot)
+		await _frames(30)
+		var mat: ShaderMaterial = MB.cutaway_material()
+		_check(float(mat.get_shader_parameter("cut_radius")) > cam.CUT_RADIUS * 0.9 and float(mat.get_shader_parameter("cone")) == 1.0, "the cutaway opens round the hidden player, narrowing toward the camera")
+	game.settings["view"] = "classic"
+	game.apply_settings()
+	await _frames(2)
+	_check(cam.projection == Camera3D.PROJECTION_ORTHOGONAL and is_equal_approx(cam.rotation_degrees.x, -cam.PITCH), "Settings > View switches to the classic flat view")
+	game.settings["view"] = "perspective"
+	game.apply_settings()
+	await _frames(2)
+	_check(cam.projection == Camera3D.PROJECTION_PERSPECTIVE, "and back to perspective")
+	# Settings > Zoom scales the view, and the city loads further out to match.
+	_place_player(_home(), Vector3.ZERO)
+	game.settings["zoom"] = 1.3
+	game.apply_settings()
+	await _frames(240)
+	_check(absf(cam.size - cam.FOOT_SIZE * 1.3) < 0.5 and game.city.LOAD_RADIUS > 130.0, "Zoom 130%% frames %.1f m on foot and loads cells to %.0f m" % [cam.size, game.city.LOAD_RADIUS])
+	# Nothing on screen lies past the loaded cells: the ground at the screen's
+	# corners and edges, while driving flat out at the far zoom.
+	# On a 20:9 phone, the widest screen the game runs on.
+	var corner_far := 0.0
+	cam.size = cam.DRIVE_SIZE * 1.3
+	cam.snap()
+	var t := tan(deg_to_rad(cam.fov) * 0.5)
+	var b: Basis = cam.global_basis
+	for uv in [Vector2(-1, 1), Vector2(1, 1), Vector2(0, 1), Vector2(-1, -1), Vector2(1, -1)]:
+		var o: Vector3 = cam.global_position
+		var d: Vector3 = (-b.z + b.x * uv.x * t * 20.0 / 9.0 + b.y * uv.y * t).normalized()
+		var g := o + d * (-o.y / d.y)
+		corner_far = maxf(corner_far, Vector2(g.x - game.player.global_position.x, g.z - game.player.global_position.z).length())
+	_check(corner_far < game.city.LOAD_RADIUS, "at the far zoom the screen's corners (%.0f m out) lie inside the loaded radius" % corner_far)
+	game.settings["zoom"] = 1.0
+	game.apply_settings()
 
 
 # --- Helpers -----------------------------------------------------------------

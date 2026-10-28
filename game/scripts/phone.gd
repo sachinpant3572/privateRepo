@@ -256,6 +256,19 @@ func _settings() -> void:
 		game.apply_settings()
 		db.text = "Detail: " + s["detail"].to_upper())
 	_body.add_child(db)
+	var vb := _button("View: " + s.get("view", "perspective").to_upper(), Callable())
+	vb.pressed.connect(func():
+		s["view"] = "classic" if s.get("view", "perspective") == "perspective" else "perspective"
+		game.apply_settings()
+		vb.text = "View: " + s["view"].to_upper())
+	_body.add_child(vb)
+	var zooms: Array = game.camera.ZOOMS
+	var zb := _button("Zoom: %d%%" % roundi(game.camera.zoom * 100.0), Callable())
+	zb.pressed.connect(func():
+		s["zoom"] = zooms[(zooms.find(game.camera.zoom) + 1) % zooms.size()]
+		game.apply_settings()
+		zb.text = "Zoom: %d%%" % roundi(game.camera.zoom * 100.0))
+	_body.add_child(zb)
 	_body.add_child(_toggle("Shadows", s.get("shadows", true), func(on): s["shadows"] = on; game.apply_settings()))
 	_body.add_child(_toggle("Show FPS", s.get("show_fps", true), func(on): s["show_fps"] = on; game.apply_settings()))
 	var weathers := ["auto", "clear", "rain", "storm"]

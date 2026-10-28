@@ -360,7 +360,12 @@ those). `SHOTS=roads` shoots the wide roads (53 to 58), `SHOTS=props` a car
 through a lamp, a tree and a hydrant (59 to 64), `SHOTS=farm` Golden
 Flats' farmland (65 to 72), `SHOTS=routes` the way in to one home of
 each kind and setting (73), and `SHOTS=wealth` one home of each kind at each
-household tier it takes (74).
+household tier it takes (74). `SHOTS=view` compares the classic and perspective cameras
+at the Aurum Tower, Midtown and Lantern Square, on foot and driving (80),
+and the perspective camera backed out of a tower and with the view band
+cutting buildings round the player (81). `res://tests/occlusion_probe.tscn`
+(headless) measures how much of the hero and the street each camera
+setting hides (HANDOFF-perspective-camera.md).
 
 The country is generated, not hand-made. After changing `data/world_map.json`
 or the street plan, dump the plan and rebuild it (needs `pip install shapely`):

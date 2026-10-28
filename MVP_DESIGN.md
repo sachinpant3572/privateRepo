@@ -31,6 +31,13 @@ Everything not needed to prove that waits for later phases.
 
 ## Camera decision
 
+**Update (Oct 28, 2026): perspective top-down by default.** Same north-up
+view, but in true perspective (65° pitch, 35° field of view) like GTA
+Chinatown Wars, so towers lean out as you pass; buildings that hide the
+ground round and ahead of the player are cut away. Settings > View keeps the
+classic flat 60° view below, and Settings > Zoom sets 80-130%. See
+HANDOFF-perspective-camera.md. Full 3D is parked in TODO.md.
+
 **Decision (Oct 26, 2026): classic top-down view only.** North is up, and the
 camera looks down at 60° below the horizon, a 3/4 view that shows the fronts
 of buildings and people, like the Java-era Gangstar games, Stardew Valley, Crashlands and
@@ -73,7 +80,7 @@ The decisions and their costs are in `HANDOFF-modern-look.md`.
 
 | From the classic games (Java Gangstar, GTA 2 era) | From modern games |
 |---|---|
-| **Classic top-down camera**, north up (in the prototype) | Smooth follow, lead ahead of cars, zoom out with speed (in the prototype) |
+| **Top-down camera**, north up, perspective or classic (in the prototype) | Smooth follow, lead ahead of cars, zoom out with speed (in the prototype) |
 | Wanted stars, instant carjacking, arcade driving | Day/night lighting, neon at night, weather (rain, storms, flooding) |
 | Big, readable characters and cars; clear colours | Particles: skid marks, tyre smoke, sparks, dust, splashes |
 | Arrows and markers to the next objective | Screen shake and hit-stop on punches and crashes, phone vibration |

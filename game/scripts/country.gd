@@ -19,7 +19,8 @@ const Terrain = preload("res://scripts/terrain.gd")
 const DATA_PATH := "res://data/country.json"
 ## Tiles load when their square comes this close to the focus (or to where
 ## a fast car will be in LOOKAHEAD seconds) and unload past UNLOAD_RADIUS.
-## Static so a far-seeing camera (the camera demo) can widen them.
+## Static so a far-seeing camera (Settings > Zoom, the camera demo) can
+## widen them.
 static var LOAD_RADIUS := 130.0
 static var UNLOAD_RADIUS := 210.0
 const LOOKAHEAD := 1.2

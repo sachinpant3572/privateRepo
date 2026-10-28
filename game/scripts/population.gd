@@ -50,12 +50,13 @@ func _physics_process(delta: float) -> void:
 
 
 ## How much further out than on foot people and cars come and go: the
-## driving camera zooms out to see about 1.8x as far.
+## driving camera zooms out to see about 1.8x as far, and Settings > Zoom
+## up to 1.3x more.
 func reach() -> float:
 	var cam = game.camera
 	if cam == null:
 		return 1.0
-	return clampf(cam.size / 30.0, 1.0, 1.6)
+	return clampf(cam.size / 30.0, 1.0, 2.1)
 
 
 ## Far enough to remove: beyond `dist` and off screen, or far beyond it.

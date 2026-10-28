@@ -222,10 +222,23 @@ render_mode diffuse_burley, specular_schlick_ggx;
 #include_common
 
 uniform vec3 focus = vec3(0.0);
-uniform vec3 cam_right = vec3(1.0, 0.0, 0.0);
-uniform vec3 cam_up = vec3(0.0, 1.0, 0.0);
 uniform vec3 cam_back = vec3(0.0, 0.0, 1.0);
+// The perspective camera's position; with cone 1 the hole narrows toward
+// it, so it stays the same size on screen at every depth.
+uniform vec3 eye = vec3(0.0, 100.0, 60.0);
+uniform float cone = 0.0;
 uniform float cut_radius = 7.0;
+// Perspective only: anything nearer the camera than this dissolves, so a
+// tower the low camera passes through fades out instead of popping.
+uniform float near_fade = 0.0;
+// The ground the player needs to see: a band `view_radius` wide round the
+// player (focus, 1 m up) and out along `ahead` (where they are heading).
+// Any part of a building that hides more than HIDE_MIN metres of that ground
+// is cut away, so tall buildings there drop to low stubs that still show
+// their footprints (HANDOFF-perspective-camera.md). 0 turns it off.
+uniform float view_radius = 0.0;
+uniform vec3 ahead = vec3(0.0);
+const float HIDE_MIN = 4.0;
 
 varying vec3 world_pos;
 varying vec3 world_normal;
@@ -249,13 +262,39 @@ void fragment() {
 	SPECULAR = spec;
 	METALLIC = metal;
 	vec3 rel = world_pos - focus;
-	if (world_pos.y > 0.4 && dot(rel, cam_back) > 1.0) {
-		float d = length(vec2(dot(rel, cam_right), dot(rel, cam_up))) / cut_radius;
-		if (d < 1.0) {
-			float noise = fract(sin(dot(floor(FRAGCOORD.xy), vec2(12.9898, 78.233))) * 43758.5453);
-			if (noise > smoothstep(0.7, 1.0, d)) {
-				discard;
-			}
+	vec3 to_eye = eye - focus;
+	float reach = length(to_eye);
+	vec3 axis = normalize(mix(cam_back, to_eye / reach, cone));
+	float t = dot(rel, axis);
+	float keep = 1.0;
+	if (world_pos.y > 0.4 && t > 1.0) {
+		float shrink = mix(1.0, max((reach - t) / reach, 0.05), cone);
+		float d = length(rel - axis * t) / (cut_radius * shrink);
+		keep = smoothstep(0.7, 1.0, d);
+	}
+	if (view_radius > 0.0 && world_pos.y > focus.y) {
+		vec3 ray = cone > 0.5 ? normalize(world_pos - eye) : -cam_back;
+		if (ray.y < -0.05) {
+			// Where this point's line of sight meets the player's ground.
+			float s = (focus.y - 1.0 - world_pos.y) / ray.y;
+			vec3 hidden = world_pos + ray * s;
+			float hides = length(hidden.xz - world_pos.xz);
+			vec2 pa = hidden.xz - focus.xz;
+			float h = clamp(dot(pa, ahead.xz) / max(dot(ahead.xz, ahead.xz), 0.0001), 0.0, 1.0);
+			float dc = length(pa - ahead.xz * h) / view_radius;
+			keep = min(keep, max(smoothstep(0.9, 1.0, dc), 1.0 - smoothstep(HIDE_MIN, HIDE_MIN + 1.0, hides)));
+		}
+	}
+	if (near_fade > 0.0) {
+		keep = min(keep, smoothstep(near_fade * 0.35, near_fade, distance(world_pos, eye)));
+	}
+	if (keep < 1.0) {
+		// An ordered 4x4 dither: an even screen-door edge, not speckle.
+		ivec2 p = ivec2(FRAGCOORD.xy) % 4;
+		int i = p.x + p.y * 4;
+		float bayer = float((i == 0 ? 0 : i == 1 ? 8 : i == 2 ? 2 : i == 3 ? 10 : i == 4 ? 12 : i == 5 ? 4 : i == 6 ? 14 : i == 7 ? 6 : i == 8 ? 3 : i == 9 ? 11 : i == 10 ? 1 : i == 11 ? 9 : i == 12 ? 15 : i == 13 ? 7 : i == 14 ? 13 : 5)) / 16.0 + 0.03125;
+		if (bayer > keep) {
+			discard;
 		}
 	}
 }
