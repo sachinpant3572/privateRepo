@@ -104,7 +104,7 @@ func _clip(activity: String, view: String, label: String) -> void:
 	var mover: Callable
 	match activity:
 		"walking":
-			var f: Transform3D = game.city.landmark_frame("lantern_square")
+			var f: Transform3D = game.city.landmark_frame("aurum_tower")
 			var a: Vector3 = f * Vector3(-16, 0, 0)
 			var b: Vector3 = f * Vector3(20, 0, 0)
 			p.process_mode = Node.PROCESS_MODE_INHERIT
@@ -173,11 +173,12 @@ func _clip(activity: String, view: String, label: String) -> void:
 	_fog(false, false)
 
 
-## A red sports car in the near lane of a downtown avenue, its route ahead.
+## A red sports car in the near lane past the Aurum Tower, its route ahead.
 func _spawn_car():
 	var city = game.city
-	var a: int = city.nearest_node(Vector3(380, 0, 140))
-	var b: int = city.nearest_node(Vector3(820, 0, 140))
+	var tower: Vector3 = city.landmark_front("aurum_tower")
+	var a: int = city.nearest_node(tower + Vector3(-240, 0, 30))
+	var b: int = city.nearest_node(tower + Vector3(240, 0, 30))
 	var nodes: PackedInt64Array = city.route_nodes(city.node_pos(a), city.node_pos(b))
 	var car = Vehicle.new()
 	car.kind = "sports"

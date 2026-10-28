@@ -26,8 +26,9 @@ The two options were (from my cost answer the same day):
     where streaming stops. A real option 2 needs distant low-detail buildings instead.
 - D-4 The plane is a box model on a scripted loop round downtown (320 m radius, 150 m up, 42 m/s,
   banked). There is no flyable aircraft in the game yet (world v3 plans aircraft).
-- D-5 The car is a red sports car on a scripted drive along a downtown avenue (the taxi autopilot).
-  The walk is along the Lantern Square sidewalk.
+- D-5 The walk and the drive pass the Aurum Tower, where perspective differs most from the flat view
+  (the trial walked Lantern Square and drove a low-rise avenue: the two top-down views looked alike).
+  The car is a red sports car on the taxi autopilot.
 
 ## Traps
 
