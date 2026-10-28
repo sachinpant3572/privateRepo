@@ -199,6 +199,31 @@ yet.
 - **Transit (busy, mixed)**: one metro line, the hillside cable car, minibuses, the Gulf
   ferry to Ironwharf and Isla Serena, an airport; no tram.
 
+### 2.6 The California city: LA sprawl, hills, beaches and freeways, expansion 2
+
+Sachin, Oct 28, picking it over making Bellerive the California city: "Add a California city
+later as an expansion, the way Porto Brisa is planned: LA sprawl, Hollywood-style hills,
+beaches and freeways. It fits the expansion rules already in the plan and touches nothing that
+exists. Yeah this looks better." Bellerive stays the Florida city; it keeps the LA-style street
+grid and the Bellerive Hills it already has.
+- **Where**: west past Hollow Mesa and Las Brasas, on the open west edge (section 9), the way
+  Los Angeles lies west of Las Vegas across the desert. It is reached first by highway bus,
+  train or flight (a kiosk and a fade); a drivable desert crossing on Route 40 can come later.
+- **Theme** (Los Angeles and Southern California, all fictional, no real studios or brands):
+  - endless low sprawl on a huge grid;
+  - stacked freeway interchanges;
+  - a glass downtown;
+  - hills with letters, an observatory and canyon roads;
+  - a film-studio district;
+  - beach towns, a pier and boardwalk, and surf;
+  - a port;
+  - a dry river channel;
+  - palm-lined boulevards and mansions in gated canyons.
+- **To decide when it starts**: its name, districts, condition (car-centric is the likely
+  pick), factions, characters and story strand, all per section 9, plus its `expansions` entry
+  in `world_map.json` and an arrow on `world_map.svg`. Nothing in the game reads it until it is
+  built.
+
 ## 3. The countryside
 
 Each region has one biome, one landmark, one faction and one sentence of mood, and most
@@ -325,6 +350,7 @@ interiors phase 0 about 2).
 | 5 | Concordia; metro, cable cars; Castellanes, Ledger, Halberd | 8-10 |
 | 6 | Steelhaven and Corran; the Loop; Local 12, Tenmile, Copper Kings; riots | 6-8 |
 | Expansion 1 | Porto Brisa (section 2.5) and the Gulf ferry and flights to it | 8-10 |
+| Expansion 2 | The California city (section 2.6) and the travel to it | 10-12 (rough; the sprawl and freeways are big) |
 
 **Recommended: a seamless state built in phases** (one streamed world, about 34-44
 sessions in all). Each city still ships as its own phase, behind a story gate (the Great
@@ -340,7 +366,8 @@ Storm's closed bridges, a dock strike).
 ## 8. Open questions
 
 - Whether trespass into Fort Granite gives 4 stars or 2-3 on a phone.
-- Where expansion 2 and later go (section 9 lists the open edges).
+- Where expansion 3 and later go (section 9 lists the open edges).
+- The California city's name, districts and story strand (section 2.6).
 
 ## 9. Expansions
 
@@ -359,5 +386,5 @@ More cities come in later expansions (Sachin, Oct 27). The rules, so each one fi
   - south across the Gulf: Porto Brisa (expansion 1);
   - north past Steelhaven and Cinder Ridge: a border city by the Solvera Line's northern
     extension;
-  - west past Hollow Mesa: a desert border city by highway or air;
+  - west past Hollow Mesa: the California city (expansion 2, section 2.6), by highway or air;
   - east past Sovereign Bay: an island or coastal city by sea and air.

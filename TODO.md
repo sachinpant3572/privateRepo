@@ -1,5 +1,24 @@
 # TODO
 
+## Wednesday, Oct 28, 2026: a California city as expansion 2
+
+Status: **not started** (a later expansion). Sachin asked which city was our California. The
+answer was none: Bellerive is the Florida city, built on an LA-style street plan with
+California-style hills. Of the options he chose: "Add a California city later as an expansion,
+the way Porto Brisa is planned: LA sprawl, Hollywood-style hills, beaches and freeways. It fits
+the expansion rules already in the plan and touches nothing that exists. Yeah this looks
+better."
+
+- Planned in `WORLD_V3_PLAN.md` section 2.6, with expansion 2 in the section 7 cost table
+  (10-12 sessions, rough).
+- It goes on the west edge past Hollow Mesa and Las Brasas, and follows the rules in section 9.
+- Nothing that exists changes; Bellerive stays the Florida city.
+- When it starts:
+  - pick its name, districts, factions, characters and story strand with Sachin;
+  - add its `expansions` entry and map arrow;
+  - research LA from the top down, the way `reference/world/california_topdown.md` was done
+    for Bellerive.
+
 ## Wednesday, Oct 28, 2026: Solvera robbery missions and heists
 
 Status: **not started**. Sachin: "Abb robbery missions too, they will allow to rob most of the
