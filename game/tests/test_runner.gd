@@ -56,7 +56,7 @@ func _run() -> void:
 		"test_people_wear_modern_clothes",
 		"test_people_dress_for_their_kind", "test_reactions_by_kind_of_person", "test_reaction_starts_on_time",
 		"test_people_notice_by_sight_and_sound", "test_poses_stay_in_joint_limits", "test_crowd_reacts_to_a_punch",
-		"test_people_dodge_cars_and_get_up", "test_cops_investigate_off_duty",
+		"test_people_dodge_cars_and_get_up", "test_cops_investigate_off_duty", "test_people_sit_on_benches",
 		"test_vehicle_roster_and_parking",
 		"test_vehicle_speed_ranks",
 		"test_player_driving_assists",
@@ -5962,3 +5962,65 @@ func test_cops_investigate_off_duty() -> void:
 	await _frames(240)
 	_check(cop.reaction == "" and cop.style == "patrol", "then goes back to the beat ('%s', %s)" % [cop.reaction, cop.style])
 	cop.queue_free()
+
+
+## A walker who stops for a bench walks to the nearest free one, turns and
+## sits facing out over the seat; a second finds it taken and waits; a
+## knocked-down bench is never chosen; a gunshot gets the sitter up and off
+## with collisions back on.
+func test_people_sit_on_benches() -> void:
+	const L = preload("res://scripts/layers.gd")
+	await _free_game()
+	var o := Vector3(300, 0, 1900)
+	var city = _fake_street(o)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 12
+	var benches := []
+	for b in 2:
+		var body := StaticBody3D.new()
+		body.collision_layer = L.PROPS
+		body.collision_mask = 0
+		var shape := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = Vector3(1.8, 1.0, 0.6)
+		shape.shape = box
+		# Seat faces -x (yaw 90°): the backrest is on the far side from the walker.
+		shape.position = o + Vector3(2.0, 0.5, 0.0) if b == 0 else o + Vector3(-1.6, 0.5, 0.0)
+		shape.rotation.y = PI / 2.0
+		shape.set_meta("brk", {"kind": "bench", "down": b == 1})
+		body.add_child(shape)
+		add_child(body)
+		benches.append(shape)
+	var ped = _street_ped(city, rng, o, 0.0)
+	ped.walk_speed = 1.4
+	await _frames(3)
+	ped.pause_for("bench", 15.0)
+	_check(ped.pause_kind == "bench" and ped._bench == benches[0],
+		"a walker picks the standing bench, not the knocked-down nearer one ('%s')" % ped.pause_kind)
+	var sat_at := -1
+	for f in 300:
+		await _frames(1)
+		if ped.sitting:
+			sat_at = f
+			break
+	await _frames(30)
+	var seat: Vector3 = benches[0].global_position
+	var off := Vector2(ped.global_position.x - seat.x, ped.global_position.z - seat.z).length()
+	var faces: float = ped.forward().dot(Vector3.LEFT)
+	_check(sat_at > 0 and sat_at < 150 and off < 0.15 and faces > 0.95,
+		"walks over and sits on the seat in %d frames, %.2f m off, facing out (%.2f)" % [sat_at, off, faces])
+	_check(ped.collision_mask & L.PROPS == 0 and _hips_height(ped) < 0.75,
+		"sitting, the body clears the bench collider and the hips are at seat height (%.2f m)" % _hips_height(ped))
+	var other = _street_ped(city, rng, o + Vector3(0, 0, 1.5), 0.0)
+	await _frames(2)
+	other.pause_for("bench", 10.0)
+	_check(other.pause_kind == "wait", "a second walker finds the bench taken and waits ('%s')" % other.pause_kind)
+	ped.perceive("gunshot", o + Vector3(-30, 0, 0), null, 30.0, {})
+	await _frames(45)
+	_check(not ped.sitting and ped.reaction == "flee" and ped.collision_mask & L.PROPS != 0
+		and ped.global_position.distance_to(seat) > 0.5,
+		"a gunshot gets the sitter up and running, colliding again ('%s')" % ped.reaction)
+	ped.queue_free()
+	other.queue_free()
+	for b in benches:
+		b.get_parent().queue_free()

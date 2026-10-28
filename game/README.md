@@ -382,7 +382,12 @@ and the minimap past the city's edge, with `res://tests/country_shots.tscn`
 the country (suburbs, Brisa Beach, towns, farms, bridges, barricades, the
 fence, estates, villages, a farmyard and fields, by day and night; `ONLY=c17_hale_estate,...`
 shoots just those views) and with `res://tests/taxi_shots.tscn` hailing,
-the fare panel, a ride and a skip. `res://tests/civic_gallery.tscn`,
+the fare panel, a ride and a skip. `res://tests/char_shots.tscn` renders the
+people (char_1 to char_7: a street crowd of every kind, close-ups of each
+kind and the cops, the hero beside a plain look, every gait, all gestures,
+and the actions, idle acts, falls, get-up and sitting; `-- <out_dir> hero
+gaits` shoots just those pages; each line prints the triangle count).
+`res://tests/civic_gallery.tscn`,
 `res://tests/skyline_gallery.tscn` and `res://tests/shady_gallery.tscn`
 render every kind of the civic, skyline and shady kits; the screenshots
 include aerial views of Gilt, Midtown, the Wards, Ironwharf and the

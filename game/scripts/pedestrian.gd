@@ -20,16 +20,18 @@ const CROWD := [["general", 28], ["office", 16], ["worker", 10], ["tourist", 10]
 ## Things each category stops to do on the sidewalk (Rig gestures, plus
 ## "chat" with someone close by).
 const PAUSES := {
-	"general": ["call", "smoke", "wait", "lean_wall", "eat", "chat", "chat"],
-	"office": ["call", "call", "wait", "hail", "chat", "chat"],
+	"general": ["call", "smoke", "wait", "lean_wall", "eat", "chat", "chat", "bench"],
+	"office": ["call", "call", "wait", "hail", "chat", "chat", "bench"],
 	"worker": ["smoke", "arms_crossed", "stretch", "eat", "chat", "chat"],
-	"tourist": ["film", "point", "hail", "eat", "chat"],
+	"tourist": ["film", "point", "hail", "eat", "chat", "bench"],
 	"gang": ["smoke", "lean_wall", "arms_crossed", "call", "chat", "chat"],
-	"elderly": ["wait", "lean_wall", "call", "chat"],
+	"elderly": ["wait", "lean_wall", "call", "chat", "bench", "bench"],
 	"athlete": ["stretch", "stretch", "wait"],
 	"shopkeeper": ["smoke", "call", "lean_wall", "chat"],
 	"medic": ["call", "wait", "smoke", "chat"],
 }
+## "bench" sits on a free street bench within this many metres (else waits).
+const BENCH_REACH := 6.0
 ## The first stop comes this long after spawning, later ones PAUSE_EVERY
 ## apart (seconds).
 const FIRST_PAUSE := Vector2(18.0, 45.0)
@@ -61,6 +63,8 @@ var _pause_walk := false
 var _pause_face := Vector3.ZERO
 var _chat_with = null
 var _chat_lead := false
+## The bench collider sat on (CollisionShape3D) while pause_kind is "bench".
+var _bench = null
 var _react_from := Vector3.ZERO
 var _dodge_dir := Vector3.ZERO
 var _rain_hurry := false
@@ -171,9 +175,12 @@ func _set_state(value: State) -> void:
 	_detour_side = 1.0
 	_stuck = 0.0
 	if value != State.PAUSE:
+		if sitting and _bench != null:
+			_stand_from_bench()
 		activity = ""
 		pause_kind = ""
 		_chat_with = null
+		_bench = null
 	if (was == State.FIGHT) != (value == State.FIGHT):
 		set_xray(HOSTILE if value == State.FIGHT else Color(0, 0, 0, 0))
 
@@ -464,8 +471,12 @@ func _try_pause() -> void:
 	if gesture != "" or reaction != "" or not is_inside_tree():
 		return
 	var options: Array = PAUSES.get(category, PAUSES.general)
-	var what: String = options[_rng.randi() % options.size()]
-	var secs := _rng.randf_range(4.0, 9.0)
+	pause_for(options[_rng.randi() % options.size()], _rng.randf_range(4.0, 9.0))
+
+
+## Stops to do `what` (a PAUSES entry) for about `secs`; what needs a place
+## or a partner falls back to waiting when there is none.
+func pause_for(what: String, secs: float) -> void:
 	_pause_walk = false
 	_pause_face = Vector3.ZERO
 	var inward := _inward()
@@ -494,6 +505,16 @@ func _try_pause() -> void:
 				_pause_goal = Vector3(hit.position.x, global_position.y, hit.position.z) - inward * 0.3
 				_pause_walk = true
 				_pause_face = -inward
+		"bench":
+			var b = _free_bench()
+			if b == null:
+				what = "wait"
+			else:
+				_bench = b
+				b.set_meta("sitter", get_instance_id())
+				_pause_goal = _bench_front(b)
+				_pause_walk = true
+				secs = _rng.randf_range(10.0, 20.0)
 		"hail":
 			_pause_face = -inward
 		"film", "point":
@@ -550,6 +571,13 @@ func _pause(delta: float) -> void:
 			return
 		_pause_walk = false
 	velocity = Vector3.ZERO
+	if pause_kind == "bench":
+		if not sitting:
+			_sit_on_bench()
+		elif not is_instance_valid(_bench) or _bench.disabled \
+				or Vector2(_bench.global_position.x - global_position.x, _bench.global_position.z - global_position.z).length() > 0.4:
+			_set_state(State.WANDER) # knocked off it, or the bench is gone
+		return
 	if pause_kind == "chat":
 		var to: Vector3 = _chat_with.global_position - global_position
 		to.y = 0.0
@@ -562,6 +590,74 @@ func _pause(delta: float) -> void:
 	if _pause_face != Vector3.ZERO:
 		face(_pause_face, delta)
 	activity = pause_kind
+
+
+## A street bench within BENCH_REACH nobody sits on and no car knocked
+## down (its collider, a CollisionShape3D tagged "brk" by the prop kit), or
+## null. One shape query, made only when deciding to sit.
+func _free_bench():
+	var space := get_world_3d().direct_space_state if is_inside_tree() else null
+	if space == null:
+		return null
+	var sphere := SphereShape3D.new()
+	sphere.radius = BENCH_REACH
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = sphere
+	q.transform = Transform3D(Basis.IDENTITY, global_position)
+	q.collision_mask = L.PROPS | L.WORLD
+	var best = null
+	var best_d := INF
+	for hit in space.intersect_shape(q, 24):
+		var body = hit.collider
+		if not body is CollisionObject3D:
+			continue
+		var owner_id: int = body.shape_find_owner(hit.shape)
+		var shape = body.shape_owner_get_owner(owner_id)
+		if not shape is CollisionShape3D or shape.disabled or not shape.has_meta("brk"):
+			continue
+		var info: Dictionary = shape.get_meta("brk")
+		if info.get("kind", "") != "bench" or info.get("down", false):
+			continue
+		var by := instance_from_id(int(shape.get_meta("sitter", 0)))
+		if by != null and by != self and by.get("_bench") == shape:
+			continue
+		var d := global_position.distance_squared_to(shape.global_position)
+		if d < best_d:
+			best_d = d
+			best = shape
+	return best
+
+
+## Where to stand in front of bench `b` before sitting (the seat faces the
+## bench's -z, away from the backrest).
+func _bench_front(b) -> Vector3:
+	var front: Vector3 = -b.global_basis.z
+	front.y = 0.0
+	var p: Vector3 = b.global_position + front.normalized() * 0.65
+	return Vector3(p.x, global_position.y, p.z)
+
+
+## Turns round and sits: the body moves onto the seat and stops colliding
+## with props while there (the bench's collider covers the seat).
+func _sit_on_bench() -> void:
+	if not is_instance_valid(_bench) or _bench.disabled:
+		_set_state(State.WANDER)
+		return
+	var front: Vector3 = -_bench.global_basis.z
+	front.y = 0.0
+	front = front.normalized()
+	var seat: Vector3 = _bench.global_position - front * 0.05
+	global_position = Vector3(seat.x, global_position.y, seat.z)
+	rotation.y = atan2(-front.x, -front.z)
+	collision_mask = L.WORLD
+	sitting = true
+
+
+func _stand_from_bench() -> void:
+	sitting = false
+	collision_mask = L.WORLD | L.PROPS | L.CHARACTERS | L.VEHICLES
+	if is_instance_valid(_bench) and global_position.distance_to(_bench.global_position) < 1.0:
+		global_position = _bench_front(_bench)
 
 
 func _on_hit(attacker) -> void:
