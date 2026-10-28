@@ -96,6 +96,7 @@ P = {
     "taxi_cap_h_per_day": 4.0,    # taxi time beyond this in one game day moves only the sky
     "load_real_min": 0.25,        # a sleep or taxi fade, in real minutes
     "tap_real_min": 0.125,        # one "Skip 3 hours" tap
+    "biz_cap_w_per_day": 0.35,   # R-22: all business income per game day, net (shares the clock)
     "counters": True,
     "allow_short": False,
 }
@@ -970,6 +971,9 @@ def main():
         pas * clk["rules"], clk["rules"]))
     pr("    no taxi cap %.3f (%.2f) | 3h-skip taps move the clock %.3f (%.2f)" %
        (pas * clk["taxi_off"], clk["taxi_off"], pas * clk["taps"], clk["taps"]))
+    pr("    all rules: skilled %.3f | tips %.3f | tips + businesses at the %.2fW/day cap %.3f" %
+       (statistics.fmean(res["skilled"][0]) * clk["rules"], statistics.fmean(res["tips"][0]) * clk["rules"],
+        P["biz_cap_w_per_day"], (statistics.fmean(res["tips"][0]) + P["biz_cap_w_per_day"]) * clk["rules"]))
     pr("7 Compounding: P&L/day in days 41-60 vs days 1-20:  caps on x%.2f | no caps x%.2f" %
        (growth(eq_tips), growth(eq_off)))
 
@@ -994,9 +998,11 @@ def main():
          "%.3f / %.3f" % (cs_real, or_real)),
         ("authored payday p90 <= 8 W, one-off", stats(pd)[3] <= 8.0,
          "mean %.2f, p90 %.2f" % (pd_m, stats(pd)[3])),
-        ("clock bot, all rules, < side jobs per real hour (and the taxi cap binds)",
-         pas * clk["rules"] < days_per_hour and clk["rules"] < clk["taxi_off"],
-         "%.3f (no cap %.3f)" % (pas * clk["rules"], pas * clk["taxi_off"])),
+        ("clock bot, all rules: tips + businesses < side jobs per real hour (taxi cap binds)",
+         (max(pas, sk, tp) + P["biz_cap_w_per_day"]) * clk["rules"] < days_per_hour
+         and clk["rules"] < clk["taxi_off"],
+         "%.3f (passive alone %.3f, no cap %.3f)" % ((max(pas, sk, tp) + P["biz_cap_w_per_day"]) * clk["rules"],
+                                                     pas * clk["rules"], pas * clk["taxi_off"])),
     ]
     for name, ok, val in checks:
         pr("  [%s] %s: %s" % ("PASS" if ok else "FAIL", name, val))

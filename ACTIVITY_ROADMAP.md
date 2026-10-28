@@ -40,7 +40,7 @@ source; Solvera's status (**have** / **partial** / **missing**) with file refere
 
 | Item | Who / label / source | Solvera |
 |---|---|---|
-| Golf, tennis, darts | V5, V [S9][S5] | missing. A tennis court exists as estate scenery only (`kits/grounds_kit.gd:101`). Planned: tennis and darts in package 21, mini-golf and the driving range in `ACTIVITY_IDEAS.md` N2; a real course is not costed (2.3: Ember Heights later) |
+| Golf, tennis, darts | V5, V [S9][S5] | missing. A tennis court exists as estate scenery only (`kits/grounds_kit.gd:101`). Planned: tennis and darts in package 21, mini-golf and the driving range in `ACTIVITY_IDEAS.md` N2; real golf: Ember Heights' 9 desert holes in `ACTIVITY_ATLAS.md` CP-2 (2.3), the Haverly links in the full CP-3 |
 | Yoga, triathlon | V5, 2 [S10] | missing; packages 28 and 29 |
 | Flight school, parachute jumps (13) | V5, V [S5]; SA pilot and boat schools, R | missing; packages 30 and 31 |
 | Shooting range | V5, V [S5] | missing (planned: interiors phase 6) |
@@ -53,7 +53,7 @@ source; Solvera's status (**have** / **partial** / **missing**) with file refere
 | Horse betting (Inside Track) | SA, V [S11] | missing (same conflict) |
 | Cinema, bar, strip club (friend activities) | V5, V [S9] | missing. Strip club: recommend never (tone and age rating) |
 | Fairground rides | V5, V [S9] | missing; package 32 |
-| Hunting / wildlife photography challenge | V5, V [S4] | missing. Hunting: never (no killing animals); it becomes wildlife photography with the phone camera (package 7), the bayou wildlife rescue (`ACTIVITY_IDEAS.md` N25) and Red Pine's photo spots (`ACTIVITY_ATLAS.md` D2, CP-1) |
+| Hunting / wildlife photography challenge | V5, V [S4] | missing. Hunting: never (no killing animals); it becomes the wildlife photography challenge in `ACTIVITY_IDEAS.md` N25 (bayou, Glades and Red Pine, on package 7's phone camera) |
 | Stock market | V5, R | missing; designed in `STOCK_MARKET_DESIGN.md` (lite about 2.5 sessions, full about 6) |
 | Dating, girlfriends, friends | SA, V [S15]; V5 friends, V [S9] | missing |
 | 1v1 races, clan seasons, daily and weekly tasks | MO2, V [M2]; tasks 2 [M3] | missing |

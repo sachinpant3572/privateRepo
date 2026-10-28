@@ -214,9 +214,12 @@ cash, phone, settings, inventory}` only on a mission pass and on New game, and `
    and after every trade (tests inject a fixed seed), so a copied save never replays the same
    future. An emulator snapshot that restores RAM is just another copy (rows below).
 4. **Autosave on every tick, trade and skip**, atomically (write a temp file, then rename).
-5. **One market per profile.** If the game ever gets several manual save slots, the market, its
-   clock and its RNG state live once per profile, outside the slots; loading another slot keeps
-   the market as it is. Otherwise picking the best of N slots would be save copying from a menu.
+5. **Each save slot is one whole world.** If the game ever gets several manual save slots, the
+   market, its clock, lots, flags, paydays and the cash all live in the slot together; nothing is
+   shared between slots or kept in a profile. Splitting them would print money (save, buy shares,
+   reload: the cash returns and a profile-wide market keeps the shares) and would let a payday
+   be replayed from a slot whose flag is unset. Picking the best of N slots is save copying from
+   a menu, which rule 3 already bounds (the rows below).
 *What's left*: copying the save outside the game (PC, emulator, rooted phone, R-27 cloud restore)
 and keeping the best of N futures. Nobody can stop that on an open platform, so it must pay worse
 than playing. A checksum stops casual cash edits, not copying. Exclude the save from Android Auto
@@ -233,13 +236,18 @@ included, so fail-and-retry can move time either way; and the hour isn't saved (
 (8 h per 16 h awake, the sleep rule), by a taxi ride's time up to `taxi_cap_h_per_day` 4 h per
 game day (longer taxi time moves only the sky), and by a mission's first start (at most 12 h, a
 one-off per mission, so not a loop); retries and backward hour sets move only the sky. "Skip 3 hours" becomes sky-only.
-Catch-up stops at 7 days per jump, and the device clock is never read. The same clock drives
-R-22 business income, so one rule closes both. *Sim*: a clock bot plays one real hour (1 game hour = 1 real minute) and takes every legal
+Catch-up stops at 7 days per jump, and the device clock is never read. "First start" means a
+story mission's first start; repeatable jobs and activities that set an hour move only the sky.
+The same clock drives R-22 business income, so R-22 gets a cap too: `biz_cap_w_per_day` 0.35 W
+per game day for all businesses together, net, so the clock bot with tips and full businesses
+still earns less than side jobs. *Sim*: a clock bot plays one real hour (1 game hour = 1 real minute) and takes every legal
 jump: sleep as soon as allowed, taxi rides of 2 h with a 15 s fade, and 3 h taps at 7.5 s each
 when taps count; taxi time counts as awake, which earns sleep sooner. Passive income per real
 hour (game days per real hour): normal play 0.211 (2.5), sleep rule 0.293 (3.5), all rules with
-the taxi cap 0.382 (4.5), no taxi cap 2.239 (26.5, close to side jobs' 2.5), taps that move the
-clock 5.492 (65, twice side jobs). Mission first starts add a one-off, not a rate.
+the taxi cap 0.382 (4.5), no taxi cap 2.239 (26.5 game days per real hour; 2.239 W is close to side jobs' 2.5), taps that move the
+clock 5.492 (65, twice side jobs). At the all-rules pace a skilled trader earns 0.592 per real
+hour and a tips trader 0.798; tips plus businesses at their cap earn 2.380, under side jobs' 2.5
+(check 8). Mission first starts add a one-off, not a rate.
 
 **6.7 Infinite compounding.** *Loop*: reinvest every gain. *Counters*: caps in W that rise only
 with the story, stationary prices, cash dividends. *Sim*: a tips trader's profit per day in days
@@ -291,16 +299,18 @@ Seed 20261028, 150 runs, 60 days, 12 ticks a day; profit per game day in W:
 | Authored payday (one-off total, not per day) | 5.475 | 1.709 | 3.431 | 7.621 | `tip_cap_w` 17 |
 
 Time skip (clock bot), passive per real hour: normal 0.211, sleep rule 0.293, all rules with the
-taxi cap 0.382, no taxi cap 2.239, taps moving the clock 5.492. Compounding, days 41-60 against
-1-20: caps on x0.95, no caps x1.55. Runtime 36.2 s, exit 0.
+taxi cap 0.382, no taxi cap 2.239, taps moving the clock 5.492; all rules, skilled 0.592, tips
+0.798, tips plus businesses at `biz_cap_w_per_day` 0.35: 2.380. Compounding, days 41-60 against
+1-20: caps on x0.95, no caps x1.55. Runtime 38.1 s, exit 0.
 
 **Which targets held** (all 8 sim checks pass): passive 0.084 W/day (8.4% of W) is inside 5-15%;
 skilled 0.131 (0.177 with tips), or 0.33 (0.44) per real hour, sits far below side jobs' 2.5;
 every in-game exploit with counters, plus half an index, is at most 0.064; the honest index
 holder's crimes are never flagged; the payday's p90 is 7.6 W (mean 5.5) at `tip_cap_w` 17, under
-the 8 W cap (20 W would give p90 8.9); the clock bot with all rules earns 0.382 per real hour.
+the 8 W cap (20 W would give p90 8.9); the clock bot with all rules earns 0.382 per real hour passive, 0.798 with tips, and 2.380 with tips and businesses at their cap.
 **Partly held**: copying
-the save outside the game beats skilled trading per real hour (0.756 against 0.33) but stays well
+the save outside the game beats skilled trading at normal pace (0.756 against 0.33; the tips
+trader at the clock bot's pace makes 0.798) but stays well
 under side jobs (2.5), the honest limit on an open platform. The "Solvera save" row equals
 passive by construction, and the blackout isn't modelled (so the insider rows are a worst case).
 
@@ -345,7 +355,7 @@ passive by construction, and the blackout isn't modelled (so the insider rows ar
   and flag and reseeds the RNG; caps, buy limits and T+1 refuse orders; cooldown and decay cut
   repeats; an index holder's crimes never open a case; a retry never moves `market.clock`, the
   skip button is sky-only, taxi time past 4 h a game day is sky-only, catch-up stops at 84 ticks;
-  loading another save slot leaves the market as it is; a short GDScript balance run (passive and
+  loading another save slot loads that slot's own market and cash and reseeds the RNG; a short GDScript balance run (passive and
   the sabotage loop, 20 seeds) lands near the sim's numbers.
 - **Cost, full: about 6 sessions**: `market.gd` and data 2, Bourse screen 1.5, event hooks with
   SSC and clock rules 1.5, tests and balance port 1. Broker office +0.5-1.
@@ -357,7 +367,9 @@ passive by construction, and the blackout isn't modelled (so the insider rows ar
   its own); R-20 fines (until then the SSC only seizes); R-22 businesses (shares the clock rule);
   R-23 heists (full version only); R-16 side jobs set W; R-27 cloud restore counts as a copy.
 
-## 11. Open decisions for Sachin
+## 11. Decisions (Sachin approved the design on 2026-10-28: "Sure")
+
+The ten answers below are the recommended ones, taken as the defaults; Sachin can overrule any.
 
 1. **Shorts, leverage, options**: recommend none at launch (6.8).
 2. **Paydays**: recommend five, `payday_move` 0.30, `tip_cap_w` 17 W (p90 7.6 W; 20 W gives 8.9).
@@ -370,6 +382,8 @@ passive by construction, and the blackout isn't modelled (so the insider rows ar
 8. **Names**: "Bourse de Bellerive" and the SSC; recommend keeping both.
 9. **Rating stance**: recommend the sober framing in section 9, revisited with the gambling call.
 10. **W**: placeholder $600 in act 1; set it when R-16 side jobs are tuned.
+11. **Clean cash only** (follows Sachin's laundering answer, 2026-10-28; `PROGRESSION_UNLOCKS.md`
+    section 4): orders take only clean cash, so the Bourse never turns dirty cash clean.
 
 ## 12. Sources
 
