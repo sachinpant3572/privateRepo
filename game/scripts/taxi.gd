@@ -657,6 +657,32 @@ func _curb_stop(from: int, to: int, at: Vector3) -> Array:
 	return [at + off * CURB_SHIFT, atan2(-dir.x, -dir.z)]
 
 
+## The shortest drive from `start` into junction `end` by any street but the
+## one from `not_from`, without passing `end` on the way. Empty when none.
+func _round_the_block(start: int, end: int, not_from: int) -> PackedInt64Array:
+	var city = game.city
+	var best := PackedInt64Array()
+	var best_len := INF
+	for m in city.next_nodes(end):
+		if m == not_from:
+			continue
+		var nodes: PackedInt64Array = city.route_nodes(city.node_pos(start), city.node_pos(m))
+		if nodes.is_empty():
+			if start != m:
+				continue
+			nodes = PackedInt64Array([start])
+		if end in nodes:
+			continue
+		nodes.append(end)
+		var length := 0.0
+		for k in range(1, nodes.size()):
+			length += city.node_pos(nodes[k - 1]).distance_to(city.node_pos(nodes[k]))
+		if length < best_len:
+			best_len = length
+			best = nodes
+	return best
+
+
 ## A drive from junction `start` to a stop on the curb street, arriving the
 ## way that keeps the curb on `side_of`'s side when the route allows (no
 ## U-turn at the last junction): {points, stop, yaw, first} where `first`
@@ -672,14 +698,20 @@ func _approach(start: int, curb: Dictionary, side_of: Vector3) -> Dictionary:
 			continue
 		if nodes.is_empty():
 			nodes = PackedInt64Array([start])
-		# Coming in along the curb street itself means turning back on it.
+		# Coming in along the curb street itself means turning back on it:
+		# come round the block into its end by another street instead.
 		var turns_back: bool = nodes.size() >= 2 and nodes[nodes.size() - 2] == dir[1]
+		if turns_back:
+			var loop := _round_the_block(start, dir[0], dir[1])
+			if not loop.is_empty():
+				nodes = loop
+				turns_back = false
 		var length := 0.0
 		for k in range(1, nodes.size()):
 			length += city.node_pos(nodes[k - 1]).distance_to(city.node_pos(nodes[k]))
 		# The far side means crossing the street to the cab: worth a loop
 		# round the block on a grid.
-		var score := length + (0.0 if near_side else 250.0) + (400.0 if turns_back else 0.0)
+		var score := length + (0.0 if near_side else 600.0) + (400.0 if turns_back else 0.0)
 		options.append({"nodes": nodes, "stop": s[0], "yaw": s[1], "to": dir[1], "score": score})
 	if options.is_empty():
 		return {}
