@@ -76,9 +76,23 @@ garden_apartments 7, diner 6, gas_station 3, civic 9.
 tests/run.sh after each game-code change; country preview after each generator change; shots
 of a suburb street with people and parked cars, a place door, and the new kinds; APK 0.20.
 
+## Review outcome (one run, 2026-10-28)
+
+- Fixed: a home's stalls and bays (about 2.6 m apart) used the 4 m occupancy radius, so a car in
+  one stall blocked the next; spots with a tier now use 2 m. The live-car test now counts spots
+  left open on unloaded tiles. The kind test now builds the shady kinds too (they take the 8k
+  big-lot budget: scrapyard and housing_project reach 5.1k-7.2k triangles).
+- Not fixed, unreachable: "a lot refused by try_lot loses its car tier". `try_lot` with
+  plot >= 0 never refuses.
+- Left as is: `Kit.live_cars` is a static flag set and cleared round each build, the same
+  pattern as reach, wealth and route_step. Safe while builds stay on one thread.
+- Noted: regenerating shifted the towns' lot counts (Larkspur 33 to 25 lots, Wheaton bars
+  2 to 7).
+
 ## Open questions
 
-- None yet.
+- None. Next work (enterable places and brands) waits on Sachin's pick from
+  BRANDS_AND_PLACES_PLAN.md.
 
 ## Traps
 
