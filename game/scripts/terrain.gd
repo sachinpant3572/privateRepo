@@ -14,6 +14,8 @@ static var nx := 0
 static var ny := 0
 static var heights := PackedFloat32Array()
 static var bounds := Rect2()
+## The grid as a texture for shaders (`terrain_dm`), kept for tests.
+static var height_texture: ImageTexture
 
 
 ## Reads the "terrain" entry of country.json ({} or null clears it).
@@ -22,6 +24,8 @@ static func load_data(d) -> void:
 	nx = 0
 	ny = 0
 	bounds = Rect2()
+	height_texture = null
+	RenderingServer.global_shader_parameter_set("terrain_grid", Vector4.ZERO)
 	if not d is Dictionary or d.is_empty():
 		return
 	origin = Vector2(d.origin[0], d.origin[1])
@@ -33,6 +37,12 @@ static func load_data(d) -> void:
 	for i in nx * ny:
 		heights[i] = raw.decode_u16(i * 2) * SCALE
 	bounds = Rect2(origin, Vector2(nx - 1, ny - 1) * cell)
+	# The same grid for shaders (headlight beams lie on it): two bytes a
+	# step, low then high, as stored.
+	var img := Image.create_from_data(nx, ny, false, Image.FORMAT_RG8, raw.slice(0, nx * ny * 2))
+	height_texture = ImageTexture.create_from_image(img)
+	RenderingServer.global_shader_parameter_set("terrain_dm", height_texture)
+	RenderingServer.global_shader_parameter_set("terrain_grid", Vector4(origin.x, origin.y, cell, 0.0))
 
 
 ## Height (m) of the ground at local x, z.

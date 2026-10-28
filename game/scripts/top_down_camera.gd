@@ -90,6 +90,9 @@ var zoom := 1.0
 ## on-foot framing while driving (H-15).
 const DRIVE_ZOOMS := [0.0, 0.25, 0.5, 0.75, 1.0]
 var drive_zoom := 1.0
+## Settings preview: frame the view as if driving at full speed up the
+## screen, so Drive zoom-out shows while standing still.
+var preview_drive := false
 
 var target: Node3D
 ## Inside a place: the room's centre (a Vector3) and the zoom that frames
@@ -212,8 +215,14 @@ func _process(delta: float) -> void:
 	var want_size := FOOT_SIZE * zoom
 	var lead := Vector3.ZERO
 	var flatten := 0.0
-	if node != target:
-		var v: Vector3 = node.velocity
+	var driving := node != target
+	var v := Vector3.ZERO
+	if driving:
+		v = node.velocity
+	if preview_drive and fixed_focus == null:
+		driving = true
+		v = Vector3.FORWARD.rotated(Vector3.UP, yaw) * (TURN_FULL_SPEED if turns() else DRIVE_SPEED)
+	if driving:
 		var speed := Vector2(v.x, v.z).length()
 		var fast := clampf(speed / (TURN_FULL_SPEED if turns() else DRIVE_SPEED), 0.0, 1.0) * drive_zoom
 		want_size = lerpf(FOOT_SIZE, TURN_DRIVE_SIZE if turns() else DRIVE_SIZE, fast) * zoom

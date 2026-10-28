@@ -800,18 +800,27 @@ func _build_model() -> void:
 	if is_police:
 		_skin(MeshBuilder.xray_material(POLICE_XRAY), _gloss_xray(POLICE_XRAY))
 	add_child(_model)
+	# Beams and the red pool behind lie on the ground, over the hills too
+	# (ground_glow_material); the lamps' own glow rides on the car.
+	var ground := MeshBuilder.new()
 	var glow := MeshBuilder.new()
 	var head := Color(0.6, 0.55, 0.38)
 	var lamps := [0.0] if shows_rider else [-_size.x * 0.33, _size.x * 0.33]
 	for x in lamps:
-		glow.light_beam(Vector3(x, 0.05, -_size.z * 0.5), Vector3.FORWARD, 13.0, 3.2, head)
+		ground.light_beam(Vector3(x, 0.05, -_size.z * 0.5), Vector3.FORWARD, 13.0, 3.2, head, 5)
 		glow.light_pool(Vector3(x, 0.7, -_size.z * 0.5 - 0.1), Vector2(0.5, 0.35), Color(1.0, 0.95, 0.8))
-	glow.light_pool(Vector3(0, 0.08, _size.z * 0.5 + 0.6), Vector2(_size.x * 0.7, 1.2), Color(0.5, 0.05, 0.04))
-	_beams = glow.make_instance()
-	_beams.material_override = MeshBuilder.glow_material()
+	ground.light_pool(Vector3(0, 0.08, _size.z * 0.5 + 0.6), Vector2(_size.x * 0.7, 1.2), Color(0.5, 0.05, 0.04))
+	_beams = ground.make_instance()
+	_beams.material_override = MeshBuilder.ground_glow_material()
 	_beams.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# The shader moves the beams up or down to the ground, off their box.
+	_beams.extra_cull_margin = 4.0
 	_beams.visible = false
 	add_child(_beams)
+	var lamp_glow := glow.make_instance()
+	lamp_glow.material_override = MeshBuilder.glow_material()
+	lamp_glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_beams.add_child(lamp_glow) # shown with the beams
 	if is_police:
 		for i in 2:
 			var light := MeshInstance3D.new()

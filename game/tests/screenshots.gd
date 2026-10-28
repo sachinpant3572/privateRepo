@@ -62,6 +62,11 @@ func _run() -> void:
 		await _hills(game)
 		get_tree().quit()
 		return
+	if OS.get_environment("SHOTS") == "lights":
+		# Just headlights at night, flat and up and down the hills.
+		await _lights(game)
+		get_tree().quit()
+		return
 	if OS.get_environment("SHOTS") == "props":
 		await _props(game)
 		get_tree().quit()
@@ -422,6 +427,46 @@ func _props(game) -> void:
 		n += 2
 	game.camera.fixed_focus = null
 	game.camera.room_size = 0.0
+
+
+## A car with its lights on at night, on the flat and pointing up and down
+## the Bellerive Hills: the beams must lie on the ground ahead, not sink
+## under a road that climbs.
+func _lights(game) -> void:
+	game.atmosphere.hour = 22.0
+	game.player.visible = false
+	var stops := [
+		["86_lights_flat", Vector2(690, 470), 0.0],
+		["86_lights_down_crest", Vector2(1560, -1255), -1.0],
+		["86_lights_down_canyon", Vector2(760, -1150), -1.0],
+		["86_lights_up_crest", Vector2(1560, -1255), 1.0],
+		["86_lights_up_canyon", Vector2(760, -1150), 1.0],
+	]
+	for stop in stops:
+		var at: Vector2 = stop[1]
+		var n := Terrain.normal(at.x, at.y)
+		var dir := Vector3(0, 0, -1)
+		if stop[2] != 0.0 and Vector2(n.x, n.z).length() > 0.001:
+			dir = -Vector3(n.x, 0, n.z).normalized() * stop[2] # uphill is against the normal's lean
+		var pos := Vector3(at.x, Terrain.height(at.x, at.y), at.y)
+		game.city.stream_now(pos)
+		game.player.global_position = pos - dir * 6.0
+		var car = Vehicle.new()
+		car.kind = "sedan"
+		game.add_child(car)
+		car.global_position = pos
+		car.rotation.y = atan2(-dir.x, -dir.z)
+		car.driver = Vehicle.Driver.PLAYER
+		game.camera.fixed_focus = pos + dir * 6.0
+		game.camera.room_size = 34.0
+		game.camera.snap()
+		await _frames(40)
+		print("lights %s grade %.1f%%" % [stop[0], 100.0 * (Terrain.height(pos.x + dir.x * 10.0, pos.z + dir.z * 10.0) - pos.y) / 10.0])
+		await _shot(stop[0] + ".png")
+		car.queue_free()
+	game.camera.fixed_focus = null
+	game.camera.room_size = 0.0
+	game.player.visible = true
 
 
 ## The 4- and 6-lane streets, avenues and boulevards, and the roads out

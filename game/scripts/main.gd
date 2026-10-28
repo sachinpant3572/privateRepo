@@ -36,7 +36,9 @@ var taxi
 var inventory = Inventory.new()
 var respawning := false
 var cash := 0
-var settings := {"shadows": true, "show_fps": true, "weather": "auto", "detail": "high", "controls": "stick", "view": "perspective", "zoom": 1.0, "angle": 65.0, "auto_tilt": true, "camera_turn": "car", "drive_zoom": 1.0}
+var settings := {"shadows": true, "show_fps": true, "weather": "auto", "detail": "high", "controls": "stick", "view": "perspective", "zoom": 1.0, "angle": 65.0, "auto_tilt": true, "camera_turn": "car", "drive_zoom": 1.0, "fps_limit": 120}
+## Settings > Graphics > FPS limit.
+const FPS_LIMITS := [30, 60, 75, 90, 120]
 ## Player-set map waypoint (a road node position) or null.
 var waypoint = null
 
@@ -163,8 +165,16 @@ func apply_settings() -> void:
 	Country.UNLOAD_RADIUS = 210.0 * reach
 	var scheme: String = settings.get("controls", "stick")
 	Controls.scheme = scheme if Controls.SCHEMES.has(scheme) else "stick"
+	# Headless runs (tests, tools) go flat out.
+	Engine.max_fps = 0 if DisplayServer.get_name() == "headless" else fps_limit()
 	if missions:
 		missions.save_game()
+
+
+## The saved FPS limit, or 120 if it isn't one of FPS_LIMITS.
+func fps_limit() -> int:
+	var f = settings.get("fps_limit", 120)
+	return int(f) if (f is int or f is float) and FPS_LIMITS.has(int(f)) else 120
 
 
 ## After "New game": back to Union Station and the first mission.

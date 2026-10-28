@@ -367,6 +367,56 @@ void fragment() {
 
 static var _glow_material: ShaderMaterial
 
+## GLOW_SHADER laid on the ground: each vertex drops (or rises) to the
+## ground's height under it plus GROUND_LIFT, read from the hills' height
+## grid (terrain.gd sets terrain_dm and terrain_grid). A flat beam on a car
+## that climbs a hill would otherwise sink under the road ahead (4% up is
+## enough to hide a 13 m beam 5 cm off the ground). Roads on the hills cut
+## 4 m chords a few centimetres under the curve and their markings sit
+## 5 cm up, so 10 cm clears both.
+const GROUND_GLOW_SHADER := """
+shader_type spatial;
+render_mode unshaded, blend_add, depth_draw_never, cull_disabled, shadows_disabled, world_vertex_coords;
+
+global uniform float night;
+global uniform float wet;
+global uniform sampler2D terrain_dm : filter_nearest;
+global uniform vec4 terrain_grid;
+
+const float GROUND_LIFT = 0.1;
+
+float height_at(ivec2 i) {
+	vec2 t = texelFetch(terrain_dm, i, 0).rg;
+	return (t.r * 255.0 + t.g * 65280.0) * 0.1;
+}
+
+float ground(vec2 p) {
+	if (terrain_grid.z <= 0.0) {
+		return 0.0;
+	}
+	ivec2 n = textureSize(terrain_dm, 0);
+	vec2 uv = (p - terrain_grid.xy) / terrain_grid.z;
+	if (uv.x < 0.0 || uv.y < 0.0 || uv.x >= float(n.x - 1) || uv.y >= float(n.y - 1)) {
+		return 0.0;
+	}
+	ivec2 i = ivec2(floor(uv));
+	vec2 f = uv - vec2(i);
+	float a = mix(height_at(i), height_at(i + ivec2(1, 0)), f.x);
+	float b = mix(height_at(i + ivec2(0, 1)), height_at(i + ivec2(1, 1)), f.x);
+	return mix(a, b, f.y);
+}
+
+void vertex() {
+	VERTEX.y = ground(VERTEX.xz) + GROUND_LIFT;
+}
+
+void fragment() {
+	ALBEDO = COLOR.rgb * night * (0.75 + 0.5 * wet);
+}
+"""
+
+static var _ground_glow_material: ShaderMaterial
+
 var verts := PackedVector3Array()
 var normals := PackedVector3Array()
 var colors := PackedColorArray()
@@ -471,6 +521,17 @@ static func glow_material() -> ShaderMaterial:
 	return _glow_material
 
 
+## The glow for light cast on the ground by something that moves over the
+## hills (headlight beams): each vertex sits on the ground under it.
+static func ground_glow_material() -> ShaderMaterial:
+	if _ground_glow_material == null:
+		var shader := Shader.new()
+		shader.code = GROUND_GLOW_SHADER
+		_ground_glow_material = ShaderMaterial.new()
+		_ground_glow_material.shader = shader
+	return _ground_glow_material
+
+
 ## `color` marked with a surface code (see GLOW_WINDOW and friends).
 static func glow(color: Color, code: float) -> Color:
 	return Color(color.r, color.g, color.b, code)
@@ -491,16 +552,25 @@ func light_pool(center: Vector3, radius: Vector2, color: Color, sides := 10) -> 
 		indices.append_array([base, base + 2, base + 1])
 
 
-## A beam of light on the ground from `from` along `dir` (headlights).
-func light_beam(from: Vector3, dir: Vector3, length: float, spread: float, color: Color) -> void:
+## A beam of light on the ground from `from` along `dir` (headlights), in
+## `pieces` lengths so that, drawn with ground_glow_material, it can bend
+## over the hills.
+func light_beam(from: Vector3, dir: Vector3, length: float, spread: float, color: Color, pieces := 1) -> void:
 	var side := Vector3(-dir.z, 0, dir.x)
 	var base := verts.size()
-	for p in [from - side * 0.3, from + side * 0.3, from + dir * length + side * spread, from + dir * length - side * spread]:
-		verts.append(xform * p)
-		normals.append(Vector3.UP)
-		uvs.append(Vector2.ZERO)
-	colors.append_array([color, color, Color.BLACK, Color.BLACK])
-	indices.append_array([base, base + 2, base + 1, base, base + 3, base + 2])
+	for k in pieces + 1:
+		var t := float(k) / pieces
+		var half := lerpf(0.3, spread, t)
+		var at := from + dir * length * t
+		for p in [at - side * half, at + side * half]:
+			verts.append(xform * p)
+			normals.append(Vector3.UP)
+			uvs.append(Vector2.ZERO)
+		var c := color.lerp(Color.BLACK, t)
+		colors.append_array([c, c])
+	for k in pieces:
+		var i := base + k * 2
+		indices.append_array([i, i + 3, i + 1, i, i + 2, i + 3])
 
 
 ## Thinner than this, a box is drawn as its two broad faces only (one face if

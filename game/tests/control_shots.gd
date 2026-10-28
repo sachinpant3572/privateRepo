@@ -57,8 +57,17 @@ func _run() -> void:
 		Controls.tilt_override = null
 	# The HUD's gear opens Settings straight away.
 	game.hud.settings_button.pressed.emit()
-	await _ui_frames(4)
+	await _ui_frames(90)
 	await _shot("controls_settings.png")
+	# Each tab, and the preview driving fast after a Drive zoom-out change.
+	var page = game.hud.phone.settings_page
+	page.steppers["Drive zoom-out"].get_meta("less").pressed.emit()
+	await _ui_frames(120)
+	await _shot("settings_driving.png")
+	for t in ["Graphics", "Controls", "Game"]:
+		page.show_tab(t)
+		await _ui_frames(4)
+		await _shot("settings_%s.png" % t.to_lower())
 	get_tree().quit()
 
 

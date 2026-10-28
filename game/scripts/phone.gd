@@ -3,9 +3,10 @@ extends Control
 ## Apps: Messages and Contacts (filled in as the story goes), Map (the full
 ## map), Places (shops and diners, with a waypoint to each), Missions
 ## (progress and replays), Cab (call a taxi, taxi.gd) and Settings
-## (graphics, weather, time, new game).
+## (settings_screen.gd: camera, graphics, controls, game, with a preview).
 
 const Places = preload("res://scripts/places.gd")
+const SettingsScreen = preload("res://scripts/settings_screen.gd")
 const BG := Color(0.07, 0.08, 0.11)
 const ACCENT := Color(1.0, 0.78, 0.25)
 
@@ -17,8 +18,8 @@ var _frame: PanelContainer
 var _title: Label
 var _body: VBoxContainer
 var _back: Button
-## The Camera steppers by name (Distance, Drive zoom-out, Angle), for tests.
-var steppers := {}
+## The Settings page, which covers the whole screen.
+var settings_page
 
 
 func _ready() -> void:
@@ -61,13 +62,18 @@ func _ready() -> void:
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	touch_scroll(scroll)
 	col.add_child(scroll)
 	_body = VBoxContainer.new()
 	_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_body.add_theme_constant_override("separation", 10)
 	scroll.add_child(_body)
 	_back = _button("CLOSE", func(): _on_back())
+	_back.mouse_filter = Control.MOUSE_FILTER_STOP
 	col.add_child(_back)
+	settings_page = SettingsScreen.new()
+	settings_page.phone = self
+	add_child(settings_page)
 
 
 func open() -> void:
@@ -92,6 +98,8 @@ func open_settings() -> void:
 
 
 func close() -> void:
+	settings_page.hide_page()
+	_frame.visible = true
 	visible = false
 	get_tree().paused = false
 
@@ -103,7 +111,14 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _on_back() -> void:
-	if _back.text == "CLOSE":
+	if settings_page.visible:
+		if settings_page._back.text == "CLOSE":
+			close()
+			return
+		settings_page.hide_page()
+		_frame.visible = true
+		_home()
+	elif _back.text == "CLOSE":
 		close()
 	else:
 		_home()
@@ -261,88 +276,10 @@ func _cab() -> void:
 	_body.add_child(status)
 
 
-func _turn_label() -> String:
-	var cam = game.camera
-	return "Camera turn: " + ("North up" if not cam.turn_view else "90° turns" if cam.turn_steps else "Follow")
-
-
+## Settings opens as its own full-screen page with a preview of the game.
 func _settings(back := "BACK") -> void:
-	_clear("Settings", back)
-	steppers.clear()
-	var s: Dictionary = game.settings
-	var cam = game.camera
-	_body.add_child(_text("Camera", 22, Color(0.75, 0.8, 0.9)))
-	var vb := _button("View: " + ("CLASSIC" if str(s.get("view")) == "classic" else "PERSPECTIVE"), Callable())
-	vb.pressed.connect(func():
-		s["view"] = "perspective" if str(s.get("view")) == "classic" else "classic"
-		game.apply_settings()
-		vb.text = "View: " + s["view"].to_upper())
-	_body.add_child(vb)
-	_stepper("Distance", "zoom", cam.ZOOMS, func(): return cam.zoom, func(v): return "%d%%" % roundi(v * 100.0))
-	_stepper("Drive zoom-out", "drive_zoom", cam.DRIVE_ZOOMS, func(): return cam.drive_zoom, func(v): return "Off" if v == 0.0 else "%d%%" % roundi(v * 100.0))
-	# Camera angle (perspective view only).
-	_stepper("Angle", "angle", cam.ANGLES, func(): return cam.base_pitch, func(v): return "%d°" % roundi(v))
-	var tilt_b := _button("Tilt near towers: " + ("ON" if cam.auto_tilt else "OFF"), Callable())
-	tilt_b.pressed.connect(func():
-		s["auto_tilt"] = not cam.auto_tilt
-		game.apply_settings()
-		tilt_b.text = "Tilt near towers: " + ("ON" if cam.auto_tilt else "OFF"))
-	_body.add_child(tilt_b)
-	var turn_b := _button(_turn_label(), Callable())
-	turn_b.pressed.connect(func():
-		# Follow -> 90° turns -> North up -> Follow.
-		s["camera_turn"] = "car" if not cam.turn_view else "north" if cam.turn_steps else "steps"
-		game.apply_settings()
-		turn_b.text = _turn_label())
-	_body.add_child(turn_b)
-	var reset_b := _button("Reset camera", Callable())
-	reset_b.pressed.connect(func():
-		s["angle"] = cam.PITCH_LOW
-		s["auto_tilt"] = true
-		s["zoom"] = 1.0
-		s["drive_zoom"] = 1.0
-		game.apply_settings()
-		tilt_b.text = "Tilt near towers: ON"
-		for row in steppers.values():
-			row.get_meta("refresh").call())
-	_body.add_child(reset_b)
-	_body.add_child(_text("Game", 22, Color(0.75, 0.8, 0.9)))
-	var db := _button("Detail: " + s.get("detail", "high").to_upper(), Callable())
-	db.pressed.connect(func():
-		s["detail"] = "low" if s.get("detail", "high") == "high" else "high"
-		game.apply_settings()
-		db.text = "Detail: " + s["detail"].to_upper())
-	_body.add_child(db)
-	_body.add_child(_toggle("Shadows", s.get("shadows", true), func(on): s["shadows"] = on; game.apply_settings()))
-	_body.add_child(_toggle("Show FPS", s.get("show_fps", true), func(on): s["show_fps"] = on; game.apply_settings()))
-	var weathers := ["auto", "clear", "rain", "storm"]
-	var wb := _button("Weather: " + s.get("weather", "auto").to_upper(), Callable())
-	wb.pressed.connect(func():
-		var i := (weathers.find(s.get("weather", "auto")) + 1) % weathers.size()
-		s["weather"] = weathers[i]
-		game.apply_settings()
-		wb.text = "Weather: " + weathers[i].to_upper())
-	_body.add_child(wb)
-	var cb := _button("Driving: " + Controls.SCHEME_NAMES[Controls.scheme], Callable())
-	cb.pressed.connect(func():
-		s["controls"] = Controls.SCHEMES[(Controls.SCHEMES.find(Controls.scheme) + 1) % Controls.SCHEMES.size()]
-		game.apply_settings()
-		cb.text = "Driving: " + Controls.SCHEME_NAMES[Controls.scheme])
-	_body.add_child(cb)
-	var tb := _button("Skip 3 hours (now %s)" % game.atmosphere.clock_text(), Callable())
-	tb.pressed.connect(func():
-		game.atmosphere.hour = fmod(game.atmosphere.hour + 3.0, 24.0)
-		tb.text = "Skip 3 hours (now %s)" % game.atmosphere.clock_text())
-	_body.add_child(tb)
-	var reset := _button("New game (erase progress)", Callable())
-	reset.pressed.connect(func():
-		if reset.text.begins_with("Tap again"):
-			game.missions.reset_progress()
-			close()
-			game.restart_story()
-		else:
-			reset.text = "Tap again to erase everything")
-	_body.add_child(reset)
+	_frame.visible = false
+	settings_page.show_page(back)
 
 
 # --- Widgets ---------------------------------------------------------------------
@@ -353,51 +290,11 @@ func _button(text: String, on_press: Callable) -> Button:
 	b.focus_mode = Control.FOCUS_NONE
 	b.custom_minimum_size = Vector2(0, 56)
 	b.add_theme_font_size_override("font_size", 20)
+	# A drag that starts on a button still scrolls its list (touch_scroll).
+	b.mouse_filter = Control.MOUSE_FILTER_PASS
 	if on_press.is_valid():
 		b.pressed.connect(on_press)
 	return b
-
-
-## A setting with - and + buttons either side of its value: `values` in
-## order, `now` reads the camera's current one, `shown` formats it. Steps
-## stop at the ends rather than wrapping round.
-func _stepper(label: String, key: String, values: Array, now: Callable, shown: Callable) -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	var name_l := _text(label, 20, Color.WHITE)
-	name_l.autowrap_mode = TextServer.AUTOWRAP_OFF
-	name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(name_l)
-	var less := _button("-", Callable())
-	var more := _button("+", Callable())
-	var value := _text("", 20, Color(1.0, 0.85, 0.4))
-	value.custom_minimum_size = Vector2(80, 0)
-	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	for b in [less, more]:
-		b.custom_minimum_size = Vector2(64, 56)
-	row.add_child(less)
-	row.add_child(value)
-	row.add_child(more)
-	var refresh := func():
-		var i := values.find(now.call())
-		value.text = shown.call(now.call())
-		less.disabled = i <= 0
-		more.disabled = i < 0 or i >= values.size() - 1
-	var step := func(by: int):
-		var i := clampi(values.find(now.call()) + by, 0, values.size() - 1)
-		game.settings[key] = values[i]
-		game.apply_settings()
-		refresh.call()
-	less.pressed.connect(step.bind(-1))
-	more.pressed.connect(step.bind(1))
-	row.set_meta("refresh", refresh)
-	row.set_meta("less", less)
-	row.set_meta("more", more)
-	row.set_meta("value", value)
-	refresh.call()
-	steppers[label] = row
-	_body.add_child(row)
-	return row
 
 
 func _toggle(label: String, on: bool, changed: Callable) -> Button:
@@ -417,3 +314,29 @@ func _text(t: String, size: int, color: Color) -> Label:
 	l.add_theme_color_override("font_color", color)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	return l
+
+
+## Makes a list easy to scroll with a finger: a wide bar with a solid grab
+## handle, a little slack before a touch counts as a drag, and a drag that
+## turns into a scroll cancels the button it began on, so scrolling never
+## presses anything.
+static func touch_scroll(scroll: ScrollContainer) -> void:
+	scroll.scroll_deadzone = 12
+	var bar := scroll.get_v_scroll_bar()
+	bar.custom_minimum_size = Vector2(26, 0)
+	var track := StyleBoxFlat.new()
+	track.bg_color = Color(1, 1, 1, 0.08)
+	track.set_corner_radius_all(10)
+	bar.add_theme_stylebox_override("scroll", track)
+	for state in [["grabber", 0.4], ["grabber_highlight", 0.55], ["grabber_pressed", 0.7]]:
+		var grab := StyleBoxFlat.new()
+		grab.bg_color = Color(1, 1, 1, state[1])
+		grab.set_corner_radius_all(10)
+		bar.add_theme_stylebox_override(state[0], grab)
+	scroll.scroll_started.connect(func():
+		# Disabling a button drops the press it was tracking.
+		for b in scroll.find_children("*", "BaseButton", true, false):
+			if b.button_pressed or b.is_hovered():
+				var was: bool = b.disabled
+				b.disabled = true
+				b.disabled = was)

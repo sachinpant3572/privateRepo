@@ -7,6 +7,7 @@ const Vehicle = preload("res://scripts/vehicle.gd")
 const Npc = preload("res://scripts/npc.gd")
 const VehicleKit = preload("res://scripts/kits/vehicle_kit.gd")
 const Terrain = preload("res://scripts/terrain.gd")
+const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const Population = preload("res://scripts/population.gd")
 const StreetPlan = preload("res://scripts/street_plan.gd")
 
@@ -37,10 +38,10 @@ func _run() -> void:
 		"test_camera_is_classic_top_down",
 		"test_perspective_camera",
 		"test_camera_turns_with_car",
-		"test_camera_ninety_turns",
+		"test_camera_ninety_turns", "test_settings_page_tabs_and_preview",
 		"test_punch_combo_ends_in_knockdown_kick",
 		"test_minimap_routes_to_waypoint", "test_state_map_shows_the_whole_state",
-		"test_night_lights_the_city",
+		"test_night_lights_the_city", "test_headlights_follow_the_ground",
 		"test_homecoming_runs_start_to_finish",
 		"test_failed_mission_can_be_retried",
 		"test_empty_rooms_phone_and_clues",
@@ -778,17 +779,19 @@ func test_perspective_camera() -> void:
 	_check(absf(cam.size - cam.FOOT_SIZE * 1.3) < 0.5 and game.city.LOAD_RADIUS > 130.0, "Zoom 130%% frames %.1f m on foot and loads cells to %.0f m" % [cam.size, game.city.LOAD_RADIUS])
 	game.settings["zoom"] = 1.0
 	game.apply_settings()
-	# Settings > Angle and Tilt near towers, driven from the phone, and Reset
-	# camera putting angle, tilt, distance and drive zoom-out back.
+	# Settings > Angle and Look down near towers, driven from the phone, and
+	# Reset camera putting angle, tilt, distance and drive zoom-out back.
 	var phone = game.hud.phone
 	phone.open()
 	phone._settings()
-	var angle_s = phone.steppers.get("Angle")
-	var zoom_s = phone.steppers.get("Distance")
-	var drive_s = phone.steppers.get("Drive zoom-out")
-	var tilt_b = _find_button(phone._body, "Tilt near towers: ")
-	var reset_b = _find_button(phone._body, "Reset camera")
-	_check(angle_s != null and zoom_s != null and drive_s != null and tilt_b != null and reset_b != null and angle_s.get_meta("value").text == "65°" and zoom_s.get_meta("value").text == "100%" and drive_s.get_meta("value").text == "100%", "Settings has Distance (100%), Drive zoom-out (100%), Angle (65°), Tilt near towers and Reset camera")
+	var page = phone.settings_page
+	page.show_tab("Camera")
+	var angle_s = page.steppers.get("Angle")
+	var zoom_s = page.steppers.get("Distance")
+	var drive_s = page.steppers.get("Drive zoom-out")
+	var tilt_b = _find_button(page, "Look down near towers: ")
+	var reset_b = _find_button(page, "Reset camera")
+	_check(angle_s != null and zoom_s != null and drive_s != null and tilt_b != null and reset_b != null and angle_s.get_meta("value").text == "65°" and zoom_s.get_meta("value").text == "100%" and drive_s.get_meta("value").text == "100%", "Settings > Camera has Distance (100%), Drive zoom-out (100%), Angle (65°), Look down near towers and Reset camera")
 	if angle_s != null and zoom_s != null and drive_s != null and tilt_b != null and reset_b != null:
 		for n in 4:
 			angle_s.get_meta("less").pressed.emit()
@@ -1279,9 +1282,10 @@ func test_camera_ninety_turns() -> void:
 	var opened: int = phone.open_count
 	game.hud.settings_button.pressed.emit()
 	await _frames(1)
-	_check(phone.visible and phone._title.text == "Settings" and phone.open_count == opened, "the HUD gear opens Settings (and does not count as checking the phone)")
+	_check(phone.visible and phone.settings_page.visible and phone.open_count == opened, "the HUD gear opens Settings (and does not count as checking the phone)")
+	phone.settings_page.show_tab("Camera")
 	var turn_b: Button = null
-	for b in phone.find_children("*", "Button", true, false):
+	for b in phone.settings_page.find_children("*", "Button", true, false):
 		if b.text.begins_with("Camera turn"):
 			turn_b = b
 	var seen := []
@@ -1296,6 +1300,118 @@ func test_camera_ninety_turns() -> void:
 	game.apply_settings()
 	phone.close()
 	await _frames(1)
+
+func test_settings_page_tabs_and_preview() -> void:
+	await _new_game(false)
+	var cam = game.camera
+	var phone = game.hud.phone
+	var page = phone.settings_page
+	game.hud.settings_button.pressed.emit()
+	await _idle(2)
+	_check(page.visible and not phone._frame.visible and get_tree().paused and page._back.text == "CLOSE", "the gear opens the full-screen Settings page with the game paused")
+	_check(cam.process_mode == Node.PROCESS_MODE_ALWAYS and page.preview.render_target_update_mode == SubViewport.UPDATE_ALWAYS and page.get_viewport().disable_3d, "while it is open the camera runs, the preview draws and the hidden game view does not")
+	# Every tab, each setting with a line under it saying what it does.
+	var want := {"Camera": ["View: ", "Look down near towers: ", "Camera turn: ", "Reset camera", "Distance", "Drive zoom-out", "Angle"],
+		"Graphics": ["Detail: ", "Shadows: ", "Show FPS: ", "FPS limit"],
+		"Controls": ["Driving: "],
+		"Game": ["Weather: ", "Skip 3 hours", "New game"]}
+	for t in page.TABS:
+		page.show_tab(t)
+		await _idle(1)
+		var missing := []
+		for w in want[t]:
+			if _find_button(page._list, w) == null and not page.steppers.has(w):
+				missing.append(w)
+		var hinted := true
+		var kids: Array = page._list.get_children()
+		for i in range(0, kids.size(), 3):
+			hinted = hinted and kids[i + 1] is Label and kids[i + 1].text.length() > 20
+		_check(missing.is_empty() and hinted and kids.size() == want[t].size() * 3 and page._tabs[t].button_pressed, "tab %s has its settings, each with a hint (missing %s)" % [t, missing])
+	# The preview follows a change while the game stays paused.
+	page.show_tab("Camera")
+	var spot: Vector3 = game.player.global_position
+	var before: float = cam.size
+	page.steppers["Distance"].get_meta("more").pressed.emit()
+	page.steppers["Distance"].get_meta("more").pressed.emit()
+	await _idle(150)
+	_check(cam.zoom == 1.3 and cam.size > before * 1.2 and absf(page.preview_cam.size - cam.size) < 0.01 and page.preview_cam.global_transform.origin.distance_to(cam.global_transform.origin) < 0.01 and get_tree().paused and game.player.global_position.distance_to(spot) < 0.01, "Distance 130%% eases the paused view out from %.1f to %.1f m, and the preview matches it" % [before, cam.size])
+	var foot: float = cam.size
+	page.steppers["Drive zoom-out"].get_meta("less").pressed.emit()
+	await _idle(150)
+	_check(cam.preview_drive and page._drive_b.text.ends_with("Driving fast") and cam.size > foot * 1.5, "touching Drive zoom-out previews driving fast (%.1f m at 75%%)" % cam.size)
+	page._drive_b.pressed.emit()
+	await _idle(150)
+	_check(not cam.preview_drive and absf(cam.size - foot) < 1.0, "Preview: As now goes back to the walking view (%.1f m)" % cam.size)
+	# FPS limit.
+	page.show_tab("Graphics")
+	var fps = page.steppers.get("FPS limit")
+	_check(fps != null and fps.get_meta("value").text == "120" and fps.get_meta("more").disabled, "FPS limit starts at 120, the top of the list")
+	fps.get_meta("less").pressed.emit()
+	fps.get_meta("less").pressed.emit()
+	_check(game.settings["fps_limit"] == 75 and game.fps_limit() == 75 and fps.get_meta("value").text == "75" and Engine.max_fps == 0, "FPS limit - twice gives 75 (headless runs stay uncapped)")
+	for n in 5:
+		fps.get_meta("less").pressed.emit()
+	_check(game.fps_limit() == 30 and fps.get_meta("less").disabled, "and stops at 30")
+	var odd := []
+	for v in [45, "60", null, 90.0]:
+		game.settings["fps_limit"] = v
+		odd.append(game.fps_limit())
+	_check(odd == [120, 120, 120, 90], "a saved limit not on the list loads as 120: %s" % [odd])
+	game.settings["fps_limit"] = 120
+	# Scrolling: buttons let drags through to the list, and a drag that
+	# becomes a scroll cancels the button it began on.
+	var stops := 0
+	for b in page._list.find_children("*", "BaseButton", true, false) + phone._body.find_children("*", "BaseButton", true, false):
+		if b.mouse_filter != Control.MOUSE_FILTER_PASS:
+			stops += 1
+	_check(stops == 0 and page._scroll.get_v_scroll_bar().custom_minimum_size.x >= 26 and page._scroll.scroll_deadzone > 0, "list buttons pass drags to their scroll, which has a wide bar")
+	await _idle(2)
+	var db = _find_button(page._list, "Detail: ")
+	# Window pixels (the headless window is tiny and stretched).
+	var at: Vector2 = get_viewport().get_final_transform() * db.get_global_rect().get_center()
+	await _tap(at, false)
+	_check(game.settings["detail"] == "low" and db.text == "Detail: LOW" and db.size.x > 400, "a tap on Detail switches it (the button spans the list, %.0f px)" % db.size.x)
+	await _tap(at, true)
+	_check(game.settings["detail"] == "low", "a drag that scrolls the list does not")
+	await _tap(at, false)
+	# BACK, from the phone's own Settings app, returns to the apps.
+	phone.close()
+	phone.open()
+	phone._settings()
+	_check(page.visible and page._back.text == "BACK", "the phone's Settings app opens the page with BACK")
+	phone._on_back()
+	_check(phone.visible and not page.visible and phone._frame.visible and get_tree().paused and not page.get_viewport().disable_3d, "BACK returns to the phone's apps and draws the game again")
+	phone.close()
+	_check(not get_tree().paused and cam.process_mode == Node.PROCESS_MODE_INHERIT and page.preview.render_target_update_mode == SubViewport.UPDATE_DISABLED and not cam.preview_drive, "closing puts the camera back to pausing with the game and stops the preview")
+	game.settings["zoom"] = 1.0
+	game.settings["drive_zoom"] = 1.0
+	game.apply_settings()
+
+
+## Presses and releases the left button at `at`; `scroll` has the list start
+## a drag-scroll in between.
+func _tap(at: Vector2, scroll: bool) -> void:
+	var page = game.hud.phone.settings_page
+	var ev := InputEventMouseButton.new()
+	ev.button_index = MOUSE_BUTTON_LEFT
+	ev.position = at
+	ev.global_position = at
+	ev.pressed = true
+	get_viewport().push_input(ev)
+	await _idle(1)
+	if scroll:
+		page._scroll.scroll_started.emit()
+	var up: InputEventMouseButton = ev.duplicate()
+	up.pressed = false
+	get_viewport().push_input(up)
+	await _idle(1)
+
+
+## Waits `n` drawn frames (these run while the game is paused).
+func _idle(n: int) -> void:
+	for i in n:
+		await get_tree().process_frame
+
 
 func test_punch_combo_ends_in_knockdown_kick() -> void:
 	await _new_game(false)
@@ -1387,6 +1503,40 @@ func test_night_lights_the_city() -> void:
 	game.atmosphere.hour = 12.0
 	await _frames(5)
 	_check(not game.city.glow_visible, "lamp pools are off by day")
+
+
+## Head and tail lights lie on the ground, so they show on hills too (they
+## were flat at the car's height and sank into the road going uphill).
+func test_headlights_follow_the_ground() -> void:
+	await _new_game(false)
+	game.atmosphere.hour = 22.0
+	var tex: Texture2D = Terrain.height_texture
+	_check(tex != null and tex.get_width() == Terrain.nx and tex.get_height() == Terrain.ny, "the country height grid is handed to the shaders (%dx%d, %.0f m cells)" % [Terrain.nx, Terrain.ny, Terrain.cell])
+	# The texture holds the heights the shader reads back, to the decimetre.
+	var img := tex.get_image()
+	var top := 0
+	for k in Terrain.heights.size():
+		if Terrain.heights[k] > Terrain.heights[top]:
+			top = k
+	var worst := 0.0
+	for k in [top, top + 1, Terrain.nx * (Terrain.ny / 2) + Terrain.nx / 3, Terrain.heights.size() - 1]:
+		var px := img.get_pixel(k % Terrain.nx, k / Terrain.nx)
+		var h := (roundf(px.r * 255.0) + roundf(px.g * 255.0) * 256.0) * 0.1
+		worst = maxf(worst, absf(h - Terrain.heights[k]))
+	_check(Terrain.heights[top] > 50.0 and worst < 0.06, "decoded heights match the grid (top %.1f m, worst error %.2f m)" % [Terrain.heights[top], worst])
+	var at := Vector2(760, -1150)
+	var pos := Vector3(at.x, Terrain.height(at.x, at.y), at.y)
+	game.city.stream_now(pos)
+	game.player.global_position = pos + Vector3(6, 0, 0)
+	var car = Vehicle.new()
+	car.kind = "sedan"
+	game.add_child(car)
+	car.global_position = pos
+	car.driver = Vehicle.Driver.PLAYER
+	await _frames(10)
+	var beams: MeshInstance3D = car._beams
+	_check(beams.visible and beams.material_override == MeshBuilder.ground_glow_material() and beams.get_child(0).material_override == MeshBuilder.glow_material(), "at night the beams and tail pool are drawn on the ground; the lamp glows stay at the lamps")
+	car.queue_free()
 
 
 func test_homecoming_runs_start_to_finish() -> void:

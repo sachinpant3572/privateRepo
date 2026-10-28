@@ -43,11 +43,16 @@ phone.
   Contacts that fill in with the story, the Map, Places (nearest first,
   open or closed, GO sets a waypoint), Missions (progress and
   replays) and Settings. The gear button under the clock (always shown, even
-  before the phone is unlocked) opens Settings straight away: Camera (view,
-  Distance 60-130%, Drive zoom-out Off-100%, Angle 40-90° with - and +
-  buttons, tilt near towers, camera turn, reset) and Game (detail
-  high/low, shadows, FPS counter, weather, driving layout, skip time, new
-  game).
+  before the phone is unlocked) opens Settings straight away. Settings is a
+  full-screen page with tabs, a line under each setting saying what it
+  does, and a live preview of the game view beside the list (the game stays
+  paused; "Preview: Driving fast" shows the view at full speed, and touching
+  Drive zoom-out switches to it). Camera: view, Distance 60-130%, Drive
+  zoom-out Off-100%, Angle 40-90° with - and + buttons, look down near
+  towers (among tall buildings the camera tips further down, up to 85°, then
+  back to your Angle), camera turn, reset. Graphics: detail high/low,
+  shadows, FPS limit (30, 60, 75, 90, 120), FPS counter. Controls: driving
+  layout. Game: weather, skip time, new game.
 - **Minimap and full map**: round north-up minimap with landmark icons,
   mission blips (on the rim when off the map), police while wanted and the
   GPS route; tap it (or M) for the full map: pan, pinch or scroll to zoom,
@@ -313,7 +318,7 @@ phone.
 
 Tab toggles the on-screen controls on desktop.
 
-Driving has three layouts, picked in Phone > Settings > Driving and saved:
+Driving has three layouts, picked in Settings > Controls and saved:
 
 - **Stick + pedals** (default): the car heads where the stick points, as on
   foot, with a corner assist that slows for tight turns. GAS alone drives
@@ -331,8 +336,9 @@ Driving has three layouts, picked in Phone > Settings > Driving and saved:
 Install `build/solvera-prototype-debug.apk` (built by `tools/build_apk.sh`, arm64,
 debug-signed). Android will ask you to allow installing from that source.
 
-If a low-end phone struggles at night or in the rain, set Phone > Settings >
-Detail to LOW (flat colours, lighter rain) or turn shadows off.
+If a low-end phone struggles at night or in the rain, set Settings >
+Graphics > Detail to LOW (flat colours, lighter rain) or turn shadows off; a
+lower FPS limit there saves battery and heat.
 
 ## Develop in a cloud session
 
@@ -355,7 +361,7 @@ The same command with `res://tests/gallery.tscn` renders the asset gallery
 dialogue, with `res://tests/place_shots.tscn` the storefronts by day
 and night, the rooms, the shop menu, a diner meal and the Places app, and
 with `res://tests/control_shots.tscn` the touch controls on foot and in
-each driving layout, and with `res://tests/map_shots.tscn` the full map
+each driving layout and every Settings tab, and with `res://tests/map_shots.tscn` the full map
 zoomed out to the state and on the countryside, a tap on a closed place,
 and the minimap past the city's edge, with `res://tests/country_shots.tscn`
 the country (suburbs, Brisa Beach, towns, farms, bridges, barricades, the
@@ -376,7 +382,7 @@ at the Aurum Tower, Midtown and Lantern Square, on foot and driving (80),
 the perspective camera backed out of a tower and with the view band
 turning buildings round the player see-through (81), and driving flat out
 east and north through Midtown and past the Aurum Tower (82), and Settings > Angle at
-45, 55, 65, 75 and 90° with tilt off at the Aurum Tower and Lantern Square (83), and the camera turning with the car flat out east, south and west (84). `res://tests/occlusion_probe.tscn`
+45, 55, 65, 75 and 90° with tilt off at the Aurum Tower and Lantern Square (83), and the camera turning with the car flat out east, south and west (84). `SHOTS=lights` shows a car's headlights at night on the flat and up and down the hills (86). `res://tests/occlusion_probe.tscn`
 (headless) measures how much of the hero and the street each camera
 setting hides (HANDOFF-perspective-camera.md).
 
