@@ -408,6 +408,58 @@ arcade (R-11), the tow truck (R-16) and heists (R-23).
 The full design, its anti-exploit rules and a simulation that proves them are in
 `STOCK_MARKET_DESIGN.md` and `tools/stock_market_sim.py`.
 
+### 4.13 GTA III, the Liberty City games, Watch Dogs and Sleeping Dogs: what they add (pass of 2026-10-28)
+
+Sachin asked to check GTA III, Watch Dogs, Sleeping Dogs and "GTA Liberty City" too. Two games
+are set in Liberty City besides GTA III: **Liberty City Stories** (LCS) and **GTA IV**, with its
+episodes The Lost and Damned (TLAD) and The Ballad of Gay Tony (TBoGT). For Watch Dogs, this pass
+covers Watch Dogs 1 and Legion; Watch Dogs 2 is already in section 1. Same rule as 4.11: only what
+is not already planned. All facts come from guide and wiki search summaries (2 [A23]-[A28]).
+
+**Already in our plans, so not repeated here**:
+- GTA III and LCS (2 [A23][A24]): the taxi, paramedic, firefighter and vigilante jobs (R-9,
+  R-16); 100 hidden packages (R-7); RC Toyz (4.5); payphone jobs (4.11); the off-road and
+  car-park checkpoint challenges (E3, R-14); the export lists (4.11, daily wanted-car list).
+- GTA IV and its episodes (2 [A25]): friends who call for bowling, pool, darts, food, a show or a
+  boat ride (R-24, 4.2); club management (4.4); golf (2.3); arm wrestling (4.11).
+- Watch Dogs (2 [A26][A27]): races in many vehicle types (2.8); deliveries (R-16); darts (R-21);
+  chess (4.1); the investigator cases (4.3); Watch Dogs 1's "Digital Trips" surreal games
+  (our own café games, 2.10).
+- Sleeping Dogs (2 [A28]): street races (2.8), fight clubs (2.4 fight nights), karaoke (2.1),
+  jade statues that unlock moves (2.9), lockboxes (hidden packages), and people asking for
+  favours (R-5 random events).
+
+| Idea | From (label, source) | Solvera version | Engine / needs |
+|---|---|---|---|
+| **Car salesman** | LCS "Car Salesman": sell 24 cars over 6 levels by test drives that match each buyer's taste; then the lot pays a daily profit (2 [A24]) | A used-car lot in Ironwharf. Each buyer wants something: "smooth" (no bumps), "show me speed", "make me scream" (jumps). Drive well and they buy. Finish the 6 levels and the lot becomes a business on E6 | E5, then E6 |
+| **Dumpster dash** | LCS: three hidden Trashmaster missions, empty the dumpsters against the clock (2 [A24]) | A sanitation route in the Floodline Wards: a garbage truck, dumpsters on a timer, and storm-debris bonus piles. A cheap shift job | E5 |
+| **Lowrider bounce-off** | LCS "Low Rider Rumble" (2 [A24]); SA's bounce challenge is in roadmap 1.1, but in no package yet | A hydraulics rhythm contest at the car meet: hit the bounces on the beat of an AI track. The same beats as E2 | E2, car meet (4.11) |
+| **Studio gauntlet show** | LCS "Slash TV": survive waves in a TV studio (2 [A24]). Kept, but **non-lethal** | A TV obstacle show in the Gilt District: foam bats, paint guns, a spinning floor, a shouting host. A foot version of 4.11's arena car show; knocks people down, never kills | combat, R-19 |
+| **Crimes detected** | Watch Dogs 1: the phone flags a likely victim; you wait, see who strikes, then stop the crime (2 [A26]) | A "Street Cam" phone app from a hacker friend. It marks someone at risk; you watch from a distance, pick the right suspect from the crowd, then chase or tackle them. Bring them down **alive** for a bonus | R-5, R-9, the coding class (4.6) |
+| **Spot-the-suspect camera busts** | Sleeping Dogs: hack a camera, watch the footage at home, pick out the dealer, then make the bust (2 [A28]) | Same loop with **contraband**, not drugs: fake designer goods, stolen phones, illegal fireworks. Spot the courier on the camera feed, then raid the spot | E1 camera puzzle, R-20 |
+| **Convoy takedowns** | Watch Dogs 1 "Criminal Convoys": stop a convoy, take down the target (2 [A26]) | Aurum or Halberd armoured convoys on the Gilt District roads, or Marrow Krewe smuggling convoys from Ironwharf. Plan an ambush point, then box in the target car | R-19, R-20 |
+| **Hideout takedowns** | Watch Dogs 1 "Gang Hideouts": take out the leader **non-lethally** (2 [A26]) | Faction hideouts (warehouses, a bayou camp, a rooftop) where you knock out the boss without raising the alarm. Each cleared hideout weakens that faction's turf (R-22) | stealth stat (R-17), R-22 |
+| **Camera-mast puzzles** | Watch Dogs 1 ctOS towers: a short puzzle that reveals the area (2 [A26]) | One relay mast per district. Climb it and solve a short node-turning puzzle (E1) to show that district's activities on the map. Teaches the city | E1, map |
+| **AR phone games** | Watch Dogs 1 AR games such as Cash Run, played on the real streets (2 [A26]) | Phone games played on Bellerive's real streets: "Coin Rush" (run through coins between two points), "Gator Tag" (shoot cartoon gators that pop out of the drains). Points go to the challenge board (4.9) | E3, phone |
+| **Hit-and-run chases** | Sleeping Dogs: a police friend sends you after hit-and-run drivers (2 [A28]) | A detective friend calls in a driver who fled a crash. Find them from witness hints, then ram them to a stop. Ties to the bail bonds work (4.11) | E3, R-5, R-24 |
+| **Keepy-uppy** | Watch Dogs Legion "Kick-Ups" (2 [A27]) | A tap-on-time football juggle in parks and on the beach. Tiny; leads to football later (Porto Brisa) | E2 |
+| **Air hockey** | GTA IV TBoGT and TLAD (2 [A25]) | Tables in bars, the arcade and your own gaming café. One finger, two minutes, good with friends | E1 |
+| **Comedy club and cabaret** | GTA IV friend shows: a comedy club and a cabaret (2 [A25]) | A Lantern Quarter comedy club and a cabaret night with **fictional acts** whose jokes react to your deeds and the city news. Take a friend; it raises friendship (R-24) | R-10 venue, R-13 news |
+| **Recruit from the street** | Watch Dogs Legion: recruit anyone in the city (2 [A27]) | Not playable as anyone (Jules stays the hero). Some NPCs you help become **crew** you can call: a mechanic, a hacker, a driver, a lookout. Each one has a perk for heists and turf | R-22, R-23, E8 |
+| **Street-art pasting** | Watch Dogs Legion: 47 paste-up spots (2 [A27]) | Paste posters satirising Aurum at marked spots; each one cuts Aurum's grip on that block slightly and joins the graffiti editor (4.8) | E7, 4.8 |
+| **Drink before darts** | Watch Dogs Legion: a pint before darts pays more (2 [A27]); GTA IV drinking with friends (2 [A25]) | Swapped for a non-alcohol version: a **lucky soda** or a hot-sauce dare before darts adds wobble and doubles the stake. See "keep out" for alcohol | E4 |
+
+**Keep out**, from the same games:
+- Watch Dogs 1's privacy invasions (peeking into homes through cameras): voyeurism, so cameras
+  in Solvera only show streets and crime spots;
+- Watch Dogs 1's poker and shell game (gambling decision), its drinking game, and its
+  human-trafficking strand;
+- Sleeping Dogs' health shrines (a religious site) and cockfighting (animal cruelty);
+- LCS's Slash TV chainsaw gore (kept only as the non-lethal studio show above);
+- GTA IV's friend shows with real comedians (Solvera uses fictional acts);
+- drinking games and drunk-driving effects: alcohol is kept as bar scenery, with a soda swap for
+  minigames, unless Sachin says otherwise.
+
 ## 5. Picking: the next wave after the roadmap's first wave
 
 Scored the same way as the roadmap: liveliness (1-5) divided by cost. Most rows build on the
@@ -537,3 +589,23 @@ depends on, including later ones.
   https://gameluster.com/?p=140202
 - [A22] GTA VI regions: https://gameinformer.com/2025/05/06/rockstar-shows-off-six-major-areas-of-vice-city-in-grand-theft-auto-vi ·
   https://www.gamerguides.com/grand-theft-auto-vi/news/regions-of-grand-theft-auto-vi
+- [A23] GTA III side missions: https://gtabase.com/gta-3/side-missions ·
+  https://www.igrandtheftauto.com/gta3/guides/side-missions ·
+  https://www.igrandtheftauto.com/gta3/guides/100-percent-completion-checklist
+- [A24] GTA Liberty City Stories side missions (Car Salesman, Trash Dash, Low Rider Rumble, Slash TV):
+  https://gtabase.com/gta-liberty-city-stories/missions/ ·
+  https://gta.wiki/w/Missions_in_GTA_Liberty_City_Stories ·
+  https://www.igrandtheftauto.com/gtalcs/guides/vehicle-sub-missions
+- [A25] GTA IV, TLAD and TBoGT friend activities: https://gta.wiki/w/Friendships_in_GTA_IV ·
+  https://gta.wiki/w/Friendships_in_The_Ballad_of_Gay_Tony ·
+  https://bloxodes.com/gta/wiki/gta-4-tlad/activities ·
+  https://www.gamepressure.com/grandtheftautoiv/friends/z9125a
+- [A26] Watch Dogs 1 side missions and minigames: https://www.gamepressure.com/watchdogs/activities-and-hints/z0631f ·
+  https://www.dualshockers.com/watch_dogs-side-missions-and-mini-games/ ·
+  https://www.honestgamers.com/guides/watch-dogs/4/read/137.html
+- [A27] Watch Dogs Legion activities: https://powerpyx.com/watch-dogs-legion-all-darts-locations ·
+  https://windowscentral.com/watch-dogs-legion-vuide-minigames-how-play-them ·
+  https://www.giga.de/galerie/watch-dogs-legion-alle-47-paste-up-orte-fundorte-auf-der-karte/
+- [A28] Sleeping Dogs side activities: https://www.trueachievements.com/game/Sleeping-Dogs/walkthrough/6 ·
+  https://www.gamepressure.com/sleepingdogs/secondary-missions/z23ee5 ·
+  https://segmentnext.com/sleeping-dogs-all-random-events
