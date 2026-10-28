@@ -48,6 +48,27 @@ const ASPHALT := Color(0.27, 0.27, 0.29)
 const OLD_ASPHALT := Color(0.33, 0.33, 0.33)
 const DIRT := Color(0.52, 0.42, 0.31)
 const GRAVEL := Color(0.6, 0.57, 0.51)
+## Road surfaces, as the city's (CityCells.ROAD_LOOKS): [colour, pattern
+## code, how far the paint has faded, share of the dashes worn away]; the
+## tarmac's shade sets how cracked the shader draws it.
+const ROAD_LOOKS := {
+	"fresh": [Color(0.165, 0.165, 0.18), MeshBuilder.ASPHALT, 0.0, 0.0],
+	"worn": [Color(0.3, 0.3, 0.305), MeshBuilder.ASPHALT, 0.2, 0.05],
+	"washed": [Color(0.42, 0.41, 0.39), MeshBuilder.ASPHALT, 0.5, 0.3],
+	"gravel": [GRAVEL, 1.0, 0.0, 1.0],
+	"dirt": [DIRT, 1.0, 0.0, 1.0],
+}
+## Shares of each surface by road class: farm tracks dirt or gravel, lanes
+## old tarmac or gravel, county roads worn or washed out, the big roads
+## mostly sound.
+const ROAD_MIX := {
+	"freeway": {"fresh": 45, "worn": 50, "washed": 5}, "highway": {"fresh": 40, "worn": 50, "washed": 10},
+	"avenue": {"fresh": 30, "worn": 50, "washed": 20}, "street": {"fresh": 30, "worn": 45, "washed": 25},
+	"road": {"fresh": 15, "worn": 45, "washed": 40}, "lane": {"worn": 30, "washed": 35, "gravel": 35},
+	"track": {"dirt": 60, "gravel": 40},
+}
+## Edges of a road resurfaced together (a long road changes along its way).
+const ROAD_STRETCH := 10
 const PAVEMENT := Color(0.58, 0.56, 0.52)
 const CURB := Color(0.66, 0.65, 0.63)
 const MARKING := Color(0.92, 0.8, 0.3)
@@ -274,10 +295,13 @@ static func _strip(c, e: int, h0: float, h1: float, s0 := 0.0, s1 := 0.0) -> Pac
 	return _cw(PackedVector2Array([pa + ma * h0, pb + mb * h0, pb + mb * h1, pa + ma * h1]))
 
 
-static func _dashes(mb, s0: float, run: float, z: float, color: Color, lift := 0.0) -> void:
+## Dashes along the frame's x at offset z, `drop` of them (by a hash of
+## where they are) worn away.
+static func _dashes(mb, s0: float, run: float, z: float, color: Color, lift := 0.0, drop := 0.0) -> void:
 	var t := s0 + 1.5
 	while t < s0 + run - 3.0:
-		mb.box(Vector3(t + 1.5, 0.01 + lift, z), Vector3(3.0, 0.02, 0.16), color)
+		if drop <= 0.0 or fposmod(sin(t * 12.9898 + z * 78.233) * 43758.5453, 1.0) >= drop:
+			mb.box(Vector3(t + 1.5, 0.01 + lift, z), Vector3(3.0, 0.02, 0.16), color)
 		t += 7.0
 
 
@@ -500,8 +524,9 @@ static func _road(ctx: Ctx, e: int) -> void:
 	var h := w * 0.5
 	var mb = ctx.mb
 	var bridge: bool = c.bridge_edges.has(e)
-	var surface := DIRT if cls == "track" else (OLD_ASPHALT if cls == "lane" else ASPHALT)
-	var road_color := MeshBuilder.glow(surface, MeshBuilder.ASPHALT) if cls != "track" else surface
+	var look: Array = ROAD_LOOKS[road_surface(c, e)]
+	var road_color := MeshBuilder.glow(look[0], look[1])
+	var paint_from: int = mb.verts.size()
 	if bridge:
 		_bridge(ctx, e, a, b, w)
 	else:
@@ -519,6 +544,7 @@ static func _road(ctx: Ctx, e: int) -> void:
 		var lanes := int(geo.get("lanes", 0))
 		var lane_w := float(geo.get("lane_w", 0.0))
 		var middle := float(geo.get("middle", 0.0))
+		var drop: float = look[3]
 		match cls:
 			"freeway", "highway":
 				# A painted median between two yellow lines, dashes between
@@ -527,18 +553,20 @@ static func _road(ctx: Ctx, e: int) -> void:
 					_line(mb, s0, run, side * (middle - 0.15), MARKING, piece, lift)
 					_line(mb, s0, run, side * (middle + lanes * lane_w + 0.15), WHITE_LINE, piece, lift)
 					for j in range(1, lanes):
-						_dashes(mb, s0, run, side * (middle + lane_w * j), WHITE_LINE, lift)
+						_dashes(mb, s0, run, side * (middle + lane_w * j), WHITE_LINE, lift, drop)
 			"avenue", "street":
 				for z in [-0.12, 0.12]:
 					_line(mb, s0, run, z, MARKING, piece, lift)
 				for side in [-1.0, 1.0]:
 					for j in range(1, lanes):
-						_dashes(mb, s0, run, side * (middle + lane_w * j), WHITE_LINE, lift)
+						_dashes(mb, s0, run, side * (middle + lane_w * j), WHITE_LINE, lift, drop)
 			"road":
-				_dashes(mb, s0, run, 0.0, MARKING, lift)
+				_dashes(mb, s0, run, 0.0, MARKING, lift, drop)
 				for side in [-1.0, 1.0]:
 					_line(mb, s0, run, side * (h - 0.5), WHITE_LINE, piece, lift)
 		mb.xform = Transform3D.IDENTITY
+		# Paint as old as the road under it.
+		mb.fade_colors(paint_from, [MARKING, WHITE_LINE], look[0], look[2])
 	if bridge:
 		return
 	if cls in LIGHT_CLASSES:
@@ -570,6 +598,24 @@ static func _road(ctx: Ctx, e: int) -> void:
 				if q != Vector2.INF and q.distance_to(p) < 60.0:
 					next = _v3(q)
 			Props.power_pole(mb, ctx.props, _v3(p), next)
+
+
+## The surface of country edge e (ROAD_LOOKS): by its class (ROAD_MIX) and a
+## hash of its road and which stretch of it the edge is on.
+static func road_surface(c, e: int) -> String:
+	var cls: String = c.edge_class(e)
+	var mix: Dictionary = ROAD_MIX.get(cls, ROAD_MIX["street"])
+	var road: int = c.edge_road[e]
+	var k: int = e - int(c.roads[road].e0)
+	var total := 0
+	for kind in mix:
+		total += int(mix[kind])
+	var roll := posmod(hash([road, k / ROAD_STRETCH, "surface"]), total)
+	for kind in mix:
+		roll -= int(mix[kind])
+		if roll < 0:
+			return kind
+	return "worn"
 
 
 static func _pole_at(c, e: int, h: float) -> Vector2:
@@ -612,15 +658,18 @@ static func _junctions(ctx: Ctx) -> void:
 		if not ctx.rect.has_point(p) or not _is_junction(c, n) or c.links.has(n):
 			continue
 		var w := 0.0
-		var dirt := true
+		var widest := -1
 		var bridge := false
 		for e in c.edges_of(n):
-			w = maxf(w, c.edge_width(e))
-			dirt = dirt and c.edge_class(e) == "track"
+			if c.edge_width(e) > w:
+				w = c.edge_width(e)
+				widest = e
 			bridge = bridge or c.bridge_edges.has(e)
-		if bridge:
+		if bridge or widest < 0:
 			continue
-		var color := DIRT if dirt else MeshBuilder.glow(ASPHALT, MeshBuilder.ASPHALT)
+		# The pad takes the surface of the widest road through it.
+		var look: Array = ROAD_LOOKS[road_surface(c, widest)]
+		var color := MeshBuilder.glow(look[0], look[1])
 		_flat(ctx, _circle(p, w * 0.5 + 0.6, 14), ROAD_Y + 0.003, color)
 
 
@@ -670,6 +719,7 @@ static func _lot(ctx: Ctx, i: int) -> void:
 	var o0 := ctx.out.size()
 	Kit.reach = l[9] if l.size() > 9 else [0.0, 0.0, 0.0]
 	Kit.wealth = int(l[10]) if l.size() > 10 else -1
+	Kit.zone = str(l[7]) if l.size() > 7 else ""
 	Kit.route_step = 1.0 if ctx.hill else 0.0
 	Kit.route_out_verts.clear()
 	Kit.live_cars = str(l[7]) in LIVE_CAR_ZONES
@@ -697,6 +747,7 @@ static func _lot(ctx: Ctx, i: int) -> void:
 	Kit.route_out_verts.clear()
 	Kit.reach = [0.0, 0.0, 0.0]
 	Kit.wealth = -1
+	Kit.zone = ""
 
 
 ## A hill lot's routes past its front: from the pad's height at the front

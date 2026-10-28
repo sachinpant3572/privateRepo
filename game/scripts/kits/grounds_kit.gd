@@ -67,6 +67,9 @@ static func draw(kind: String, p: Array, tree_kinds: Array, mb, out: Array, rng:
 	mb.xform = base * t
 	var local: Array = []
 	var v := int(p[6])
+	# One look per plot (its frame), so an estate's walls, fences and gate
+	# match each other and the estates differ.
+	var plot := hash([snappedf(base.origin.x, 1.0), snappedf(base.origin.z, 1.0)])
 	match kind:
 		"lawn":
 			Kit._pad(mb, -w * 0.5, w * 0.5, -d * 0.5, d * 0.5, MeshBuilder.glow(LAWN, MeshBuilder.GRASS), BASE_Y)
@@ -82,13 +85,13 @@ static func draw(kind: String, p: Array, tree_kinds: Array, mb, out: Array, rng:
 		"footpath":
 			_footpath(mb, w, d, v)
 		"wall":
-			_wall(mb, local, w, d)
+			_wall(mb, local, w, d, plot)
 		"hedge":
 			Kit._hedge(mb, local, Vector3(-w * 0.5, 0, 0), Vector3(w * 0.5, 0, 0), 1.8, true, maxf(d, 0.9))
 		"fence":
-			_fence(mb, local, w, v)
+			_fence(mb, local, w, v, plot)
 		"gate":
-			_gate(mb, local, w)
+			_gate(mb, local, w, plot)
 		"trees":
 			var n := 1 if w < 0.1 else int(w / maxf(d, 1.0)) + 1
 			for i in n:
@@ -192,41 +195,65 @@ static func _yard(mb, w: float, d: float, wet: bool, rng: RandomNumberGenerator)
 		mb.flat(poly, BASE_Y + 0.013, MeshBuilder.glow(DIRT.lerp(col, 0.35), MeshBuilder.CONCRETE))
 
 
-## A stuccoed garden wall with piers and a coping, 1.8 m.
-static func _wall(mb, out: Array, w: float, d: float) -> void:
-	const H := 1.8
+## A plot's wall: [height, body (colour and surface code), coping] from
+## its look seed: stucco, brick, dressed stone or cream block, 1.5 to 2.4 m.
+static func _wall_look(plot: int) -> Array:
+	var r := RandomNumberGenerator.new()
+	r.seed = plot
+	var h := snappedf(r.randf_range(1.5, 2.4), 0.1)
+	match r.randi() % 4:
+		1:
+			return [h, MeshBuilder.glow(Color(0.6, 0.32, 0.25), MeshBuilder.BRICK), Color(0.5, 0.27, 0.21)]
+		2:
+			return [h, MeshBuilder.glow(Color(0.62, 0.59, 0.53), MeshBuilder.PAVING), Color(0.52, 0.5, 0.46)]
+		3:
+			return [h, MeshBuilder.glow(Color(0.86, 0.83, 0.75), MeshBuilder.BRICK), COPING]
+	return [h, MeshBuilder.glow(STUCCO, MeshBuilder.CONCRETE), COPING]
+
+
+## A garden wall with piers and a coping, in the plot's look (_wall_look).
+static func _wall(mb, out: Array, w: float, d: float, plot := 0) -> void:
+	var look := _wall_look(plot)
+	var h: float = look[0]
 	var t := maxf(d, 0.4)
-	mb.box(Vector3(0, H * 0.5, 0), Vector3(w, H, t), MeshBuilder.glow(STUCCO, MeshBuilder.CONCRETE))
-	mb.box(Vector3(0, H + 0.06, 0), Vector3(w + 0.1, 0.12, t + 0.16), COPING)
+	mb.box(Vector3(0, h * 0.5, 0), Vector3(w, h, t), look[1])
+	mb.box(Vector3(0, h + 0.06, 0), Vector3(w + 0.1, 0.12, t + 0.16), look[2])
 	var n := maxi(1, int(w / 8.0))
 	for i in n + 1:
 		var x := -w * 0.5 + w * i / n
-		mb.box(Vector3(x, (H + 0.3) * 0.5, 0), Vector3(0.7, H + 0.3, t + 0.3), MeshBuilder.glow(STUCCO.darkened(0.04), MeshBuilder.CONCRETE))
-	out.append([Vector3(0, H * 0.5, 0), Vector3(w, H, t + 0.1)])
+		mb.box(Vector3(x, (h + 0.3) * 0.5, 0), Vector3(0.7, h + 0.3, t + 0.3), Color(look[1]).darkened(0.04))
+	out.append([Vector3(0, h * 0.5, 0), Vector3(w, h, t + 0.1)])
 
 
-## A post-and-wire fence (variant 0) or a white board fence (1), 1.2 m.
-static func _fence(mb, out: Array, w: float, v: int) -> void:
-	var col := WHITE_WOOD if v == 1 else WOOD
+## A post-and-wire fence (variant 0) or a board fence (1), its height
+## (1.0 to 1.5 m) and paint (white, natural, dark stain) the plot's own.
+static func _fence(mb, out: Array, w: float, v: int, plot := 0) -> void:
+	var r := RandomNumberGenerator.new()
+	r.seed = hash([plot, "fence"])
+	var h := snappedf(r.randf_range(1.0, 1.5), 0.05)
+	var col: Color = [WHITE_WOOD, WHITE_WOOD, WOOD.lightened(0.15), Color(0.3, 0.24, 0.18)][r.randi() % 4] if v == 1 else WOOD
 	var n := maxi(1, int(w / 2.5))
 	for i in n + 1:
-		mb.box(Vector3(-w * 0.5 + w * i / n, 0.6, 0), Vector3(0.12, 1.2, 0.12), col)
-	var rails := [0.45, 0.8, 1.1] if v == 1 else [0.55, 1.0]
+		mb.box(Vector3(-w * 0.5 + w * i / n, h * 0.5, 0), Vector3(0.12, h, 0.12), col)
+	var rails := [0.38, 0.67, 0.92] if v == 1 else [0.46, 0.83]
 	for y: float in rails:
-		mb.box(Vector3(0, y, 0), Vector3(w, 0.12 if v == 1 else 0.03, 0.04), col if v == 1 else IRON.lightened(0.3))
-	out.append([Vector3(0, 0.6, 0), Vector3(w, 1.2, 0.2)])
+		mb.box(Vector3(0, y * h, 0), Vector3(w, 0.12 if v == 1 else 0.03, 0.04), col if v == 1 else IRON.lightened(0.3))
+	out.append([Vector3(0, h * 0.5, 0), Vector3(w, h, 0.2)])
 
 
-## Gate piers with lamps at both ends of the gap, the leaves swung open.
-static func _gate(mb, out: Array, w: float) -> void:
-	var stone := MeshBuilder.glow(STUCCO.darkened(0.06), MeshBuilder.CONCRETE)
+## Gate piers with lamps at both ends of the gap in the plot's wall look,
+## a head over the wall, the leaves swung open.
+static func _gate(mb, out: Array, w: float, plot := 0) -> void:
+	var look := _wall_look(plot)
+	var ph := maxf(2.4, float(look[0]) + 0.5)
+	var stone := Color(look[1]).darkened(0.06)
 	var lamp := MeshBuilder.glow(Color(1.0, 0.9, 0.6), MeshBuilder.GLOW_LAMP)
 	for s: float in [-1.0, 1.0]:
 		var x := s * (w * 0.5 + 0.1)
-		mb.box(Vector3(x, 1.2, 0), Vector3(1.0, 2.4, 1.0), stone)
-		mb.box(Vector3(x, 2.45, 0), Vector3(1.2, 0.1, 1.2), COPING)
-		mb.ball(Vector3(x, 2.75, 0), Vector3(0.28, 0.28, 0.28), lamp, 6, 3)
-		out.append([Vector3(x, 1.2, 0), Vector3(1.0, 2.4, 1.0)])
+		mb.box(Vector3(x, ph * 0.5, 0), Vector3(1.0, ph, 1.0), stone)
+		mb.box(Vector3(x, ph + 0.05, 0), Vector3(1.2, 0.1, 1.2), look[2])
+		mb.ball(Vector3(x, ph + 0.35, 0), Vector3(0.28, 0.28, 0.28), lamp, 6, 3)
+		out.append([Vector3(x, ph * 0.5, 0), Vector3(1.0, ph, 1.0)])
 		# A leaf of iron bars, swung in and back against the wall, clear of the drive.
 		var hinge := Vector3(s * (w * 0.5 - 0.4), 0, 0.5)
 		var leaf := w * 0.45

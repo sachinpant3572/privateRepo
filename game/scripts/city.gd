@@ -106,6 +106,22 @@ const WALK_CELL := 100.0
 var _cell_of_face := PackedInt32Array()
 var _cell_grid := {} # Vector2i -> [cell]
 var _rail_of_edge := {} # edge -> rail line index
+## Roadworks (Sachin: "some are being paved so there is a construction
+## sign, to avoid it, otherwise the cars can get stuck"): edge ->
+## {"side", "x0", "x1"}, the curb lane and parking strip dug up on the side
+## `side` of the street frame (+1 the right of a->b, where a->b traffic
+## drives; -1 the other) from x0 to x1 metres along from a. That way's
+## traffic keeps to its other lanes along the whole street (lanes_of); the
+## cell builder draws the barriers, cones, sign and the pit.
+var roadworks := {}
+var _works_lanes := {} # Vector2i(from, to) -> the lanes left open that way
+const WORKS_CLASSES := ["boulevard", "avenue", "river", "street"]
+## No works this near the spawn (the tests' and the first drive's streets).
+const WORKS_CLEAR_OF_SPAWN := 260.0
+## Works stand this far apart at least, two or three to a district.
+const WORKS_SPACING := 180.0
+## Cones taper the closed lane in over this many metres ahead of the pit.
+const WORKS_TAPER := 8.0
 var _loaded := {} # cell -> Node3D
 var _task := -1
 var _task_cell := 0
@@ -157,6 +173,7 @@ func build(seed_v: int) -> void:
 			sidewalk_loops.append(_make_loop(f))
 	_add_country_walks()
 	_place_points()
+	_pick_roadworks()
 	_pick_parking()
 	_build_water()
 	stream_now(spawn_point)
@@ -523,6 +540,8 @@ func lanes_of(a: int, b: int) -> Dictionary:
 	elif a < COUNTRY_BASE and b < COUNTRY_BASE:
 		var e: int = plan.edge_between(a, b)
 		if e >= 0:
+			if not _works_lanes.is_empty() and _works_lanes.has(Vector2i(a, b)):
+				return _works_lanes[Vector2i(a, b)]
 			return StreetPlan.CLASSES[plan.edge_class(e)]
 	return LINK_LANES
 
@@ -931,6 +950,110 @@ func _make_loop(f: int) -> PackedVector3Array:
 	return loop
 
 
+## Two or three roadworks a district (see roadworks), on four- and six-lane
+## streets with a curb on the works side, clear of the spawn, the rails and
+## each other, from their own random stream (the rest of the city's draws
+## stay as they were).
+func _pick_roadworks() -> void:
+	var r := RandomNumberGenerator.new()
+	r.seed = seed_value * 7919 + 101
+	var by_district := {}
+	for e in plan.edge_count():
+		var cls: String = plan.edge_class(e)
+		if not cls in WORKS_CLASSES or not plan.drivable(e) or rail_on(e) >= 0:
+			continue
+		var na: int = plan.edge_a[e]
+		var nb: int = plan.edge_b[e]
+		if not (drive_node(na) and drive_node(nb)):
+			continue
+		var a := node_pos(na)
+		var b := node_pos(nb)
+		var mid := (a + b) * 0.5
+		var length := a.distance_to(b)
+		var run: float = length - plan.clearance(na, e) - plan.clearance(nb, e) - 1.0
+		if run < 50.0 or mid.distance_to(spawn_point) < WORKS_CLEAR_OF_SPAWN or not window.has_point(Vector2(mid.x, mid.z)):
+			continue
+		var id: String = district_at(mid).get("id", "")
+		if not by_district.has(id):
+			by_district[id] = []
+		by_district[id].append(e)
+	var ids := by_district.keys()
+	ids.sort()
+	var picked: Array[Vector3] = []
+	for id in ids:
+		var list: Array = by_district[id]
+		for k in list.size():
+			var j := r.randi_range(k, list.size() - 1)
+			var t: int = list[j]
+			list[j] = list[k]
+			list[k] = t
+		var want := r.randi_range(2, 3)
+		for e: int in list:
+			if want <= 0:
+				break
+			var na: int = plan.edge_a[e]
+			var nb: int = plan.edge_b[e]
+			var a := node_pos(na)
+			var b := node_pos(nb)
+			var length := a.distance_to(b)
+			var dir := (b - a) / length
+			var right := Vector3(-dir.z, 0, dir.x)
+			var g: Dictionary = StreetPlan.CLASSES[plan.edge_class(e)]
+			var w: float = g.width
+			var side := 1.0 if r.randf() < 0.5 else -1.0
+			if not plan.is_land(block_of((a + b) * 0.5 + right * side * (w * 0.5 + 3.0))):
+				side = -side
+				if not plan.is_land(block_of((a + b) * 0.5 + right * side * (w * 0.5 + 3.0))):
+					continue
+			var s0: float = plan.clearance(na, e) + 0.5
+			var s1: float = plan.clearance(nb, e) + 0.5
+			var span := r.randf_range(14.0, 22.0)
+			# Room for the sign and the taper on the side traffic comes from.
+			var lo := s0 + (24.0 if side > 0.0 else 6.0)
+			var hi := length - s1 - span - (6.0 if side > 0.0 else 24.0)
+			if hi < lo:
+				continue
+			var x0 := r.randf_range(lo, hi)
+			var at := a + dir * (x0 + span * 0.5)
+			if picked.any(func(q: Vector3) -> bool: return q.distance_to(at) < WORKS_SPACING):
+				continue
+			picked.append(at)
+			roadworks[e] = {"side": side, "x0": x0, "x1": x0 + span}
+			var open := g.duplicate()
+			open["lanes"] = int(g.lanes) - 1
+			open["closed"] = 1
+			_works_lanes[Vector2i(na, nb) if side > 0.0 else Vector2i(nb, na)] = open
+			want -= 1
+
+
+## The roadworks on the street from a to b, or {}.
+func works_on(a: int, b: int) -> Dictionary:
+	if roadworks.is_empty() or a < 0 or b < 0 or a >= COUNTRY_BASE or b >= COUNTRY_BASE:
+		return {}
+	return roadworks.get(plan.edge_between(a, b), {})
+
+
+## `at`, a point on the street from a to b, moved along the street out of
+## its roadworks and their taper (to the nearer end that leaves the
+## junctions clear); else `at` as it is.
+func clear_of_works(a: int, b: int, at: Vector3) -> Vector3:
+	if works_on(a, b).is_empty():
+		return at
+	var e: int = plan.edge_between(a, b)
+	var wk: Dictionary = roadworks[e]
+	var pa := node_pos(plan.edge_a[e])
+	var pb := node_pos(plan.edge_b[e])
+	var length := pa.distance_to(pb)
+	var dir := (pb - pa) / length
+	var x := (at - pa).dot(dir)
+	var lo: float = wk.x0 - WORKS_TAPER - 4.0
+	var hi: float = wk.x1 + WORKS_TAPER + 4.0
+	if x <= lo or x >= hi:
+		return at
+	var to := lo if (x - lo < hi - x and lo > 9.0) or hi > length - 9.0 else hi
+	return at + dir * (to - x)
+
+
 func _pick_parking() -> void:
 	# Always leave one car at the curb in front of the spawn point.
 	var home := landmark_block("union_station")
@@ -958,9 +1081,13 @@ func _pick_parking() -> void:
 		var side := 1.0 if rng.randf() < 0.5 else -1.0
 		# In the middle of the parking strip, outside the curb lane.
 		var out: float = lanes.middle + lanes.lanes * lanes.lane_w + lanes.park * 0.5
-		var p := a + along * rng.randf_range(s0, length - s1) + right * side * out
+		var x := rng.randf_range(s0, length - s1)
+		var p := a + along * x + right * side * out
 		if not plan.is_land(block_of(p + right * side * 4.0)):
 			continue # no curb on that side (water)
+		var wk: Dictionary = roadworks.get(e, {})
+		if not wk.is_empty() and wk.side == side and x > wk.x0 - 30.0 and x < wk.x1 + 30.0:
+			continue # dug up, or the sign ahead of it
 		var facing := along * side
 		parked_spots.append([p, atan2(-facing.x, -facing.z)])
 

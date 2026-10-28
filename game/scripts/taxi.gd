@@ -659,13 +659,18 @@ func _curb_near(pos: Vector3) -> Dictionary:
 
 ## Where a cab driving from junction `from` toward `to` stops at `at`: in
 ## the parking strip where the street has one, else the curb lane nudged
-## toward the curb. [stop, yaw]
+## toward the curb; never in roadworks (it stops past them). [stop, yaw]
 func _curb_stop(from: int, to: int, at: Vector3) -> Array:
 	var city = game.city
 	var off: Vector3 = city.lane_point(from, to) - city.node_pos(to)
 	var lanes: Dictionary = city.lanes_of(from, to)
+	# Roadworks close the curb lane that way (City.roadworks): count it.
+	var n: int = int(lanes.get("lanes", 1)) + int(lanes.get("closed", 0))
+	if lanes.has("closed"):
+		off = off.normalized() * (float(lanes.middle) + float(lanes.lane_w) * (n - 0.5))
+	at = city.clear_of_works(from, to, at)
 	if float(lanes.get("park", 0.0)) > 0.0:
-		off = off.normalized() * (float(lanes.middle) + float(lanes.lanes) * float(lanes.lane_w) + float(lanes.park) * 0.5)
+		off = off.normalized() * (float(lanes.middle) + n * float(lanes.lane_w) + float(lanes.park) * 0.5)
 	else:
 		off *= CURB_SHIFT
 	var dir: Vector3 = city.node_pos(to) - city.node_pos(from)

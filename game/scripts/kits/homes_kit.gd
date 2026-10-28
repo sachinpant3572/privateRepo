@@ -36,6 +36,19 @@ static func _lit_piers(mb, out: Array, x: float, z: float, gw: float, h := 1.6) 
 		mb.ball(p + Vector3(0, h + 0.32, 0), Vector3(0.2, 0.2, 0.2), _g(Color(1.0, 0.9, 0.6), MeshBuilder.GLOW_LAMP), 6, 3)
 
 
+## A condo's low front of its own: a brick wall, iron on a low wall, a
+## clipped hedge or block, 0.7 to 1.5 m; the sides and back the same.
+static func _low_front(rng: RandomNumberGenerator, brick: Color) -> Dictionary:
+	var r := RandomNumberGenerator.new()
+	r.seed = hash([rng.seed, "low front"])
+	var style: String = Kit._roll([["low", 40], ["iron", 25], ["hedge", 20], ["block", 15]], {}, r)[0]
+	var h := snappedf(r.randf_range(1.1, 1.5) if style == "iron" else r.randf_range(0.7, 1.2), 0.05)
+	var paints: Array = Kit.FENCE_COLORS[style]
+	var paint: Color = brick if style == "low" else paints[r.randi() % paints.size()]
+	return {"style": style, "h": h, "color": paint, "gate": ["", "", "swing"][r.randi() % 3],
+		"gate_look": "iron" if style != "hedge" else "wood", "gate_h": snappedf(maxf(0.9, h), 0.05)}
+
+
 ## A sun lounger (0.65 x 1.7) at p, its head toward +Z.
 static func _lounger(mb, p: Vector3, color := Kit.WHITE) -> void:
 	mb.box(p + Vector3(0, 0.22, -0.2), Vector3(0.65, 0.12, 1.3), color)
@@ -121,7 +134,8 @@ static func res_tower(mb, out: Array, w: float, d: float, rng: RandomNumberGener
 		Props.palm(mb, out, Vector3(-(w * 0.5 - 2.0) * side, 0, -d * 0.5 + 2.2), rng)
 	if (ru - 1.8) - dx1 > 3.0:
 		Props.palm(mb, out, Vector3((dx1 + ru - 1.8) * 0.5 * side, 0, -d * 0.5 + 2.5), rng)
-	Kit._lot_fence(mb, out, w, d, "hedge", Kit.LEAF, [], false)
+	var bound := Kit.boundary(t, Kit.zone, hash([rng.seed, "boundary"]))
+	Kit._lot_fence(mb, out, w, d, bound, bound.color, [], false)
 	# Shaft.
 	var sw := clampf(w * 0.56, 13.0, 20.0)
 	var sd := clampf(pd * 0.75, 11.0, 17.0)
@@ -311,8 +325,11 @@ static func midrise_condo(mb, out: Array, w: float, d: float, rng: RandomNumberG
 				Props.palm(mb, out, Vector3(s * px, 0, pz), rng)
 			else:
 				Kit._bush(mb, Vector3(s * (bl * 0.5 - 2.5), 0, -d * 0.5 + 2.4), 0.7, rng)
-		Kit._lot_fence(mb, out, w, d, "hedge", Kit.LEAF, [[0.0, 6.4]], true, 1.2, false)
-		_lit_piers(mb, out, 0.0, -d * 0.5 + 1.2, 6.4)
+		# The household's boundary, lit piers at the motor court's mouth
+		# (left open: no leaves to swing into the cars).
+		var bound := Kit.boundary(t, Kit.zone, hash([rng.seed, "boundary"]))
+		bound["gate"] = ""
+		Kit._lot_fence(mb, out, w, d, bound, bound.color, [[0.0, 6.4]], true, 1.2, false)
 	else:
 		# Ground-floor lobby and its canopy, a walk to the street, the lot.
 		mb.box(Vector3(0, 1.3, fz - 0.05), Vector3(3.0, 2.6, 0.08), lit)
@@ -338,7 +355,7 @@ static func midrise_condo(mb, out: Array, w: float, d: float, rng: RandomNumberG
 			if absf(x) > 3.0:
 				Kit._bush(mb, Vector3(x, 0, fz - 1.0), 0.6, rng)
 		var brick := _g(Kit._pick(Kit.BRICKS, rng), MeshBuilder.BRICK) if Kit.BRICKS.size() > 0 else Kit.TERRACOTTA
-		Kit._lot_fence(mb, out, w, d, "low", brick, [[gx, 5.0], [0.0, 1.8]], true, 0.6, false)
+		Kit._lot_fence(mb, out, w, d, _low_front(rng, brick), brick, [[gx, 5.0], [0.0, 1.8]], true, 0.6, false)
 
 
 # --- cheap_block ----------------------------------------------------------------
@@ -471,9 +488,11 @@ static func cheap_block(mb, out: Array, w: float, d: float, rng: RandomNumberGen
 	var g1 := gate_x + 2.5
 	var lo := -w * 0.5 + 0.3
 	var hi := w * 0.5 - 0.3
-	Shady._chainlink(mb, out, Vector3(lo, 0, fzc), Vector3(g0, 0, fzc), 1.8, rng, false, t == 0 and side < 0.0, 1)
-	Shady._chainlink(mb, out, Vector3(g1, 0, fzc), Vector3(hi, 0, fzc), 1.8, rng, false, t == 0 and side > 0.0, 1)
-	Kit._lot_fence(mb, out, w, d, "chain", Color(0.62, 0.64, 0.66), [], false, 0.4)
+	var bound := Kit.boundary(t, Kit.zone, hash([rng.seed, "boundary"]))
+	var ch: float = snappedf(clampf(bound.back_h, 1.5, 2.2), 0.05)
+	Shady._chainlink(mb, out, Vector3(lo, 0, fzc), Vector3(g0, 0, fzc), ch, rng, false, t == 0 and side < 0.0, 1)
+	Shady._chainlink(mb, out, Vector3(g1, 0, fzc), Vector3(hi, 0, fzc), ch, rng, false, t == 0 and side > 0.0, 1)
+	Kit._lot_fence(mb, out, w, d, bound, bound.color, [], false, 0.4)
 	# T0: the dumped couch or mattress, bags, a tag on the end wall.
 	if t == 0:
 		var jp := Vector3(side * (w * 0.5 - 2.0), 0, kerb - 3.6)
@@ -567,14 +586,11 @@ static func exec_house(mb, out: Array, w: float, d: float, rng: RandomNumberGene
 	elif room >= 3.0:
 		Kit._pad(mb, mx - 3.0, mx + 3.0, bz, bz + 2.6, paving, 0.05)
 		Props.cafe_table(mb, out, Vector3(mx, 0, bz + 1.4), Kit._pick(Buildings.PARASOLS, rng))
-	# Privacy: a hedge (T4) or a rendered wall (T5) all round, lit piers at
-	# the drive.
-	var gate := [[gx, gw + (1.2 if t <= 4 else 0.4)]]
-	if t >= 5:
-		Kit._lot_fence(mb, out, w, d, "wall", STUCCO, gate, true, 1.2, false)
-	else:
-		Kit._lot_fence(mb, out, w, d, "hedge", Kit.LEAF, gate, true, 1.2, false)
-	_lit_piers(mb, out, gx, -d * 0.5 + 1.2, gw + (0.4 if t <= 4 else -0.4))
+	# Privacy by the household: a hedge, iron on a wall, a rendered or
+	# brick wall all round, lit piers at the drive and its gates open.
+	var bound := Kit.boundary(t, Kit.zone, hash([rng.seed, "boundary"]))
+	var gate := [[gx, gw + bound.drive_extra + (0.8 if bound.style == "hedge" else 0.0)]]
+	Kit._lot_fence(mb, out, w, d, bound, bound.color, gate, true, 1.2, false)
 
 
 # --- gatehouse ------------------------------------------------------------------
