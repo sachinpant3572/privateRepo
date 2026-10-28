@@ -2304,14 +2304,21 @@ func test_country_joins_the_city() -> void:
 			carried += 1 if linked_to.has(n) else 0
 	_check(meets > 40 and carried >= meets * 0.9, "the city's streets carry on out past the frame (%d of %d)" % [carried, meets])
 	# The suburbs and the coast road, to the Beltway and past it; farm lanes
-	# and tracks may end at a field.
+	# and tracks may end at a field, and a road up to a landmark (the
+	# observatory) at its door.
 	var near_city: Rect2 = plan.bounds.grow(1100.0)
+	var doors: Array = []
+	for id in c.landmark_ids():
+		var front: Vector3 = c.landmark(id).front
+		doors.append(Vector2(front.x, front.z))
 	var dead: Array = []
 	for n in c.node_count():
 		var p: Vector2 = c.pos(n)
 		if c.degree(n) != 1 or c.links.has(n) or not near_city.has_point(p):
 			continue
 		if c.edge_class(c.edges_of(n)[0]) in ["lane", "track"]:
+			continue
+		if doors.any(func(q): return q.distance_to(p) < 30.0):
 			continue
 		var inside := true
 		for d in [Vector2(25, 0), Vector2(-25, 0), Vector2(0, 25), Vector2(0, -25)]:
