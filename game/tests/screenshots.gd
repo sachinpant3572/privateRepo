@@ -789,14 +789,15 @@ func _traffic(game) -> void:
 		if is_instance_valid(q):
 			q.queue_free()
 	traffic._set_phase(e, TM.MAIN_GO)
-	# Rush hour downtown, then a residential street deep in the night.
 	# Rush hour downtown, then a residential street deep in the night, both
-	# at the driving view's size.
+	# framed wide (100 m) so most of the traffic bubble (cars despawn past
+	# 95 m) is in view: the driving view (62 m) shows only a third of it.
 	game.atmosphere.hour = 8.0
 	game.camera.fixed_focus = c
-	game.camera.room_size = 62.0
+	game.camera.room_size = 100.0
 	await _stand(game, corner, 1200)
-	print("traffic rush: %d cars, budget %d, density %.2f" % [game.population.cars.size(), traffic.budget(), traffic._density])
+	print("traffic rush: %d cars (%d within 50 m), budget %d, density %.2f" % [game.population.cars.size(),
+		_cars_within(game, c, 50.0), traffic.budget(), traffic._density])
 	await _shot("98_traffic_rush_downtown.png")
 	var quiet := Vector3.INF
 	var q_style := ""
@@ -816,29 +817,43 @@ func _traffic(game) -> void:
 	game.atmosphere.hour = 2.5
 	game.camera.fixed_focus = quiet
 	await _stand(game, quiet, 1200)
-	print("traffic quiet (%s): %d cars, budget %d, density %.2f" % [q_style, game.population.cars.size(), traffic.budget(), traffic._density])
+	print("traffic quiet (%s): %d cars (%d within 50 m), budget %d, density %.2f" % [q_style,
+		game.population.cars.size(), _cars_within(game, quiet, 50.0), traffic.budget(), traffic._density])
 	await _shot("98_traffic_quiet_night.png")
 	# A rough frame-time probe back at the rush: physics time per frame with
-	# the junction controller running and with it paused.
+	# the junction controller running and with it paused, in alternating
+	# blocks of 150 frames so traffic drifting about weighs on both alike.
 	game.atmosphere.hour = 8.0
 	game.camera.fixed_focus = null
 	game.camera.room_size = 0.0
 	game.player.visible = true
 	await _stand(game, corner, 900)
-	for on in [true, false]:
-		traffic.set_physics_process(on)
-		var sum := 0.0
-		var worst := 0.0
-		var draws := 0.0
-		for i in 300:
+	var sums := [0.0, 0.0]
+	var worsts := [0.0, 0.0]
+	var draws := [0.0, 0.0]
+	for block in 6:
+		var m := block % 2 # 0 controller on, 1 paused
+		traffic.set_physics_process(m == 0)
+		for i in 150:
 			await get_tree().physics_frame
 			var t: float = Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)
-			sum += t
-			worst = maxf(worst, t)
-			draws += Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
-		print("traffic probe (controller %s): %d cars, physics %.2f ms a frame (worst %.2f), %.0f draw calls" % [
-			"on" if on else "paused", game.population.cars.size(), sum / 300.0 * 1000.0, worst * 1000.0, draws / 300.0])
+			sums[m] += t
+			worsts[m] = maxf(worsts[m], t)
+			draws[m] += Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
 	traffic.set_physics_process(true)
+	for m in 2:
+		print("traffic probe (controller %s): %d cars, physics %.2f ms a frame (worst %.2f), %.0f draw calls" % [
+			"on" if m == 0 else "paused", game.population.cars.size(), sums[m] / 450.0 * 1000.0,
+			worsts[m] * 1000.0, draws[m] / 450.0])
+
+
+## How many population cars are within `r` m of `pos` (flat distance).
+func _cars_within(game, pos: Vector3, r: float) -> int:
+	var count := 0
+	for car in game.population.cars:
+		if is_instance_valid(car) and Vector2(car.global_position.x - pos.x, car.global_position.z - pos.z).length() <= r:
+			count += 1
+	return count
 
 
 ## The sidewalk point nearest `pos`.

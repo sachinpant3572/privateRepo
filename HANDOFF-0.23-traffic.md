@@ -19,8 +19,9 @@ in HANDOFF-0.23-traffic-archive.md. This note is what was built.
 - population.gd: budget from Traffic, kind from the district mix, a
   per-driver speed factor. city_cells.gd: poles and signs per approach
   (no more random green poles). prop_kit.gd `traffic_light`: mast arm,
-  heads, ped heads, cabinet. vehicle.gd: `_traffic_ai`, yield in
-  `_police_ai`'s targets, the `_ahead` ray, new traffic consts and vars.
+  heads, ped heads, cabinet. vehicle.gd: `_traffic_ai` and its new
+  helpers, consts and vars, the `_ahead` ray. `_police_ai` is unchanged:
+  traffic finds police drivers itself (`Traffic.sirens`) and yields.
 
 ## Decisions (as built)
 
@@ -65,13 +66,15 @@ Driving (vehicle.gd `_traffic_ai`):
   the last bit, which read as rolling over a red.
 - Yellow: stop if d > v^2/6. Red: stop unless d < v^2/18. Right on red
   after a full stop when the cross traffic gap is clear; permissive lefts
-  yield to oncoming.
+  yield to oncoming. Don't block the box: on green a car waits at the
+  line while its exit street has no room.
 - Signs: full stop of 1 s, then first come first served, and only with
   the box clear. Box clear counts a car's end nearest the middle, not
   its centre (a car half into the box let the next one go). Gridlock
   give-up 25 s at a sign, 90 s at a red.
-- Sirens: within range, slow to 2.5 m/s and pull right; resume after.
-  `_police_ai` itself is unchanged (police don't stop at lights).
+- Sirens (any police driver): within 15 m, or within 40 m and closing,
+  slow to 2.5 m/s and pull right; resume after. Police don't stop at
+  lights.
 - Blockages: behind something that never moves, go round after 3, 6 or
   10 s (wreck or parked; a driver; traffic not queued at a junction).
 - `_drive` eases the throttle by the angle still to steer; `_traffic_ai`
