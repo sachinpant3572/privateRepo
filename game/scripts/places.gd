@@ -9,6 +9,7 @@ extends RefCounted
 
 const StreetPlan = preload("res://scripts/street_plan.gd")
 const Cells = preload("res://scripts/city_cells.gd")
+const Terrain = preload("res://scripts/terrain.gd")
 
 ## Per type: label, the storefront's width and depth, opening hours (24
 ## means midnight) and shop names. Map icons are in map_image.gd.
@@ -17,13 +18,16 @@ const TYPES := {
 		"label": "Corner store", "size": Vector2(10.0, 12.0),
 		"hours": [0, 24],
 		"names": ["Dumaine Mart", "Lucky 7 Grocery", "Corner Pantry", "Crescent Grocery", "Levee Mart",
-			"Joe's Market", "Quik Stop", "Bayou Mart", "Sunrise Grocery", "Night Owl Mart"],
+			"Joe's Market", "Quik Stop", "Bayou Mart", "Sunrise Grocery", "Night Owl Mart",
+			"Palm Mart", "Gulf Pantry", "Sandpiper Market", "Two Oaks Grocery", "Shoreline Market",
+			"Heights Grocery", "Corner Cupboard", "Pelican Pantry"],
 	},
 	"diner": {
 		"label": "Diner", "size": Vector2(14.0, 13.0),
 		"hours": [6, 24],
 		"names": ["Rosie's Diner", "Blue Plate", "Starlite Diner", "Levee Diner", "Morning Call",
-			"Ruby's", "The Griddle", "Dixie Diner"],
+			"Ruby's", "The Griddle", "Dixie Diner", "Pelican Grill", "Shore Diner", "Hilltop Grill",
+			"Cypress Cafe", "Sunset Diner", "The Skillet"],
 	},
 }
 ## How many of each type every district gets (district ids from the world
@@ -44,6 +48,12 @@ const MIN_GAP := 40.0
 const DOOR_OUT := 1.2
 ## Doors stay this far inside the playable window.
 const EDGE := 15.0
+## Suburb places (country lots round the city, HANDOFF-bellerive-expand
+## BX-3): the country kinds that open as a place, and the zones they may
+## stand in. At most SUBURB_MAX of them, spaced as in the city.
+const SUBURB_TYPES := {"diner": "diner", "general_store": "corner_store", "shopfront": "corner_store", "strip_mall": "corner_store"}
+const SUBURB_ZONES := ["heights", "bayou_town", "fringe", "eastside", "beach_town", "shore"]
+const SUBURB_MAX := 16
 
 
 ## [{id, type, name, district, district_name, face, parcel, rect, door,
@@ -93,6 +103,92 @@ static func build(city) -> Array:
 				used_faces[pick[0]] = true
 				places.append(place)
 	return places
+
+
+## Places on the suburbs' country lots: diners, general stores, shopfronts
+## and strip malls in SUBURB_ZONES, appended after the city's (`places`
+## holds those; names stay unique across both). These have no block:
+## face and parcel are -1, rect is empty. The door is in front of the kit
+## building's door (suburb_door) and `yaw` faces into it.
+static func build_suburbs(city, places: Array) -> Array:
+	var c = city.country
+	if c == null:
+		return []
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([city.seed_value, "suburb places"])
+	var picks: Array = []
+	for i in c.lots.size():
+		var l: Array = c.lots[i]
+		var kind: String = c.kinds[int(l[5])]
+		if SUBURB_TYPES.has(kind) and str(l[7]) in SUBURB_ZONES:
+			picks.append(i)
+	# Shuffle with the seeded stream so the spread doesn't follow lot order.
+	for k in range(picks.size() - 1, 0, -1):
+		var j := rng.randi() % (k + 1)
+		var t = picks[k]
+		picks[k] = picks[j]
+		picks[j] = t
+	var used_names := {}
+	for p in places:
+		used_names[p.name] = true
+	var out: Array = []
+	for i in picks:
+		if out.size() >= SUBURB_MAX:
+			break
+		var l: Array = c.lots[i]
+		var type: String = SUBURB_TYPES[c.kinds[int(l[5])]]
+		var xf := Transform3D(Basis(Vector3.UP, float(l[2])), Vector3(l[0], 0.0, l[1]))
+		var d2 := suburb_door(c.kinds[int(l[5])], float(l[3]), float(l[4]))
+		var door := xf * Vector3(d2.x, 0.0, d2.y)
+		door.y = Terrain.height(float(l[0]), float(l[1]))
+		var clash := false
+		for q in places + out:
+			var gap: float = Vector2(q.door.x, q.door.z).distance_to(Vector2(door.x, door.z))
+			if gap < MIN_GAP or (q.type == type and gap < SPACING):
+				clash = true
+				break
+		if clash:
+			continue
+		var names: Array = TYPES[type].names
+		var name: String = names[rng.randi() % names.size()]
+		for k in names.size():
+			var candidate: String = names[(names.find(name) + k) % names.size()]
+			if not used_names.has(candidate):
+				name = candidate
+				break
+		used_names[name] = true
+		# The lot's front is -z: the door faces +z, into the building.
+		var inward := xf.basis * Vector3(0, 0, 1)
+		var d: Dictionary = city.district_at(door)
+		out.append({
+			"id": "%s_%d" % [type, places.size() + out.size()], "type": type, "name": name,
+			"district": d.get("id", ""), "district_name": d.get("name", ""),
+			"face": -1, "parcel": -1, "rect": Rect2(), "lot": i, "door": door,
+			"yaw": atan2(-inward.x, -inward.z), "seed": rng.randi(), "hours": TYPES[type].hours,
+		})
+	return out
+
+
+## Where a country shop kind's door is, in its lot frame (x across, y back
+## from the lot centre; the road is at -d/2): DOOR_OUT in front of the
+## facade. Mirrors the fronts in country_kit.gd (diner, general_store,
+## shopfront, strip_mall: the middle unit).
+static func suburb_door(kind: String, w: float, d: float) -> Vector2:
+	var fz := 0.0
+	var x := 0.0
+	match kind:
+		"diner":
+			fz = d * 0.5 - 1.0 - 3.0 - clampf(d * 0.26, 5.0, 8.0)
+		"general_store":
+			fz = -d * 0.5 + 3.2
+		"shopfront":
+			fz = -d * 0.5 + 1.6
+		"strip_mall":
+			fz = d * 0.5 - 1.0 - clampf(d * 0.32, 9.0, 18.0)
+			var bl := w - 4.0
+			var n := clampi(int(bl / 9.0), 3, 8)
+			x = -bl * 0.5 + bl / n * (floori(n * 0.5) + 0.5)
+	return Vector2(x, fz - DOOR_OUT)
 
 
 ## Block f can hold a place: playable land with a front lot on the

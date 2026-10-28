@@ -99,6 +99,10 @@ var _district_by_id := {}
 var _river: PackedVector2Array
 var _river_half := 80.0
 var _loop_of_block := {}
+## Suburb sidewalk loops by WALK_CELL grid cell (Vector2i -> loop indices);
+## they follow the plan's loops in `sidewalk_loops`.
+var _walk_grid := {}
+const WALK_CELL := 100.0
 var _cell_of_face := PackedInt32Array()
 var _cell_grid := {} # Vector2i -> [cell]
 var _rail_of_edge := {} # edge -> rail line index
@@ -144,12 +148,14 @@ func build(seed_v: int) -> void:
 	places = Places.build(self)
 	for p in places:
 		_place_by_parcel[Vector2i(p.face, p.parcel)] = p
+	places.append_array(Places.build_suburbs(self, places))
 	_make_cells()
 	_make_rails()
 	for f in plan.faces.size():
 		if plan.is_land(f) and in_window(f):
 			_loop_of_block[f] = sidewalk_loops.size()
 			sidewalk_loops.append(_make_loop(f))
+	_add_country_walks()
 	_place_points()
 	_pick_parking()
 	_build_water()
@@ -622,6 +628,7 @@ func random_sidewalk_between(center: Vector3, min_d: float, max_d: float, rand: 
 	for f in plan.faces_near(Vector2(center.x, center.z), max_d):
 		if _loop_of_block.has(f):
 			near.append(_loop_of_block[f])
+	near.append_array(_walks_near(center, max_d))
 	if near.is_empty():
 		return []
 	for attempt in 24:
@@ -642,6 +649,13 @@ func nearest_sidewalk(pos: Vector3) -> Array:
 			var li: int = _loop_of_block.get(f, -1)
 			if li < 0:
 				continue
+			var loop := sidewalk_loops[li]
+			for pi in loop.size():
+				var d := loop[pi].distance_squared_to(pos)
+				if d < best_d:
+					best_d = d
+					best = [li, pi]
+		for li in _walks_near(pos, r):
 			var loop := sidewalk_loops[li]
 			for pi in loop.size():
 				var d := loop[pi].distance_squared_to(pos)
@@ -871,6 +885,35 @@ func _place_points() -> void:
 
 
 ## The walking loop round block f: just inside its sidewalk's outer edge.
+## Appends the country's suburb sidewalk loops after the plan's and files
+## them by grid cell, so people walk the suburbs like the city's blocks.
+func _add_country_walks() -> void:
+	for w in country.walks:
+		var li := sidewalk_loops.size()
+		sidewalk_loops.append(w)
+		var seen := {}
+		for p in w:
+			var k := Vector2i(floori(p.x / WALK_CELL), floori(p.z / WALK_CELL))
+			if not seen.has(k):
+				seen[k] = true
+				if not _walk_grid.has(k):
+					_walk_grid[k] = PackedInt32Array()
+				_walk_grid[k].append(li)
+
+
+## The suburb sidewalk loops with a point in a grid cell within `r` of `pos`
+## (each once).
+func _walks_near(pos: Vector3, r: float) -> Array:
+	var out := {}
+	var c0 := Vector2i(floori((pos.x - r) / WALK_CELL), floori((pos.z - r) / WALK_CELL))
+	var c1 := Vector2i(floori((pos.x + r) / WALK_CELL), floori((pos.z + r) / WALK_CELL))
+	for gx in range(c0.x, c1.x + 1):
+		for gy in range(c0.y, c1.y + 1):
+			for li in _walk_grid.get(Vector2i(gx, gy), PackedInt32Array()):
+				out[li] = true
+	return out.keys()
+
+
 func _make_loop(f: int) -> PackedVector3Array:
 	var inner: PackedVector2Array = plan.inner(f)
 	var poly: PackedVector2Array = StreetPlan._largest(Geometry2D.offset_polygon(inner, -WALK_INSET, Geometry2D.JOIN_MITER))

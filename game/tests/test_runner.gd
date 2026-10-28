@@ -103,7 +103,9 @@ func test_city_streams_cells() -> void:
 	var land := 0
 	for f in city.plan.faces.size():
 		land += 1 if city.block_land(f) and city.in_window(f) else 0
-	_check(city.sidewalk_loops.size() == land, "one sidewalk loop per playable land block")
+	_check(city.sidewalk_loops.size() == land + city.country.walks.size(),
+		"one sidewalk loop per playable land block, then the suburbs' (%d)" % city.country.walks.size())
+	_check(city.country.walks.size() >= 100, "the suburbs have sidewalk loops, got %d" % city.country.walks.size())
 	# Teleport across the map: the old cells go, new ones stream in.
 	_place_player_at(city.hospital)
 	await _frames(240)
@@ -2780,7 +2782,11 @@ func test_places_line_the_streets() -> void:
 	await _new_game(false)
 	var city = game.city
 	_check(city.places.size() >= 14, "places are listed, got %d" % city.places.size())
-	var again = preload("res://scripts/places.gd").build(city)
+	var again: Array = Places.build(city)
+	again.append_array(Places.build_suburbs(city, again.duplicate()))
+	var suburb: Array = city.places.filter(func(p): return p.face < 0)
+	_check(suburb.size() >= 6, "the suburbs have enterable places too, got %d" % suburb.size())
+	_check(suburb.any(func(p): return p.type == "diner") and suburb.any(func(p): return p.type == "corner_store"), "suburb places include a diner and a store")
 	_check(again.size() == city.places.size() and again.all(func(p): return p.door == city.places[again.find(p)].door), "places are the same on every build")
 	var space: PhysicsDirectSpaceState3D = game.get_world_3d().direct_space_state
 	var blocked: Array = []
@@ -3493,6 +3499,44 @@ func test_country_tiles_stream() -> void:
 	_place_player_at(city.spawn_point)
 	await _frames(240)
 	_check(c.tile_node(key) == null, "far tiles are unloaded")
+
+
+## People walk the suburbs' sidewalks (BX-1): out on the east side, the
+## crowd spawns on the country's loops, on the ground by the streets.
+func test_people_walk_the_suburbs() -> void:
+	await _new_game(true)
+	var city = game.city
+	var c = city.country
+	var first: int = city.sidewalk_loops.size() - c.walks.size()
+	var at := Vector3.INF
+	for w in c.walks:
+		if w[0].x > 1700.0 and w[0].z > 200.0 and w[0].z < 900.0:
+			at = w[0]
+			break
+	_check(at != Vector3.INF, "an east side loop to stand on")
+	if at == Vector3.INF:
+		return
+	_place_player_at(at)
+	await _frames(600)
+	var pop = game.population
+	var near := 0
+	var on_suburb := 0
+	for p in pop.peds:
+		if p.global_position.distance_to(at) > 120.0:
+			continue
+		near += 1
+		var hit: Array = city.nearest_sidewalk(p.global_position)
+		if int(hit[0]) >= first:
+			on_suburb += 1
+	_check(near >= 8, "people about on the east side, got %d" % near)
+	_check(on_suburb * 10 >= near * 8, "they walk the suburb loops (%d of %d)" % [on_suburb, near])
+	var probe: Array = city.random_sidewalk_between(at, 30.0, 60.0, RandomNumberGenerator.new())
+	_check(not probe.is_empty() and int(probe[0]) >= first, "spawn points out there are on suburb loops")
+	var road := INF
+	for p in pop.peds:
+		if p.global_position.distance_to(at) < 120.0:
+			road = minf(road, c.road_distance(Vector2(p.global_position.x, p.global_position.z), 40.0))
+	_check(road > 0.5, "no one walks in the road (closest %.1f m from the asphalt's middle-line)" % road)
 
 
 ## Banks, the coast and the play area's fence are walls: a car driven at

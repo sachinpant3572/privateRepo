@@ -155,6 +155,10 @@ def main() -> None:
     for n, pn in c["links"]:
         p = P(c["nodes"][n])
         d.ellipse([p[0] - 3, p[1] - 3, p[0] + 3, p[1] + 3], fill=(255, 0, 255))
+    # Sidewalk loops for people (BX-1), as thin rings.
+    for w in c.get("walks", []):
+        ring = [P((w[i], w[i + 1])) for i in range(0, len(w), 2)]
+        d.line(ring + ring[:1], fill=(255, 60, 200), width=1)
     img.save(out)
     print(out, img.size)
 

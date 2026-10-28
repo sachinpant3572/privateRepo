@@ -1745,7 +1745,7 @@ static func _door_zones(ctx: Ctx, half: float) -> Array:
 		return zones
 	var inv: Transform3D = ctx.mb.xform.affine_inverse()
 	for place in ctx.city.places:
-		if place.face != ctx.face:
+		if place.face < 0 or place.face != ctx.face:
 			continue
 		var d: Vector3 = inv * place.door
 		if absf(d.x) < half + 4.0 and d.z > -0.5 and d.z < 4.0:

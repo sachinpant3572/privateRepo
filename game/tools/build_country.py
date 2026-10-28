@@ -27,7 +27,8 @@ from pathlib import Path
 
 from shapely import constrained_delaunay_triangles
 from shapely.geometry import LineString, MultiLineString, Point, Polygon, box
-from shapely.ops import linemerge, nearest_points, substring, unary_union
+from shapely.geometry.polygon import orient
+from shapely.ops import linemerge, nearest_points, polygonize, substring, unary_union
 from shapely.prepared import prep
 from shapely.strtree import STRtree
 
@@ -142,6 +143,11 @@ LINE_PARTS = ("wall", "hedge", "fence", "gate", "trees")
 # Dwellings of the styles whose homes stand in clusters.
 CLUSTER_HOMES = {"village": ["house", "house", "shack"], "bayou_village": ["stilt_house", "shack"],
                  "bayou_town": ["stilt_house", "shack", "house"]}
+# In those styles a shop or bar stands at least this far from another of its
+# kind. A 48-64 m cluster often fails to fit where a 16 m bar still does, and
+# the frontage redraws every 4 m, so without it bars filled the gaps: 40 of
+# the bayou town's 121 lots (HANDOFF-bellerive-expand BX-6).
+CLUSTER_SHOP_GAP = 220.0
 
 # Suburb zones round the street plan (local metres) and what they hold.
 SUBURB_STYLE = {
@@ -204,6 +210,13 @@ TRACT_LOT = (15.0, 30.0)
 TRACT_PITCH = 79.0          # two 30 m lots back to back, their setbacks and a street
 TRACT_PITCH_MIN = 52.0      # closest tract streets (one from each city street): shallower lots
 TRACT_LOT_SHALLOW = (15.0, 20.0)
+# Sidewalk loops for people (HANDOFF-bellerive-expand.md BX-1).
+WALK_ZONES = ("heights", "bayou_town", "fringe", "eastside", "beach_town", "shore")
+WALK_CLASSES = ("street", "avenue")
+WALK_MID = 1.25             # the middle of a 2.5 m sidewalk, out from the road's edge
+WALK_BLOCK_MAX = 400000.0   # bigger faces are open country, not blocks
+WALK_PART_MIN = 150.0
+WALK_SHARE = 0.6            # of a ring that must run along sidewalks
 CARRY_MAX = 400.0  # how far a city street carries on out to meet a road
 TRACT_ARTERIAL_MIN = 45.0   # closest a tract street from the city runs beside an arterial
 TRACT_BOW = 16.0
@@ -2067,6 +2080,7 @@ class Country:
         for name, poly in self.zones:
             zone_of[name] = prep(poly)
         towns = [(t, prep(t["zone"])) for t in self.town_zones]
+        shops = {}  # kind -> frontage points of shops placed in cluster styles
         towers = {}  # condo towers per tile: two at most keeps a tile's triangles down
         for pi, pc in enumerate(self.pieces):
             cls = pc["cls"]
@@ -2167,6 +2181,11 @@ class Country:
                         else:
                             towers[tkey] = towers.get(tkey, 0) + 1
                     lw, ld = LOT[kind]
+                    if homes and kind not in DWELLINGS:
+                        here = line.interpolate(s).coords[0]
+                        if any(math.hypot(here[0] - o[0], here[1] - o[1]) < CLUSTER_SHOP_GAP for o in shops.get(kind, ())):
+                            s += 4.0
+                            continue
                     s += lw * 0.5
                     if s > line.length - 14.0:
                         break
@@ -2179,6 +2198,8 @@ class Country:
                     off = w * 0.5 + 3.5 + ld * 0.5
                     q = (p[0] + nx * off, p[1] + ny * off)
                     if self.try_lot(q[0], q[1], yaw_facing(nx, ny), kind, "", zname):
+                        if homes and kind not in DWELLINGS:
+                            shops.setdefault(kind, []).append(p)
                         s += lw * 0.5 + self.rng.uniform(2.0, 6.0)
                     else:
                         s += 4.0 - lw * 0.5 + lw * 0.5
@@ -2899,8 +2920,51 @@ class Country:
         self.lot_reach()
         self.wealth = wealth.Wealth(self)
         self.wealth.assign()
+        self.walks_out()
         self.polyline_outputs()
         self.tiles()
+
+    def walks_out(self):
+        """Sidewalk loops for people in Bellerive's suburbs
+        (HANDOFF-bellerive-expand.md BX-1): each block the roads close,
+        less every road's half width and half a sidewalk, leaves a ring
+        down the middle of the sidewalks round it. A ring is kept when
+        most of it runs along streets and avenues (the classes with
+        sidewalks); points every 6 m at most, anticlockwise."""
+        self.walks = []
+        keep = unary_union([p for z, p in self.zones if z in WALK_ZONES])
+        nodes = self.plan["nodes"]
+        frame = [LineString([nodes[a], nodes[b]]) for a, b, cls, road in self.plan["edges"] if road == "frame"]
+        lines = [LineString(pc["pts"]) for pc in self.pieces] + frame
+        cut = unary_union([LineString(pc["pts"]).buffer(CLASSES[pc["cls"]]["w"] * 0.5 + WALK_MID, join_style=2)
+                           for pc in self.pieces] +
+                          [f.buffer(CITY_STREET_W * 0.5 + WALK_MID, join_style=2) for f in frame])
+        walked = unary_union([LineString(pc["pts"]).buffer(CLASSES[pc["cls"]]["w"] * 0.5 + WALK_MID + 0.6)
+                              for pc in self.pieces if pc["cls"] in WALK_CLASSES] +
+                             [f.buffer(CITY_STREET_W * 0.5 + WALK_MID + 0.6) for f in frame])
+        walked_prep = prep(walked)
+        dropped = 0
+        for face in polygonize(unary_union(lines)):
+            if not keep.contains(face.representative_point()) or face.area > WALK_BLOCK_MAX:
+                continue
+            for part in polys_of(face.difference(cut)):
+                if part.area < WALK_PART_MIN:
+                    continue
+                ring = LineString(orient(part.simplify(0.5), 1.0).exterior.coords)
+                if not walked_prep.intersects(ring) or ring.intersection(walked).length < ring.length * WALK_SHARE:
+                    dropped += 1
+                    continue
+                pts = []
+                cs = list(ring.coords)[:-1]
+                for k, a in enumerate(cs):
+                    b = cs[(k + 1) % len(cs)]
+                    steps = max(1, int(math.dist(a, b) / 6.0))
+                    for s in range(steps):
+                        t = s / steps
+                        pts += [round(a[0] + (b[0] - a[0]) * t, 1), round(a[1] + (b[1] - a[1]) * t, 1)]
+                self.walks.append(pts)
+        print("walks: %d loops, %d points, %d rings dropped (mostly roads without sidewalks)"
+              % (len(self.walks), sum(len(w) // 2 for w in self.walks), dropped))
 
     def lot_reach(self):
         """Each lot's `reach`: metres from its front edge (at x = -w/2, 0,
@@ -3170,6 +3234,7 @@ class Country:
             "rails": self.rail_out,
             "far_roads": self.far_out,
             "pivots": self.pivots,
+            "walks": self.walks,
             "tiles": tiles,
         }
 

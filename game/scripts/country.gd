@@ -73,6 +73,10 @@ var towns: Array = []
 var area: Array[PackedVector2Array] = []
 ## [{zone, poly}] suburb zones (Brisa Beach, the Heights...).
 var suburbs: Array = []
+## Sidewalk loops round the suburb blocks inside Bellerive's outline, for
+## people (HANDOFF-bellerive-expand.md BX-1): closed, anticlockwise, points
+## every 6 m at most, in game metres on the ground.
+var walks: Array[PackedVector3Array] = []
 var plan_bounds := Rect2()
 ## Every tile's data: Vector2i -> {g, r, l, w, b, p, t, x, f}.
 var tiles := {}
@@ -156,6 +160,11 @@ func load_data(seed_v := 1234) -> void:
 	pivots = d.get("pivots", [])
 	towns = d.towns
 	suburbs = d.suburbs
+	for w in d.get("walks", []):
+		var loop := PackedVector3Array()
+		for i in range(0, w.size(), 2):
+			loop.append(Vector3(w[i], 0.0, w[i + 1]))
+		walks.append(loop)
 	for ring in d.area:
 		var poly := PackedVector2Array()
 		for p in ring:
