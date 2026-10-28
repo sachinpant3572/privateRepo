@@ -106,6 +106,11 @@ of them); everything in the main session (each call re-reads a context that woul
   lane, one the other way, one from a side street, 25 s; it fails (barriers burst) if the
   lane closure in `lanes_of` is switched off. Shots: `res://tests/world_shots.tscn`
   (COUNT=n roadworks, wide and close), `SHOTS=roads`, `SHOTS=wealth`, `SHOTS=farm`.
+- Full suite after WORLD: 957 passed, 0 failed, in 221 s of run.sh's 300 s cap (2 agents
+  sharing 4 CPUs). The cap is getting close; raise it or split the suite if it is hit.
+- WORLD had no agent tool for the independent review: the main session should review WORLD
+  at merge (city.gd roadworks + lanes_of, city_cells `_works`, country_kit `boundary`/
+  `_lot_fence`/`_gate_leaves`, homes_kit/shady_kit boundary calls).
 
 ## Open questions
 
