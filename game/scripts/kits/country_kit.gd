@@ -18,7 +18,7 @@ const Skyline = preload("res://scripts/kits/skyline_kit.gd")
 
 const KINDS := [
 	# Rural.
-	"farmhouse", "barn", "silos", "machine_shed", "trailer_home", "shack", "stilt_house",
+	"farmhouse", "farmhouse_big", "farmhouse_small", "ranch_house", "adobe_farmhouse", "barn", "silos", "machine_shed", "trailer_home", "shack", "stilt_house",
 	"water_tower", "windpump", "pump_house",
 	# Roadside and town.
 	"gas_station", "diner", "motel", "general_store", "truck_stop", "garage", "town_hall",
@@ -36,7 +36,8 @@ const KINDS := [
 
 ## The usual lot of each kind: x along the street, y deep, metres.
 const FOOTPRINTS := {
-	"farmhouse": Vector2(24, 26), "barn": Vector2(20, 26), "silos": Vector2(16, 14),
+	"farmhouse": Vector2(24, 26), "farmhouse_big": Vector2(26, 20), "farmhouse_small": Vector2(14, 12),
+	"ranch_house": Vector2(22, 14), "adobe_farmhouse": Vector2(18, 15), "barn": Vector2(20, 26), "silos": Vector2(16, 14),
 	"machine_shed": Vector2(24, 18), "trailer_home": Vector2(12, 24), "shack": Vector2(10, 12),
 	"stilt_house": Vector2(14, 16), "water_tower": Vector2(12, 12), "windpump": Vector2(8, 8),
 	"pump_house": Vector2(14, 12),
@@ -110,6 +111,10 @@ static func build(kind: String, mb, out: Array, size: Vector2, rng: RandomNumber
 	var d := maxf(size.y, 3.0)
 	match kind:
 		"farmhouse": farmhouse(mb, out, w, d, rng)
+		"farmhouse_big": farmhouse_big(mb, out, w, d, rng)
+		"farmhouse_small": farmhouse_small(mb, out, w, d, rng)
+		"ranch_house": ranch_house(mb, out, w, d, rng)
+		"adobe_farmhouse": adobe_farmhouse(mb, out, w, d, rng)
 		"barn": barn(mb, out, w, d, rng)
 		"silos": silos(mb, out, w, d, rng)
 		"machine_shed": machine_shed(mb, out, w, d, rng)
@@ -622,9 +627,11 @@ static func farmhouse(mb, out: Array, w: float, d: float, rng: RandomNumberGener
 	mb.box(Vector3(cx, 0.3, cz), Vector3(bw + 0.1, 0.6, bd + 0.1), MeshBuilder.glow(CONCRETE, MeshBuilder.CONCRETE))
 	mb.box(Vector3(cx, h * 0.5 + 0.3, cz), Vector3(bw, h - 0.6, bd), body)
 	_col(out, Vector3(cx, h * 0.5, cz), Vector3(bw, h, bd))
-	var roof: Color = _pick(TIN_ROOFS, rng)
-	_gable(mb, cx, cz, h, bw + 0.8, bd + 0.8, 2.6, MeshBuilder.glow(roof, MeshBuilder.SEAM_ROOF), body)
-	mb.box(Vector3(cx - bw * 0.5 + 1.0, h + 1.4, cz + bd * 0.2), Vector3(0.9, 3.6, 0.9), MeshBuilder.glow(BRICKS[0], MeshBuilder.BRICK))
+	# Tin or shingles; the chimney at either gable end.
+	var roof: Color = MeshBuilder.glow(_pick(TIN_ROOFS, rng), MeshBuilder.SEAM_ROOF) if rng.randf() < 0.6 else _pick(SHINGLES, rng)
+	_gable(mb, cx, cz, h, bw + 0.8, bd + 0.8, 2.6, roof, body)
+	var chim := -1.0 if rng.randf() < 0.5 else 1.0
+	mb.box(Vector3(cx + chim * (bw * 0.5 - 1.0), h + 1.4, cz + bd * 0.2), Vector3(0.9, 3.6, 0.9), MeshBuilder.glow(_pick(BRICKS, rng), MeshBuilder.BRICK))
 	for x: float in [cx - bw * 0.5 + 0.06, cx + bw * 0.5 - 0.06]:
 		mb.box(Vector3(x, h * 0.5 + 0.3, zf - 0.06), Vector3(0.2, h - 0.6, 0.06), TRIM)
 	# Windows: two floors at the front (a door in the middle below), sides, back.
@@ -636,31 +643,18 @@ static func farmhouse(mb, out: Array, w: float, d: float, rng: RandomNumberGener
 	_windows(mb, Vector3(cx + 0.9, 2.0, zf), Vector3(cx + bw * 0.5, 2.0, zf), half, Vector2(1.0, 1.5), rng, Vector3.FORWARD, 0.4, shutter)
 	mb.box(Vector3(cx, 1.7, zf - 0.05), Vector3(1.0, 2.2, 0.1), WOOD.darkened(0.2))
 	_all_windows(mb, cx - bw * 0.5, cx + bw * 0.5, zf, zf + bd, 0.6, 2, FLOOR, 3.0, Vector2(0.9, 1.4), rng, 0.4)
-	# Porch across the front: floor, posts, rail, steps and a shed roof.
+	# Porch across the whole front, or just round the door: floor, posts,
+	# rail, steps and a shed roof.
 	var pd := 2.4
-	mb.box(Vector3(cx, 0.55, zf - pd * 0.5), Vector3(bw, 0.12, pd), MeshBuilder.glow(WOOD.lightened(0.25), MeshBuilder.SIDING))
-	var posts := maxi(2, int(bw / 2.6) + 1)
-	for i in posts:
-		var x := cx - bw * 0.5 + 0.12 + (bw - 0.24) * i / (posts - 1)
-		_solid(mb, out, Vector3(x, 1.95, zf - pd + 0.12), Vector3(0.16, 2.8, 0.16), TRIM)
-	for s: float in [-1.0, 1.0]:
-		var xa := cx + s * 1.0
-		var xb := cx + s * (bw * 0.5 - 0.1)
-		mb.box(Vector3((xa + xb) * 0.5, 1.5, zf - pd + 0.12), Vector3(absf(xb - xa), 0.08, 0.08), TRIM)
-		mb.box(Vector3((xa + xb) * 0.5, 0.9, zf - pd + 0.12), Vector3(absf(xb - xa), 0.06, 0.06), TRIM)
-	mb.box(Vector3(cx, 0.3, zf - pd - 0.45), Vector3(1.8, 0.6, 0.9), MeshBuilder.glow(WOOD.lightened(0.15), MeshBuilder.SIDING))
-	var pr := MeshBuilder.glow(roof, MeshBuilder.SEAM_ROOF)
-	var r0 := Vector3(cx - bw * 0.5 - 0.2, 3.75, zf)
-	var r1 := Vector3(cx + bw * 0.5 + 0.2, 3.75, zf)
-	mb.quad(r0, r1, r1 + Vector3(0, -0.5, -pd - 0.3), r0 + Vector3(0, -0.5, -pd - 0.3), Vector3(0, pd, -0.5).normalized(), pr)
-	mb.box(Vector3(cx, 3.15, zf - pd - 0.25), Vector3(bw + 0.4, 0.2, 0.08), TRIM)
-	# Kitchen wing at the back.
+	var pw := bw if rng.randf() < 0.6 else minf(bw, 4.6)
+	_porch(mb, out, cx, zf, pw, pd, 3.75, roof)
+	# Kitchen wing at the back, to one side or the other.
 	var ww := bw * 0.45
 	var wd := clampf(d * 0.18, 3.0, 5.0)
-	var wx := cx + bw * 0.2
+	var wx := cx + bw * (0.2 if rng.randf() < 0.5 else -0.2)
 	var wz := zf + bd + wd * 0.5
 	_solid(mb, out, Vector3(wx, 1.8, wz), Vector3(ww, 3.6, wd), body)
-	_gable(mb, wx, wz, 3.6, ww + 0.6, wd + 0.6, 1.6, MeshBuilder.glow(roof, MeshBuilder.SEAM_ROOF), body, true)
+	_gable(mb, wx, wz, 3.6, ww + 0.6, wd + 0.6, 1.6, roof, body, true)
 	_windows(mb, Vector3(wx - ww * 0.5, 2.0, wz), Vector3(wx - ww * 0.5, 2.0, wz + wd * 0.5), 1, Vector2(0.9, 1.2), rng, Vector3.LEFT, 0.4)
 	# Gravel drive down the side, a pickup, mailbox, an oak out back.
 	var dx := cx + bw * 0.5 + 3.0
@@ -670,6 +664,350 @@ static func farmhouse(mb, out: Array, w: float, d: float, rng: RandomNumberGener
 	if w >= 18.0:
 		Props.oak(mb, out, Vector3(w * 0.5 - 4.6, 0, d * 0.5 - 4.6), rng)
 
+
+## A porch `pw` wide and `pd` deep before the wall at zf, centred on cx:
+## floor, posts, a rail either side of the steps and a shed roof from `top`.
+static func _porch(mb, out: Array, cx: float, zf: float, pw: float, pd: float, top: float, roof: Color, post := TRIM) -> void:
+	mb.box(Vector3(cx, 0.55, zf - pd * 0.5), Vector3(pw, 0.12, pd), MeshBuilder.glow(WOOD.lightened(0.25), MeshBuilder.SIDING))
+	var posts := maxi(2, int(pw / 2.6) + 1)
+	for i in posts:
+		var x := cx - pw * 0.5 + 0.12 + (pw - 0.24) * i / (posts - 1)
+		_solid(mb, out, Vector3(x, (top + 0.15) * 0.5, zf - pd + 0.12), Vector3(0.16, top - 0.95, 0.16), post)
+	for s: float in [-1.0, 1.0]:
+		var xa := cx + s * 1.0
+		var xb := cx + s * (pw * 0.5 - 0.1)
+		if absf(xb - xa) < 0.3:
+			continue
+		mb.box(Vector3((xa + xb) * 0.5, 1.5, zf - pd + 0.12), Vector3(absf(xb - xa), 0.08, 0.08), post)
+		mb.box(Vector3((xa + xb) * 0.5, 0.9, zf - pd + 0.12), Vector3(absf(xb - xa), 0.06, 0.06), post)
+	mb.box(Vector3(cx, 0.3, zf - pd - 0.45), Vector3(1.8, 0.6, 0.9), MeshBuilder.glow(WOOD.lightened(0.15), MeshBuilder.SIDING))
+	var r0 := Vector3(cx - pw * 0.5 - 0.2, top, zf)
+	var r1 := Vector3(cx + pw * 0.5 + 0.2, top, zf)
+	mb.quad(r0, r1, r1 + Vector3(0, -0.5, -pd - 0.3), r0 + Vector3(0, -0.5, -pd - 0.3), Vector3(0, pd, -0.5).normalized(), roof)
+	mb.box(Vector3(cx, top - 0.6, zf - pd - 0.25), Vector3(pw + 0.4, 0.2, 0.08), post)
+
+
+## The big farmhouse of a prosperous spread: a two-storey main block with
+## a gabled wing stepping forward at one end, a porch wrapping round the
+## other, dormers, two chimneys, a one-storey back kitchen, oaks behind.
+static func farmhouse_big(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator) -> void:
+	var side := 1.0 if rng.randf() < 0.5 else -1.0 # the wing's end
+	var bw := clampf(w * 0.48, 7.0, 15.0)
+	var bd := clampf(d * 0.4, 6.0, 10.0)
+	var ww := clampf(w * 0.24, 4.0, 7.0)
+	var step := 3.0 # the wing stands forward of the main block
+	var pd := 2.6
+	# The pair's left edge: the porch's end just inside the lot, the drive
+	# on the wing's side.
+	var x0 := -w * 0.5 + 0.4 + pd if side > 0.0 else w * 0.5 - 0.4 - pd - bw - ww
+	var cx := x0 + (bw * 0.5 if side > 0.0 else ww + bw * 0.5)
+	var wx := x0 + (bw + ww * 0.5 if side > 0.0 else ww * 0.5)
+	var zf := -d * 0.5 + clampf(d * 0.3, 5.0, 8.0)
+	var cz := zf + bd * 0.5
+	var wz0 := zf - step
+	var wcz := (wz0 + zf + bd) * 0.5
+	var wd := zf + bd - wz0
+	var siding: Color = [WHITE, Color(0.95, 0.91, 0.8), Color(0.93, 0.9, 0.84), SIDINGS[3]][rng.randi() % 4]
+	var body := MeshBuilder.glow(siding, MeshBuilder.SIDING)
+	var shutter: Color = [Color(0.12, 0.14, 0.16), Color(0.16, 0.3, 0.22), Color(0.42, 0.14, 0.12)][rng.randi() % 3]
+	var roof: Color = _pick(SHINGLES, rng) if rng.randf() < 0.55 else MeshBuilder.glow(_pick(TIN_ROOFS, rng), MeshBuilder.SEAM_ROOF)
+	var h := 2.0 * FLOOR + 0.6
+	_pad(mb, -w * 0.5, w * 0.5, -d * 0.5, d * 0.5, MeshBuilder.glow(LAWN, MeshBuilder.GRASS))
+	var found := MeshBuilder.glow(CONCRETE, MeshBuilder.CONCRETE)
+	mb.box(Vector3(cx, 0.3, cz), Vector3(bw + 0.1, 0.6, bd + 0.1), found)
+	mb.box(Vector3(wx, 0.3, wcz), Vector3(ww + 0.1, 0.6, wd + 0.1), found)
+	mb.box(Vector3(cx, h * 0.5 + 0.3, cz), Vector3(bw, h - 0.6, bd), body)
+	mb.box(Vector3(wx, h * 0.5 + 0.3, wcz), Vector3(ww, h - 0.6, wd), body)
+	_col(out, Vector3(cx, h * 0.5, cz), Vector3(bw, h, bd))
+	_col(out, Vector3(wx, h * 0.5, wcz), Vector3(ww, h, wd))
+	_gable(mb, cx, cz, h, bw + 0.8, bd + 0.8, 3.0, roof, body)
+	_gable(mb, wx, wcz, h, ww + 0.8, wd + 0.8, 3.4, roof, body, true)
+	var brick := MeshBuilder.glow(_pick(BRICKS, rng), MeshBuilder.BRICK)
+	for x: float in [cx - side * (bw * 0.5 - 0.9), wx]:
+		var z := cz if x != wx else zf + bd - 1.2
+		mb.box(Vector3(x, h + 2.0, z), Vector3(1.0, 4.2, 1.0), brick)
+	# Corner boards, then windows: two floors on the main front either side
+	# of the door, a pair a floor on the wing's gable end, all round.
+	for x: float in [cx - bw * 0.5 + 0.06, cx + bw * 0.5 - 0.06]:
+		mb.box(Vector3(x, h * 0.5 + 0.3, zf - 0.06), Vector3(0.2, h - 0.6, 0.06), TRIM)
+	var y0 := 2.0
+	var y1 := 0.6 + FLOOR + 1.6
+	var n := maxi(3, int(bw / 2.3))
+	_windows(mb, Vector3(cx - bw * 0.5, y1, zf), Vector3(cx + bw * 0.5, y1, zf), n, Vector2(1.0, 1.6), rng, Vector3.FORWARD, 0.4, shutter)
+	var half := maxi(1, int((bw * 0.5 - 1.0) / 2.3))
+	_windows(mb, Vector3(cx - bw * 0.5, y0, zf), Vector3(cx - 1.0, y0, zf), half, Vector2(1.0, 1.6), rng, Vector3.FORWARD, 0.4, shutter)
+	_windows(mb, Vector3(cx + 1.0, y0, zf), Vector3(cx + bw * 0.5, y0, zf), half, Vector2(1.0, 1.6), rng, Vector3.FORWARD, 0.4, shutter)
+	mb.box(Vector3(cx, 1.75, zf - 0.05), Vector3(1.3, 2.3, 0.1), WOOD.darkened(0.25))
+	mb.box(Vector3(cx, 3.05, zf - 0.06), Vector3(1.5, 0.5, 0.08), Buildings._window(rng, 0.5))
+	for y: float in [y0, y1]:
+		_windows(mb, Vector3(wx - ww * 0.5, y, wz0), Vector3(wx + ww * 0.5, y, wz0), 2, Vector2(1.0, 1.6), rng, Vector3.FORWARD, 0.4, shutter)
+	mb.box(Vector3(wx, h + 1.2, wz0 - 0.45), Vector3(0.9, 0.9, 0.08), Buildings._window(rng, 0.3))
+	_all_windows(mb, cx - bw * 0.5, cx + bw * 0.5, zf, zf + bd, 0.6, 2, FLOOR, 3.0, Vector2(0.9, 1.4), rng, 0.4)
+	_all_windows(mb, wx - ww * 0.5, wx + ww * 0.5, wz0, zf + bd, 0.6, 2, FLOOR, 3.0, Vector2(0.9, 1.4), rng, 0.4)
+	# Two dormers on the main roof's front slope.
+	for k: float in [-0.25, 0.25]:
+		var dx := cx + k * bw
+		var dz := zf + 1.4
+		mb.box(Vector3(dx, h + 1.05, dz), Vector3(1.6, 1.7, 2.4), body)
+		_gable(mb, dx, dz, h + 1.9, 2.0, 2.6, 0.8, roof, body, true)
+		mb.box(Vector3(dx, h + 1.1, dz - 1.22), Vector3(0.8, 0.9, 0.06), Buildings._window(rng, 0.4))
+	# The porch: along the main front and round its far end.
+	var top := 3.8
+	_porch(mb, out, cx, zf, bw, pd, top, roof)
+	var ex := cx - side * (bw * 0.5 + pd * 0.5)
+	mb.box(Vector3(ex, 0.55, zf + 2.0 - pd * 0.5), Vector3(pd, 0.12, 4.0 + pd), MeshBuilder.glow(WOOD.lightened(0.25), MeshBuilder.SIDING))
+	for z: float in [zf + 1.6, zf + 3.8]:
+		_solid(mb, out, Vector3(ex - side * (pd * 0.5 - 0.12), (top + 0.15) * 0.5, z), Vector3(0.16, top - 0.95, 0.16), TRIM)
+	var ea := Vector3(cx - side * bw * 0.5, top, zf - pd - 0.3)
+	var eb := Vector3(cx - side * bw * 0.5, top, zf + 4.2)
+	var off := Vector3(-side * (pd + 0.3), -0.5, 0)
+	mb.quad(ea, eb, eb + off, ea + off, Vector3(-side * 0.5, pd, 0).normalized(), roof)
+	# A one-storey back kitchen, the drive down the wing's side, two oaks.
+	var kx := cx - side * bw * 0.15
+	var kd := minf(d * 0.5 - zf - bd - 0.4, 5.0)
+	if kd >= 2.5:
+		_solid(mb, out, Vector3(kx, 1.8, zf + bd + kd * 0.5), Vector3(bw * 0.5, 3.6, kd), body)
+		_gable(mb, kx, zf + bd + kd * 0.5, 3.6, bw * 0.5 + 0.6, kd + 0.3, 1.6, roof, body, true)
+	# The drive beside the wing when there is room, else the car out front.
+	var we := absf(wx + side * ww * 0.5)
+	var drx := side * (we + (w * 0.5 - we) * 0.5)
+	if w * 0.5 - we > 3.8:
+		_pad(mb, drx - 1.6, drx + 1.6, -d * 0.5, zf + bd, MeshBuilder.glow(GRAVEL, MeshBuilder.CONCRETE), 0.04)
+		_pickup(mb, out, Vector3(drx, 0, zf + bd * 0.5), 0.0, _pick(PAINTS, rng))
+	else:
+		_car(mb, out, Vector3(cx, 0, -d * 0.5 + 1.6), PI * 0.5, _pick(PAINTS, rng))
+	_rural_mailbox(mb, Vector3(side * (w * 0.5 - 1.0), 0, -d * 0.5 + 0.5))
+	if w >= 22.0:
+		Props.oak(mb, out, Vector3(-side * (w * 0.5 - 4.6), 0, d * 0.5 - 4.6), rng)
+		Props.oak(mb, out, Vector3(side * (w * 0.5 - 4.6), 0, d * 0.5 - 4.6), rng)
+
+
+## A one-storey cottage: steep roof (its gable end to the road on some),
+## a stoop under a little canopy, a chimney, a clothesline and a
+## vegetable patch; a bicycle by the stoop on some.
+static func farmhouse_small(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator) -> void:
+	var bw := clampf(w * 0.58, 6.0, 8.5)
+	var bd := clampf(d * 0.5, 5.0, 7.0)
+	var cx := -w * 0.5 + 1.5 + bw * 0.5
+	var zf := -d * 0.5 + clampf(d * 0.25, 2.4, 4.0)
+	var cz := zf + bd * 0.5
+	var weathered := rng.randf() < 0.35
+	var siding: Color = OLD_WOOD if weathered else _pick(SIDINGS, rng)
+	var body := MeshBuilder.glow(siding, MeshBuilder.SIDING)
+	var roof: Color = MeshBuilder.glow(RUST if weathered else _pick(TIN_ROOFS, rng), MeshBuilder.SEAM_ROOF)
+	if not weathered and rng.randf() < 0.4:
+		roof = _pick(SHINGLES, rng)
+	var h := FLOOR + 0.5
+	_pad(mb, -w * 0.5, w * 0.5, -d * 0.5, d * 0.5, MeshBuilder.glow(LAWN.lerp(STRAW, 0.35), MeshBuilder.GRASS))
+	# Piers under a raised floor.
+	for x: float in [cx - bw * 0.5 + 0.3, cx, cx + bw * 0.5 - 0.3]:
+		for z: float in [zf + 0.3, zf + bd - 0.3]:
+			mb.box(Vector3(x, 0.25, z), Vector3(0.4, 0.5, 0.4), MeshBuilder.glow(CONCRETE, MeshBuilder.CONCRETE))
+	mb.box(Vector3(cx, h * 0.5 + 0.25, cz), Vector3(bw, h - 0.5, bd), body)
+	_col(out, Vector3(cx, h * 0.5, cz), Vector3(bw, h, bd))
+	var end_on := rng.randf() < 0.45
+	_gable(mb, cx, cz, h, bw + 0.7, bd + 0.7, 2.6 if end_on else 2.2, roof, body, end_on)
+	var cs := -1.0 if rng.randf() < 0.5 else 1.0
+	mb.box(Vector3(cx + cs * (bw * 0.5 + 0.35), (h + 1.8) * 0.5, cz + bd * 0.15), Vector3(0.7, h + 1.8, 1.0), MeshBuilder.glow(Color(0.55, 0.52, 0.48) if weathered else _pick(BRICKS, rng), MeshBuilder.BRICK))
+	# Door off centre, a window either side, windows round the sides.
+	var door := cx + (bw * 0.12 if rng.randf() < 0.5 else -bw * 0.12)
+	mb.box(Vector3(door, 1.55, zf - 0.05), Vector3(0.95, 2.1, 0.1), WOOD.darkened(0.2) if not weathered else OLD_WOOD.darkened(0.35))
+	for x: float in [cx - bw * 0.32, cx + bw * 0.32]:
+		if absf(x - door) > 1.4:
+			_windows(mb, Vector3(x - 0.5, 2.1, zf), Vector3(x + 0.5, 2.1, zf), 1, Vector2(0.9, 1.2), rng, Vector3.FORWARD, 0.4)
+	_all_windows(mb, cx - bw * 0.5, cx + bw * 0.5, zf, zf + bd, 0.5, 1, FLOOR, 3.2, Vector2(0.8, 1.1), rng, 0.4)
+	# The stoop and its canopy on two brackets.
+	var stoop := MeshBuilder.glow(WOOD.lightened(0.15), MeshBuilder.SIDING)
+	mb.box(Vector3(door, 0.45, zf - 0.7), Vector3(1.8, 0.12, 1.4), stoop)
+	mb.box(Vector3(door, 0.2, zf - 1.6), Vector3(1.2, 0.4, 0.5), stoop)
+	_gable(mb, door, zf - 0.6, 2.9, 1.8, 1.3, 0.5, roof, body, true)
+	for s: float in [-0.8, 0.8]:
+		mb.box(Vector3(door + s, 2.7, zf - 0.45), Vector3(0.1, 0.4, 0.8), TRIM if not weathered else OLD_WOOD)
+	# Clothesline on the far side, a vegetable patch before it.
+	var lx := clampf(cx + bw * 0.5 + 2.2, -w * 0.5 + 1.0, w * 0.5 - 1.0)
+	var post := Color(0.5, 0.48, 0.45)
+	for z: float in [zf + 0.5, zf + bd]:
+		mb.box(Vector3(lx, 1.1, z), Vector3(0.1, 2.2, 0.1), post)
+		mb.box(Vector3(lx, 2.15, z), Vector3(1.2, 0.08, 0.08), post)
+	for s: float in [-0.5, 0.5]:
+		mb.box(Vector3(lx + s, 2.1, zf + 0.5 + (bd - 0.5) * 0.5), Vector3(0.02, 0.02, bd - 0.5), Color(0.85, 0.85, 0.82))
+	for i in 3:
+		var cloth: Color = [Color(0.9, 0.9, 0.88), Color(0.35, 0.45, 0.65), Color(0.75, 0.3, 0.28)][rng.randi() % 3]
+		mb.box(Vector3(lx + (0.5 if i % 2 == 0 else -0.5), 1.75, zf + 1.4 + i * (bd - 1.6) / 3.0), Vector3(0.04, 0.7, 0.8), cloth)
+	var gz0 := -d * 0.5 + 0.8
+	var gz1 := zf - 0.8
+	if gz1 - gz0 > 1.2:
+		_pad(mb, lx - 1.4, lx + 1.2, gz0, gz1, MeshBuilder.glow(DIRT, MeshBuilder.GRASS), 0.05)
+		var row := gz0 + 0.4
+		while row < gz1 - 0.2:
+			mb.box(Vector3(lx - 0.1, 0.2, row), Vector3(2.2, 0.3, 0.3), Color(0.32, 0.48, 0.22))
+			row += 0.8
+	if rng.randf() < 0.6:
+		Props.bike(mb, Vector3(door + 1.6, 0, zf - 0.4), _pick(PAINTS, rng))
+	_rural_mailbox(mb, Vector3(-w * 0.5 + 0.6, 0, -d * 0.5 + 0.4))
+
+
+## A long one-storey ranch house under a low hip roof with deep eaves:
+## a brick wainscot, a picture window, a stone chimney, an attached
+## carport with the car under it and a split-rail fence along the road.
+static func ranch_house(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator) -> void:
+	var side := 1.0 if rng.randf() < 0.5 else -1.0 # the carport's end
+	var cw := clampf(w * 0.24, 4.5, 6.0)
+	var bw := clampf(w - cw - 3.0, 10.0, 17.0)
+	var bd := clampf(d * 0.55, 6.5, 9.0)
+	var x0 := -(bw + cw) * 0.5
+	var cx := x0 + (bw * 0.5 if side > 0.0 else cw + bw * 0.5)
+	var px := x0 + (bw + cw * 0.5 if side > 0.0 else cw * 0.5)
+	var zf := -d * 0.5 + clampf(d * 0.25, 3.0, 5.0)
+	var cz := zf + bd * 0.5
+	var siding: Color = [Color(0.76, 0.68, 0.55), Color(0.62, 0.66, 0.55), Color(0.58, 0.45, 0.34), Color(0.84, 0.8, 0.7), Color(0.55, 0.6, 0.64)][rng.randi() % 5]
+	var body := MeshBuilder.glow(siding, MeshBuilder.SIDING) if rng.randf() < 0.6 else siding
+	var roof: Color = _pick(SHINGLES, rng) if rng.randf() < 0.7 else MeshBuilder.glow(_pick(TIN_ROOFS, rng), MeshBuilder.SEAM_ROOF)
+	const H := 3.0
+	_pad(mb, -w * 0.5, w * 0.5, -d * 0.5, d * 0.5, MeshBuilder.glow(LAWN, MeshBuilder.GRASS))
+	mb.box(Vector3(cx, 0.15, cz), Vector3(bw + 0.1, 0.3, bd + 0.1), MeshBuilder.glow(CONCRETE, MeshBuilder.CONCRETE))
+	mb.box(Vector3(cx, H * 0.5 + 0.15, cz), Vector3(bw, H - 0.3, bd), body)
+	_col(out, Vector3(cx, H * 0.5, cz), Vector3(bw, H, bd))
+	var brick := MeshBuilder.glow(_pick(BRICKS, rng), MeshBuilder.BRICK)
+	mb.box(Vector3(cx, 0.65, zf - 0.04), Vector3(bw + 0.08, 1.0, 0.1), brick)
+	_hip(mb, Vector3(cx, H, cz), bw + 1.8, bd + 1.8, 1.5, roof)
+	# Stone chimney through the roof at the far end from the carport.
+	var stone := MeshBuilder.glow(Color(0.58, 0.55, 0.5), MeshBuilder.BRICK)
+	mb.box(Vector3(cx - side * (bw * 0.5 - 1.6), H + 0.9, cz + 0.6), Vector3(1.1, 2.6, 1.1), stone)
+	# The front: a picture window, the door, a ribbon of bedroom windows.
+	var door := cx - side * bw * 0.08
+	mb.box(Vector3(door, 1.25, zf - 0.06), Vector3(1.0, 2.1, 0.1), _pick(ACCENTS, rng).darkened(0.25))
+	var pic := door - side * 2.4
+	mb.box(Vector3(pic, 1.75, zf - 0.07), Vector3(2.8, 1.4, 0.08), Buildings._window(rng, 0.5))
+	mb.box(Vector3(pic, 1.0, zf - 0.12), Vector3(3.0, 0.1, 0.18), TRIM)
+	var ra := door + side * 1.2
+	var rb := cx + side * (bw * 0.5 - 0.5)
+	var nr := maxi(1, int(absf(rb - ra) / 2.2))
+	_windows(mb, Vector3(minf(ra, rb), 1.95, zf), Vector3(maxf(ra, rb), 1.95, zf), nr, Vector2(1.2, 0.8), rng, Vector3.FORWARD, 0.4)
+	_all_windows(mb, cx - bw * 0.5, cx + bw * 0.5, zf, zf + bd, 0.15, 1, H, 3.4, Vector2(1.1, 0.9), rng, 0.4)
+	mb.box(Vector3(door, 0.18, zf - 0.8), Vector3(2.2, 0.16, 1.4), MeshBuilder.glow(CONCRETE, MeshBuilder.CONCRETE))
+	# The carport: four steel posts and a flat roof, the car beneath.
+	var steel := Color(0.42, 0.44, 0.46)
+	for x: float in [px - cw * 0.5 + 0.2, px + cw * 0.5 - 0.2]:
+		for z: float in [zf + 0.2, zf + bd - 0.2]:
+			_solid(mb, out, Vector3(x, 1.4, z), Vector3(0.14, 2.8, 0.14), steel)
+	mb.box(Vector3(px, 2.86, cz), Vector3(cw + 0.4, 0.14, bd + 0.6), roof)
+	mb.box(Vector3(px, 2.75, zf - 0.2), Vector3(cw + 0.4, 0.22, 0.08), TRIM)
+	_pad(mb, px - cw * 0.5, px + cw * 0.5, -d * 0.5, zf + bd, MeshBuilder.glow(CONCRETE, MeshBuilder.CONCRETE), 0.04)
+	_car(mb, out, Vector3(px, 0, cz), 0.0, _pick(PAINTS, rng))
+	# Split-rail fence along the road, open at the drive.
+	var rail := Color(0.5, 0.42, 0.33)
+	var fz := -d * 0.5 + 0.4
+	var gap0 := px - cw * 0.5 - 0.4
+	var gap1 := px + cw * 0.5 + 0.4
+	var x := -w * 0.5 + 0.3
+	while x < w * 0.5 - 0.3:
+		var nx := minf(x + 2.6, w * 0.5 - 0.3)
+		if nx < gap0 or x > gap1:
+			mb.box(Vector3(x, 0.55, fz), Vector3(0.16, 1.1, 0.16), rail)
+			mb.box(Vector3(nx, 0.55, fz), Vector3(0.16, 1.1, 0.16), rail)
+			for y: float in [0.45, 0.85]:
+				mb.box(Vector3((x + nx) * 0.5, y, fz), Vector3(nx - x, 0.1, 0.08), rail)
+		x = nx
+	_rural_mailbox(mb, Vector3(gap0 - 0.6 if side > 0.0 else gap1 + 0.6, 0, -d * 0.5 + 0.4))
+	if d >= 13.0 and w >= 18.0:
+		Props.oak(mb, out, Vector3(cx - side * bw * 0.3, 0, d * 0.5 - 4.6), rng)
+
+
+## An adobe farmhouse: thick stucco walls under a low terracotta roof, a
+## front portal on dark posts with the roof beams showing, deep-set
+## windows with painted frames, a walled courtyard with an arched gate
+## and agaves, chile ristras by the door.
+static func adobe_farmhouse(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator) -> void:
+	var side := 1.0 if rng.randf() < 0.5 else -1.0 # the courtyard's side
+	var bw := clampf(w * 0.58, 7.0, 13.0)
+	var bd := clampf(d * 0.45, 4.5, 8.0)
+	var cx := -side * (w * 0.5 - 1.2 - bw * 0.5)
+	var zf := -d * 0.5 + clampf(d * 0.3, 2.5, 5.5)
+	var cz := zf + bd * 0.5
+	var stucco: Color = [Color(0.86, 0.72, 0.56), Color(0.9, 0.8, 0.64), Color(0.8, 0.6, 0.46), Color(0.92, 0.86, 0.74)][rng.randi() % 4]
+	var tile := MeshBuilder.glow(TERRACOTTA.lerp(Color(0.66, 0.34, 0.24), rng.randf()), MeshBuilder.SEAM_ROOF)
+	var frame: Color = [Color(0.15, 0.4, 0.55), Color(0.2, 0.5, 0.45), Color(0.45, 0.22, 0.16)][rng.randi() % 3]
+	const H := 3.6
+	_pad(mb, -w * 0.5, w * 0.5, -d * 0.5, d * 0.5, MeshBuilder.glow(DIRT.lerp(STRAW, 0.4), MeshBuilder.GRASS))
+	_solid(mb, out, Vector3(cx, H * 0.5, cz), Vector3(bw, H, bd), stucco)
+	_hip(mb, Vector3(cx, H, cz), bw + 1.0, bd + 1.0, 1.3, tile)
+	# A back wing at the far end makes an L.
+	var ww := bw * 0.4
+	var wd := minf(d * 0.5 - zf - bd - 0.5, 5.0)
+	var wx := cx - side * (bw * 0.5 - ww * 0.5)
+	if wd >= 2.0:
+		_solid(mb, out, Vector3(wx, (H - 0.4) * 0.5, zf + bd + wd * 0.5), Vector3(ww, H - 0.4, wd), stucco.darkened(0.04))
+		_hip(mb, Vector3(wx, H - 0.4, zf + bd + wd * 0.5), ww + 0.8, wd + 0.8, 1.0, tile)
+	mb.box(Vector3(cx + side * bw * 0.25, H + 1.0, cz + 0.8), Vector3(0.9, 1.6, 0.9), stucco.darkened(0.08))
+	# Deep-set windows and the door, framed in paint.
+	var n := maxi(2, int(bw / 3.0))
+	for i in n:
+		var x := cx - bw * 0.5 + bw * (i + 0.5) / n
+		if absf(x - cx) < 1.2:
+			continue
+		mb.box(Vector3(x, 1.9, zf - 0.05), Vector3(1.2, 1.5, 0.1), frame)
+		mb.box(Vector3(x, 1.9, zf - 0.07), Vector3(0.9, 1.2, 0.1), Buildings._window(rng, 0.4))
+		mb.box(Vector3(x, 1.08, zf - 0.18), Vector3(1.3, 0.12, 0.3), stucco.darkened(0.1))
+	mb.box(Vector3(cx, 1.2, zf - 0.05), Vector3(1.4, 2.4, 0.1), frame)
+	mb.box(Vector3(cx, 1.15, zf - 0.07), Vector3(1.1, 2.3, 0.1), WOOD.darkened(0.3))
+	_all_windows(mb, cx - bw * 0.5, cx + bw * 0.5, zf, zf + bd, 0.0, 1, H, 3.4, Vector2(0.8, 1.0), rng, 0.4, false)
+	# The portal: posts, a beam, a flat roof with the vigas poking out.
+	var post := Color(0.3, 0.2, 0.13)
+	var pd := 2.4
+	var pw := bw * 0.7
+	var pz := zf - pd
+	mb.box(Vector3(cx, 0.08, zf - pd * 0.5), Vector3(pw, 0.16, pd), MeshBuilder.glow(Color(0.62, 0.42, 0.32), MeshBuilder.BRICK))
+	var posts := maxi(3, int(pw / 2.4) + 1)
+	for i in posts:
+		var x := cx - pw * 0.5 + 0.15 + (pw - 0.3) * i / (posts - 1)
+		_solid(mb, out, Vector3(x, 1.4, pz + 0.15), Vector3(0.24, 2.8, 0.24), post)
+	mb.box(Vector3(cx, 2.9, pz + 0.15), Vector3(pw + 0.3, 0.3, 0.3), post)
+	mb.box(Vector3(cx, 3.12, zf - pd * 0.5), Vector3(pw + 0.3, 0.16, pd + 0.2), stucco.darkened(0.12))
+	var v := cx - pw * 0.5 + 0.4
+	while v < cx + pw * 0.5:
+		mb.box(Vector3(v, 2.98, pz - 0.1), Vector3(0.14, 0.14, 0.5), post)
+		v += 0.9
+	for k in 3:
+		mb.box(Vector3(cx - bw * 0.5 + 1.0 + k * (bw - 2.0) * 0.5, H - 0.35, zf - 0.25), Vector3(0.18, 0.18, 0.5), post)
+	# The courtyard: a low wall from the house's front corner out to the
+	# road and along it, with an arched gate; agaves inside.
+	var wall := stucco.darkened(0.06)
+	var ex := cx + side * bw * 0.5
+	var fx := side * (w * 0.5 - 0.4)
+	var fz := -d * 0.5 + 0.4
+	var cxw := (ex + fx) * 0.5
+	var span := absf(fx - ex)
+	if span > 2.5:
+		_solid(mb, out, Vector3(fx, 0.75, (fz + zf + bd) * 0.5), Vector3(0.4, 1.5, zf + bd - fz), wall)
+		_solid(mb, out, Vector3(cxw, 0.75, zf + bd), Vector3(span, 1.5, 0.4), wall)
+		_solid(mb, out, Vector3(ex, 0.75, (fz + zf) * 0.5), Vector3(0.4, 1.5, zf - fz), wall)
+		var g0 := cxw - 1.1
+		var g1 := cxw + 1.1
+		for pair in [[minf(ex, fx), g0], [g1, maxf(ex, fx)]]:
+			if pair[1] - pair[0] > 0.3:
+				_solid(mb, out, Vector3((pair[0] + pair[1]) * 0.5, 0.75, fz), Vector3(pair[1] - pair[0], 1.5, 0.4), wall)
+		for x: float in [g0 - 0.25, g1 + 0.25]:
+			mb.box(Vector3(x, 1.3, fz), Vector3(0.5, 2.6, 0.5), wall)
+		mb.box(Vector3(cxw, 2.75, fz), Vector3(3.0, 0.4, 0.5), wall)
+		mb.box(Vector3(cxw, 2.98, fz), Vector3(3.2, 0.1, 0.6), tile)
+		for i in 3:
+			_agave(mb, Vector3(cxw + (i - 1) * span * 0.28, 0, (fz + zf) * 0.5 + (i % 2) * 1.6), rng)
+	# Chile ristras either side of the door.
+	for s: float in [-0.95, 0.95]:
+		mb.box(Vector3(cx + s, 2.0, zf - 0.12), Vector3(0.18, 0.8, 0.18), Color(0.7, 0.12, 0.1))
+	_rural_mailbox(mb, Vector3(-side * (w * 0.5 - 0.8), 0, -d * 0.5 + 0.4))
+
+
+## A clump of agave: stiff blue-green leaves fanned up from the ground.
+static func _agave(mb, p: Vector3, rng: RandomNumberGenerator) -> void:
+	var leaf := Color(0.42, 0.56, 0.5)
+	var n := 7 + rng.randi() % 3
+	for i in n:
+		var a := TAU * i / n + rng.randf() * 0.3
+		var r := 0.55 + rng.randf() * 0.25
+		mb.limb(p + Vector3(0, 0.05, 0), p + Vector3(cos(a) * r, 0.5 + rng.randf() * 0.35, sin(a) * r), 0.09, 0.01, leaf, 4, false)
+	mb.limb(p, p + Vector3(0, 0.6, 0), 0.12, 0.02, leaf.darkened(0.1), 4, false)
 
 ## Red barn with a gambrel roof, its gable end to the lane: white-trimmed
 ## doors with X braces, a hayloft door, a cupola, a lean-to and hay bales.

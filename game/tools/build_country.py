@@ -70,6 +70,9 @@ LOT = {
     "brownstone_row": (36, 14), "painted_lady_row": (36, 14),
     # The Bellerive Hills (tools/mountain.py), built from the skyline kit.
     "pump_house": (12, 9),
+    # Farmhouses beside the plain one: big, small, ranch and adobe.
+    "farmhouse_big": (26, 20), "farmhouse_small": (14, 12), "ranch_house": (22, 14),
+    "adobe_farmhouse": (18, 15),
     "observatory": OBSERVATORY_SIZE, "hill_letters": LETTERS_SIZE, "radio_mast": MAST_SIZE,
 }
 KINDS = list(LOT)
@@ -126,6 +129,7 @@ TENNIS_BACK = 21.0      # depth behind an estate house for a tennis court across
 FIELD_CELL = 44.0
 # Golden Flats farmsteads stand at least this far apart (m).
 FLATS_FARM_GAP = 520.0
+HOMESTEAD_GAP = 260.0  # a homestead from any other farm or homestead
 FIELD_PITCH = 50.0
 # Line parts: their w runs along their own x.
 LINE_PARTS = ("wall", "hedge", "fence", "gate", "trees")
@@ -458,6 +462,7 @@ class Country:
         r = city["rect"]
         self.city_rect = box(r[0] - self.origin[0], r[1] - self.origin[1], r[0] + r[2] - self.origin[0], r[1] + r[3] - self.origin[1])
         self.rng = random.Random(1234)
+        self.house_decks = {}
         self.sources = []  # [LineString, cls, name, kind] drivable or trail
         self.render_only = []  # roads beyond the play area: [LineString, cls]
         self.rails = []  # [LineString, kind]
@@ -1498,8 +1503,39 @@ class Country:
                 seg = LineString([end, q.coords[0]])
                 if seg.crosses(self.P) or self.water_prep.intersects(seg.buffer(1.0)):
                     continue
+                if seg.intersection(line.buffer(0.5)).length > 2.0:
+                    continue  # it would run back along its own road
                 extra.append([seg, cls if CLASSES[cls]["prio"] <= CLASSES[drivable[best][1]]["prio"] else drivable[best][1], name, kind])
         self.sources.extend(extra)
+
+    def trim_farm_stubs(self):
+        """A section road that runs out at the flats' edge onto nothing is cut
+        back to the last road it crosses (or, crossing none, made a dirt
+        track), so no paved road stops dead in a field; repeated, since a cut
+        can take away another one's crossing."""
+        cut = True
+        while cut:
+            cut = False
+            drivable = [s for s in self.sources if CLASSES[s[1]]["graph"]]
+            for src in drivable:
+                if src[3] != "farm_grid":
+                    continue
+                others = unary_union([o[0] for o in drivable if o is not src])
+                for at_end in (False, True):
+                    line = src[0]
+                    end = Point(line.coords[-1] if at_end else line.coords[0])
+                    if self.A.exterior.distance(end) < 12.0 or others.distance(end) < 2.0:
+                        continue
+                    cuts = [line.project(Point(h)) for h in self._points(line.intersection(others))]
+                    cuts = [c for c in cuts if 1.0 < c < line.length - 1.0]
+                    if not cuts:
+                        # Hung only from its far end: a dirt track to the field.
+                        src[1], src[2], src[3] = "track", "", "farm_track"
+                        cut = True
+                        break
+                    s_cut = max(cuts) if at_end else min(cuts)
+                    src[0] = substring(line, 0.0, s_cut) if at_end else substring(line, s_cut, line.length)
+                    cut = True
 
     # --- Graph --------------------------------------------------------------------
 
@@ -1973,13 +2009,18 @@ class Country:
     def farmyard_at(self, q, template, zone):
         """A farmstead on a fenced yard: house nearest the road, barn, silos
         and sheds behind, a windbreak on the north and west sides."""
-        lots, parts, (W, D) = farmyard_layout(template, self.rng)
+        deck = self.house_decks.setdefault(template, [])
+        if not deck:
+            deck.extend(k for k, cards in FARM_HOUSES[template] for _ in range(cards))
+            self.rng.shuffle(deck)
+        lots, parts, (W, D) = farmyard_layout(template, self.rng, deck[-1])
         spot = self._front_spot(q, W, D, 6.0)
         if spot is None:
             return False
         c, yaw, n, poly = spot
         if not self._free(poly, yaw):
             return False
+        deck.pop()
         # Windbreak rows along the sides (not the front) that face north (-y) or west (-x).
         x0, z0, x1, z1 = -W * 0.5, -D * 0.5, W * 0.5, D * 0.5
         sides = []
@@ -2161,6 +2202,7 @@ class Country:
         town_prep = [prep(t["zone"].buffer(60)) for t in self.town_zones]
         suburb = prep(unary_union([z[1] for z in self.zones]).buffer(60))
         flats_farms = []
+        flats_homes = []
         for i, pc in enumerate(self.pieces):
             if pc["cls"] not in ("road", "lane", "track", "highway"):
                 continue
@@ -2175,13 +2217,19 @@ class Country:
                 sgn = 1.0 if self.rng.random() < 0.5 else -1.0
                 q = self._side_point(line, s, sgn, self.front_half[i] + 30.0)
                 if reg == "golden_flats":
-                    # One to a few sections: the pivots need the room.
+                    # One farm to a few sections: the pivots need the room.
+                    # Between them, a homestead here and there on its own.
                     placed = False
+                    gap = self.rng.uniform(380, 700)
                     if all(dist(q, f) > FLATS_FARM_GAP for f in flats_farms):
                         placed = self.farmyard_at(q, "flats", reg)
                         if placed:
                             flats_farms.append(q)
-                    gap = self.rng.uniform(380, 700)
+                    if not placed and all(dist(q, f) > HOMESTEAD_GAP for f in flats_farms + flats_homes):
+                        placed = self.farmyard_at(q, "homestead", reg)
+                        if placed:
+                            flats_homes.append(q)
+                            gap = self.rng.uniform(200, 420)
                 elif reg == "saltgrass":
                     placed = self.cluster_at(q, self.rng.uniform(40.0, 56.0), self.rng.uniform(34.0, 42.0),
                                              ["shack", "stilt_house", "trailer_home"], "camp", reg)
@@ -2803,6 +2851,7 @@ class Country:
         self.farm_roads()
         self.trim_route_stubs()
         self.join_ends()
+        self.trim_farm_stubs()
         self.graph()
         self.build_graph_arrays()
         self._pier_land()
@@ -3220,19 +3269,39 @@ def cluster_layout(W, D, kinds, style, rng):
     return parts, homes, gx
 
 
-def farmyard_layout(template, rng):
+# The houses a kind of farmstead is dealt, a shuffled deck at a time so
+# each turns up in its share: (kind, cards in the deck).
+FARM_HOUSES = {
+    "flats": [("farmhouse_big", 4), ("farmhouse", 2), ("adobe_farmhouse", 2), ("ranch_house", 2)],
+    "homestead": [("farmhouse_small", 4), ("ranch_house", 3), ("farmhouse", 2), ("adobe_farmhouse", 2)],
+    "hills": [("farmhouse", 2), ("adobe_farmhouse", 1), ("farmhouse_small", 1)],
+}
+
+
+def farmyard_layout(template, rng, house="farmhouse"):
     """A farmstead square to its road: ([(kind, x, z)], parts, (W, D)).
     House nearest the road beside the drive, the yard and its sheds behind;
     farmyard_at adds the windbreak."""
     if template == "flats":
         W, D = 90.0, 76.0
-        lots = [("farmhouse", -28.0, -24.0), ("barn", 4.0, 8.0), ("silos", 28.0, 4.0)]
+        lots = [(house, -28.0, -25.0), ("barn", 4.0, 8.0), ("silos", 28.0, 4.0)]
         if rng.random() < 0.6:
             lots.append(("machine_shed", -24.0, 22.0))
+        if rng.random() < 0.45:
+            lots.append(("farmhouse_small", 34.0, -27.0))  # the hired hand's cottage
         dx, yard = -10.0, (10.0, 6.0, 52.0, 44.0)
+    elif template == "homestead":
+        W, D = 44.0, 38.0
+        lots = [(house, -6.0, -9.0)]
+        extra = rng.random()
+        if extra < 0.4:
+            lots.append(("windpump", 15.0, 9.0))
+        elif extra < 0.7:
+            lots.append(("water_tower", 13.0, 8.0))
+        dx, yard = 13.0, (13.0, 0.0, 10.0, 14.0)
     else:
         W, D = 64.0, 56.0
-        lots = [("farmhouse", -14.0, -12.0), ("machine_shed", 16.0, 12.0)]
+        lots = [(house, -14.0, -12.0), ("machine_shed", 16.0, 12.0)]
         dx, yard = 0.0, (13.0, 9.0, 34.0, 30.0)
     z0 = -D * 0.5
     yf = yard[1] - yard[3] * 0.5

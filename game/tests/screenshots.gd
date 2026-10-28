@@ -261,6 +261,13 @@ func _farm(game) -> void:
 		if c.plot_types[int(q[5])] == "farmyard" and float(q[0]) < -700.0 and float(q[1]) < -600.0:
 			stops.append(["69_flats_farmstead", Vector2(q[0], q[1]), 140.0])
 			break
+	# Each kind of farm home, close up: the first of each on the flats.
+	var homes := {}
+	for l: Array in c.lots:
+		var kind: String = c.kinds[int(l[5])]
+		if kind in ["farmhouse", "farmhouse_big", "farmhouse_small", "ranch_house", "adobe_farmhouse"] and str(l[7]) == "golden_flats" and not homes.has(kind):
+			homes[kind] = true
+			stops.append(["69%s_%s" % ["abcde"[homes.size() - 1], kind], Vector2(l[0], l[1]), 45.0])
 	stops.append(["70_strip_fields", Vector2(pivots[pivots.size() - 1][0], pivots[pivots.size() - 1][1]), 200.0])
 	stops.append(["71_flats_meet_hills", Vector2(60, -1500), 200.0])
 	for stop in stops:

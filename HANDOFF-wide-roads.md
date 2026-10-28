@@ -105,6 +105,27 @@ Measured: 22 pivots (59 spans), 75 paved section-road pieces, 37 dirt-track piec
 (about 48k field triangles; tiles stay small). Greens toned down after the first shots (they rendered
 neon). Shots 65-72 (`SHOTS=farm`).
 
+## Farm homes (Sachin, 2026-10-28: "All homes in the farmstead look the same ... add farmhouses, big and small ones")
+
+- H-1 Four new country kit kinds: `farmhouse_big` (26x20: two storeys, a gabled wing stepping
+  forward, wraparound porch, dormers, two chimneys), `farmhouse_small` (14x12 cottage: stoop and
+  canopy, clothesline, vegetable patch), `ranch_house` (22x14: low hip roof, carport, split-rail
+  fence), `adobe_farmhouse` (18x15: stucco, terracotta, portal with vigas, walled courtyard, agaves).
+  The plain `farmhouse` now varies its roof (tin or shingles), porch (whole front or round the door),
+  chimney end and kitchen-wing side.
+- H-2 Houses are dealt from a shuffled deck per farm type (`FARM_HOUSES`), not rolled: plain odds
+  rolls came out lopsided (4 big houses of 15 farms at 45% odds). Flats farms: big 4, plain 2,
+  adobe 2, ranch 2 per deck; 45% add a hired hand's cottage. Hills: plain, adobe, small.
+- H-3 Homesteads (`farmyard_layout("homestead")`, 44x38 fenced, a windpump or water tower on most)
+  fill the flats roads between farms, 260 m or more from any farm or homestead.
+- H-4 Suite failure from the farmland push fixed: section roads that ran out onto nothing at the
+  flats' edge (`no road round the city stops dead`). `trim_farm_stubs` cuts them back to their last
+  crossing (or makes one hung from its far end a dirt track), and `join_ends` no longer adds a join
+  that runs back along the road's own line (it hid those ends).
+- Measured: flats homes big 5, plain 7, small 16, ranch 10, adobe 8; 15 flats farms, 46 farmyards
+  in all; 6586 nodes, 0 unreached; country.json 3.8 MB. Gallery page `country_8_farmhouses.png`,
+  shots 69a-69e.
+
 ## Measured after the change
 
 - Country: 5106 nodes, 633 roads, lots 2335 -> 2056 (fronting 1511 -> 1333), worst lot turn 2.75 deg,

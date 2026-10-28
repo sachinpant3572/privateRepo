@@ -90,7 +90,9 @@ phone.
   `tools/farmland.py`: centre-pivot circles with sprinkler arms, strip fields
   in rows, canals with pump houses, a 600 m section grid of paved roads and
   dirt tracks with dirt shortcuts, and the 6-lane Golden Flats Expressway off
-  the Beltway), Saltgrass (bayou, the Gator Farm,
+  the Beltway; farmsteads with a big, plain, adobe or ranch farmhouse, some
+  with a hired hand's cottage, and homesteads between them with a small
+  cottage, ranch house, farmhouse or adobe), Saltgrass (bayou, the Gator Farm,
   airboats) and Verdant Hills (Larkspur, the vineyard). Suburb streets run
   straight on from the city's: nearly every city street that reaches the
   edge carries on out to the Beltway, Sunvale Boulevard, Seabreeze Drive or

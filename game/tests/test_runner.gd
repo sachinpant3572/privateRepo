@@ -3030,14 +3030,23 @@ func test_golden_flats_farmland() -> void:
 				zone_tris[z] = zone_tris.get(z, 0) + 1
 	for z in ["pivot_track", "pivot_green", "field_green_row", "field_gold", "canal", "canal_bank"]:
 		_check(zone_tris.get(z, 0) > 0, "%s is on the ground" % z)
+	# Sachin: "All homes in the farmstead look the same ... Also add
+	# farmhouses, big and small ones": the flats' homes come in several
+	# kinds, big and small among them.
 	var pumps := 0
 	var farms := 0
+	var homes := {}
 	for l: Array in c.lots:
-		if c.kinds[int(l[5])] == "pump_house":
+		var kind: String = c.kinds[int(l[5])]
+		if kind == "pump_house":
 			pumps += 1
-		elif c.kinds[int(l[5])] == "farmhouse" and Geometry2D.is_point_in_polygon(Vector2(l[0], l[1]), flats):
+		elif kind == "barn" and Geometry2D.is_point_in_polygon(Vector2(l[0], l[1]), flats):
 			farms += 1
+		elif kind in ["farmhouse", "farmhouse_big", "farmhouse_small", "ranch_house", "adobe_farmhouse"] and Geometry2D.is_point_in_polygon(Vector2(l[0], l[1]), flats):
+			homes[kind] = homes.get(kind, 0) + 1
 	_check(pumps >= 1 and farms >= 6, "pump houses at the canals (%d), farmsteads (%d)" % [pumps, farms])
+	_check(homes.size() >= 4 and homes.get("farmhouse_big", 0) >= 3 and homes.get("farmhouse_small", 0) >= 3,
+			"the flats' homes come in kinds, big and small among them (%s)" % [homes])
 	# A pivot's tile streams in with its tower solid.
 	var big: Array = c.pivots[0]
 	var at := Vector3(big[0], 0.0, big[1])

@@ -3,7 +3,7 @@ extends Node3D
 ## art review. Needs a real renderer:
 ##   xvfb-run godot --rendering-driver opengl3 res://tests/gallery.tscn -- <out_dir>
 ## Add a second argument to render only the countryside kit (country_kit):
-##   ... -- <out_dir> country       its seven gallery pages
+##   ... -- <out_dir> country       its eight gallery pages
 ##   ... -- <out_dir> country_each  one shot per kind at 0.7x, 1x and 1.3x
 ##                                  (optional third argument: a kind filter)
 
@@ -27,6 +27,7 @@ const COUNTRY_PAGES := [
 	["country_5_landmarks.png", 165.0, ["grain_elevators", "hollis_farm", "larkspur_vineyard", "gator_farm", "moonshine_still"]],
 	["country_6_landmarks.png", 180.0, ["bellerive_general", "bus_terminal", "seaplane_base", "torque_tone"]],
 	["country_7_landmarks.png", 200.0, ["cruise_terminal", "aurum_hangar"]],
+	["country_8_farmhouses.png", 110.0, ["farmhouse", "farmhouse", "farmhouse_big", "farmhouse_big", "farmhouse_small", "farmhouse_small", "ranch_house", "ranch_house", "adobe_farmhouse", "adobe_farmhouse"]],
 ]
 
 var out_dir := "user://"
