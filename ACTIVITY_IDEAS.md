@@ -14,6 +14,9 @@ parity* list: what other activity-heavy games do that those three don't, plus or
 that fit Solvera's world. Where an idea is already a roadmap package, it says "R-n" (roadmap
 package n) and only adds what is new.
 
+**Where each activity happens**: `ACTIVITY_ATLAS.md` lists every planned activity from both
+files by region, place and terrain.
+
 ## 0. Method and labels
 
 - Sources: WebSearch result summaries only. The roadmap found that WebFetch can't reach the wikis
@@ -352,6 +355,171 @@ Without this, 80 activities feel like a list. With it, every activity counts tow
   catalogue.
 - **Pier diving** off the levee piers, scored on spin and splash.
 
+### 4.11 GTA V, GTA Online and GTA VI: what they add (pass of 2026-10-28)
+
+Sachin asked to check the GTA V and GTA VI activity lists for more ideas. The roadmap's section 1
+already covers GTA V's story mode (91 items; golf, tennis, darts, yoga, triathlon, flight school,
+hunting, the stock market and so on). This pass looks at the two places it didn't: **GTA Online**
+(GTA V's online mode, updated until 2025 and beyond) and **GTA VI**. It lists only what is not
+already in the roadmap or in sections 2-4 above.
+
+**GTA VI status**: due on **19 November 2026** (2 [A21]), so it is not out yet. Everything below
+comes from trailers, the 27 August 2026 "Extended Look" and Rockstar's place descriptions, as
+reported by news sites (2 [A20][A22]). Game Informer itself says it doesn't know which of these
+are playable. Re-check after launch. GTA VI is set in Leonida, a Florida parody; Bellerive is
+also the state's Florida in world v3 (Keys, swamp park, airboats, Brisa Beach). Solvera keeps its
+own names and story, and should avoid copying any Leonida set piece.
+
+**Already in our plans, so not repeated here**: from GTA VI (2 [A20]), the gym and bench press
+(2.2), fishing (4.1), basketball, pool, mini-golf (N2), jet skis (4.10), scuba diving (4.1 storm
+wrecks), shooting range, clubbing (4.4), kickboxing and martial arts (2.9), street and off-road
+racing (2.8), skydiving (roadmap 1.1), hunting (roadmap 1.1), and short social clips of the
+player's chaos (R-13's short-video app). From GTA Online, the nightclub (4.4 Blue Lantern), the
+arcade (R-11), the tow truck (R-16) and heists (R-23).
+
+| Idea | From (label, source) | Solvera version | Engine / needs |
+|---|---|---|---|
+| **Bail bonds: bounty hunter** | V5: four bail jumpers for Maude; alive pays $10,000, dead pays $5,000 (2 [A15]). Online: the Bail Office (2 [A17]) | A bondsman in the Lantern Quarter hands you skips. Clues come in the PI clue board style (4.3); the skip runs, hides or bribes. Bring them in **alive for full pay**: tackle, cuff, or trick them into your car. Cartoon tone, and a non-lethal reason to chase | R-5, R-20; PI board (4.3) |
+| **Daily wanted-car list** | Online: Exotic Exports, a daily list of 10 cars (U); V5's Simeon export requests (U) | A fence at Ironwharf posts 10 wanted cars each in-game day; find, steal and deliver them undamaged. Feeds the car collection and teaches the map | E7, existing cars |
+| **Roaming black-market van** | Online: the Gun Van moves to one of 30 spots each day at 06:00 UTC (2 [A16]) | A van at one of about 20 spots per in-game day, hinted by a phone rumour. It sells rare tuning parts, outfits and a few weapons (after R-19), with a daily deal | `shop_menu.gd`, E9 |
+| **Money fronts and laundering** | Online "Money Fronts" (June 2025): a car wash, a smoke shop and helicopter tours; laundering raises Heat, legal jobs lower it, the car-wash safe caps at $100,000 (2 [A18]) | Crime pays **dirty cash**. Big purchases (property, shares, top cars) need **clean cash**, laundered through your fronts (food truck, car wash, your gaming café). Cleaning too fast raises heat; honest shifts at the front lower it. A strong money sink and a reason to run legit businesses. See decision 8 in section 7 | E6, R-22 |
+| **Payphone jobs** | Online: Payphone Hits (U) | Payphones across Bellerive ring now and then. The voice offers a strange job: tail someone, deliver a parcel, solve a riddle, or (later) a hit. A cheap way to deliver random jobs and lore | R-5 |
+| **Pop-up city challenges** | Online freemode events such as King of the Castle and checkpoint hunts (U) | Five-minute challenges announced on the phone: "pop 15 parade balloons in the Quarter", "hold the rooftop", "longest wheelie along the levee road". Score against NPC rivals or your best | E9, R-5 |
+| **Daily buried stash** | Online: daily shipwreck and hidden-cache spots (U) | One Marrow Krewe stash per day, found from a map scrap. Pairs with metal detecting (4.1) | E7 |
+| **Race creator** | Online: the Content Creator (U) | Place checkpoints on the city map from the phone; race your own ghost; share a code through R-27. High replay at almost no content cost | E3, R-27 for sharing |
+| **Transform races** | Online: the vehicle changes at set checkpoints, e.g. car to plane or parachute (2 [A19]) | Bellerive suits it: car, then airboat through the bayou, then bike up the levee | E3, R-26 |
+| **Car meet with rep levels and a test track** | Online LS Car Meet: membership, rep from races and daily visits, a test track for drifting (2 [A19]) | Grows 4.7's Friday car meet: an Ironwharf warehouse with membership, rep tiers that unlock parts and paints, and a test track | E3, tuning (IS-3) |
+| **Arena car-combat show** | Online Arena War: car-combat modes in an arena with a goofy host (2 [A19]) | Turns 2.8's demolition derby into a TV game show: traps, a loud host, sponsor fees. Cartoon tone only | E3, vehicle damage (have) |
+| **Arm wrestling** | Online clubhouse arm wrestling (U) | A tap-and-hold duel in bars and the gym. Tiny, and good for NPC rivalries | E1 |
+| **Community service** | GTA VI: litter picking seen in trailer 2 (2 [A20]) | After Busted, choose a fee **or** a cleanup shift in the Floodline Wards. Clearing storm debris raises High Water reputation and ties to the Wards rebuild (4.4) | E5 |
+| **TV at the safehouse** | GTA VI: watching TV (2 [A20]) | Channels with the city news reacting to your deeds (R-13), cartoons, a cooking show, and your own film shorts (4.2). Reuses content that already exists | R-13 |
+| **Kayaking** | GTA VI: kayaking at Mount Kalaga (2 [A20][A22]) | Paddle trails through the bayou, a calm photo tour, and a slalom course on the Morrow | E3, R-26 |
+| **Base jumping** | GTA VI Extended Look (2 [A20]) | Jump from the Aurum Tower and Solvera Line bridges. An illegal jump from Aurum property earns a wanted star | parachute (roadmap 1.1) |
+| **Backyard wrestling league** | GTA VI Extended Look (2 [A20]) | A Floodline Wards league with folding chairs, paddling pools and a ring announcer; cartoon slams on the R-17 fight system | R-17 |
+| **Bayou wildlife rescue** | GTA VI: zoos (2 [A20]); the city size is fixed, so no zoo | Not a zoo but a rescue centre in Blackwater Bayou: rescue injured animals during events, feed and release them, and photograph them | R-3 animals, E8 |
+| **Snorkelling** | GTA VI: Leonida Keys (2 [A20][A22]) | Later, for the Keys and Isla Serena in world v3. Bellerive's river is too murky | v3 |
+
+**Keep out**, from the same lists:
+- Online's drug labs and street dealers (roadmap section 2);
+- strip clubs (GTA VI coverage mentions them);
+- rampages (mass violence, not our tone);
+- GTA V's Epsilon cult parody: WORLD_BIBLE keeps religious institutions out, and a cult reads as one;
+- the casino's Lucky Wheel and podium car: they wait on the gambling decision.
+
+### 4.12 Stock market
+
+The full design, its anti-exploit rules and a simulation that proves them are in
+`STOCK_MARKET_DESIGN.md` and `tools/stock_market_sim.py`.
+
+### 4.13 GTA III, the Liberty City games, Watch Dogs and Sleeping Dogs: what they add (pass of 2026-10-28)
+
+Sachin asked to check GTA III, Watch Dogs, Sleeping Dogs and "GTA Liberty City" too. Two games
+are set in Liberty City besides GTA III: **Liberty City Stories** (LCS) and **GTA IV**, with its
+episodes The Lost and Damned (TLAD) and The Ballad of Gay Tony (TBoGT). For Watch Dogs, this pass
+covers Watch Dogs 1 and Legion; Watch Dogs 2 is already in section 1. Same rule as 4.11: only what
+is not already planned. All facts come from guide and wiki search summaries (2 [A23]-[A28]).
+
+**Already in our plans, so not repeated here**:
+- GTA III and LCS (2 [A23][A24]): the taxi, paramedic, firefighter and vigilante jobs (R-9,
+  R-16); 100 hidden packages (R-7); RC Toyz (4.5); payphone jobs (4.11); the off-road and
+  car-park checkpoint challenges (E3, R-14); the export lists (4.11, daily wanted-car list).
+- GTA IV and its episodes (2 [A25]): friends who call for bowling, pool, darts, food, a show or a
+  boat ride (R-24, 4.2); club management (4.4); golf (2.3); arm wrestling (4.11).
+- Watch Dogs (2 [A26][A27]): races in many vehicle types (2.8); deliveries (R-16); darts (R-21);
+  chess (4.1); the investigator cases (4.3); Watch Dogs 1's "Digital Trips" surreal games
+  (our own café games, 2.10).
+- Sleeping Dogs (2 [A28]): street races (2.8), fight clubs (2.4 fight nights), karaoke (2.1),
+  jade statues that unlock moves (2.9), lockboxes (hidden packages), and people asking for
+  favours (R-5 random events).
+
+| Idea | From (label, source) | Solvera version | Engine / needs |
+|---|---|---|---|
+| **Car salesman** | LCS "Car Salesman": sell 24 cars over 6 levels by test drives that match each buyer's taste; then the lot pays a daily profit (2 [A24]) | A used-car lot in Ironwharf. Each buyer wants something: "smooth" (no bumps), "show me speed", "make me scream" (jumps). Drive well and they buy. Finish the 6 levels and the lot becomes a business on E6 | E5, then E6 |
+| **Dumpster dash** | LCS: three hidden Trashmaster missions, empty the dumpsters against the clock (2 [A24]) | A sanitation route in the Floodline Wards: a garbage truck, dumpsters on a timer, and storm-debris bonus piles. A cheap shift job | E5 |
+| **Lowrider bounce-off** | LCS "Low Rider Rumble" (2 [A24]); SA's bounce challenge is in roadmap 1.1, but in no package yet | A hydraulics rhythm contest at the car meet: hit the bounces on the beat of an AI track. The same beats as E2 | E2, car meet (4.11) |
+| **Studio gauntlet show** | LCS "Slash TV": survive waves in a TV studio (2 [A24]). Kept, but **non-lethal** | A TV obstacle show in the Gilt District: foam bats, paint guns, a spinning floor, a shouting host. A foot version of 4.11's arena car show; knocks people down, never kills | combat, R-19 |
+| **Crimes detected** | Watch Dogs 1: the phone flags a likely victim; you wait, see who strikes, then stop the crime (2 [A26]) | A "Street Cam" phone app from a hacker friend. It marks someone at risk; you watch from a distance, pick the right suspect from the crowd, then chase or tackle them. Bring them down **alive** for a bonus | R-5, R-9, the coding class (4.6) |
+| **Spot-the-suspect camera busts** | Sleeping Dogs: hack a camera, watch the footage at home, pick out the dealer, then make the bust (2 [A28]) | Same loop with **contraband**, not drugs: fake designer goods, stolen phones, illegal fireworks. Spot the courier on the camera feed, then raid the spot | E1 camera puzzle, R-20 |
+| **Convoy takedowns** | Watch Dogs 1 "Criminal Convoys": stop a convoy, take down the target (2 [A26]) | Aurum or Halberd armoured convoys on the Gilt District roads, or Marrow Krewe smuggling convoys from Ironwharf. Plan an ambush point, then box in the target car | R-19, R-20 |
+| **Hideout takedowns** | Watch Dogs 1 "Gang Hideouts": take out the leader **non-lethally** (2 [A26]) | Faction hideouts (warehouses, a bayou camp, a rooftop) where you knock out the boss without raising the alarm. Each cleared hideout weakens that faction's turf (R-22) | stealth stat (R-17), R-22 |
+| **Camera-mast puzzles** | Watch Dogs 1 ctOS towers: a short puzzle that reveals the area (2 [A26]) | One relay mast per district. Climb it and solve a short node-turning puzzle (E1) to show that district's activities on the map. Teaches the city | E1, map |
+| **AR phone games** | Watch Dogs 1 AR games such as Cash Run, played on the real streets (2 [A26]) | Phone games played on Bellerive's real streets: "Coin Rush" (run through coins between two points), "Gator Tag" (shoot cartoon gators that pop out of the drains). Points go to the challenge board (4.9) | E3, phone |
+| **Hit-and-run chases** | Sleeping Dogs: a police friend sends you after hit-and-run drivers (2 [A28]) | A detective friend calls in a driver who fled a crash. Find them from witness hints, then ram them to a stop. Ties to the bail bonds work (4.11) | E3, R-5, R-24 |
+| **Keepy-uppy** | Watch Dogs Legion "Kick-Ups" (2 [A27]) | A tap-on-time football juggle in parks and on the beach. Tiny; leads to football later (Porto Brisa) | E2 |
+| **Air hockey** | GTA IV TBoGT and TLAD (2 [A25]) | Tables in bars, the arcade and your own gaming café. One finger, two minutes, good with friends | E1 |
+| **Comedy club and cabaret** | GTA IV friend shows: a comedy club and a cabaret (2 [A25]) | A Lantern Quarter comedy club and a cabaret night with **fictional acts** whose jokes react to your deeds and the city news. Take a friend; it raises friendship (R-24) | R-10 venue, R-13 news |
+| **Recruit from the street** | Watch Dogs Legion: recruit anyone in the city (2 [A27]) | Not playable as anyone (Jules stays the hero). Some NPCs you help become **crew** you can call: a mechanic, a hacker, a driver, a lookout. Each one has a perk for heists and turf | R-22, R-23, E8 |
+| **Street-art pasting** | Watch Dogs Legion: 47 paste-up spots (2 [A27]) | Paste posters satirising Aurum at marked spots; each one cuts Aurum's grip on that block slightly and joins the graffiti editor (4.8) | E7, 4.8 |
+| **Drink before darts** | Watch Dogs Legion: a pint before darts pays more (2 [A27]); GTA IV drinking with friends (2 [A25]) | Swapped for a non-alcohol version: a **lucky soda** or a hot-sauce dare before darts adds wobble and doubles the stake. See "keep out" for alcohol | E4 |
+
+**Keep out**, from the same games:
+- Watch Dogs 1's privacy invasions (peeking into homes through cameras): voyeurism, so cameras
+  in Solvera only show streets and crime spots;
+- Watch Dogs 1's poker and shell game (gambling decision), its drinking game, and its
+  human-trafficking strand;
+- Sleeping Dogs' health shrines (a religious site) and cockfighting (animal cruelty);
+- LCS's Slash TV chainsaw gore (kept only as the non-lethal studio show above);
+- GTA IV's friend shows with real comedians (Solvera uses fictional acts);
+- drinking games and drunk-driving effects: alcohol is kept as bar scenery, with a soda swap for
+  minigames, unless Sachin says otherwise.
+
+### 4.14 Bully, Saints Row and Yakuza: what they add (pass of 2026-10-28)
+
+Sachin asked to check Bully, Saints Row and Yakuza too. Section 1 already took one lesson from
+each (Bully's classes, Saints Row 2's scored chaos, Yakuza's business sims and Like a Dragon's
+long loops). This pass reads their full activity lists: Bully and its Scholarship Edition; Saints
+Row 2, The Third and the 2022 reboot; Yakuza 0 to 6, Kiwami 2, Like a Dragon and Infinite Wealth.
+Same rule as 4.11: only what is not already planned. Facts come from guide and wiki search
+summaries (2 [A29]-[A31]); details remembered but not confirmed by a search are marked U.
+
+**Already in our plans, so not repeated here**:
+- Bully (2 [A29]): classes as minigames (4.6 night classes); go-kart and bike races (2.8, R-14);
+  arcade games (R-11); collectibles (R-7).
+- Saints Row (2 [A30]): Insurance Fraud (4.5 fender-bender fraud); Chop Shop (4.11 daily
+  wanted-car list); Demolition Derby (2.8, 4.11 arena show); Hitman's target list as the
+  non-lethal bail bonds version (4.11); Zombie Uprising, a game inside the game (our café games,
+  2.10); the reboot's ventures, such as a garage, a food truck and a laundromat (E6, and the
+  money fronts in 4.11); its activities sorted by district (this is what `ACTIVITY_ATLAS.md`
+  does); Tank Mayhem (the tank row in roadmap 1.1, for Fort Granite in phase 3).
+- Yakuza and Like a Dragon (2 [A31]): karaoke (2.1); the batting cage (4.2); disco dancing (R-10
+  dance rhythm game); darts, bowling and arcade classics (R-21, R-11); go-karts (2.8);
+  taxi jobs and Crazy Delivery (R-16 shift jobs); busking (2.1); vocational exams (4.6);
+  business sims (4.4, E6); Dondoko Island (the "buy back the Wards" renovation in 4.4); Sujimon
+  (the collection log, E7); the Miss Match dating app (R-24); Revelations, learning a move from
+  an odd sight (U; our fight manuals in 2.9 do the same job).
+
+| Idea | From (label, source) | Solvera version | Engine / needs |
+|---|---|---|---|
+| **Paper route** | Bully: newspaper delivery missions on a bike (2 [A29]) | A dawn route on a bike through Magnolia Heights: flick papers onto porches on the beat of your speed, with bonuses for the doormat and for dodging dogs and sprinklers. The paper prints a front page about your latest big deed | E5, E3 |
+| **Yard jobs** | Bully: lawn mowing for pay (U); snow shovelling in winter (U) | Mow lawns in Magnolia Heights; after a storm, clear branches and debris from Wards yards (pays in High Water reputation too). Snow shovelling waits for Steelhaven's winter (phase 6) | E5 |
+| **Neighbour errands** | Bully: 50 errands for townsfolk, some of which unlock clothes (2 [A29]) | Named neighbours post small jobs on a phone "street board": fetch a lost cat, carry a sousaphone to the march, fix a fence. Each neighbour's chain ends in a **unique reward** (a jacket, a discount, a shortcut key) | R-5, E7 |
+| **Travelling fair** | Bully: the carnival's games pay tickets for prizes (2 [A29]); roadmap 1.1 lists fairground rides as missing; now roadmap package 32 | A fair on Liberty Green for one week each season (E9): ring toss, high striker, a water-pistol race, a dunk tank with Aurum's mascot, a Ferris wheel and bumper cars. Tickets are earned only, never bought (section 6) | E1, E9, R-32 |
+| **Sludge Avenger** | Saints Row 2 "Septic Avenger": spray sewage on buildings to drop their value (2 [A6][A30]) | A pump truck from the flood works sprays mud on Aurum show homes and billboards against the clock. Each soaked block lowers Aurum's land value slightly (wealth phase 1). Cartoon mess only, never on people | E3, R-22 |
+| **Wrecking crew** | Saints Row 2 "Mayhem": damage property for a cash score (2 [A30]) | Grows 4.5's wrecking ball into a timed score run: a rival developer pays you to wreck one Aurum building site's props (fences, cones, portable toilets) with a digger or a pickup. Multipliers for chains | E3, physics props |
+| **Bodyguard gigs** | Saints Row 2 "Crowd Control": guard a VIP from fans; it unlocks clothing discounts (2 [A30]) | Walk a fictional celebrity through the Gilt District while fans, paparazzi and a rival's goons rush in; shove, block and steer. Pays in shop discounts | R-5, light combat |
+| **Reality cop show** | Saints Row 2 "FUZZ": a reality TV show films you as a cop (2 [A30]) | "Street Patrol" films your vigilante jobs (R-9). Clean, **non-lethal** arrests score style points; a good episode airs on the city news and lowers your police heat for a day | R-9, R-13 news |
+| **Paint-trail quad run** | Saints Row 2 "Trail Blazing": a quad bike leaving a trail of fire through targets (2 [A30]); fire swapped out | A quad on the levee and in the bayou leaves a trail of coloured powder; drive it through marked targets (Aurum signs, festival floats) before the timer ends | E3 |
+| **Chopper spotter** | Saints Row 2 "Heli Assault": cover a friend's car from a helicopter (2 [A30]) | Ride in a friend's helicopter and guide their getaway: mark roadblocks, call turns, drop smoke. No shooting. Waits for helicopters | E3, helicopters (roadmap) |
+| **Pocket racers** | Yakuza 0 and Kiwami "Pocket Circuit": build tiny cars from parts found around town, race them on tracks (2 [A31]) | A hobby shop in the Lantern Quarter runs a mini-car league. Parts come from capsule toys, side jobs and hidden spots; you tune (motor, tyres, weight) and the race runs itself. Good for short phone sessions | E3 (auto race), E7 |
+| **The Shakedown** | Yakuza 0 "Mr. Shakedown": a strong roaming enemy who takes your cash if he wins; beat him to win it back with extra (2 [A31]) | A huge debt collector roams at night. Lose and he takes 10% of your **pocket cash** (never bank or stock holdings); beat him for that cash back plus a bonus. A soft money sink that makes carrying cash a choice | combat (R-17) |
+| **Crew defence** | Yakuza Kiwami 2 "Clan Creator": top-down battles defending sites with a crew (2 [A31]) | Defend a Wards building site or your club with the crew you recruited (4.13), each with a skill. Runs on the Levee Line tower-defence engine (2.10) | 2.10 Levee Line, 4.13 crew |
+| **Cat café** | Yakuza 6: a cat café you help run; you find cats around town (U) | A cat café in Magnolia Heights that takes shelter cats. Find strays, bring them in, and the café earns more; regulars can adopt them. Ties to the pet shelter (4.1) | E6, animals (R-3) |
+| **Spearfishing** | Yakuza 6: spearfishing with a fisherman (2 [A31]) | An old fisherman takes you out off the Keys (phase 4): aim and fire at fish swimming past in waves; rare fish go in the collection log | E4, diving, E7 |
+| **Water-balloon fight** | Yakuza 5: a snowball-fight arena (U) | A summer water-balloon fight in Liberty Green for teams; a snowball version in Steelhaven later | E1, light combat |
+| **Can run** | Like a Dragon "Can Quest": collect cans on a bike against the clock (2 [A31]) | Collect recyclables around the Wards with a bike cart before rival collectors take them; trade them in at the recycling yard. Pairs with the dumpster dash (4.13) | E3, E5 |
+| **Oddball snaps** | Infinite Wealth "Sicko Snap": photograph strange people around town (2 [A31]) | A list of odd sights to photograph (a man walking a gator on a leash, a dog in the brass band); each one goes in the photo log (E7) with a gag caption | phone camera, E7 |
+| **Personality traits** | Like a Dragon: personality stats such as kindness, charisma and confidence that rise from activities and open jobs and dialogue (U) | Five traits (Nerve, Charm, Smarts, Heart, Style) rise from hobbies: karaoke raises Charm, chess raises Smarts, volunteering raises Heart. Some jobs, dates and story options need a level. Gives every small activity a reason | stats (R-17), E8 |
+| **Sandlot baseball** | Yakuza 6: a local baseball team you manage (U) | Coach a Wards amateur team: pick the lineup and hit in the batting cage minigame at the big moments. Wins raise the Wards' mood | E4 batting, E6 |
+
+**Keep out**, from the same games:
+- Saints Row 2's Snatch (pimping), Escort (sexual) and Drug Trafficking;
+- Yakuza's hostess and cabaret clubs and its adult live chat (4.13's cabaret is a stage show
+  only, with no hostesses);
+- casinos, pachinko, mahjong and Koi Koi (the gambling decision);
+- Hitman's killing contracts (only the alive-pays-more bail bonds version stays);
+- Trail Blazing's fire on people, and any harm to bystanders in chaos runs;
+- Bully's fights with children: no Solvera activity sets the player against kids.
+
 ## 5. Picking: the next wave after the roadmap's first wave
 
 Scored the same way as the roadmap: liveliness (1-5) divided by cost. Most rows build on the
@@ -374,8 +542,21 @@ depends on, including later ones.
 | N12 | Hurricane-season event + election | Signature systemic events | R-25, R-9, R-26 (boats) | 3 | 5 |
 | N13 | Arcade games G-L | Six small games | R-11 | 4.5 | 2 |
 | N14 | Comedy chaos set + RC and drone | Cheap laughs | none | 1.5 | 3 |
+| N15 | Daily variety set (4.11) | Daily wanted-car list, black-market van, payphone jobs, pop-up challenges, buried stash, community service | R-5, R-13, R-16 | 2.5 | 4 |
+| N16 | Bail bonds + race creator + hit-and-run chases (4.11, 4.13) | Bounty work and player-made races | R-5, R-14, R-24 | 2.5 | 3 |
+| N17 | Stock market (4.12) | The Exchange app with city-event prices and the anti-exploit rules | R-13 | see 4.12 | 3 |
+| N18 | Crime set (4.13) | Crimes detected, camera busts, convoy takedowns, hideout takedowns | R-5, R-9, R-17, R-19, R-20, R-22 | 3 | 4 |
+| N19 | Liberty City and venue extras (4.13) | Car salesman, dumpster dash, lowrider bounce-off, air hockey, keepy-uppy, comedy club | N3, N5, R-10, R-11 | 2.5 | 3 |
+| N20 | Money fronts and laundering (4.11) | Dirty and clean cash; waits on decision 8 | R-22, N8 | 1.5 | 3 |
+| N21 | Neighbourhood jobs (4.14) | Paper route, yard jobs, can run, neighbour errands | N5, R-5, R-26 | 1.5 | 3 |
+| N22 | Bully, Saints Row and Yakuza extras (4.14) | Sludge Avenger, wrecking crew, bodyguard gigs, reality cop show, paint-trail quad, pocket racers, the Shakedown, cat café, water-balloon fight, oddball snaps | R-5, R-9, R-17, R-22, N1, N8 | 4 | 3 |
+| N23 | Crew and character (4.13, 4.14) | Recruit from the street, crew defence, personality traits, sandlot baseball | R-17, R-22, R-24, N2, N13 (Levee Line engine) | 3 | 3 |
 
 - **All 14**: about **32 sessions**, on top of the roadmap's 57.
+- **N15-N23** (added with 4.11-4.14): about **20.5 sessions** more, plus the stock market (N17,
+  costed in 4.12). The roadmap's new packages 28-32 (yoga, triathlon, flight school, parachute
+  jumps, fairground) add about 8, and the city activity packs in `ACTIVITY_ATLAS.md` Part D
+  about 16 (cheaper: 6), both spread over the world phases.
 - **Not costed yet**: much of sections 2 and 4 sits outside N1-N14 as content for later rounds:
   - the racing extras (2.8);
   - the boxing, gym, shopping and eating-out extras;
@@ -383,7 +564,9 @@ depends on, including later ones.
   - the gallery and storm heists;
   - photography, diving, pets, escape rooms, laser tag and paintball;
   - 7 of the 11 careers;
-  - water fun (4.10); the meta layer (4.9) is costed there (about 1 session) but not yet scheduled.
+  - water fun (4.10); the meta layer (4.9) is costed there (about 1 session) but not yet scheduled;
+  - the items that wait on later world phases: spearfishing (the Keys) and the chopper spotter
+    (helicopters).
 
   On the engines, most of these are 0.3-1 session each. A rough guess for all of them is another
   15-20 sessions.
@@ -396,7 +579,7 @@ depends on, including later ones.
 
   Gym, boxing, table tennis, racing, martial arts and eating out come from the roadmap's own
   packages (R-1, R-14, R-17, R-18, R-21) and from N10.
-- **Recommendation**: the cheaper option first. Re-score after players (or Sachin) have played the
+- **Recommendation**: the cheaper option first, then N15 and N21 (cheap daily variety). Re-score after players (or Sachin) have played the
   first wave, and order the rest by what they actually return to.
 
 ## 6. Things to keep out
@@ -424,6 +607,17 @@ depends on, including later ones.
 4. **Fender-bender fraud**: keep it (cartoon comedy), or cut it for tone?
 5. **Krewe Cards**: should it become a stand-alone mobile game later (marketing for Solvera)?
 6. The roadmap's open points still stand: gambling, audio timing, first-wave order, and "sucu".
+7. **Stock market**: approve the design in `STOCK_MARKET_DESIGN.md` (4.12) and answer its open
+   questions.
+8. **Money laundering** (4.11): split cash into dirty and clean, so big purchases need laundered
+   money? It is a strong money sink, but one more thing for mobile players to track. The
+   simpler option is one cash pool with heat only.
+9. **Alcohol in minigames**: Solvera keeps alcohol as bar scenery and swaps drinking games for a
+   lucky soda or a hot-sauce dare (4.13). Keep the swap, or allow cartoon drinking without
+   drunk driving?
+10. **City activity packs** (`ACTIVITY_ATLAS.md` Part D): build the full packs (about 16
+    sessions over the world phases) or the cheaper version (about 6: each place's signature,
+    martial art and one venue)?
 
 ## 8. Sources
 
@@ -458,3 +652,68 @@ depends on, including later ones.
   https://www.musicinafrica.net/magazine/suno-adjusts-ai-music-ownership-terms-after-warner-music-partnership ·
   https://dynamoi.com/learn/ai-music-distribution/suno-commercial-rights-explained
 - [A13] ACE-Step model card: https://huggingface.co/ACE-Step/ACE-Step-v1-3.5B
+- [A14] GTA V hobbies and pastimes (guides): https://www.gtabase.com/grand-theft-auto-v/side-missions/ ·
+  https://sportskeeda.com/gta/gta-5-100-completion-checklist
+- [A15] GTA V bail bonds and towing: https://www.gtabase.com/grand-theft-auto-v/side-missions/bail-bonds ·
+  https://www.grandtheftwiki.com/Bail_Bonds_-_Glenn_Scoville ·
+  https://www.gtabase.com/side-missions/grand-theft-auto-v/towing-missions
+- [A16] GTA Online Gun Van: https://sportskeeda.com/gta/why-gta-online-gun-van-changes-location-every-day ·
+  https://pcgamer.com/gta-online-gun-van-location
+- [A17] GTA Online businesses: https://www.sportskeeda.com/gta/list-every-business-available-players-gta-online-properties-required ·
+  https://deltiasgaming.com/?p=164609
+- [A18] GTA Online Money Fronts: https://gta.wiki/w/GTA_Online:_Money_Fronts ·
+  https://www.gtabase.com/articles/gta-online-money-fronts-releases-june-17 ·
+  https://massivelyop.com/2025/06/12/gta-online-will-introduce-money-laundering-mechanics-in-the-money-fronts-update-june-17/
+- [A19] GTA Online Arena War, Transform Races, LS Car Meet: https://www.pcgamesn.com/grand-theft-auto-v/gta-online-arena-war ·
+  https://www.pcgamer.com/gta-onlines-transform-races-are-crazy ·
+  https://pcgamer.com/gta-online-los-santos-tuners-update-guide-rep
+- [A20] GTA VI activities (pre-release): https://gameinformer.com/2026/08/27/every-potential-side-activity-we-saw-in-the-grand-theft-auto-vi-extended-look ·
+  https://www.gamesradar.com/games/grand-theft-auto/gta-6-side-activities/ ·
+  https://www.redbull.com/us-en/gta-6-side-activities ·
+  https://www.gamingbible.com/news/gta-6-confirms-side-activities-158807-20250507
+- [A21] GTA VI release date: https://www.gamesradar.com/gta-6-release-date-news-trailers-map-gameplay-rumours/ ·
+  https://gameluster.com/?p=140202
+- [A22] GTA VI regions: https://gameinformer.com/2025/05/06/rockstar-shows-off-six-major-areas-of-vice-city-in-grand-theft-auto-vi ·
+  https://www.gamerguides.com/grand-theft-auto-vi/news/regions-of-grand-theft-auto-vi
+- [A23] GTA III side missions: https://gtabase.com/gta-3/side-missions ·
+  https://www.igrandtheftauto.com/gta3/guides/side-missions ·
+  https://www.igrandtheftauto.com/gta3/guides/100-percent-completion-checklist
+- [A24] GTA Liberty City Stories side missions (Car Salesman, Trash Dash, Low Rider Rumble, Slash TV):
+  https://gtabase.com/gta-liberty-city-stories/missions/ ·
+  https://gta.wiki/w/Missions_in_GTA_Liberty_City_Stories ·
+  https://www.igrandtheftauto.com/gtalcs/guides/vehicle-sub-missions
+- [A25] GTA IV, TLAD and TBoGT friend activities: https://gta.wiki/w/Friendships_in_GTA_IV ·
+  https://gta.wiki/w/Friendships_in_The_Ballad_of_Gay_Tony ·
+  https://bloxodes.com/gta/wiki/gta-4-tlad/activities ·
+  https://www.gamepressure.com/grandtheftautoiv/friends/z9125a
+- [A26] Watch Dogs 1 side missions and minigames: https://www.gamepressure.com/watchdogs/activities-and-hints/z0631f ·
+  https://www.dualshockers.com/watch_dogs-side-missions-and-mini-games/ ·
+  https://www.honestgamers.com/guides/watch-dogs/4/read/137.html
+- [A27] Watch Dogs Legion activities: https://powerpyx.com/watch-dogs-legion-all-darts-locations ·
+  https://windowscentral.com/watch-dogs-legion-vuide-minigames-how-play-them ·
+  https://www.giga.de/galerie/watch-dogs-legion-alle-47-paste-up-orte-fundorte-auf-der-karte/
+- [A28] Sleeping Dogs side activities: https://www.trueachievements.com/game/Sleeping-Dogs/walkthrough/6 ·
+  https://www.gamepressure.com/sleepingdogs/secondary-missions/z23ee5 ·
+  https://segmentnext.com/sleeping-dogs-all-random-events
+- [A29] Bully side activities (errands, paper route, carnival, races, classes):
+  https://bully.fandom.com/wiki/100%25_Completion ·
+  https://skillnation.in/posts/bully-scholarship-edition-100/ ·
+  https://www.wand.com/en/maps/bully-scholarship-edition/bullworth/checklist ·
+  https://tcrf.net/Bully_(PlayStation_2)
+- [A30] Saints Row activities (SR2, The Third, the 2022 reboot):
+  https://www.supercheats.com/guides/saints-row-2/activities ·
+  https://www.trueachievements.com/game/Saints-Row-2/walkthrough/4 ·
+  https://www.giantbomb.com/wiki/Games/Saints_Row_2 ·
+  https://saintsrow.wiki/wiki/Activities_in_Saints_Row ·
+  https://saintsrow.wiki/wiki/Activities_in_Saints_Row:_The_Third ·
+  https://saintsrow.wiki/wiki/Tank_Mayhem ·
+  https://www.gamepressure.com/saints-row-v/list-of-all-side-activities/zd102d6 ·
+  https://www.gamepressure.com/saints-row-v/list-of-all-ventures/zf102d8
+- [A31] Yakuza and Like a Dragon minigames:
+  https://www.gamepressure.com/yakuza-6/minigames-list/z6aca1 ·
+  https://samurai-gamers.com/yakuza-like-a-dragon/mini-games/ ·
+  https://www.gamepressure.com/like-a-dragon-infinite-wealth/all-mini-games/ze11219 ·
+  https://www.gematsu.com/2023/12/like-a-dragon-infinite-wealth-details-minigames ·
+  https://www.gamerguides.com/like-a-dragon-infinite-wealth/guide/minigames/sicko-snap ·
+  https://blogs.tuni.fi/playlab/game-reviews/yakuza-kiwami-2-gangster-drama-with-lots-of-minigames/ ·
+  https://www.sportskeeda.com/esports/7-great-mini-games-yakuza-like-dragon-franchise
