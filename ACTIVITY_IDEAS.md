@@ -542,8 +542,21 @@ depends on, including later ones.
 | N12 | Hurricane-season event + election | Signature systemic events | R-25, R-9, R-26 (boats) | 3 | 5 |
 | N13 | Arcade games G-L | Six small games | R-11 | 4.5 | 2 |
 | N14 | Comedy chaos set + RC and drone | Cheap laughs | none | 1.5 | 3 |
+| N15 | Daily variety set (4.11) | Daily wanted-car list, black-market van, payphone jobs, pop-up challenges, buried stash, community service | R-5, R-13, R-16 | 2.5 | 4 |
+| N16 | Bail bonds + race creator + hit-and-run chases (4.11, 4.13) | Bounty work and player-made races | R-5, R-14, R-24 | 2.5 | 3 |
+| N17 | Stock market (4.12) | The Exchange app with city-event prices and the anti-exploit rules | R-13 | see 4.12 | 3 |
+| N18 | Crime set (4.13) | Crimes detected, camera busts, convoy takedowns, hideout takedowns | R-5, R-9, R-17, R-19, R-20, R-22 | 3 | 4 |
+| N19 | Liberty City and venue extras (4.13) | Car salesman, dumpster dash, lowrider bounce-off, air hockey, keepy-uppy, comedy club | N3, N5, R-10, R-11 | 2.5 | 3 |
+| N20 | Money fronts and laundering (4.11) | Dirty and clean cash; waits on decision 8 | R-22, N8 | 1.5 | 3 |
+| N21 | Neighbourhood jobs (4.14) | Paper route, yard jobs, can run, neighbour errands | N5, R-5, R-26 | 1.5 | 3 |
+| N22 | Bully, Saints Row and Yakuza extras (4.14) | Sludge Avenger, wrecking crew, bodyguard gigs, reality cop show, paint-trail quad, pocket racers, the Shakedown, cat café, water-balloon fight, oddball snaps | R-5, R-9, R-17, R-22, N1, N8 | 4 | 3 |
+| N23 | Crew and character (4.13, 4.14) | Recruit from the street, crew defence, personality traits, sandlot baseball | R-17, R-22, R-24, N2, N13 (Levee Line engine) | 3 | 3 |
 
 - **All 14**: about **32 sessions**, on top of the roadmap's 57.
+- **N15-N23** (added with 4.11-4.14): about **20.5 sessions** more, plus the stock market (N17,
+  costed in 4.12). The roadmap's new packages 28-32 (yoga, triathlon, flight school, parachute
+  jumps, fairground) add about 8, and the city activity packs in `ACTIVITY_ATLAS.md` Part D
+  about 16 (cheaper: 6), both spread over the world phases.
 - **Not costed yet**: much of sections 2 and 4 sits outside N1-N14 as content for later rounds:
   - the racing extras (2.8);
   - the boxing, gym, shopping and eating-out extras;
@@ -551,7 +564,9 @@ depends on, including later ones.
   - the gallery and storm heists;
   - photography, diving, pets, escape rooms, laser tag and paintball;
   - 7 of the 11 careers;
-  - water fun (4.10); the meta layer (4.9) is costed there (about 1 session) but not yet scheduled.
+  - water fun (4.10); the meta layer (4.9) is costed there (about 1 session) but not yet scheduled;
+  - the items that wait on later world phases: spearfishing (the Keys) and the chopper spotter
+    (helicopters).
 
   On the engines, most of these are 0.3-1 session each. A rough guess for all of them is another
   15-20 sessions.
@@ -564,7 +579,7 @@ depends on, including later ones.
 
   Gym, boxing, table tennis, racing, martial arts and eating out come from the roadmap's own
   packages (R-1, R-14, R-17, R-18, R-21) and from N10.
-- **Recommendation**: the cheaper option first. Re-score after players (or Sachin) have played the
+- **Recommendation**: the cheaper option first, then N15 and N21 (cheap daily variety). Re-score after players (or Sachin) have played the
   first wave, and order the rest by what they actually return to.
 
 ## 6. Things to keep out
@@ -592,6 +607,17 @@ depends on, including later ones.
 4. **Fender-bender fraud**: keep it (cartoon comedy), or cut it for tone?
 5. **Krewe Cards**: should it become a stand-alone mobile game later (marketing for Solvera)?
 6. The roadmap's open points still stand: gambling, audio timing, first-wave order, and "sucu".
+7. **Stock market**: approve the design in `STOCK_MARKET_DESIGN.md` (4.12) and answer its open
+   questions.
+8. **Money laundering** (4.11): split cash into dirty and clean, so big purchases need laundered
+   money? It is a strong money sink, but one more thing for mobile players to track. The
+   simpler option is one cash pool with heat only.
+9. **Alcohol in minigames**: Solvera keeps alcohol as bar scenery and swaps drinking games for a
+   lucky soda or a hot-sauce dare (4.13). Keep the swap, or allow cartoon drinking without
+   drunk driving?
+10. **City activity packs** (`ACTIVITY_ATLAS.md` Part D): build the full packs (about 16
+    sessions over the world phases) or the cheaper version (about 6: each place's signature,
+    martial art and one venue)?
 
 ## 8. Sources
 
