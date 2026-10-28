@@ -131,12 +131,17 @@ func apply_settings() -> void:
 	var persp: bool = str(settings.get("view", "perspective")) != "classic"
 	camera.perspective = persp
 	atmosphere.set_view(persp)
-	# Zoomed out, the city and country load further round the player.
+	# Zoomed out or tipped flatter, the city and country load further round
+	# the player.
 	var z = settings.get("zoom", 1.0)
 	camera.zoom = float(z) if (z is float or z is int) and camera.ZOOMS.has(float(z)) else 1.0
 	var a = settings.get("angle", 65.0)
-	camera.set_angle(float(a) if (a is float or a is int) and camera.ANGLES.has(float(a)) else camera.PITCH_LOW, settings.get("auto_tilt", true) != false)
+	var t = settings.get("auto_tilt", true)
+	camera.set_angle(float(a) if (a is float or a is int) and camera.ANGLES.has(float(a)) else camera.PITCH_LOW, t if t is bool else true)
 	var reach := maxf(camera.zoom, 1.0)
+	# A camera flatter than 65 degrees sees further up the screen.
+	if persp:
+		reach *= maxf(1.0, sin(deg_to_rad(camera.PITCH_LOW)) / sin(deg_to_rad(camera.base_pitch)))
 	City.LOAD_RADIUS = 105.0 * reach
 	City.UNLOAD_RADIUS = 150.0 * reach
 	Country.LOAD_RADIUS = 130.0 * reach

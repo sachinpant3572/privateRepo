@@ -41,7 +41,6 @@ const PITCH_TALL := 85.0
 ## from `base_pitch` (Settings > Angle, PITCH_LOW by default) up to
 ## PITCH_TALL in 5 degree steps, or are `base_pitch` alone with Settings >
 ## Tilt near towers off.
-const PITCHES := [65.0, 70.0, 75.0, 80.0, 85.0]
 const ANGLES := [40.0, 45.0, 50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0]
 var base_pitch := PITCH_LOW
 var auto_tilt := true
@@ -250,7 +249,8 @@ func _update_pitch(delta: float) -> void:
 	_pitch_t -= delta
 	_pitch_hold -= delta
 	if fixed_focus != null:
-		_pitch_want = base_pitch
+		# Rooms are framed for 65 degrees; flatter shows past the back wall.
+		_pitch_want = maxf(base_pitch, PITCH_LOW)
 	elif _pitch_t <= 0.0 and is_inside_tree():
 		_pitch_t = PITCH_EVERY
 		var pick := best_pitch(_player, _focus, _pitch_want)
@@ -275,7 +275,7 @@ func _update_pitch(delta: float) -> void:
 	perspective_pitch = _pitch_want if delta <= 0.0 else lerpf(perspective_pitch, _pitch_want, 1.0 - exp(-2.5 * delta))
 
 
-## The lowest of PITCHES from which the player at `player` is in sight, and
+## The lowest of pitches() from which the player at `player` is in sight, and
 ## all but one of up to seven open-ground points round the view's centre
 ## `center` (a ring and the look-ahead point). Dropping below `now` needs
 ## all of them in sight, so the camera doesn't hunt between two pitches.
@@ -346,7 +346,8 @@ func _frame(delta: float) -> void:
 		back = _back
 		fov = rad_to_deg(2.0 * atan(size * 0.5 / back))
 		far = back * 4.0
-		view_depth = back
+		# Flatter than 65 degrees the top of the screen sees further out.
+		view_depth = back * maxf(1.0, sin(deg_to_rad(PITCH_LOW)) / sin(deg_to_rad(perspective_pitch)))
 	else:
 		rotation_degrees = Vector3(-PITCH, 0.0, 0.0)
 		projection = PROJECTION_ORTHOGONAL

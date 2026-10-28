@@ -90,7 +90,10 @@ buildings, flying later, keep north-up and outlines): "Yes lets build this as be
   (65°, tilt on, Zoom 100%). Sachin, Oct 28: "Give me a setting to change camera angle too, so that I
   can test and share my feedback on which angle would be better, but also give option to reset the
   camera angle and zooming." The angle is the lowest pitch; with tilt on the picker steepens from it
-  to 85°. Perspective view only (classic stays 60°). Saved as "angle" and "auto_tilt".
+  to 85°. Perspective view only (classic stays 60°). Saved as "angle" and "auto_tilt". Below 65°
+  the screen sees further: city/country load radii and the shadow distance grow by sin 65°/sin angle
+  (1.41x at 40°); rooms keep at least 65° (flatter shows past the back wall). Review (one): no
+  serious findings. Not shot yet: an interior and a 130% drive at 40°.
 
 ## Rejected
 
@@ -130,7 +133,7 @@ buildings, flying later, keep north-up and outlines): "Yes lets build this as be
 
 ## Gates
 
-- `game/tests/run.sh`: 714 checks passed, 0 failed (61 tests). `test_perspective_camera` (28 checks)
+- `game/tests/run.sh`: 717 checks passed, 0 failed (61 tests). `test_perspective_camera` (31 checks)
   drives city routes at 30 m/s: downtown turn-backs <= 12 a minute (old picker 19.5, now 7.5),
   low-rise time above 67° <= 15% (first hold 21%, now 0%), and 20:9 corners over streamed cells at
   100% and 130% zoom after the build queue drains. That last check also passes with the view
