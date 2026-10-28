@@ -104,3 +104,8 @@ has the release plan). Branch `worktree-agent-a2a87c52f007c834a`.
 
 - The bicycle's crank mesh is static (built level); only the rider's legs
   turn with the pedals.
+- Independent review: not run inside the package (the package agent had
+  no tool to start a reviewer); a self-review of the diff found nothing.
+  The main session's release review should cover this package.
+- AI crew figures in open cars keep the plain body material, so they do
+  not take the car's x-ray tint.
