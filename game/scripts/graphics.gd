@@ -14,11 +14,17 @@ const QUALITIES := ["low", "medium", "high", "ultra"]
 ## What each preset sets. cars and lamps are how many real lights each
 ## gets; car_shadow gives the player's headlights a shadow; scale is the 3D
 ## render scale (the HUD stays sharp).
+## 0.21's Ultra fell to 20 fps on a Galaxy S25 Ultra once more than two cars
+## were about (Sachin, 2026-10-29): that is when its third car light came
+## on, and the Compatibility renderer draws everything a light reaches
+## once more per light, and the whole scene again into the headlight
+## shadow map. So since 0.22 Ultra keeps High's two car lights and no
+## headlight shadow, and adds only anti-aliasing (cheap on phone GPUs).
 const PRESETS := {
 	"low": {"detail": "low", "shadows": false, "bloom": false, "aa": false, "vivid": false, "real_lights": true, "cars": 1, "lamps": 0, "bars": false, "car_shadow": false, "scale": 0.8},
 	"medium": {"detail": "high", "shadows": true, "bloom": false, "aa": false, "vivid": false, "real_lights": true, "cars": 1, "lamps": 2, "bars": false, "car_shadow": false, "scale": 1.0},
 	"high": {"detail": "high", "shadows": true, "bloom": true, "aa": false, "vivid": true, "real_lights": true, "cars": 2, "lamps": 4, "bars": true, "car_shadow": false, "scale": 1.0},
-	"ultra": {"detail": "high", "shadows": true, "bloom": true, "aa": true, "vivid": true, "real_lights": true, "cars": 3, "lamps": 4, "bars": true, "car_shadow": true, "scale": 1.0},
+	"ultra": {"detail": "high", "shadows": true, "bloom": true, "aa": true, "vivid": true, "real_lights": true, "cars": 2, "lamps": 4, "bars": true, "car_shadow": false, "scale": 1.0},
 }
 ## The settings keys a preset sets (and the effect toggles on the page).
 const KEYS := ["detail", "shadows", "bloom", "aa", "vivid", "real_lights"]

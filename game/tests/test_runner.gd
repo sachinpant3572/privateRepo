@@ -62,7 +62,7 @@ func _run() -> void:
 		"test_player_driving_assists",
 		"test_driving_layouts",
 		"test_touch_driving_layouts",
-		"test_scripted_car_gets_unstuck", "test_heavy_vehicle_pushes_harder",
+		"test_scripted_car_gets_unstuck", "test_heavy_vehicle_pushes_harder", "test_spawns_need_room", "test_overlap_resolves", "test_heavy_pushes_parked", "test_pinned_car_holds_still", "test_xray_only_when_hidden",
 		"test_vehicle_handling_differs",
 		"test_traffic_drives_every_kind",
 		"test_vehicle_models_in_budget_and_grounded", "test_three_wheelers_and_big_trucks",
@@ -1646,7 +1646,7 @@ func test_graphics_quality_presets() -> void:
 	_check(s.quality == "high" and env.glow_enabled and env.adjustment_enabled and get_viewport().msaa_3d == Viewport.MSAA_DISABLED and game.graphics.cars == 2 and game.graphics.lamps == 4, "a new game starts on High: bloom and vivid colour on, no MSAA, 2 car and 4 lamp lights")
 	G.pick(s, "ultra")
 	game.apply_settings()
-	_check(env.glow_enabled and get_viewport().msaa_3d == Viewport.MSAA_4X and game.graphics.cars == 3 and game.graphics.car_shadow, "Ultra adds 4x MSAA, a third car light and a shadow from the player's headlights")
+	_check(env.glow_enabled and get_viewport().msaa_3d == Viewport.MSAA_4X and game.graphics.cars == 2 and not game.graphics.car_shadow, "Ultra adds 4x MSAA but keeps two car lights and no headlight shadow (0.22: 20 fps on a phone)")
 	G.pick(s, "low")
 	game.apply_settings()
 	_check(not env.glow_enabled and not env.adjustment_enabled and not game.atmosphere.sun.shadow_enabled and s.detail == "low" and game.graphics.cars == 1 and game.graphics.lamps == 0 and is_equal_approx(get_viewport().scaling_3d_scale, 0.8), "Low: no bloom, shadows or vivid colour, low detail, 80% 3D scale, only the player's headlights are real")
@@ -6669,3 +6669,127 @@ func test_boundaries_vary_by_household() -> void:
 	_check(problems.is_empty() and twice[0] == twice[1] and leaf_counts.size() >= 3 and leaf_hs.size() >= 4 and gate_ws.size() >= 4,
 		"built homes: gates with %s leaves at %d heights, ways out %d widths, the same each build (%s), colliders sane and no way out blocked (%d problems)"
 		% [leaf_counts.keys(), leaf_hs.size(), gate_ws.size(), twice[0] == twice[1], problems.size()])
+
+
+## Sachin's 0.21 video: an 18-wheeler stuck while the whole view shook. A
+## car parked at the curb could spawn inside the long trailer (spawns
+## checked only how near the other cars' centres were), so every spawn now
+## needs room for its whole footprint.
+func test_spawns_need_room() -> void:
+	await _free_game()
+	var semi = _track_car("semi", Vector3.ZERO, 0.0)
+	await _frames(1)
+	var sedan := VehicleKit.size_of("sedan")
+	_check(not Vehicle.room_for(get_tree(), Vector3(1.0, 0, 5.5), 0.0, sedan, 0.5), "no room for a sedan under the semi's trailer, 5.5 m from its centre")
+	_check(not Vehicle.room_for(get_tree(), Vector3(2.2, 0, -3.0), PI * 0.5, sedan, 0.5), "nor for one across its cab")
+	_check(Vehicle.room_for(get_tree(), Vector3(5.0, 0, 0.0), 0.0, sedan, 0.5), "but room for one beside it in the next lane")
+	_check(Vehicle.room_for(get_tree(), Vector3(0.0, 0, 12.0), 0.0, sedan, 0.5), "and behind the trailer")
+	semi.queue_free()
+	await _frames(1)
+
+
+## A car held against a wall at full throttle: its smoothed motion, which
+## the camera's lead and the speedometer read, stays near nought, so the
+## view holds still (its commanded velocity flips each frame).
+func test_pinned_car_holds_still() -> void:
+	await _free_game()
+	var L = preload("res://scripts/layers.gd")
+	var wall := StaticBody3D.new()
+	wall.collision_layer = L.WORLD
+	var shape := CollisionShape3D.new()
+	shape.shape = BoxShape3D.new()
+	shape.shape.size = Vector3(20, 4, 0.5)
+	wall.add_child(shape)
+	wall.position = Vector3(0.0, 2.0, -9.0)
+	add_child(wall)
+	var semi = _player_car("semi", Vector3.ZERO, 0.0)
+	Controls.override_vector = Vector2(0, -1)
+	await _frames(240)
+	var most := 0.0
+	var start: Vector3 = semi.global_position
+	for f in 60:
+		await _frames(1)
+		most = maxf(most, semi.motion.length())
+	_check(most < 1.0, "a semi pinned against a wall at full throttle shows at most %.2f m/s of motion" % most)
+	_check(semi.global_position.distance_to(start) < 0.3, "and stays put (moved %.2f m in a second)" % semi.global_position.distance_to(start))
+	Controls.override_vector = null
+	semi.queue_free()
+	wall.queue_free()
+	await _frames(1)
+
+
+## The see-through silhouette shows only while a wall or a car hides the
+## player (Sachin, 2026-10-29), never on open road.
+func test_xray_only_when_hidden() -> void:
+	await _new_game(false)
+	var L = preload("res://scripts/layers.gd")
+	var cam = game.camera
+	var p = game.player
+	var at: Vector3 = game.city.node_pos(_home()) + Vector3(0, 0, 0)
+	_place_player_at(at)
+	await _frames(20)
+	cam._update_xray(1.0, p.global_position)
+	var open_hidden: bool = cam.covered(cam.get_world_3d().direct_space_state, cam.global_position, p)
+	_check(p.is_in_group("xray") and p.xray_shown == open_hidden, "the player has a silhouette, drawn only when covered (covered on this spot: %s)" % open_hidden)
+	# A wall right between the player and the camera.
+	var wall := StaticBody3D.new()
+	wall.collision_layer = L.WORLD
+	var shape := CollisionShape3D.new()
+	shape.shape = BoxShape3D.new()
+	shape.shape.size = Vector3(6, 6, 6)
+	wall.add_child(shape)
+	add_child(wall)
+	var mid: Vector3 = p.global_position.lerp(cam.global_position, 0.25)
+	wall.global_position = mid
+	await _frames(2)
+	cam._update_xray(1.0, p.global_position)
+	_check(p.xray_shown and p.body_mesh.material_override.stencil_mode == BaseMaterial3D.STENCIL_MODE_XRAY, "behind a wall the player shows through it")
+	wall.queue_free()
+	await _frames(2)
+	cam._update_xray(1.0, p.global_position)
+	_check(not p.xray_shown and p.body_mesh.material_override.stencil_mode == BaseMaterial3D.STENCIL_MODE_DISABLED, "with the wall gone the silhouette is off again")
+
+
+## A car sunk into a semi's trailer is moved out within a few frames, so
+## the semi drives on smoothly instead of jumping back and forth a metre
+## each frame (the shaking view in Sachin's 0.21 video).
+func test_overlap_resolves() -> void:
+	await _free_game()
+	for off in [Vector3(0, 0, 5.0), Vector3(1.0, 0, 5.5), Vector3(-1.2, 0, -3.0)]:
+		var semi = _player_car("semi", Vector3.ZERO, 0.0)
+		var parked = _track_car("sedan", off, 0.0)
+		Controls.override_vector = Vector2(0, -1)
+		# The first frame's move_and_slide lifts the semi itself out of a
+		# shallow overlap (a one-off step); what must not happen is that
+		# going on frame after frame.
+		await _frames(5)
+		var most := 0.0
+		var last: Vector3 = semi.global_position
+		for f in 75:
+			await _frames(1)
+			most = maxf(most, semi.global_position.distance_to(last))
+			last = semi.global_position
+		_check(most < 0.3, "a semi with a sedan sunk in at %s drives on smoothly (largest step %.2f m a frame)" % [off, most])
+		Controls.override_vector = null
+		semi.queue_free()
+		parked.queue_free()
+		await _frames(2)
+
+
+## Driving a semi into a parked sedan pushes the sedan along, and the
+## speedometer reads the pace the semi really makes.
+func test_heavy_pushes_parked() -> void:
+	await _free_game()
+	var semi = _player_car("semi", Vector3.ZERO, 0.0)
+	var parked = _track_car("sedan", Vector3(0.6, 0, -10.2), 0.3)
+	await _frames(2)
+	var start: Vector3 = parked.global_position
+	Controls.override_vector = Vector2(0, -1)
+	await _frames(150)
+	Controls.override_vector = null
+	_check(semi.global_position.z < -4.0, "the semi drives on into the sedan (went %.1f m)" % -semi.global_position.z)
+	_check(parked.global_position.distance_to(start) > 3.0, "pushing it %.1f m" % parked.global_position.distance_to(start))
+	_check(absf(semi.speed - semi.motion.length()) < 2.0, "the speedometer reads the semi's real pace (%.1f vs %.1f m/s)" % [semi.speed, semi.motion.length()])
+	semi.queue_free()
+	parked.queue_free()
+	await _frames(2)

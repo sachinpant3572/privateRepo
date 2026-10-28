@@ -40,6 +40,8 @@ var punch_damage := 12.0
 var look := {}
 ## Silhouette colour shown through buildings; transparent means none.
 var xray_color := Color(0, 0, 0, 0)
+## Whether the silhouette is drawn now (see show_xray).
+var xray_shown := false
 
 ## Third hit of a quick combo is a kick that knocks down.
 var can_kick := false
@@ -294,9 +296,21 @@ func _build_model() -> void:
 	set_xray(xray_color)
 
 
+## Sets the see-through colour (transparent for none). TopDownCamera draws
+## it only while something big hides this person (show_xray).
 func set_xray(color: Color) -> void:
 	xray_color = color
-	body_mesh.material_override = MeshBuilder.xray_material(color) if color.a > 0.0 else MeshBuilder.material()
+	if color.a > 0.0:
+		add_to_group("xray")
+	elif is_in_group("xray"):
+		remove_from_group("xray")
+	show_xray(xray_shown)
+
+
+## Draws the see-through silhouette (stencil x-ray) or the plain body.
+func show_xray(on: bool) -> void:
+	xray_shown = on and xray_color.a > 0.0
+	body_mesh.material_override = MeshBuilder.xray_material(xray_color) if xray_shown else MeshBuilder.material()
 
 
 # --- Perception and reactions -------------------------------------------------

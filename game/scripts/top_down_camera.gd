@@ -65,6 +65,11 @@ var _pitch_hold := 0.0
 var _pitch_votes := 0
 var _pitch_recent: Array[float] = []
 var _player_hidden := false
+## The see-through check (_update_xray): how often it runs (s), how far
+## from the camera's focus it looks (m), and the time since it last ran.
+const XRAY_EVERY := 0.12
+const XRAY_REACH := 80.0
+var _xray_t := 0.0
 var _player := Vector3.ZERO
 const PERSPECTIVE_FOV := 35.0
 ## Size of the see-through hole when a building blocks the view of the player.
@@ -235,6 +240,13 @@ func _ready() -> void:
 	current = true
 
 
+## How a vehicle really moves (smoothed), not the velocity it asks for: a car
+## pinned against something asks for a different one every frame, which
+## shook the whole view.
+static func _motion(node: Node3D) -> Vector3:
+	return node.motion if "motion" in node else node.velocity
+
+
 func _process(delta: float) -> void:
 	if target == null:
 		return
@@ -246,7 +258,7 @@ func _process(delta: float) -> void:
 	var driving := node != target
 	var v := Vector3.ZERO
 	if driving:
-		v = node.velocity
+		v = _motion(node)
 	if preview_drive and fixed_focus == null:
 		driving = true
 		v = Vector3.FORWARD.rotated(Vector3.UP, yaw) * (TURN_FULL_SPEED if turns() else DRIVE_SPEED)
@@ -281,6 +293,53 @@ func _process(delta: float) -> void:
 	_update_view_band(node)
 	_apply_shake(delta)
 	_update_look_up(pos, delta)
+	_update_xray(delta, pos)
+
+
+## Draws the see-through silhouette (stencil x-ray) on those that have one
+## (group "xray": the player, their car, police, hostile people) only while
+## something big, a building or a car, stands between them and the camera.
+## Sachin, 2026-10-29: it "should only show up when the player is being
+## covered by something big like a car or building from behind and is not
+## visible on the screen". Drawn all the time, the stencil also tinted the
+## player on open road wherever one limb passed behind another.
+func _update_xray(delta: float, focus: Vector3) -> void:
+	_xray_t += delta
+	if _xray_t < XRAY_EVERY:
+		return
+	_xray_t = 0.0
+	var space := get_world_3d().direct_space_state
+	var eye := global_position
+	for n in get_tree().get_nodes_in_group("xray"):
+		if not n.is_inside_tree():
+			continue
+		var on := false
+		if n.is_visible_in_tree() and n.global_position.distance_squared_to(focus) < XRAY_REACH * XRAY_REACH:
+			on = covered(space, eye, n)
+		if on != n.xray_shown:
+			n.show_xray(on)
+
+
+## Whether walls or cars hide all of `n` (a person or a vehicle) from `eye`:
+## a person's legs and chest, a car's nose and tail.
+static func covered(space: PhysicsDirectSpaceState3D, eye: Vector3, n: Node3D) -> bool:
+	var skip: Array[RID] = [n.get_rid()]
+	var points: Array[Vector3] = []
+	if "body_mesh" in n:
+		var ride = n.get("vehicle")
+		if ride != null and is_instance_valid(ride):
+			skip.append(ride.get_rid())
+		for h in [0.6, 1.5]:
+			points.append(n.global_position + Vector3(0.0, h, 0.0))
+	else:
+		var half: Vector3 = n._size * 0.5
+		for z in [-0.6, 0.6]:
+			points.append(n.global_transform * Vector3(0.0, half.y, half.z * z))
+	for p in points:
+		var ray := PhysicsRayQueryParameters3D.create(p, eye, L.WORLD | L.VEHICLES, skip)
+		if space.intersect_ray(ray).is_empty():
+			return false
+	return true
 
 
 ## Starts or ends Look up; it starts facing the way the screen's top faces.
@@ -431,7 +490,7 @@ func _update_yaw(node: Node3D, delta: float) -> void:
 			return
 	elif node != target:
 		_still = 0.0
-		var v: Vector3 = node.velocity
+		var v: Vector3 = _motion(node)
 		var flat := Vector3(v.x, 0.0, v.z)
 		var speed := flat.length()
 		var fwd := -node.global_basis.z

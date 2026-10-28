@@ -72,6 +72,11 @@ func _run() -> void:
 		await _nightfx(game)
 		get_tree().quit()
 		return
+	if OS.get_environment("SHOTS") == "xray":
+		# The player on foot and in a car on open road: no see-through tint.
+		await _xray(game)
+		get_tree().quit()
+		return
 	if OS.get_environment("SHOTS") == "lookup":
 		# Look up through the game's own camera (the HUD's SKY button).
 		await _lookup(game)
@@ -504,6 +509,31 @@ func _lookup(game) -> void:
 		print("lookup %s: amount %.2f, forward y %.2f" % [v[0], cam.look_up_amount(), -cam.global_basis.z.y])
 		await _shot(v[0] + ".png")
 	cam.set_look_up(false)
+
+
+func _xray(game) -> void:
+	var at := Vector2(690, 470)
+	var pos := Vector3(at.x, Terrain.height(at.x, at.y), at.y)
+	game.city.stream_now(pos)
+	game.player.global_position = pos
+	game.camera.snap()
+	for q in ["low", "ultra"]:
+		game.Graphics.pick(game.settings, q)
+		game.apply_settings()
+		await _frames(30)
+		await _shot("93_xray_foot_%s.png" % q)
+	var car = Vehicle.new()
+	car.kind = "sedan"
+	game.add_child(car)
+	car.global_position = pos + Vector3(0, 0, 3)
+	await _frames(2)
+	game.player.enter_vehicle(car)
+	await _frames(30)
+	await _shot("93_xray_car_ultra.png")
+	game.player.exit_vehicle()
+	car.queue_free()
+	game.Graphics.pick(game.settings, "high")
+	game.apply_settings()
 
 
 func _nightfx(game) -> void:

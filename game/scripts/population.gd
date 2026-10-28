@@ -98,6 +98,10 @@ func _spawn_traffic(center: Vector3, r: float) -> void:
 	car.position = game.city.lane_start(n, to, lane)
 	var heading: Vector3 = game.city.node_pos(to) - game.city.node_pos(n)
 	car.rotation.y = atan2(-heading.x, -heading.z)
+	# Never on top of another vehicle (a long truck's trailer included).
+	if not Vehicle.room_for(get_tree(), car.position, car.rotation.y, VehicleKit.size_of(car.kind), 1.0):
+		car.free()
+		return
 	car.rng.seed = rng.randi()
 	car.start_traffic(game.city, n, to, lane)
 	game.add_child(car)
@@ -122,7 +126,8 @@ func _update_parked(center: Vector3) -> void:
 		var d: float = spots[idx][0].distance_to(center)
 		# A home's stalls and garage bays stand about 2.6 m apart: a car in
 		# the next one does not block this one.
-		if d < PARK_SPAWN and (_first_pass or not _in_view(spots[idx][0])) and not _occupied(spots[idx][0], 2.0 if spots[idx].size() > 3 else 4.0):
+		if d < PARK_SPAWN and (_first_pass or not _in_view(spots[idx][0])) and not _occupied(spots[idx][0], 2.0 if spots[idx].size() > 3 else 4.0) \
+				and Vehicle.room_for(get_tree(), spots[idx][0], spots[idx][1], PARK_FOOTPRINT, 0.0):
 			var car = _new_car(true, spots[idx][3] if spots[idx].size() > 3 else -1)
 			car.city = game.city
 			car.position = spots[idx][0]
@@ -138,8 +143,13 @@ func refill() -> void:
 	_first_pass = true
 
 
+## A curb car's footprint for the spot check (the biggest curb models; a
+## home's stalls stand 2.6 m apart, so neighbours don't count).
+const PARK_FOOTPRINT := Vector3(2.2, 0.0, 5.4)
+
+
 ## Whether a vehicle or the player already stands within `radius` of a
-## parking spot.
+## parking spot (by centre: a long truck over the spot is room_for's).
 func _occupied(spot: Vector3, radius := 4.0) -> bool:
 	if game.player.global_position.distance_to(spot) < radius:
 		return true

@@ -217,7 +217,7 @@ func _process(delta: float) -> void:
 	if player.passenger:
 		_prompt.text = "" # the taxi's own panel and ride bar
 	elif player.vehicle != null:
-		_prompt.text = "%d km/h" % int(absf(player.vehicle.speed) * 3.6)
+		_prompt.text = "%d km/h" % roundi(player.vehicle.motion.length() * 3.6)
 		if _ride_name_time > 0.0:
 			_prompt.text = player.vehicle.model_name() + "   " + _prompt.text
 		touch.set_label("interact", "EXIT")

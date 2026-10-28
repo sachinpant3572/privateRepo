@@ -27,12 +27,22 @@ const CORNER_RADIUS := 5.0
 ## Wheel steering (arrows, tilt): full lock aims this far (radians) off
 ## the nose, which _drive turns into full steer; seconds to reach it.
 const WHEEL_ANGLE := 0.5
-const STEER_IN := 0.3
+const STEER_IN := 0.22
 ## The tightest circle (m) any vehicle turns on, however slow.
-const MIN_RADIUS := 3.5
+const MIN_RADIUS := 3.2
 ## Seconds the player's car takes to build up (or shed) a turn, as a real
 ## body takes a moment to start rotating: no snap into the bend.
-const YAW_IN := 0.18
+const YAW_IN := 0.12
+## Game grip: each model's corner_g (its real tyres) times this. Real road
+## grip on these short city blocks felt stiff (0.21, Sachin: "the handling
+## is very stiff now, especially on corners"); the models keep their order.
+const CORNER_GRIP := 1.5
+## Time constant (s) of the smoothed real motion (`motion`).
+## How deep (m) another car must sink in before it is moved out
+## (_handle_collisions), and the most it moves out each frame.
+const OVERLAP := 0.08
+const OVERLAP_STEP := 0.25
+const MOTION_EASE := 0.12
 const TRAFFIC_THROTTLE := 0.6
 ## Traffic never cruises faster than this (m/s), whatever the model.
 const TRAFFIC_CRUISE := 13.0
@@ -45,6 +55,7 @@ const TRAFFIC_LOOKAHEAD := 9.0
 ## does not move off before it goes round.
 const SCRIPT_WAIT := 3.0
 const POLICE_XRAY := Color(0.3, 0.55, 1.0, 0.6)
+const PLAYER_XRAY := Color(1.0, 0.85, 0.25, 0.6)
 
 var driver := Driver.NONE
 var is_police := false
@@ -54,6 +65,10 @@ var body_color := Color(0.8, 0.15, 0.15)
 var city
 var occupant = null
 var health := 100.0
+## Silhouette colour shown through buildings (the player's car, police);
+## transparent means none. xray_shown: whether it is drawn now.
+var xray_color := Color(0, 0, 0, 0)
+var xray_shown := false
 var max_health := 100.0
 ## Tonnes (VehicleKit.HANDLING); collisions share speed and damage by it.
 var mass := 1.5
@@ -141,6 +156,10 @@ var _slope := Vector2.ZERO
 var _moved := 0.0
 ## Riders leaned with a two-wheeler last frame (straightened when they leave).
 var _leaning: Array = []
+## How the car really moves (m/s), smoothed over MOTION_EASE: what the
+## camera leads by and the speedometer reads. `velocity` is what the car
+## asks for, which pinned against something flips every frame.
+var motion := Vector3.ZERO
 
 
 func _ready() -> void:
@@ -188,6 +207,7 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	if driver == Driver.NONE and speed == 0.0 and velocity == Vector3.ZERO and _lights.is_empty():
+		motion = Vector3.ZERO
 		return # parked: nothing to simulate until something drives or hits it
 	desired_dir = Vector3.ZERO
 	throttle = 0.0
@@ -353,8 +373,7 @@ func driver_node():
 func take_player(p) -> void:
 	occupant = p
 	driver = Driver.PLAYER
-	if not wrecked:
-		_skin(MeshBuilder.xray_material(), _gloss_xray(Color(1.0, 0.85, 0.25, 0.6)))
+	set_xray(PLAYER_XRAY)
 
 
 func release_player() -> void:
@@ -363,8 +382,7 @@ func release_player() -> void:
 	occupant = null
 	driver = Driver.NONE
 	update_beams()
-	if not wrecked:
-		_skin(MeshBuilder.material(), MeshBuilder.gloss_material())
+	set_xray(POLICE_XRAY if is_police else Color(0, 0, 0, 0))
 
 
 ## Drives as traffic, setting off from junction `from` towards `to` in
@@ -409,6 +427,37 @@ func join_traffic_here() -> void:
 
 ## Hit by another vehicle: `push` is already scaled by the two masses (see
 ## _handle_collisions); a hard shove costs up to 40% of our speed.
+## Whether a vehicle `size` long and wide at `pos`, facing `yaw`, would sit
+## clear of every vehicle by `margin` (their footprints on the ground, so an
+## 18-wheeler's trailer counts all the way to its tail, not just near its
+## middle). Spawners check this so nothing appears inside another vehicle.
+static func room_for(tree: SceneTree, pos: Vector3, yaw: float, size: Vector3, margin := 0.5) -> bool:
+	for v in tree.get_nodes_in_group("vehicles"):
+		if v.is_inside_tree() and footprints_meet(pos, yaw, size, v.global_position, v.rotation.y, v._size, margin):
+			return false
+	return true
+
+
+## Whether two vehicle footprints (rectangles on the ground) come within
+## `margin` of each other.
+static func footprints_meet(a: Vector3, a_yaw: float, a_size: Vector3, b: Vector3, b_yaw: float, b_size: Vector3, margin := 0.0) -> bool:
+	var axes := [Vector2(cos(a_yaw), -sin(a_yaw)), Vector2(sin(a_yaw), cos(a_yaw)),
+		Vector2(cos(b_yaw), -sin(b_yaw)), Vector2(sin(b_yaw), cos(b_yaw))]
+	var gap := Vector2(b.x - a.x, b.z - a.z)
+	for n: Vector2 in axes:
+		var ra: float = (a_size.x * absf(axes[0].dot(n)) + a_size.z * absf(axes[1].dot(n))) * 0.5
+		var rb: float = (b_size.x * absf(axes[2].dot(n)) + b_size.z * absf(axes[3].dot(n))) * 0.5
+		if absf(gap.dot(n)) > ra + rb + margin:
+			return false
+	return true
+
+
+## Moves the car by `offset` at once, stopping at walls (another car
+## sunk into it moves it out).
+func shove(offset: Vector3) -> void:
+	move_and_collide(offset)
+
+
 func bump(push: Vector3) -> void:
 	velocity += push
 	speed *= lerpf(1.0, 0.6, clampf(push.length() / 6.0, 0.0, 1.0))
@@ -610,7 +659,7 @@ func _drive(delta: float) -> void:
 		# The tyres hold only so much sideways pull (corner_g = v * yaw rate)
 		# and the wheels turn only so far: at speed the arc widens. The
 		# handbrake lets the tail come round past grip (a drift).
-		var cap: float = minf(_spec.corner_g / maxf(pace, 0.1), pace / MIN_RADIUS + 0.3)
+		var cap: float = minf(_spec.corner_g * CORNER_GRIP / maxf(pace, 0.1), pace / MIN_RADIUS + 0.3)
 		rate_want = clampf(rate_want, -cap * (1.8 if handbrake else 1.0), cap * (1.8 if handbrake else 1.0))
 		if driver == Driver.PLAYER:
 			_yaw_rate = lerpf(_yaw_rate, rate_want, 1.0 - exp(-delta / YAW_IN))
@@ -658,7 +707,9 @@ func _drive(delta: float) -> void:
 	_ground_slope(delta)
 	# Tilt follows how the body really moves, so a car pinned against a
 	# wall with the throttle down stays level.
-	var moved := get_real_velocity().dot(-global_basis.z)
+	var real := get_real_velocity()
+	motion = motion.lerp(Vector3(real.x, 0.0, real.z), 1.0 - exp(-delta / MOTION_EASE))
+	var moved := real.dot(-global_basis.z)
 	_body_tilt(delta, moved * yaw / delta, (moved - _moved) / delta)
 	_moved = moved
 	_handle_collisions(before)
@@ -671,7 +722,7 @@ func _drive(delta: float) -> void:
 ## lags the heading by the model's grip.
 func _corner_speed() -> float:
 	var k: float = CORNER_RADIUS * turn_rate
-	return minf(k / (1.0 + k * _spec.steer_fade / max_speed), sqrt(_spec.corner_g * CORNER_RADIUS))
+	return minf(k / (1.0 + k * _spec.steer_fade / max_speed), sqrt(_spec.corner_g * CORNER_GRIP * CORNER_RADIUS))
 
 
 ## Tilts the model: cars roll out of turns and pitch back under power and
@@ -709,6 +760,15 @@ func _handle_collisions(before: Vector3) -> void:
 	for i in get_slide_collision_count():
 		var col := get_slide_collision(i)
 		var other := col.get_collider()
+		# Sunk into another car (a long tail swung into a parked car, which
+		# turning does not sweep, or a car spawned too close): move_and_slide
+		# pushed this one out and back every frame, 1.2 m each way, and the
+		# view shook (Sachin's 0.21 video). The parked or lighter car is
+		# moved out instead.
+		if other != null and other.has_method("shove") and col.get_depth() > OVERLAP:
+			if other.driver == Driver.NONE or other.mass < mass:
+				var n := Vector3(col.get_normal().x, 0.0, col.get_normal().z).normalized()
+				other.shove(-n * minf(col.get_depth() + 0.05, OVERLAP_STEP))
 		if other != null and other.has_method("hit_by_vehicle"):
 			if before.length() > 2.5 and not other.dead:
 				Fx.hit(other.global_position, true, driver == Driver.PLAYER)
@@ -877,16 +937,27 @@ func set_real_light(on: bool, energy := 0.0, shadow := false, bar := true) -> vo
 	update_beams()
 
 
+## Built car meshes by kind and paint, shared by every car alike: building
+## one takes 2 to 15 ms, so building each new car in traffic afresh made
+## the game stutter (0.21 on Ultra, Sachin, 2026-10-29).
+static var _meshes := {}
+
+
 func _build_model() -> void:
-	var mb := MeshBuilder.new()
-	var gloss := MeshBuilder.new()
-	VehicleKit.build(mb, kind, body_color, gloss)
-	_model = mb.make_instance()
-	_gloss = gloss.make_instance()
+	var key := "%s|%s" % [kind, body_color.to_html()]
+	if not _meshes.has(key):
+		var mb := MeshBuilder.new()
+		var gloss := MeshBuilder.new()
+		VehicleKit.build(mb, kind, body_color, gloss)
+		_meshes[key] = [mb.commit(), gloss.commit()]
+	_model = MeshInstance3D.new()
+	_model.mesh = _meshes[key][0]
+	_gloss = MeshInstance3D.new()
+	_gloss.mesh = _meshes[key][1]
 	_model.add_child(_gloss)
 	_skin(MeshBuilder.material(), MeshBuilder.gloss_material())
 	if is_police:
-		_skin(MeshBuilder.xray_material(POLICE_XRAY), _gloss_xray(POLICE_XRAY))
+		set_xray(POLICE_XRAY)
 	add_child(_model)
 	# Beams and the red pool behind lie on the ground, over the hills too
 	# (ground_glow_material); the lamps' own glow rides on the car.
@@ -926,6 +997,28 @@ func _build_model() -> void:
 			light.position = Vector3(-0.31 if i == 0 else 0.31, 1.465, 0.35)
 			_model.add_child(light) # rolls with the body
 			_lights.append(light)
+
+
+## Sets the see-through colour (transparent for none). TopDownCamera draws
+## it only while something big hides the car (show_xray).
+func set_xray(color: Color) -> void:
+	xray_color = color
+	if color.a > 0.0:
+		add_to_group("xray")
+	elif is_in_group("xray"):
+		remove_from_group("xray")
+	show_xray(xray_shown)
+
+
+## Draws the see-through silhouette (stencil x-ray) or the plain paint.
+func show_xray(on: bool) -> void:
+	xray_shown = on and xray_color.a > 0.0
+	if wrecked:
+		return
+	if xray_shown:
+		_skin(MeshBuilder.xray_material(xray_color), _gloss_xray(xray_color))
+	else:
+		_skin(MeshBuilder.material(), MeshBuilder.gloss_material())
 
 
 ## Materials for the matte body and its glossy glass/paint shell (both get

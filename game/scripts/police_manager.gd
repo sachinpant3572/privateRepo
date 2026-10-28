@@ -4,6 +4,7 @@ extends Node
 
 const Cop = preload("res://scripts/cop.gd")
 const Vehicle = preload("res://scripts/vehicle.gd")
+const VehicleKit = preload("res://scripts/kits/vehicle_kit.gd")
 const L = preload("res://scripts/layers.gd")
 
 const FOOT_COPS := [0, 2, 3]
@@ -87,7 +88,9 @@ func _spawn_car_nearby(center: Vector3) -> void:
 		return
 	var pos: Vector3 = game.city.node_pos(n)
 	var to := center - pos
-	spawn_car_at(pos, atan2(-to.x, -to.z))
+	var yaw := atan2(-to.x, -to.z)
+	if Vehicle.room_for(get_tree(), pos, yaw, VehicleKit.size_of("police"), 1.0):
+		spawn_car_at(pos, yaw)
 
 
 func _on_officer_deployed(car) -> void:
