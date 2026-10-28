@@ -23,10 +23,88 @@ Complaints as Sachin listed them (not yet verified), and where Solvera stands to
 | 8 | Mandatory drug dealing felt tedious | Drug dealing excluded for tone (ACTIVITY_ROADMAP.md) | Make sure no money system becomes a forced grind (stock market, businesses, heists stay optional) |
 | 9 | Sold less than Liberty City Stories and Vice City Stories | not a design flaw as such | Note from research why (platform, the top-down look in marketing) and what it means for Solvera |
 
-Next steps:
-- Research (running 2026-10-28): the iOS and Android ports' fixes and patch history, how players
-  rated them, fan mods and other games' fixes for each complaint. Results go below.
-- Then turn each row into a design rule, and into a build task where it needs code.
+### Research, 2026-10-28 (search excerpts only: Reddit, store reviews and page fetches were blocked)
+
+Mobile ports. Sources:
+- Rockstar's update notes: https://support.rockstargames.com/articles/3npV5Ux53CdrzLJ9JuFHwb
+- TouchArcade, iOS 7 return: https://toucharcade.com/2013/12/20/grand-theft-auto-chinatown-wars-returns-to-the-app-store-with-ios-7-fix-and-retina-display-support
+- TouchArcade, iOS 12 update: https://toucharcade.com/2019/05/13/grand-theft-auto-chinatown-wars-ios-update/
+
+Which versions exist and what they changed:
+- iPhone, Jan 2010. Driving aid that lines the car up with the road, on by default. Reviewers
+  credited it (Bit-Tech, TouchArcade).
+- iPad HD, Sept 2010.
+- Android, Dec 2014: widescreen, gamepads.
+- GTA+ subscription, Oct 2023, on both phones.
+- No Netflix release found.
+- The only controls overhaul: iOS v4.1, Dec 2014. Resizable, movable touch controls and MFi
+  controllers. The touch minigames stayed as they were.
+- An Analog Driving on/off toggle exists. When it was added is unknown.
+
+Patch history:
+- 2013: iOS 7 had broken starting a new game; the fix came that year.
+- 2016: 64-bit.
+- 2019: iOS 12 and iPhone X. Before it, TouchArcade called the game "nigh unplayable" on new iOS.
+- 2023, 2024 and Android 4.4.243 (9 Mar 2026): generic "bug fixes" only.
+- No iOS update found for 2025 or 2026.
+- So "Rockstar heavily optimized the controls over a decade" is overstated: one overhaul in 2014,
+  then compatibility fixes.
+
+Player verdict:
+- Touch driving stayed the weak point: Engadget (overcorrecting), Pocket Gamer ("never feels fully
+  precise", iPhone ranked third of three), Wired on the iPad.
+- Android averages about 4.0/5. Later pieces mention sensitivity and technical issues on modern
+  Android.
+- The usual advice is to play with a controller.
+- Not verified whether recent updates are reliable on new phones.
+
+Checks on Sachin's list:
+- 1. Touch driving: confirmed. But critics liked the DS minigames (GameSpot: "work well").
+- 3, 4. Weak cast and hero: confirmed. Kotaku: "largely forgettable cast". Game Informer: Huang's
+  sarcasm hurt the story.
+- 5. Predictable plot: not verified. The story was called the weak link, but no source called the
+  twist predictable.
+- 6. Ling Shan: confirmed. About two missions despite heavy promo art.
+- 7. Repetitive minigames: weak. Most are mandatory once. The PSP swapped them for quick button
+  prompts, which were clearer but "not nearly as novel".
+- 8. Drug dealing: not mandatory after the intro, but it is the main income.
+- 9. Commercial underperformance: confirmed. 89k US units in the first month vs a 400k forecast;
+  Take-Two blamed piracy and weak handheld demand.
+
+Camera complaints:
+- Slow to catch up, causing steering errors (Push Square).
+- Unwieldy in reverse (Tech-Gaming).
+- Buildings block the view (Kotaku).
+- No dizziness reports found.
+
+Ideas from other games:
+- Reckless Getaway: auto-accelerate plus two arrows, praised.
+- GTA SA mobile: three steering schemes.
+- Asphalt: tilt, on-screen and tap schemes.
+- Gangstar Vegas: tilt default panned.
+- Sleeping Dogs: villains tied to the hero's past; Wei Shen's inner conflict.
+- The Precinct (2025): top-down still criticised for not seeing ahead at speed.
+
+Design rules to adopt:
+- Driving:
+  - keep several schemes: stick, arrows, tilt, and add auto-accelerate;
+  - keep the corner assist (vehicle.gd), and consider a gentle road-alignment assist like CTW's;
+  - stick dead zone and response curve;
+  - a resizable, movable touch layout;
+  - gamepad from launch.
+- Camera: catch up fast at speed. The turning camera's 0.25 s half-life is aimed at this. Hold
+  the view in reverse (CTW's auto-reverse flip is the opposite; revisit after play-tests). Keep
+  the see-through ghost for buildings in the way.
+- Core actions one tap; any minigame short, varied by vehicle tier and skippable once mastered.
+- Several viable income streams; no single grind.
+- Cast:
+  - every boss has a tie to Jules and a goal of their own;
+  - Jules has a stake and an inner conflict, and sarcasm is flavour only;
+  - several credible suspects before a reveal;
+  - a character the game builds up gets an arc before they die.
+- Launch: free first chapter; controller support; test on many phone models.
+- Next: turn these rules into build tasks (the driving ones are code: auto-accelerate, alignment
+  assist, resizable layout).
 
 ## Wednesday, Oct 28, 2026: full 3D camera (parked)
 
