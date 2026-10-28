@@ -124,6 +124,7 @@ var _lamp_glow: MeshInstance3D
 var _real_light: SpotLight3D
 ## A police car's light bar throws red and blue round it, with the real light.
 var _bar_light: OmniLight3D
+var _bar_on := true
 var _size := Vector3.ONE
 var _skid_dist := 0.0
 var _smoke_time := 0.0
@@ -468,6 +469,11 @@ func _pedal_brake(amount: float, steer: float) -> void:
 		desired_dir = (-fwd).rotated(Vector3.UP, steer * WHEEL_ANGLE)
 
 
+## An 18-wheeler: routed along streets with room for its trailer.
+func _long_haul() -> bool:
+	return _size.z > VehicleKit.LONG_HAUL
+
+
 func _traffic_ai() -> void:
 	if _next_node < 0:
 		throttle = 0.0
@@ -475,13 +481,13 @@ func _traffic_ai() -> void:
 	var target: Vector3 = city.lane_point(_prev_node, _next_node, lane)
 	var near := Vector2(target.x - global_position.x, target.z - global_position.z).length()
 	if near < TRAFFIC_SLOW_ZONE and _after_node < 0:
-		_after_node = city.pick_turn(_prev_node, _next_node, rng)
+		_after_node = city.pick_turn(_prev_node, _next_node, rng, _long_haul())
 	var turn_in := false
 	if _after_node >= 0:
 		var ls: Vector3 = city.lane_start(_next_node, _after_node, lane)
 		turn_in = Vector2(ls.x - global_position.x, ls.z - global_position.z).length() < 4.0
 	if near < 5.0 or turn_in:
-		var nxt: int = _after_node if _after_node >= 0 else city.pick_turn(_prev_node, _next_node, rng)
+		var nxt: int = _after_node if _after_node >= 0 else city.pick_turn(_prev_node, _next_node, rng, _long_haul())
 		_prev_node = _next_node
 		_next_node = nxt
 		_after_node = -1
@@ -782,7 +788,7 @@ func _flash_lights(delta: float) -> void:
 	_lights[0].visible = on and phase
 	_lights[1].visible = on and not phase
 	if _bar_light != null:
-		_bar_light.visible = on and _real_light.visible
+		_bar_light.visible = on and _bar_on and _real_light.visible
 		_bar_light.light_color = Color(1.0, 0.12, 0.1) if phase else Color(0.15, 0.35, 1.0)
 
 
@@ -838,7 +844,8 @@ func headlights_on() -> bool:
 
 ## Gives this car a real headlight (lights the road, kerbs, walls and people
 ## in front of it) or takes it away. `energy` follows how dark it is.
-func set_real_light(on: bool, energy := 0.0, shadow := false) -> void:
+## `bar`: a police car's light bar may light the road too (Graphics.bars).
+func set_real_light(on: bool, energy := 0.0, shadow := false, bar := true) -> void:
 	if on and _real_light == null:
 		_real_light = SpotLight3D.new()
 		_real_light.light_color = Color(1.0, 0.93, 0.78)
@@ -850,20 +857,22 @@ func set_real_light(on: bool, energy := 0.0, shadow := false) -> void:
 		_real_light.rotation.x = deg_to_rad(-9.0)
 		_real_light.light_specular = 0.4
 		add_child(_real_light)
-		if is_police:
+	if _real_light != null:
+		_real_light.visible = on
+		_real_light.light_energy = energy
+		_real_light.shadow_enabled = on and shadow
+		# The bar's own light, made the first time a budget allows it.
+		if is_police and bar and _bar_light == null:
 			_bar_light = OmniLight3D.new()
 			_bar_light.omni_range = 9.0
 			_bar_light.omni_attenuation = 1.4
 			_bar_light.position = Vector3(0, 1.7, 0.35)
 			_bar_light.visible = false
 			_model.add_child(_bar_light)
-	if _real_light != null:
-		_real_light.visible = on
-		_real_light.light_energy = energy
-		_real_light.shadow_enabled = on and shadow
+		_bar_on = bar
 		if _bar_light != null:
 			_bar_light.light_energy = energy * 0.3
-			if not on:
+			if not on or not bar:
 				_bar_light.visible = false
 	update_beams()
 

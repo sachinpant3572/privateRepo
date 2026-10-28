@@ -15,10 +15,10 @@ const QUALITIES := ["low", "medium", "high", "ultra"]
 ## gets; car_shadow gives the player's headlights a shadow; scale is the 3D
 ## render scale (the HUD stays sharp).
 const PRESETS := {
-	"low": {"detail": "low", "shadows": false, "bloom": false, "aa": false, "vivid": false, "real_lights": true, "cars": 1, "lamps": 0, "car_shadow": false, "scale": 0.8},
-	"medium": {"detail": "high", "shadows": true, "bloom": false, "aa": false, "vivid": false, "real_lights": true, "cars": 1, "lamps": 2, "car_shadow": false, "scale": 1.0},
-	"high": {"detail": "high", "shadows": true, "bloom": true, "aa": false, "vivid": true, "real_lights": true, "cars": 2, "lamps": 4, "car_shadow": false, "scale": 1.0},
-	"ultra": {"detail": "high", "shadows": true, "bloom": true, "aa": true, "vivid": true, "real_lights": true, "cars": 3, "lamps": 4, "car_shadow": true, "scale": 1.0},
+	"low": {"detail": "low", "shadows": false, "bloom": false, "aa": false, "vivid": false, "real_lights": true, "cars": 1, "lamps": 0, "bars": false, "car_shadow": false, "scale": 0.8},
+	"medium": {"detail": "high", "shadows": true, "bloom": false, "aa": false, "vivid": false, "real_lights": true, "cars": 1, "lamps": 2, "bars": false, "car_shadow": false, "scale": 1.0},
+	"high": {"detail": "high", "shadows": true, "bloom": true, "aa": false, "vivid": true, "real_lights": true, "cars": 2, "lamps": 4, "bars": true, "car_shadow": false, "scale": 1.0},
+	"ultra": {"detail": "high", "shadows": true, "bloom": true, "aa": true, "vivid": true, "real_lights": true, "cars": 3, "lamps": 4, "bars": true, "car_shadow": true, "scale": 1.0},
 }
 ## The settings keys a preset sets (and the effect toggles on the page).
 const KEYS := ["detail", "shadows", "bloom", "aa", "vivid", "real_lights"]
@@ -36,6 +36,9 @@ var quality := "high"
 var cars := 2
 var lamps := 4
 var car_shadow := false
+## A lit police car's light bar also lights the road (High and Ultra only:
+## on Low and Medium it would go past the preset's light budget).
+var bars := true
 ## Cars holding a real light now, and the pooled lamp lights with the lamp
 ## collider each one hangs under.
 var lit_cars: Array = []
@@ -69,6 +72,7 @@ func apply(settings: Dictionary) -> void:
 	cars = p.cars if real else 0
 	lamps = p.lamps if real else 0
 	car_shadow = p.car_shadow and bool(settings.get("shadows", true))
+	bars = p.bars and real
 	var env: Environment = game.atmosphere.env
 	# Bloom: only what is brighter than white spills over (lamps, neon,
 	# headlights, the sun on glass), so daylight colours stay as they are.
@@ -127,7 +131,7 @@ func _light_cars(at: Vector3, night: float) -> void:
 		if is_instance_valid(v) and not want.has(v):
 			v.set_real_light(false)
 	for v in want:
-		v.set_real_light(true, HEAD_ENERGY * night, car_shadow and v == mine)
+		v.set_real_light(true, HEAD_ENERGY * night, car_shadow and v == mine, bars)
 	lit_cars = want
 
 

@@ -255,12 +255,21 @@ func _ready() -> void:
 		_free.append(MAX_FLOCKS - 1 - s)
 
 
+## Indoors last frame (the view was hidden for it).
+var _inside := false
+
+
 func _process(delta: float) -> void:
 	if atmosphere == null:
 		return
 	if atmosphere.indoors:
 		view.visible = false
+		_inside = true
 		return
+	if _inside:
+		# Back outside: the flocks show again (they stayed where they were).
+		_inside = false
+		_fit_visible()
 	var hour: float = atmosphere.hour
 	var focus := _focus()
 	var jump := _last_hour < 0.0 or absf(wrapf(hour - _last_hour, -12.0, 12.0)) > 0.5 \

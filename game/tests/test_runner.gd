@@ -42,12 +42,12 @@ func _run() -> void:
 		"test_city_runs_with_population",
 		"test_camera_is_classic_top_down",
 		"test_perspective_camera",
-		"test_camera_turns_with_car",
+		"test_camera_turns_with_car", "test_new_car_swing_calms_when_driving",
 		"test_camera_ninety_turns", "test_settings_page_tabs_and_preview",
 		"test_punch_combo_ends_in_knockdown_kick",
 		"test_minimap_routes_to_waypoint", "test_state_map_shows_the_whole_state",
 		"test_night_lights_the_city", "test_headlights_follow_the_ground",
-		"test_graphics_quality_presets", "test_real_lights_at_night", "test_look_up_at_the_sky",
+		"test_graphics_quality_presets", "test_real_lights_at_night", "test_police_bar_light_budget", "test_look_up_at_the_sky",
 		"test_sky_follows_the_sun_and_moon", "test_stars_by_light_pollution", "test_birds_by_day_not_at_night", "test_birds_startle_and_budget",
 		"test_homecoming_runs_start_to_finish",
 		"test_failed_mission_can_be_retried",
@@ -1135,6 +1135,43 @@ func test_camera_turns_with_car() -> void:
 ## walk has been a corner off it for STEP_HOLD. Also Follow's Drive zoom-out
 ## (H-15), the stick's frame through a slow thumb drift and a brush of the
 ## dead zone, and letting go mid-turn (H-18), and the HUD gear.
+## Getting into a car swings the view behind it at the quick caps; driving
+## off before that swing lands hands the turn back to the calm 45 degrees a
+## second (review 2026-10-28: the quick caps stayed on through later turns).
+func test_new_car_swing_calms_when_driving() -> void:
+	await _free_game()
+	var TopDownCamera = preload("res://scripts/top_down_camera.gd")
+	var cam = TopDownCamera.new()
+	add_child(cam)
+	var p = preload("res://scripts/player.gd").new()
+	p.process_mode = Node.PROCESS_MODE_DISABLED
+	add_child(p)
+	cam.target = p
+	Controls.camera = cam
+	cam.snap()
+	await _frames(5)
+	# The car faces 135 degrees off the view, and the stick turns it at once.
+	var car = _player_car("sedan", Vector3(0, 0, 400.0), 0.0, PI * 0.75)
+	p.vehicle = car
+	Controls.override_vector = Vector2(0.6, -0.8)
+	var max_rate := 0.0
+	var late := 0
+	var last: float = cam.yaw
+	for f in 300:
+		await _frames(1)
+		if car.speed > TopDownCamera.YAW_MIN_SPEED:
+			late += 1
+		# A second after driving off the swing's spare speed is braked away.
+		if late > 60:
+			max_rate = maxf(max_rate, rad_to_deg(absf(wrapf(cam.yaw - last, -PI, PI))) * 60.0)
+		last = cam.yaw
+	Controls.override_vector = null
+	_check(late > 120 and max_rate <= 45.5, "driving off mid-swing in a new car, the view turns at most 45 degrees a second (%.0f, %d frames moving)" % [max_rate, late])
+	cam.queue_free()
+	p.queue_free()
+	car.queue_free()
+
+
 func test_camera_ninety_turns() -> void:
 	await _free_game()
 	var TopDownCamera = preload("res://scripts/top_down_camera.gd")
@@ -1644,6 +1681,34 @@ func test_graphics_quality_presets() -> void:
 ## After dark the nearest cars and street lamps get real lights (they light
 ## the road, kerbs, walls and people round them); further off, the painted
 ## glow stays. Knocked-down lamps and wrecked cars go dark.
+## A police car's light bar lights the road only where the preset's budget
+## has room for it (High and Ultra); on Low and Medium the bar still flashes
+## but adds no light (review 2026-10-28: Low ran 2 lights for 1 allowed).
+func test_police_bar_light_budget() -> void:
+	await _free_game()
+	var Graphics = preload("res://scripts/graphics.gd")
+	_check(not Graphics.PRESETS.low.bars and not Graphics.PRESETS.medium.bars and Graphics.PRESETS.high.bars and Graphics.PRESETS.ultra.bars,
+		"the light bar lights the road on High and Ultra only")
+	# As PoliceManager.spawn_car_at builds one, on duty with its bar flashing.
+	var car = Vehicle.new()
+	car.kind = "police"
+	car.is_police = true
+	car.driver = Vehicle.Driver.POLICE
+	car.position = Vector3(0, 0, 400.0)
+	add_child(car)
+	await _frames(2)
+	car.set_real_light(true, 3.0, false, false)
+	car._flash_lights(0.1)
+	var none: bool = car._bar_light == null
+	car.set_real_light(true, 3.0, false, true)
+	car._flash_lights(0.1)
+	var shown: bool = car._bar_light != null and car._bar_light.visible
+	car.set_real_light(true, 3.0, false, false)
+	car._flash_lights(0.1)
+	_check(none and shown and not car._bar_light.visible, "no bar light within a small budget, a flashing one within a big one, dark again when the budget shrinks")
+	car.queue_free()
+
+
 func test_real_lights_at_night() -> void:
 	await _new_game(false)
 	game.atmosphere.hour = 22.0
@@ -1876,6 +1941,14 @@ func test_birds_by_day_not_at_night() -> void:
 		kinds[h] = seen
 		if h == "city":
 			_check(birds.flocks.size() >= 8 and birds.bird_count() >= 40 and birds.view.visible and birds.mm.visible_instance_count >= birds.bird_count(), "by day %d birds in %d flocks round the player" % [birds.bird_count(), birds.flocks.size()])
+			# Indoors hides them; back out on the same spot they show again
+			# (review 2026-10-28: they stayed hidden until a flock changed).
+			atm.indoors = true
+			await _frames(2)
+			var hid: bool = not birds.view.visible
+			atm.indoors = false
+			await _frames(2)
+			_check(hid and birds.view.visible, "birds hide indoors and show again back outside")
 		atm.hour = 2.0
 		await _frames(2)
 	_check(misplaced.is_empty() and kinds.city.get("pigeon", 0) + kinds.city.get("crow", 0) > 0 and not kinds.city.has("egret") and kinds.beach.get("gull", 0) > 0 and kinds.bayou.get("egret", 0) + kinds.bayou.get("heron", 0) > 0 and kinds.hills.get("hawk", 0) > 0, "kinds by place: %s, each a kind of its ground %s" % [kinds, misplaced])
@@ -3053,6 +3126,28 @@ func test_traffic_drives_every_kind() -> void:
 		var on: bool = passed[car] >= 3 or (passed[car] >= 2 and went[car] > 200.0) or (passed[car] >= 1 and net > 180.0)
 		_check(on and not car.wrecked,
 			"traffic %s passed %d junctions, %.0f m (%.0f m from the start) in 30 s (wrecked: %s)" % [car.kind, passed[car], went[car], net, car.wrecked])
+	# At junctions offering both, an 18-wheeler's turn is always a street with
+	# 2+ lanes each way (review 2026-10-28: it was routed into 9 m quarter
+	# streets); other cars still take the narrow ones.
+	var mixed := 0
+	var narrow_picks := 0
+	var wide_narrow := 0
+	for cur in city._nodes_near(Vector2(center.x, center.z), 600.0):
+		var outs: Array = city.next_nodes(cur)
+		if outs.size() < 3:
+			continue
+		var prev_n: int = outs[0]
+		var rest: Array = outs.slice(1)
+		if not (rest.any(func(m): return city.lane_count(cur, m) >= 2) and rest.any(func(m): return city.lane_count(cur, m) < 2)):
+			continue
+		mixed += 1
+		for i in 12:
+			if city.lane_count(cur, city.pick_turn(prev_n, cur, rng, true)) < 2:
+				wide_narrow += 1
+			if city.lane_count(cur, city.pick_turn(prev_n, cur, rng)) < 2:
+				narrow_picks += 1
+	_check(mixed >= 3 and wide_narrow == 0 and narrow_picks > 0,
+		"at %d junctions with wide and narrow ways on, the 18-wheeler turned into a narrow one %d times (other cars %d)" % [mixed, wide_narrow, narrow_picks])
 
 
 ## Every vehicle kind builds, in every paint of its palette, within its

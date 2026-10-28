@@ -444,6 +444,9 @@ func _update_yaw(node: Node3D, delta: float) -> void:
 		elif speed > YAW_MIN_SPEED and not _yaw_forced:
 			var face := _heading(fwd)
 			var slip := wrapf(_heading(flat) - face, -PI, PI)
+			# Driving off ends a quick swing (a new car's): the goal follows
+			# the steering now, so it takes the calm caps.
+			_yaw_quick = false
 			if absf(slip) < PI * 0.5:
 				var goal := face + slip * 0.6 * smoothstep(deg_to_rad(15.0), deg_to_rad(60.0), absf(slip))
 				stepped = turn_steps
@@ -482,6 +485,7 @@ func _update_yaw(node: Node3D, delta: float) -> void:
 		_yaw_rate = 0.0
 		_yaw_chasing = false
 		_yaw_forced = false
+		_yaw_quick = false
 		return
 	var quick := _yaw_forced or _yaw_quick
 	var on_foot := node == target

@@ -603,7 +603,9 @@ func next_nodes(n: int) -> Array:
 
 ## Picks where to go after arriving at `cur` from `prev`: mostly straight
 ## on, never back unless it is a dead end.
-func pick_turn(prev: int, cur: int, rand: RandomNumberGenerator) -> int:
+## `wide`: an 18-wheeler, which keeps to streets with 2+ lanes each way
+## while the junction offers one (1-lane quarter streets trap its trailer).
+func pick_turn(prev: int, cur: int, rand: RandomNumberGenerator, wide := false) -> int:
 	var din := Vector2.ZERO
 	if prev >= 0 and prev != cur:
 		din = (_pos2(cur) - _pos2(prev)).normalized()
@@ -621,6 +623,10 @@ func pick_turn(prev: int, cur: int, rand: RandomNumberGenerator) -> int:
 			options.append(m) # straight on is twice as likely
 	if options.is_empty():
 		options = sharp
+	if wide:
+		var roomy := options.filter(func(m): return lane_count(cur, m) >= 2)
+		if not roomy.is_empty():
+			options = roomy
 	if options.is_empty():
 		return prev if prev >= 0 else cur
 	return options[rand.randi() % options.size()]

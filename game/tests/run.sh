@@ -3,7 +3,7 @@
 set -u
 cd "$(dirname "$0")/.."
 godot --headless --import >/dev/null 2>&1
-out=$(timeout 300 godot --headless --fixed-fps 60 res://tests/test_runner.tscn 2>&1)
+out=$(timeout 450 godot --headless --fixed-fps 60 res://tests/test_runner.tscn 2>&1)
 code=$?
 echo "$out" | grep -vE "^\s*$|^Godot Engine"
 if echo "$out" | grep -qE "SCRIPT ERROR|^ERROR"; then
