@@ -18,6 +18,15 @@ better."
   - add its `expansions` entry and map arrow;
   - research LA from the top down, the way `reference/world/california_topdown.md` was done
     for Bellerive.
+- **Revisit the Bellerive Hills then.** Sachin, Oct 28, picking "decide later": "Keep the hills
+  now and add a TODO to revisit them when the California city is built, so the letters and the
+  canyon look end up there." The Bellerive Hills are a California-style ridge (chaparral, the
+  Hillside Letters, canyon roads) above a Florida-style city; Florida's real high point is about
+  105 m.
+  - When the California city is built, move the Hollywood-style look there: the letters, and the
+    chaparral and canyon roads.
+  - Re-dress Bellerive's hills as Florida's central ridge: sand-pine scrub, citrus groves, small
+    lakes and a bell tower. Keep the height, the roads and the observatory. Roughly one session.
 
 ## Wednesday, Oct 28, 2026: Solvera robbery missions and heists
 
