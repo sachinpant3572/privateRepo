@@ -283,6 +283,16 @@ phone.
   following right-hand lanes and stopping for obstacles. Streets and avenues
   have two lanes each way and a parking strip, boulevards and highways three,
   the Beltway four; cars pick a lane and keep it.
+- **Traffic control and demand** (0.23, `scripts/traffic.gd`,
+  `traffic_plan.gd`): US-style signals (mast arms, lit lenses, walk
+  heads; pretimed downtown, actuated elsewhere, flashing late at night),
+  all-way and two-way stops, yield at roundabouts; speed limits by road
+  class; traffic follows with the Intelligent Driver Model, stops at the
+  line, turns right on red after a stop and pulls over for sirens. How busy
+  the roads are and which vehicles drive them follow the district and the
+  hour, capped by the graphics quality; missions can call
+  `traffic.surge(pos, radius, factor, secs)`. Notes in
+  `HANDOFF-0.23-traffic.md`.
 - **Breakable roadside props** (`scripts/breakables.gd`): lamp posts, signals,
   street trees, hydrants (they gush), benches, bins, signs and the like go
   down when a car hits them, and the car keeps most of its speed.
@@ -407,7 +417,7 @@ at the Aurum Tower, Midtown and Lantern Square, on foot and driving (80),
 the perspective camera backed out of a tower and with the view band
 turning buildings round the player see-through (81), and driving flat out
 east and north through Midtown and past the Aurum Tower (82), and Settings > Angle at
-45, 55, 65, 75 and 90° with tilt off at the Aurum Tower and Lantern Square (83), and the camera turning with the car flat out east, south and west (84). `SHOTS=lights` shows a car's headlights at night on the flat and up and down the hills (86); `SHOTS=nightfx` shows real headlights, street lamps and a police light bar at each graphics quality (87) and the Lantern Quarter's gas lamps (88). `SHOTS=lookup` shows Look up through the game's own camera: the city and the hills at night, the hills at dusk and the city by day (89-92). `SHOTS=crash` drives a sedan at 72 km/h into a parked one (before, impact, dents; 93), then sets the struck car alight and shoots its fire, blast and wreck (94). `SHOTS=intro` plays mission 1's opening on a new game: the close-up on the hero for the title card and first line, then the snatch with the hero under the Union Station bus shelter (95). `res://tests/world_shots.tscn` shoots the first roadworks wide and close (`COUNT=n` of them, default 4). `res://tests/occlusion_probe.tscn`
+45, 55, 65, 75 and 90° with tilt off at the Aurum Tower and Lantern Square (83), and the camera turning with the car flat out east, south and west (84). `SHOTS=lights` shows a car's headlights at night on the flat and up and down the hills (86); `SHOTS=nightfx` shows real headlights, street lamps and a police light bar at each graphics quality (87) and the Lantern Quarter's gas lamps (88). `SHOTS=lookup` shows Look up through the game's own camera: the city and the hills at night, the hills at dusk and the city by day (89-92). `SHOTS=crash` drives a sedan at 72 km/h into a parked one (before, impact, dents; 93), then sets the struck car alight and shoots its fire, blast and wreck (94). `SHOTS=intro` plays mission 1's opening on a new game: the close-up on the hero for the title card and first line, then the snatch with the hero under the Union Station bus shelter (95). `SHOTS=traffic` shows a downtown signal by day, at night and up close (96), a queue held at a red (97), and downtown at the 8:00 rush beside a residential street at 2:30 (98), then prints a rough frame-time probe. `res://tests/world_shots.tscn` shoots the first roadworks wide and close (`COUNT=n` of them, default 4). `res://tests/occlusion_probe.tscn`
 (headless) measures how much of the hero and the street each camera
 setting hides (HANDOFF-perspective-camera.md).
 
@@ -464,6 +474,7 @@ cd game && godot --headless -s res://tests/plan_dump.gd -- /tmp/plan.json \
 | `scripts/police_manager.gd` | Police spawning and line of sight |
 | `scripts/wanted.gd` | Wanted level (autoload) |
 | `scripts/population.gd` | Pedestrian and traffic bubble around the player |
+| `scripts/traffic.gd`, `traffic_plan.gd` | Signals, stops, speed limits, traffic demand and vehicle mix |
 | `scripts/controls.gd`, `touch_controls.gd` | Input (autoload) and multi-touch UI |
 | `scripts/hud.gd`, `top_down_camera.gd` | HUD and camera |
 | `tests/` | Headless tests, screenshot tour and asset gallery (`gallery.tscn`) |

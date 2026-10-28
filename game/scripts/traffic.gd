@@ -54,7 +54,8 @@ const MAX_LENSES := 1024
 ## Half-size (m) of a signal lens quad and of a pedestrian head's.
 const LENS_SIZE := 0.3
 const PED_SIZE := 0.24
-const LENS_COLORS := [Color(1.0, 0.12, 0.08), Color(1.0, 0.7, 0.05), Color(0.15, 1.0, 0.55)]
+## (Deep hues: ACES pulls a bright red toward orange and amber toward white.)
+const LENS_COLORS := [Color(1.0, 0.05, 0.03), Color(1.0, 0.5, 0.0), Color(0.1, 1.0, 0.55)]
 const WALK_COLOR := Color(0.95, 0.95, 1.0)
 const HAND_COLOR := Color(1.0, 0.45, 0.1)
 
@@ -875,7 +876,7 @@ void fragment() {
 	if (a < 0.01) {
 		discard;
 	}
-	ALBEDO = v_color * mix(1.3, 2.6, night) * mix(0.75, 1.0, core);
+	ALBEDO = v_color * mix(1.3, 1.9, night) * mix(0.75, 1.0, core);
 	ALPHA = a;
 }
 """
