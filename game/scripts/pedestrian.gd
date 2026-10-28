@@ -574,9 +574,10 @@ func _pause(delta: float) -> void:
 	if pause_kind == "bench":
 		if not sitting:
 			_sit_on_bench()
-		elif not is_instance_valid(_bench) or _bench.disabled \
+		elif not is_instance_valid(_bench) or _bench.disabled or collision_mask != L.WORLD \
 				or Vector2(_bench.global_position.x - global_position.x, _bench.global_position.z - global_position.z).length() > 0.4:
-			_set_state(State.WANDER) # knocked off it, or the bench is gone
+			# Knocked off it (a knockdown resets the mask on getting up), or the bench is gone.
+			_set_state(State.WANDER)
 		return
 	if pause_kind == "chat":
 		var to: Vector3 = _chat_with.global_position - global_position

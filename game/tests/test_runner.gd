@@ -6020,6 +6020,20 @@ func test_people_sit_on_benches() -> void:
 	_check(not ped.sitting and ped.reaction == "flee" and ped.collision_mask & L.PROPS != 0
 		and ped.global_position.distance_to(seat) > 0.5,
 		"a gunshot gets the sitter up and running, colliding again ('%s')" % ped.reaction)
+	var third = _street_ped(city, rng, o + Vector3(0, 0, -1.0), 0.0)
+	third.walk_speed = 1.4
+	await _frames(3)
+	third.pause_for("bench", 15.0)
+	for f in 300:
+		await _frames(1)
+		if third.sitting:
+			break
+	var sat: bool = third.sitting
+	third.knock_down(0.4) # no attacker, so no reaction ends the sit
+	await _frames(60)
+	_check(sat and not third.sitting and third.collision_mask & L.PROPS != 0 and third.pause_kind != "bench",
+		"knocked down on the bench, a sitter gets up standing, colliding again (sat %s, sitting %s)" % [sat, third.sitting])
+	third.queue_free()
 	ped.queue_free()
 	other.queue_free()
 	for b in benches:
