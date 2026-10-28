@@ -9,6 +9,9 @@ signal night_changed(on: bool)
 ## drifts between clear, cloudy, rain and storm: rain falls around the camera,
 ## the ground gets wet with puddles (`wet`), storms flash with lightning.
 
+const SkyDome = preload("res://scripts/sky.gd")
+const Birds = preload("res://scripts/birds.gd")
+
 ## Sky colour, ambient colour and energy, sun colour and energy, by hour.
 const KEYS := [
 	[0.0, Color(0.06, 0.08, 0.15), Color(0.5, 0.52, 0.72), 0.62, Color(0.6, 0.68, 1.0), 0.28],
@@ -55,6 +58,11 @@ var _next_flash := 6.0
 var _night_on := false
 var _perspective := true
 var _rain: CPUParticles3D
+## The sky shader (sky.gd): gradient, sun, moon, stars by light pollution,
+## city glow; outdoors it is the background and what water reflects.
+var sky: SkyDome
+## Flocks by day, bats at dusk (birds.gd).
+var birds: Birds
 var _splash: CPUParticles3D
 var rng := RandomNumberGenerator.new()
 
@@ -93,9 +101,13 @@ func _ready() -> void:
 	# ACES: deeper shadows and a soft roll-off on bright glass and paint.
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.tonemap_exposure = 0.85
+	sky = SkyDome.new(env)
 	var world_env := WorldEnvironment.new()
 	world_env.environment = env
 	add_child(world_env)
+	birds = Birds.new()
+	birds.atmosphere = self
+	add_child(birds)
 	_rain = _make_rain()
 	_splash = _make_splashes()
 	_apply(0.0)
@@ -179,8 +191,8 @@ func _apply(delta: float) -> void:
 	var night := night_amount()
 	var key := _sample(hour)
 	var grey := Color(0.42, 0.45, 0.5)
-	var sky: Color = key[0].lerp(grey * (1.0 - night * 0.8), clouds * 0.6)
-	env.background_color = sky
+	var bg: Color = key[0].lerp(grey * (1.0 - night * 0.8), clouds * 0.6)
+	env.background_color = bg
 	env.ambient_light_color = key[1].lerp(Color(0.6, 0.63, 0.7), clouds * 0.4 * (1.0 - night))
 	env.ambient_light_energy = key[2] + clouds * 0.12 + _flash * 1.5
 	sun.light_color = key[3].lerp(Color(0.8, 0.82, 0.86), clouds * 0.5)
@@ -196,11 +208,15 @@ func _apply(delta: float) -> void:
 		_night_on = night > 0.02
 		night_changed.emit(_night_on)
 	RenderingServer.global_shader_parameter_set("wet", wetness)
-	RenderingServer.global_shader_parameter_set("sky_tint", sky.lerp(Color(0.6, 0.7, 0.85), 0.4))
+	RenderingServer.global_shader_parameter_set("sky_tint", bg.lerp(Color(0.6, 0.7, 0.85), 0.4))
+	if env.background_mode != Environment.BG_SKY:
+		env.background_mode = Environment.BG_SKY
+	sky.update(self, delta, _sky_ground(), get_viewport().get_camera_3d() if is_inside_tree() else null)
 	_update_rain(delta)
 
 
 func _apply_indoors() -> void:
+	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color(0.04, 0.04, 0.05)
 	env.ambient_light_color = Color(1.0, 0.95, 0.88)
 	env.ambient_light_energy = 0.3
@@ -211,8 +227,17 @@ func _apply_indoors() -> void:
 	RenderingServer.global_shader_parameter_set("night", 0.0)
 	RenderingServer.global_shader_parameter_set("wet", 0.0)
 	RenderingServer.global_shader_parameter_set("sky_tint", Color(0.75, 0.75, 0.72))
+	RenderingServer.global_shader_parameter_set("stars", 0.0)
 	_rain.emitting = false
 	_splash.emitting = false
+
+
+## Where the sky is seen from: the focus (the player), else the camera.
+func _sky_ground() -> Vector3:
+	if focus != null and is_instance_valid(focus) and focus.is_inside_tree():
+		return focus.global_position
+	var cam := get_viewport().get_camera_3d() if is_inside_tree() else null
+	return cam.global_position if cam != null else Vector3.ZERO
 
 
 func _sample(h: float) -> Array:

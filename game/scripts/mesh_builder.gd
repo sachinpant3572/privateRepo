@@ -51,6 +51,7 @@ global uniform float night;
 global uniform float wet;
 global uniform vec4 sky_tint;
 global uniform float detail;
+global uniform vec4 sky_zenith;
 
 // Sine-free hash: cheap on mobile GPUs.
 float hash(vec2 p) {
@@ -168,6 +169,9 @@ void surface(vec3 base, float code, vec3 wpos, vec3 wnormal, vec3 view_dir, vec2
 		spec = 0.9;
 		metal = 0.25;
 	} else if (c == 14) {
+		// Pools, ponds and glossy tops mirror the sky overhead.
+		float sky_k = smoothstep(0.85, 1.0, wnormal.y) * (0.2 + 0.4 * pow(1.0 - clamp(dot(view_dir, wnormal), 0.0, 1.0), 2.0));
+		col = mix(col, mix(sky_tint.rgb, sky_zenith.rgb, 0.6) * mix(1.0, 0.3, night), sky_k);
 		rough = 0.28;
 		spec = 0.6;
 	} else if (c == 15) {
@@ -189,7 +193,7 @@ void surface(vec3 base, float code, vec3 wpos, vec3 wnormal, vec3 view_dir, vec2
 		vec2 local = fract(wpos.xz * 0.7) - 0.5;
 		float t = fract(time * 1.3 + hash(cell));
 		float ring = smoothstep(0.03, 0.0, abs(length(local) - t * 0.45)) * (1.0 - t) * step(0.7, hash(cell + floor(time * 1.3 + hash(cell))));
-		col = mix(col, sky_tint.rgb * mix(0.9, 0.35, night), puddle * wet * 0.5);
+		col = mix(col, mix(sky_tint.rgb, sky_zenith.rgb, 0.5) * mix(0.9, 0.35, night), puddle * wet * 0.5);
 		col += vec3(ring * puddle * wet * 0.25);
 		rough = mix(rough, 0.15, wet * (0.4 + 0.6 * puddle));
 		spec = mix(spec, 0.8, wet);
@@ -323,6 +327,8 @@ render_mode diffuse_burley, specular_schlick_ggx;
 global uniform float night;
 global uniform float wet;
 global uniform vec4 sky_tint;
+global uniform vec4 sky_zenith;
+global uniform float stars;
 
 varying vec3 world_pos;
 
@@ -343,9 +349,14 @@ void fragment() {
 	NORMAL = normalize((VIEW_MATRIX * vec4(wn, 0.0)).xyz);
 	vec3 view_dir = normalize(CAMERA_POSITION_WORLD - world_pos);
 	float fres = pow(1.0 - clamp(dot(view_dir, wn), 0.0, 1.0), 4.0);
-	vec3 sky = sky_tint.rgb * mix(1.0, 0.25, night);
+	// The sky it mirrors: the zenith overhead (Sky), paler toward the horizon;
+	// at night the stars the sky shows, broken up by the ripples.
+	vec3 rd = reflect(-view_dir, wn);
+	vec3 sky = mix(sky_tint.rgb * mix(1.0, 0.25, night), sky_zenith.rgb, smoothstep(0.3, 1.0, rd.y) * 0.5);
+	vec2 sc = rd.xz / max(rd.y, 0.25) * 70.0;
+	float st = step(0.985, fract(sin(dot(floor(sc), vec2(127.1, 311.7))) * 43758.55)) * smoothstep(0.32, 0.0, length(fract(sc) - 0.5)) * stars;
 	ALBEDO = mix(COLOR.rgb * 0.85, sky, 0.25 + 0.5 * fres) + vec3(0.22, 0.28, 0.28) * glint * (1.0 - night * 0.6) + vec3(0.2) * drops;
-	EMISSION = vec3(1.0, 0.8, 0.45) * glint * night * 0.25;
+	EMISSION = vec3(1.0, 0.8, 0.45) * glint * night * 0.25 + vec3(0.85, 0.9, 1.0) * st * (1.0 - wet) * 0.9;
 	ROUGHNESS = 0.12;
 	SPECULAR = 0.7;
 }
