@@ -93,7 +93,7 @@ func _spawn_traffic(center: Vector3, r: float) -> void:
 	if options.is_empty():
 		return
 	var to: int = options[rng.randi() % options.size()]
-	var car = _new_car()
+	var car = _new_traffic_car(n, to)
 	var lane: int = rng.randi() % game.city.lane_count(n, to)
 	car.position = game.city.lane_start(n, to, lane)
 	var heading: Vector3 = game.city.node_pos(to) - game.city.node_pos(n)
@@ -169,4 +169,16 @@ func _new_car(parked := false, tier := -1):
 		pool = VehicleKit.PARKED_BY_TIER[clampi(tier, 0, 5)]
 	car.kind = pool[rng.randi() % pool.size()]
 	car.body_color = VehicleKit.pick_paint(car.kind, rng)
+	return car
+
+
+## A traffic vehicle setting off on the street from junction a to b. The
+## 18-wheeler (longer than VehicleKit.LONG_HAUL) sets off only where there
+## are two or more lanes each way (avenues, boulevards, highways), never
+## down a one-lane quarter street.
+func _new_traffic_car(a: int, b: int):
+	var car = _new_car()
+	while VehicleKit.size_of(car.kind).z > VehicleKit.LONG_HAUL and game.city.lane_count(a, b) < 2:
+		car.kind = VehicleKit.CIVILIAN[rng.randi() % VehicleKit.CIVILIAN.size()]
+		car.body_color = VehicleKit.pick_paint(car.kind, rng)
 	return car

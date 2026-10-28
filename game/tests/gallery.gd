@@ -6,6 +6,8 @@ extends Node3D
 ##   ... -- <out_dir> country       its eight gallery pages
 ##   ... -- <out_dir> country_each  one shot per kind at 0.7x, 1x and 1.3x
 ##                                  (optional third argument: a kind filter)
+##   ... -- <out_dir> vehicles      the vehicle pages, each row close up,
+##                                  and the pages from nearly overhead
 
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const Buildings = preload("res://scripts/kits/building_kit.gd")
@@ -48,19 +50,16 @@ func _ready() -> void:
 	if args.size() > 1 and args[1].begins_with("country"):
 		_run_country.call_deferred(args[1] == "country_each", args[2] if args.size() > 2 else "")
 		return
+	if args.size() > 1 and args[1] == "vehicles":
+		_run_vehicles.call_deferred()
+		return
 	_run.call_deferred()
 
 
 func _run() -> void:
 	await _shot(_buildings(), Vector3(0, 0, 0), 62.0, "gallery_1_buildings.png", true)
 	await _shot(_landmarks(), Vector3(0, 0, 300), 108.0, "gallery_2_landmarks.png", true)
-	var cars := _vehicles()
-	var shell := vehicle_gloss.make_instance()
-	shell.material_override = MeshBuilder.gloss_material()
-	add_child(shell)
-	await _shot(cars, Vector3(0, 0, 598), 28.0, "gallery_3_vehicles.png")
-	for r in vehicle_riders:
-		r[0].skeleton.get_parent().queue_free()
+	await _vehicle_shots(false)
 	await _people()
 	await _shot(_props(), Vector3(0, 0, 897), 30.0, "gallery_5_props.png", true)
 	await _shot(_trees(), Vector3(0, 0, 962), 18.0, "gallery_6_trees.png", true)
@@ -204,23 +203,80 @@ func _landmarks() -> MeshBuilder:
 	return mb
 
 
-## Every model in three rows (cars; utility; performance and two-wheelers),
-## each in a paint from its own palette, with Jules riding the bikes.
+func _run_vehicles() -> void:
+	await _vehicle_shots(true)
+	get_tree().quit()
+
+
+## Shot 3: the cars, bikes and three-wheelers; 3b: the trucks. With `close`
+## also each row close up (3c, three models a shot), the pages from nearly
+## overhead (the game camera's pitch runs 40 to 90 degrees) and from the
+## driving camera's distance.
+func _vehicle_shots(close: bool) -> void:
+	var cars := _vehicles()
+	var inst := cars.make_instance()
+	add_child(inst)
+	var shell := vehicle_gloss.make_instance()
+	shell.material_override = MeshBuilder.gloss_material()
+	add_child(shell)
+	print("vehicles: %d triangles" % [cars.triangle_count() + vehicle_gloss.triangle_count()])
+	await _view(Vector3(0, 0, 598), 28.0, "gallery_3_vehicles.png")
+	await _view(Vector3(0, 0, 652), 30.0, "gallery_3b_trucks.png")
+	if close:
+		for r in 3:
+			for half in 2:
+				await _view(Vector3(-9.5 + half * 19.5, 0, 589.0 + r * 9.0), 11.0, "gallery_3c_row%d_%d.png" % [r, half])
+		await _view(Vector3(-8.0, 0, 652), 15.0, "gallery_3c_trucks_0.png")
+		await _view(Vector3(8.0, 0, 652), 15.0, "gallery_3c_trucks_1.png")
+		await _view(Vector3(0, 0, 598), 28.0, "gallery_3d_overhead.png", 88.0)
+		await _view(Vector3(0, 0, 652), 30.0, "gallery_3d_trucks_overhead.png", 88.0)
+		await _view(Vector3(0, 0, 623), 68.0, "gallery_3e_driving_zoom.png")
+	for r in vehicle_riders:
+		r[0].skeleton.get_parent().queue_free()
+	vehicle_riders.clear()
+	inst.queue_free()
+	shell.queue_free()
+
+
+## Points the camera at `center` from `pitch` degrees with `view` metres
+## of screen height and saves the frame.
+func _view(center: Vector3, view: float, file: String, pitch := 60.0) -> void:
+	camera.rotation_degrees = Vector3(-pitch, 0.0, 0.0)
+	camera.size = view
+	camera.global_position = center + camera.global_basis.z * 150.0
+	for i in 4:
+		await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(out_dir.path_join(file))
+	camera.rotation_degrees = Vector3(-60.0, 0.0, 0.0)
+
+
+## Every model in a paint from its own palette, with Jules riding the bikes:
+## cars; utility and performance; two- and three-wheelers; trucks (a row of
+## their own further on, shot 3b).
 func _vehicles() -> MeshBuilder:
 	var mb := MeshBuilder.new()
 	var rows := [["compact", "sedan", "ev", "luxury", "taxi", "police"],
-		["crossover", "suv", "pickup", "van", "box_truck"],
-		["sports", "muscle", "super", "motorbike", "scooter"]]
-	var listed := 0
-	var yaw := PI * 0.15
+		["crossover", "suv", "pickup", "van", "sports", "muscle"],
+		["super", "motorbike", "scooter", "tuk_tuk", "cargo_trike"]]
+	var trucks := [["box_truck", Vector3(-14.0, 0, 652.0)], ["tipper", Vector3(-4.0, 0, 652.0)],
+		["semi", Vector3(9.0, 0, 652.0)]]
+	var places := []
 	for r in rows.size():
 		for i in rows[r].size():
-			var kind: String = rows[r][i]
-			var pos := Vector3(-16.0 + i * 6.5, 0, 589.0 + r * 9.0)
+			places.append([rows[r][i], Vector3(-16.0 + i * 6.5, 0, 589.0 + r * 9.0)])
+	places.append_array(trucks)
+	var listed := 0
+	for i in places.size():
+		var kind: String = places[i][0]
+		# Every other model faces the camera, so a page shows fronts and backs.
+		var yaw := PI * 0.15 + (PI if i % 2 == 1 else 0.0)
+		if VehicleKit.KINDS.has(kind):
+			var pos: Vector3 = places[i][1]
 			mb.xform = Transform3D(Basis(Vector3.UP, yaw), pos)
 			vehicle_gloss.xform = mb.xform
 			var palette: Array = VehicleKit.PALETTES.get(kind, VehicleKit.PAINTS)
-			VehicleKit.build(mb, kind, palette[(i * 3 + r) % palette.size()], vehicle_gloss)
+			VehicleKit.build(mb, kind, palette[(i * 3 + i / 6) % palette.size()], vehicle_gloss)
 			listed += 1
 			if VehicleKit.KINDS[kind].get("rider", false):
 				var rider := _person(Player.JULES, "ride", pos)
