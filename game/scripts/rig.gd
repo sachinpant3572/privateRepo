@@ -34,6 +34,8 @@ class State:
 	var face_down := false # falls forward onto the front instead of the back
 	var getup := -1.0 # 0..1 getting up at the end of a knockdown, < 0 when not
 	var ride := false # sitting astride a scooter or bike
+	var pedal := -1.0 # crank angle (rad) while riding a pedal bike, < 0 when not
+	var car := 0 # seated in an open car: 1 a passenger, 2 the driver (hands on the wheel)
 	var sit := false # on a chair, stool or bench (gestures still apply)
 	var gesture := "" # see GESTURES
 	var texting := false # looking at a phone in the right hand while strolling
@@ -51,6 +53,14 @@ class State:
 
 ## Hip drop for sitting on a seat at InteriorKit.SEAT_Y.
 const SIT_LIFT := -0.42
+## Pedal bike geometry (VehicleKit builds its bicycle to it): the rider's
+## hip joints sit PEDAL_HIP_Y over the ground at the bike's origin, the
+## crank axle PEDAL_CRANK.x ahead of them and PEDAL_CRANK.y up, the cranks
+## PEDAL_ARM long. PEDAL_RATE: crank turn (rad) per metre ridden.
+const PEDAL_HIP_Y := 0.95
+const PEDAL_CRANK := Vector2(0.15, 0.29)
+const PEDAL_ARM := 0.17
+const PEDAL_RATE := 1.13
 ## Seconds from standing to lying.
 const FALL_TIME := 0.5
 ## Seconds to get up; the owner plays it inside the end of a knockdown.
@@ -186,12 +196,19 @@ func pose(s: State, delta: float) -> void:
 		_down_time = 0.0
 		_moving = 0.0
 		if s.ride:
-			_ride()
-			lift = -0.28
+			if s.pedal >= 0.0:
+				_pedal(s.pedal, h)
+				lift = PEDAL_HIP_Y - 0.9 * h
+				rate = 60.0
+			else:
+				_ride()
+				lift = -0.28
 			grounded = false
 			_idle(s, delta, false)
 		elif s.sit:
 			_sit()
+			if s.car > 0:
+				_car_seat(s.car == 2)
 			lift = SIT_LIFT
 			grounded = false
 			_idle(s, delta, false)
@@ -747,6 +764,45 @@ func _ride() -> void:
 	_target[R_ARM] = Vector3(1.1, 0.0, -0.1)
 	_target[L_FORE].x = 0.35
 	_target[R_FORE].x = 0.35
+
+
+## Feet on the pedals of a bike whose crank is at angle `a` (0: right
+## pedal at the top, turning forward), by two-bone IK on the crank placed by
+## PEDAL_*; leaning on the bars.
+func _pedal(a: float, h: float) -> void:
+	for leg in [[R_LEG, R_SHIN, R_FOOT, 0.0], [L_LEG, L_SHIN, L_FOOT, PI]]:
+		var t: float = a + leg[3]
+		var fwd := PEDAL_CRANK.x + sin(t) * PEDAL_ARM
+		var down := PEDAL_HIP_Y - PEDAL_CRANK.y - cos(t) * PEDAL_ARM - 0.08 * h
+		var reach := minf(Vector2(fwd, down).length(), 0.79 * h)
+		var bend := acos(reach / (0.8 * h))
+		var thigh := atan2(fwd, down) + bend
+		_target[leg[0]].x = thigh
+		_target[leg[1]].x = -2.0 * bend
+		_target[leg[2]].x = -0.7 * (thigh - 2.0 * bend)
+	_target[SPINE].x = -0.3
+	_target[HEAD].x = 0.25
+	_target[L_ARM] = Vector3(0.45, 0.0, 0.05)
+	_target[R_ARM] = Vector3(0.45, 0.0, -0.05)
+	_target[L_FORE].x = 0.85
+	_target[R_FORE].x = 0.85
+
+
+## In an open car's seat (on top of _sit): legs out into the footwell, the
+## back against the reclined seat and both hands on the wheel at ten to
+## two (driving) or on the lap.
+func _car_seat(driving: bool) -> void:
+	_target[L_LEG] = Vector3(1.55, 0.0, -0.08)
+	_target[R_LEG] = Vector3(1.55, 0.0, 0.08)
+	_target[L_SHIN].x = -0.3
+	_target[R_SHIN].x = -0.3
+	_target[SPINE].x = 0.15
+	var arm := Vector3(0.9, 0.0, 0.25) if driving else Vector3(0.4, 0.0, 0.15)
+	var fore := 0.6 if driving else 0.4
+	_target[L_ARM] = arm
+	_target[R_ARM] = Vector3(arm.x, 0.0, -arm.z)
+	_target[L_FORE].x = fore
+	_target[R_FORE].x = fore
 
 
 ## Thighs level, shins down, hands resting on the table or knees.

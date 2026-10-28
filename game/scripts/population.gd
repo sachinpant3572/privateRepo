@@ -179,7 +179,16 @@ func _new_car(parked := false, tier := -1):
 		pool = VehicleKit.PARKED_BY_TIER[clampi(tier, 0, 5)]
 	car.kind = pool[rng.randi() % pool.size()]
 	car.body_color = VehicleKit.pick_paint(car.kind, rng)
+	_roof(car)
 	return car
+
+
+## An open car's top: mostly down by day in the dry, mostly up at night or
+## in the rain (VehicleKit.roof_up_at_spawn).
+func _roof(car) -> void:
+	if VehicleKit.KINDS.get(car.kind, {}).get("convertible", false):
+		var sky = game.atmosphere if game != null else null
+		car.roof_up = VehicleKit.roof_up_at_spawn(rng, sky != null and sky.is_night(), sky != null and sky.rain > 0.05)
 
 
 ## A traffic vehicle setting off on the street from junction a to b. The
@@ -191,4 +200,5 @@ func _new_traffic_car(a: int, b: int):
 	while VehicleKit.size_of(car.kind).z > VehicleKit.LONG_HAUL and game.city.lane_count(a, b) < 2:
 		car.kind = VehicleKit.CIVILIAN[rng.randi() % VehicleKit.CIVILIAN.size()]
 		car.body_color = VehicleKit.pick_paint(car.kind, rng)
+		_roof(car)
 	return car

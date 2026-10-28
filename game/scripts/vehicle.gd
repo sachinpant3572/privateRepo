@@ -14,6 +14,7 @@ const VehicleClasses = preload("res://scripts/kits/vehicle_classes.gd")
 const CarDebris = preload("res://scripts/car_debris.gd")
 const CarFire = preload("res://scripts/car_fire.gd")
 const Emissions = preload("res://scripts/kits/vehicle_emissions.gd")
+const Convertible = preload("res://scripts/convertible.gd")
 
 signal officer_deployed(car)
 ## A SCRIPT driver reached the end of its path.
@@ -141,6 +142,10 @@ var shows_rider := false
 ## NPC sitting on a scooter (visible) and NPCs riding inside (hidden).
 var rider = null
 var passengers: Array = []
+## Open cars (VehicleKit "convertible"): whether the soft top is up, and the
+## node that holds it and seats the people seen inside (convertible.gd).
+var roof_up := false
+var convertible = null
 ## SCRIPT driving: points to follow and the throttle to use.
 var path := PackedVector3Array()
 var path_index := 0
@@ -1453,6 +1458,9 @@ func _build_model() -> void:
 	_gloss = MeshInstance3D.new()
 	_gloss.mesh = _meshes[key][1]
 	_model.add_child(_gloss)
+	if _spec.get("convertible", false):
+		convertible = Convertible.new(self)
+		_model.add_child(convertible)
 	_skin(MeshBuilder.material(), MeshBuilder.gloss_material())
 	if is_police:
 		set_xray(POLICE_XRAY)
@@ -1524,6 +1532,8 @@ func show_xray(on: bool) -> void:
 func _skin(body: Material, shell: Material) -> void:
 	_model.material_override = body
 	_gloss.material_override = shell
+	if convertible != null:
+		convertible.skin(body, shell)
 
 
 static var _gloss_xrays := {}

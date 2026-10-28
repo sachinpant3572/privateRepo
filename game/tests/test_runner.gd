@@ -96,6 +96,8 @@ func _run() -> void:
 		"test_screen_shake_setting", "test_settings_sliders_snap_and_apply",
 		"test_blood_melee_spurts_and_spatters", "test_blood_car_hits_smear_and_pool", "test_blood_bleed_toggle_cap_and_fade",
 		"test_exhaust_by_kind_and_norms", "test_tyre_marks_and_smoke", "test_flora_kit_and_hill_ecology",
+		"test_new_kinds_build_and_drive", "test_convertible_roof_meshes", "test_convertible_occupants_show_with_roof_down",
+		"test_roof_button_only_when_nearly_stopped", "test_bicycle_rider_and_pedals", "test_new_kinds_in_pools",
 	]
 	# ONLY=name1,name2 runs just those (handy while working on one test).
 	var only := OS.get_environment("ONLY")
@@ -7876,10 +7878,14 @@ func test_exhaust_by_kind_and_norms() -> void:
 	Input.action_press("gas")
 	await _frames(20)
 	Input.action_release("gas")
-	await _frames(12)
+	# Each flash lives 0.12 s, so look every frame while the pops run.
 	var flames := 0
-	for c in Fx.puffs.colors():
-		flames += int(c.r > 0.99 and c.g < 0.6)
+	for f in 30:
+		await get_tree().process_frame
+		var now := 0
+		for c in Fx.puffs.colors():
+			now += int(c.r > 0.99 and c.g < 0.6)
+		flames = maxi(flames, now)
 	_check(flames > 0, "a sports car pops on the overrun (%d flashes)" % flames)
 	car.queue_free()
 	Controls.scheme = "stick"
@@ -8073,3 +8079,350 @@ func test_flora_kit_and_hill_ecology() -> void:
 	_check(trunks > 0, "the hill tiles grow trees (%d trunks)" % trunks)
 	_check(off < 0.05, "trunks stand on the slope (worst %.2f m off)" % off)
 	_check(worst < 250000, "a hill tile builds in %.0f ms" % (worst / 1000.0))
+
+
+# --- 0.23 kinds: convertibles, the MUV and the bicycle -----------------------
+
+## The roadster and the cabriolet (convertibles), the seven-seat MUV and the
+## bicycle exist under these keys, build at a sane size and drive off.
+func test_new_kinds_build_and_drive() -> void:
+	await _free_game()
+	var sizes := {"roadster": [Vector3(1.7, 1.0, 3.7), Vector3(2.0, 1.35, 4.3)],
+		"cabriolet": [Vector3(1.8, 1.2, 4.4), Vector3(2.1, 1.55, 5.1)],
+		"muv": [Vector3(1.8, 1.6, 4.3), Vector3(2.0, 1.9, 4.8)],
+		"bicycle": [Vector3(0.4, 0.9, 1.6), Vector3(0.8, 1.3, 2.0)]}
+	var cars := {}
+	var i := 0
+	for kind: String in sizes:
+		var spec: Dictionary = VehicleKit.spec(kind)
+		_check(spec.get("name", "") != "" and spec.has("category"), "%s has a model name (%s) and a category" % [kind, spec.get("name", "")])
+		var s: Vector3 = VehicleKit.size_of(kind)
+		_check(s.clamp(sizes[kind][0], sizes[kind][1]) == s, "%s is %s, within %s to %s" % [kind, s, sizes[kind][0], sizes[kind][1]])
+		var car = _track_car(kind, Vector3(i * 14.0, 0, 0), 0.0)
+		car.drive_path(PackedVector3Array([Vector3(i * 14.0, 0, -4000.0)]), 1.0)
+		cars[kind] = car
+		i += 1
+	await _frames(180)
+	for kind: String in cars:
+		var car = cars[kind]
+		var box: AABB = car._model.get_aabb()
+		_check(box.size.z > sizes[kind][0].z * 0.9 and box.size.z < sizes[kind][1].z + 0.2 and box.size.y > 0.8,
+			"%s's model is %.2f m long and %.2f m tall" % [kind, box.size.z, box.size.y])
+		_check(car.global_position.z < -3.0 and car.speed > 1.5,
+			"%s drives off: %.1f m in 3 s, at %.1f m/s" % [kind, -car.global_position.z, car.speed])
+		_check((car.convertible != null) == (kind in ["roadster", "cabriolet"]),
+			"%s %s a soft top" % [kind, "has" if car.convertible != null else "has no"])
+		car.queue_free()
+	var sedan: Vector3 = VehicleKit.size_of("sedan")
+	var muv: Vector3 = VehicleKit.size_of("muv")
+	var van: Vector3 = VehicleKit.size_of("van")
+	_check(sedan.z < muv.z and muv.z < van.z and sedan.y < muv.y and muv.y < van.y,
+		"the MUV sits between the sedan and the van (%s < %s < %s)" % [sedan, muv, van])
+	var top := func(k): return VehicleKit.KINDS[k].max_speed
+	var bike: float = top.call("bicycle") * 3.6
+	_check(bike >= 28.0 and bike <= 32.0, "the bicycle tops out at %.0f km/h (28-32)" % bike)
+	_check(VehicleKit.KINDS.keys().all(func(k): return k == "bicycle" or top.call(k) > top.call("bicycle")), "the bicycle is the slowest kind")
+	_check(top.call("roadster") > top.call("cabriolet") and top.call("cabriolet") > top.call("muv") and top.call("muv") > top.call("van"),
+		"top speeds: roadster > cabriolet > MUV > van")
+	var mass := func(k): return VehicleKit.spec(k).mass
+	_check(mass.call("bicycle") < mass.call("scooter") and mass.call("roadster") < mass.call("cabriolet")
+		and mass.call("compact") < mass.call("muv") and mass.call("muv") < mass.call("suv"),
+		"masses: bicycle %.2f < scooter, roadster %.2f < cabriolet %.2f, compact < MUV %.2f < SUV"
+		% [mass.call("bicycle"), mass.call("roadster"), mass.call("cabriolet"), mass.call("muv")])
+	_check(VehicleKit.seat_count("roadster") == 2 and VehicleKit.seat_count("cabriolet") == 4,
+		"the roadster seats two, the cabriolet four (%d, %d)" % [VehicleKit.seat_count("roadster"), VehicleKit.seat_count("cabriolet")])
+
+
+## An open car's soft top: raised and folded meshes cached per kind apart
+## from the body (VehicleKit.build_top), swapped by the roof state over
+## FOLD_TIME; the body mesh never changes with it.
+func test_convertible_roof_meshes() -> void:
+	await _free_game()
+	var open = Vehicle.new()
+	open.kind = "roadster"
+	add_child(open)
+	var shut = Vehicle.new()
+	shut.kind = "roadster"
+	shut.roof_up = true
+	shut.position = Vector3(6, 0, 0)
+	add_child(shut)
+	var c = open.convertible
+	var d = shut.convertible
+	_check(c._tops.has("roadster|up") and c._tops.has("roadster|down"), "the roadster's tops are cached up and down")
+	_check(c._raised.mesh == d._raised.mesh and c._folded.mesh == d._folded.mesh and c._raised.mesh != c._folded.mesh,
+		"two roadsters share the cached raised and folded tops")
+	_check(c.is_open() and not c._raised.visible and c._folded.visible, "spawned open: only the folded stack shows")
+	_check(not d.is_open() and d._raised.visible and not d._folded.visible, "spawned shut: only the raised top shows")
+	for kind in ["roadster", "cabriolet"]:
+		var up := MeshBuilder.new()
+		var up_glass := MeshBuilder.new()
+		VehicleKit.build_top(up, kind, true, up_glass)
+		var down := MeshBuilder.new()
+		var down_glass := MeshBuilder.new()
+		VehicleKit.build_top(down, kind, false, down_glass)
+		var up_tris: int = up.triangle_count() + up_glass.triangle_count()
+		var down_tris: int = down.triangle_count()
+		var up_box: AABB = up.commit().get_aabb()
+		var down_box: AABB = down.commit().get_aabb()
+		var seat_z: float = VehicleKit.seat(kind, VehicleKit.seat_count(kind) - 1).z
+		_check(up_box.end.y > down_box.end.y + 0.1 and up_box.size.z > down_box.size.z * 2.0 and up_box.position.z < VehicleKit.seat(kind, 0).z,
+			"%s: the raised top spans the cabin (%s), the folded one is low and short (%s)" % [kind, up_box, down_box])
+		_check(down_box.position.z > seat_z, "%s: the folded top sits behind the last seats (from z %.2f, seats at %.2f)" % [kind, down_box.position.z, seat_z])
+		_check(up_glass.triangle_count() > 0, "%s: the raised top has its windows" % kind)
+		_check(up_tris > 40 and up_tris < 700 and down_tris > 20 and down_tris < 400,
+			"%s: tops in budget (%d up, %d down)" % [kind, up_tris, down_tris])
+	var body = open._model.mesh
+	c.set_roof(true)
+	await _frames(int(c.FOLD_TIME * 30.0))
+	_check(c.fold > 0.15 and c.fold < 0.85 and c._raised.visible and c._folded.visible,
+		"half way through the fold both tops show (fold %.2f)" % c.fold)
+	await _frames(40)
+	_check(open.roof_up and c.fold == 0.0 and c._raised.visible and not c._folded.visible and c._raised.transform.is_equal_approx(Transform3D.IDENTITY),
+		"raised after %.1f s: the full top, no stack" % c.FOLD_TIME)
+	_check(open._model.mesh == body, "the body mesh is the same with the roof up")
+	c.set_roof(false, false)
+	_check(c.fold == 1.0 and not c._raised.visible and c._folded.visible, "set_roof without animate folds at once")
+	open.queue_free()
+	shut.queue_free()
+
+
+## With the top down the people in an open car show in their seats (the
+## player at the wheel, a passenger, an AI car's own driver) and ride
+## along; with it up they are hidden as in any car.
+func test_convertible_occupants_show_with_roof_down() -> void:
+	await _new_game(false)
+	Controls.camera = null
+	var p = game.player
+	var at: Vector3 = p.global_position + Vector3(4, 0, 0)
+	var car = Vehicle.new()
+	car.kind = "cabriolet"
+	car.position = at
+	game.add_child(car)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3
+	var friend = Npc.new()
+	friend.setup("Friend", CharKit.random_look(rng))
+	friend.position = at + Vector3(3, 0, 0)
+	game.add_child(friend)
+	await _frames(2)
+	p.enter_vehicle(car)
+	friend.mount(car)
+	await _frames(3)
+	var seat := func(who, i: int) -> float:
+		var h: float = who.look.get("height", 1.0)
+		return who.global_position.distance_to(car.global_transform * (VehicleKit.seat("cabriolet", i) + Vector3(0, 0.92 * (1.0 - h), 0)))
+	_check(p.visible and p.sitting and p.anim.car == 2 and seat.call(p, 0) < 0.05,
+		"top down: Jules shows at the wheel (%.2f m off the seat)" % seat.call(p, 0))
+	_check(friend.visible and friend.sitting and friend.anim.car == 1 and seat.call(friend, 1) < 0.05,
+		"and the passenger beside (%.2f m off the seat)" % seat.call(friend, 1))
+	Controls.override_vector = Vector2(0, -1)
+	await _frames(45)
+	Controls.override_vector = null
+	_check(car.speed > 3.0 and seat.call(p, 0) < 0.05 and seat.call(friend, 1) < 0.05 and is_equal_approx(p.rotation.y, car.global_rotation.y),
+		"both ride along in their seats at %.1f m/s" % car.speed)
+	car.convertible.set_roof(true, false)
+	await _frames(2)
+	_check(not p.visible and not friend.visible and not p.sitting and not friend.sitting and p.anim.car == 0 and friend.anim.car == 0,
+		"top up: both hidden and out of the seated pose")
+	car.convertible.set_roof(false, false)
+	await _frames(2)
+	_check(p.visible and friend.visible, "top down again: both show")
+	car.speed = 0.0
+	car.velocity = Vector3.ZERO
+	p.exit_vehicle()
+	await _frames(2)
+	_check(p.visible and not p.sitting and p.anim.car == 0 and seat.call(p, 0) > 0.5, "out of the car Jules stands beside it")
+	friend.dismount(at + Vector3(3, 0, 0))
+	await _frames(2)
+	_check(friend.visible and not friend.sitting and car.passengers.is_empty(), "the passenger gets out too")
+	# An AI car shows its own driver with the top down, nobody with it up
+	# or once parked.
+	var ai = Vehicle.new()
+	ai.kind = "roadster"
+	ai.position = at + Vector3(0, 0, 12)
+	game.add_child(ai)
+	ai.driver = Vehicle.Driver.SCRIPT
+	await _frames(2)
+	var crew: Array = ai.convertible._crew
+	_check(crew[0] != null and crew[0].visible, "an AI-driven open car shows its driver")
+	ai.convertible.set_roof(true, false)
+	await _frames(2)
+	_check(not crew[0].visible and (crew[1] == null or not crew[1].visible), "and hides them with the top up")
+	ai.convertible.set_roof(false, false)
+	ai.driver = Vehicle.Driver.NONE
+	await _frames(2)
+	_check(not crew[0].visible, "a parked open car is empty")
+	car.queue_free()
+	ai.queue_free()
+
+
+## The HUD's roof button (and R) shows only at the wheel of an open car and
+## works only nearly stopped (Convertible.ROOF_SPEED).
+func test_roof_button_only_when_nearly_stopped() -> void:
+	await _new_game(false)
+	var p = game.player
+	var hud = game.hud
+	var sedan = Vehicle.new()
+	sedan.kind = "sedan"
+	sedan.position = p.global_position + Vector3(5, 0, 0)
+	game.add_child(sedan)
+	var car = Vehicle.new()
+	car.kind = "roadster"
+	car.position = p.global_position + Vector3(-5, 0, 0)
+	game.add_child(car)
+	await _frames(2)
+	_check(not hud.roof_button.visible, "on foot: no roof button")
+	p.enter_vehicle(sedan)
+	await _frames(2)
+	_check(not hud.roof_button.visible and not hud.toggle_roof(), "at the wheel of a sedan: none")
+	p.exit_vehicle()
+	p.enter_vehicle(car)
+	await _frames(2)
+	_check(hud.roof_button.visible and hud.roof_button.text == "ROOF UP" and not hud.roof_button.disabled,
+		"at the wheel of the open roadster, stopped: ROOF UP")
+	car.speed = 10.0
+	car.velocity = -car.global_basis.z * 10.0
+	await _frames(2)
+	_check(hud.roof_button.disabled, "at %.1f m/s the button is greyed out" % car.speed)
+	_check(not hud.toggle_roof() and not car.roof_up and car.convertible.fold == 1.0, "and the roof stays down")
+	car.speed = 1.0
+	car.velocity = -car.global_basis.z * 1.0
+	_check(hud.toggle_roof() and car.roof_up, "under 1.5 m/s the roof goes up")
+	await _frames(50)
+	_check(car.convertible.fold == 0.0 and hud.roof_button.text == "ROOF DOWN", "raised: the button now reads ROOF DOWN")
+	car.speed = 0.0
+	car.velocity = Vector3.ZERO
+	var key := InputEventKey.new()
+	key.physical_keycode = KEY_R
+	key.pressed = true
+	hud._unhandled_input(key)
+	_check(not car.roof_up, "R lowers it again")
+	p.exit_vehicle()
+	p.enter_as_passenger(car)
+	await _frames(2)
+	_check(not hud.roof_button.visible, "a passenger has no roof button")
+	p.exit_vehicle()
+	sedan.queue_free()
+	car.queue_free()
+
+
+## The bicycle shows its rider (Jules or a person) pedalling: the cranks
+## turn with the distance ridden, the feet stay on the pedals and the pose
+## ends with the ride.
+func test_bicycle_rider_and_pedals() -> void:
+	await _new_game(false)
+	Controls.camera = null
+	var p = game.player
+	var bike = Vehicle.new()
+	bike.kind = "bicycle"
+	bike.position = p.global_position + Vector3(3, 0, 0)
+	game.add_child(bike)
+	await _frames(2)
+	_check(bike.shows_rider and bike.rider == null, "a parked bicycle stands empty")
+	p.enter_vehicle(bike)
+	Controls.override_vector = Vector2(0, -1)
+	await _frames(90)
+	var a1: float = p.anim.pedal
+	await _frames(10)
+	var turned := fposmod(p.anim.pedal - a1, TAU)
+	var want: float = bike.speed * RigScript.PEDAL_RATE * 10.0 / 60.0
+	_check(p.visible and p.riding and bike.speed > 2.0 and absf(turned - want) < want * 0.25 + 0.02,
+		"Jules shows on the bicycle, pedalling: %.2f rad in 10 frames at %.1f m/s (want about %.2f)" % [turned, bike.speed, want])
+	Controls.override_vector = null
+	p.exit_vehicle()
+	await _frames(2)
+	_check(not p.riding and p.anim.pedal == -1.0, "off the bicycle the pedalling stops")
+	_check(VehicleKit.pedal_angle("scooter", 1.0, 10.0, 0.1) == -1.0, "no pedalling on a scooter")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 4
+	var cyclist = Npc.new()
+	cyclist.setup("Cyclist", CharKit.random_look(rng))
+	cyclist.position = bike.global_position + Vector3(1, 0, 0)
+	game.add_child(cyclist)
+	await _frames(1)
+	cyclist.mount(bike)
+	bike.drive_path(PackedVector3Array([bike.global_position + Vector3(0, 0, -300)]), 0.8)
+	await _frames(60)
+	_check(cyclist.visible and bike.rider == cyclist and cyclist.anim.pedal > 0.0, "a person rides one too, pedalling (%.2f)" % cyclist.anim.pedal)
+	bike.queue_free()
+	cyclist.queue_free()
+	# Feet on the pedals all the way round; the seated poses within limits.
+	var bad := []
+	var feet := []
+	for a in [0.0, PI * 0.5, PI, PI * 1.5]:
+		var skel := CharKit.build_rig({})
+		var st = RigScript.State.new()
+		st.ride = true
+		st.pedal = a
+		_pose_run(skel, st, 120, "pedal %.2f" % a, bad)
+		for leg in [["RightFoot", 0.0], ["LeftFoot", PI]]:
+			var foot: Vector3 = skel.transform * skel.get_bone_global_pose(skel.find_bone(leg[0])).origin
+			var t: float = a + leg[1]
+			var pedal := Vector2(-(RigScript.PEDAL_CRANK.x + sin(t) * RigScript.PEDAL_ARM),
+				RigScript.PEDAL_CRANK.y + cos(t) * RigScript.PEDAL_ARM + 0.08)
+			feet.append(Vector2(foot.z, foot.y).distance_to(pedal))
+		skel.free()
+	for driving in [true, false]:
+		var skel := CharKit.build_rig({})
+		var st = RigScript.State.new()
+		st.sit = true
+		st.car = 2 if driving else 1
+		_pose_run(skel, st, 90, "open car seat %s" % driving, bad)
+		skel.free()
+	_check(feet.max() < 0.05, "the feet stay on the pedals all the way round (worst %.3f m, %s)" % [feet.max(), feet])
+	_check(bad.is_empty(), "pedalling and the open-car seats stay within the joint limits %s" % [bad])
+
+
+## The new kinds in the pick lists: open cars rare and rich, the MUV
+## common, bicycles parked only (never in traffic, which has no rider for
+## them) and mostly at the poorer homes. Open cars leave with the roof
+## down about 60% of the time by day in the dry, mostly up at night or in
+## the rain.
+func test_new_kinds_in_pools() -> void:
+	await _free_game()
+	var civ: Array = VehicleKit.CIVILIAN
+	_check(civ.has("roadster") and civ.has("cabriolet") and civ.count("muv") >= 2 and not civ.has("bicycle"),
+		"traffic: roadster, cabriolet, MUV x%d, no bicycles" % civ.count("muv"))
+	var opens: int = civ.count("roadster") + civ.count("cabriolet")
+	_check(opens <= civ.count("muv") and opens <= civ.count("sedan"), "open cars are rarer in traffic than MUVs and sedans")
+	_check(VehicleKit.PARKED.has("bicycle") and VehicleKit.PARKED.has("muv") and VehicleKit.PARKED.has("roadster"),
+		"curbs park bicycles, MUVs and open cars")
+	var share := func(pool: Array, kinds: Array) -> float:
+		return pool.filter(func(k): return k in kinds).size() / float(pool.size())
+	var tiers: Array = VehicleKit.PARKED_BY_TIER
+	var open := ["roadster", "cabriolet"]
+	_check(share.call(tiers[0], open) == 0.0 and share.call(tiers[1], open) == 0.0 and share.call(tiers[2], open) == 0.0
+		and share.call(tiers[3], open) > 0.0 and share.call(tiers[4], open) > share.call(tiers[3], open)
+		and share.call(tiers[5], open) >= share.call(tiers[4], open),
+		"open cars only at T3 and richer, more of them higher up")
+	_check(share.call(tiers[0], ["bicycle"]) > share.call(tiers[2], ["bicycle"]) and share.call(tiers[2], ["bicycle"]) > 0.0
+		and share.call(tiers[4], ["bicycle"]) == 0.0 and share.call(tiers[5], ["bicycle"]) == 0.0, "bicycles at the poorer homes")
+	_check(tiers[1].has("muv") and tiers[2].has("muv") and tiers[3].has("muv"), "MUVs at the middle tiers")
+	var pop = Population.new()
+	pop.rng.seed = 23
+	var traffic := {}
+	var parked := {}
+	var roofs := {}
+	for i in 600:
+		for p in [true, false]:
+			var car = pop._new_car(p)
+			var into: Dictionary = parked if p else traffic
+			into[car.kind] = into.get(car.kind, 0) + 1
+			if VehicleKit.KINDS[car.kind].get("convertible", false):
+				roofs[car.roof_up] = roofs.get(car.roof_up, 0) + 1
+			car.free()
+	pop.free()
+	_check(traffic.has("muv") and traffic.has("roadster") and traffic.has("cabriolet") and not traffic.has("bicycle"),
+		"600 traffic picks: MUV %d, roadster %d, cabriolet %d, no bicycles" % [traffic.get("muv", 0), traffic.get("roadster", 0), traffic.get("cabriolet", 0)])
+	_check(parked.has("bicycle") and parked.has("muv"), "600 parked picks: bicycles %d, MUVs %d" % [parked.get("bicycle", 0), parked.get("muv", 0)])
+	_check(roofs.get(true, 0) > 0 and roofs.get(false, 0) > roofs.get(true, 0),
+		"spawned open cars by day: %d down, %d up" % [roofs.get(false, 0), roofs.get(true, 0)])
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 9
+	var up := [0, 0, 0]
+	for i in 1000:
+		up[0] += int(VehicleKit.roof_up_at_spawn(rng, false, false))
+		up[1] += int(VehicleKit.roof_up_at_spawn(rng, true, false))
+		up[2] += int(VehicleKit.roof_up_at_spawn(rng, false, true))
+	_check(up[0] > 330 and up[0] < 470, "by day in the dry about 60%% leave open (%d of 1000 shut)" % up[0])
+	_check(up[1] > 750 and up[2] > 750, "mostly shut at night (%d) and in the rain (%d)" % [up[1], up[2]])

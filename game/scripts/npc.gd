@@ -8,6 +8,7 @@ extends "res://scripts/humanoid.gd"
 
 enum Mode { IDLE, GOTO, FOLLOW, FIGHT, FLEE, RIDING, PASSENGER }
 
+const VehicleKit = preload("res://scripts/kits/vehicle_kit.gd")
 const HOSTILE_XRAY := Color(1.0, 0.3, 0.25, 0.6)
 const FRIEND_XRAY := Color(0.4, 1.0, 0.55, 0.6)
 
@@ -117,6 +118,10 @@ func dismount(at: Vector3) -> void:
 		vehicle.passengers.erase(self)
 	vehicle = null
 	riding = false
+	sitting = false # in an open car's seat (convertible.gd)
+	if anim != null:
+		anim.car = 0
+		anim.pedal = -1.0
 	visible = true
 	global_position = Vector3(at.x, 0.0, at.z)
 	reset_physics_interpolation()
@@ -126,6 +131,8 @@ func dismount(at: Vector3) -> void:
 
 func _physics_process(delta: float) -> void:
 	if mode == Mode.RIDING or mode == Mode.PASSENGER:
+		if mode == Mode.RIDING and anim != null and vehicle != null and is_instance_valid(vehicle):
+			anim.pedal = VehicleKit.pedal_angle(vehicle.kind, anim.pedal, vehicle.speed, delta)
 		return # the vehicle carries us
 	super(delta)
 
