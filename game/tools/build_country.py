@@ -32,6 +32,7 @@ from shapely.strtree import STRtree
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from road_classes import CLASSES, CITY_RANK  # noqa: E402
+import farmland  # noqa: E402
 from mountain import Mountain, roads as mountain_roads, OBSERVATORY, OBSERVATORY_SIZE, OBSERVATORY_ROAD_END, LETTERS, LETTERS_SIZE, MASTS, MAST_SIZE  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -68,6 +69,7 @@ LOT = {
     "public_school": (60, 40), "rowhouse_row": (36, 12), "cape_house": (11, 9), "pier_rides": (60, 140),
     "brownstone_row": (36, 14), "painted_lady_row": (36, 14),
     # The Bellerive Hills (tools/mountain.py), built from the skyline kit.
+    "pump_house": (12, 9),
     "observatory": OBSERVATORY_SIZE, "hill_letters": LETTERS_SIZE, "radio_mast": MAST_SIZE,
 }
 KINDS = list(LOT)
@@ -94,7 +96,9 @@ PLOT_TYPES = ["estate", "cluster", "farmyard", "field",
               # Bellerive v3 outskirts: street trees along a kerb, a rowhouse
               # block's yards and H-alley, a tract house's parcel, and civic
               # grounds (village green, school, DMV, mini-mall forecourt).
-              "verge", "block", "parcel", "civic"]
+              "verge", "block", "parcel", "civic",
+              # Golden Flats: one span of a centre pivot's sprinkler arm.
+              "pivot"]
 PART_KINDS = ["lawn", "yard", "gravel", "drive", "track", "wall", "hedge", "fence", "gate", "trees",
               "court", "parterre", "tennis", "orchard", "crop", "vines", "boat", "woodpile", "garden",
               # Bellerive v3: asphalt parking with stalls (variant: rows along x
@@ -102,7 +106,10 @@ PART_KINDS = ["lawn", "yard", "gravel", "drive", "track", "wall", "hedge", "fenc
               # walks, a shop row's forecourt), a public pool, a playground, a
               # sports field (0 football, 1 baseball, 2 field in a running
               # track), a DMV drive-test course.
-              "parking", "alley", "paving", "pool", "playground", "field", "course"]
+              "parking", "alley", "paving", "pool", "playground", "field", "course",
+              # Golden Flats: a centre pivot's sprinkler span (variant 1 with
+              # the pivot tower, 2 with the end overhang; see farmland.py).
+              "sprinkler"]
 # Tree kinds for "trees" and "orchard" parts.
 TREE_KINDS = ["oak", "palm", "cypress", "fruit", "magnolia", "jacaranda", "crepe_myrtle", "plane"]
 # Dwellings that go into clusters rather than lots of their own.
@@ -117,6 +124,8 @@ ESTATE_HOUSE = 40.0
 TENNIS_BACK = 21.0      # depth behind an estate house for a tennis court across the plot
 # Field cells: 44 m wide on a 50 m pitch (the gaps are the field edges).
 FIELD_CELL = 44.0
+# Golden Flats farmsteads stand at least this far apart (m).
+FLATS_FARM_GAP = 520.0
 FIELD_PITCH = 50.0
 # Line parts: their w runs along their own x.
 LINE_PARTS = ("wall", "hedge", "fence", "gate", "trees")
@@ -213,7 +222,7 @@ PATTERN_WALKS = {"heights": ("flats",), "eastside": ("tract", "bulb"),
 # Ground zones, in drawing order; the game colours them (country_tiles.gd).
 ZONES = ["land", "farmland", "bayou", "hills", "heights", "bayou_town", "fringe", "eastside",
          "beach_town", "shore", "town", "sand", "far_desert", "far_mountains", "far_forest",
-         "far_lakeside", "far_parkland", "far_military", "far_land", "mountain"]
+         "far_lakeside", "far_parkland", "far_military", "far_land", "mountain"] + farmland.ZONES
 
 
 def main() -> None:
@@ -519,20 +528,25 @@ class Country:
                 continue
             if t not in CLASSES:
                 continue
-            c = CLASSES[t]
-            line = LineString(fillet(pts, c["r"], 8.0))
-            for piece in lines_of(line.intersection(clip)):
-                piece = self._to_frame(piece, t)
-                self.add(list(piece.coords), t, rt["name"])
-            # Past the play area: drawn, not driven; a storm barricade where
-            # the road leaves it.
-            for piece in lines_of(line.intersection(self.outer.difference(self.A).difference(self.P))):
-                if piece.length > 5.0:
-                    self.render_only.append([piece, t])
-            for hit in self._points(line.intersection(self.A.exterior)):
-                if self.water_prep.contains(Point(hit).buffer(2.0)) or self.gulf.distance(Point(hit)) < 30.0:
-                    continue
-                self._barricade(line, hit, c["w"])
+            self._route(pts, t, rt["name"], clip)
+
+    def _route(self, pts, t, name, clip):
+        """A map route: driven inside the play area, drawn past it, with a
+        storm barricade where it leaves."""
+        c = CLASSES[t]
+        line = LineString(fillet(pts, c["r"], 8.0))
+        for piece in lines_of(line.intersection(clip)):
+            piece = self._to_frame(piece, t)
+            self.add(list(piece.coords), t, name)
+        # Past the play area: drawn, not driven; a storm barricade where
+        # the road leaves it.
+        for piece in lines_of(line.intersection(self.outer.difference(self.A).difference(self.P))):
+            if piece.length > 5.0:
+                self.render_only.append([piece, t])
+        for hit in self._points(line.intersection(self.A.exterior)):
+            if self.water_prep.contains(Point(hit).buffer(2.0)) or self.gulf.distance(Point(hit)) < 30.0:
+                continue
+            self._barricade(line, hit, c["w"])
 
     @staticmethod
     def _points(geom):
@@ -1348,6 +1362,91 @@ class Country:
             self.town_zones.append({"id": t["id"], "name": t["name"], "kind": kind, "style": style,
                                     "center": m, "u": u, "v": v, "zone": zone, "main": i})
 
+    # --- Golden Flats farmland (farmland.py) ------------------------------------------
+
+    def _flats_area(self):
+        reg = next(r for r in self.world["regions"] if r["id"] == "golden_flats")
+        poly = Polygon(self.L(reg["polygon"])).intersection(self.play_land)
+        keep_out = [self.mtn.poly.buffer(40.0), self.P.buffer(40.0)]
+        keep_out += [z[1].buffer(40.0) for z in self.zones]
+        keep_out += [t["zone"].buffer(25.0) for t in self.town_zones]
+        return poly.difference(unary_union(keep_out)).difference(self.water.buffer(14.0))
+
+    def farm_roads(self):
+        """The Golden Flats Expressway from the Beltway's north-west corner,
+        and the section grid of paved roads and dirt tracks."""
+        belt = unary_union([s[0] for s in self.sources if s[3] == "beltway"])
+        corner = (-426.0, -185.0)
+        on = nearest_points(Point(corner), belt)[1]
+        # Start a few metres off the Beltway; join_ends ties it on.
+        pts = [(on.x - 0.642 * 4.0, on.y - 0.768 * 4.0)] + farmland.EXPRESSWAY
+        self._route(pts, "highway", farmland.EXPRESSWAY_NAME, self.A.difference(self.P))
+        area = self._flats_area()
+        drivable = [s[0] for s in self.sources if CLASSES[s[1]]["graph"]]
+        # County Road 10 bridges the Cinder Lower, so the land west of it
+        # (Ember Canyon Drive) is reached.
+        y = farmland.BRIDGE_Y
+        crossing = self.water.buffer(16.0).intersection(box(-2700.0, y - 30.0, -1900.0, y + 30.0))
+        pieces = farmland.grid_roads(area, drivable, {y: crossing})
+        # Only grid pieces that reach the road network (crossing it, or
+        # within join_ends' reach of it without crossing water).
+        net = unary_union(drivable)
+        left = [(LineString(p[0]), p) for p in pieces]
+        grown = True
+        while grown:
+            grown = False
+            keep = []
+            for line, pc in left:
+                ok = line.distance(net) < 2.0
+                if not ok:
+                    for end in (line.coords[0], line.coords[-1]):
+                        q = nearest_points(Point(end), net)[1]
+                        seg = LineString([end, q.coords[0]])
+                        if seg.length < 90.0 and not self.water_prep.intersects(seg.buffer(1.0)):
+                            ok = True
+                            break
+                if ok:
+                    self.add(pc[0], pc[1], pc[2], pc[3])
+                    net = net.union(line)
+                    grown = True
+                else:
+                    keep.append((line, pc))
+            left = keep
+        self.flats_area = area
+
+    def farm_canals(self):
+        """The irrigation canals beside two section roads: their ground (kept
+        clear of lots) and a pump house at each one's river end."""
+        lines = farmland.canal_lines(self.flats_area)
+        water, banks = farmland.canal_zones(lines, self.road_area)
+        self.farm_zones = {"canal": water, "canal_bank": banks}
+        for poly in polys_of(unary_union([water, banks])):
+            self.lot_grid.add(poly.buffer(2.0))
+        self.canal_ends = [max(l.coords, key=lambda c: c[0]) for l in lines]
+        self.canal_area = unary_union([water, banks])
+
+    def farm_fields(self):
+        """Pump houses at the canals' heads, then the fields: pivot circles
+        and strip fields on the farmland left clear, and each pivot's
+        sprinkler spans as plots of their own."""
+        for e in self.canal_ends:
+            if not self._place_near((e[0] - 30.0, e[1] - 20.0), "pump_house", "", "golden_flats", reach=90.0):
+                print("WARNING: no room for a pump house at", e)
+        taken = [self.road_area.buffer(farmland.CLEAR), self.canal_area.buffer(3.0)]
+        taken += [lot_poly(l["x"], l["y"], l["yaw"], l["w"], l["d"]).buffer(farmland.CLEAR) for l in self.lots]
+        taken += [lot_poly(q["x"], q["y"], q["yaw"], q["w"], q["d"]).buffer(farmland.CLEAR) for q in self.plots]
+        for path in self.paths:
+            taken.append(LineString(path).buffer(4.0))
+        free = self.flats_area.difference(unary_union(taken))
+        fields, arms, pivots = farmland.lay_fields(free)
+        self.pivots = [[round(c[0], 1), round(c[1], 1), round(r, 1), crop] for c, r, crop in pivots]
+        self.farm_zones.update(fields)
+        for (x, y), a, span, variant in arms:
+            yaw = math.atan2(-math.sin(a), math.cos(a))
+            self.plots.append({"x": x, "y": y, "yaw": yaw, "w": span, "d": 6.0, "type": "pivot",
+                               "parts": [part("sprinkler", 0.0, 0.0, span, 6.0, 0.0, variant)]})
+        self.pivot_count = sum(1 for a in arms if a[3] & 1)
+
     def trim_route_stubs(self):
         """A route that starts on nothing (Serena Causeway on the river bank)
         is cut back to the first road it crosses, up to 250 m in."""
@@ -2061,6 +2160,7 @@ class Country:
         regions = {r["id"]: prep(Polygon(self.L(r["polygon"]))) for r in self.world["regions"] if r.get("phase") == 2}
         town_prep = [prep(t["zone"].buffer(60)) for t in self.town_zones]
         suburb = prep(unary_union([z[1] for z in self.zones]).buffer(60))
+        flats_farms = []
         for i, pc in enumerate(self.pieces):
             if pc["cls"] not in ("road", "lane", "track", "highway"):
                 continue
@@ -2075,7 +2175,12 @@ class Country:
                 sgn = 1.0 if self.rng.random() < 0.5 else -1.0
                 q = self._side_point(line, s, sgn, self.front_half[i] + 30.0)
                 if reg == "golden_flats":
-                    placed = self.farmyard_at(q, "flats", reg)
+                    # One to a few sections: the pivots need the room.
+                    placed = False
+                    if all(dist(q, f) > FLATS_FARM_GAP for f in flats_farms):
+                        placed = self.farmyard_at(q, "flats", reg)
+                        if placed:
+                            flats_farms.append(q)
                     gap = self.rng.uniform(380, 700)
                 elif reg == "saltgrass":
                     placed = self.cluster_at(q, self.rng.uniform(40.0, 56.0), self.rng.uniform(34.0, 42.0),
@@ -2100,7 +2205,8 @@ class Country:
         regions = {r["id"]: Polygon(self.L(r["polygon"])) for r in self.world["regions"] if r.get("phase") == 2}
         block = unary_union([z[1] for z in self.zones] + [t["zone"] for t in self.town_zones]).buffer(20.0)
         areas = []
-        for rid in ("golden_flats", "verdant_hills"):
+        # Golden Flats has its section fields (farm_fields) instead.
+        for rid in ("verdant_hills",):
             if rid in regions:
                 areas.append((rid, prep(regions[rid].intersection(self.play_land).difference(block))))
         choice = {}
@@ -2585,6 +2691,11 @@ class Country:
             z = poly.difference(taken)
             zones.append((name, z))
             taken = taken.union(z)
+        for name in farmland.ZONES:
+            if name in self.farm_zones:
+                z = self.farm_zones[name].intersection(self.play_land).difference(taken)
+                zones.append((name, z))
+                taken = taken.union(z)
         for r in self.world["regions"]:
             poly = Polygon(self.L(r["polygon"]))
             if r.get("phase") == 2:
@@ -2689,6 +2800,7 @@ class Country:
         self.routes()
         self.suburbs()
         self.towns()
+        self.farm_roads()
         self.trim_route_stubs()
         self.join_ends()
         self.graph()
@@ -2696,6 +2808,7 @@ class Country:
         self._pier_land()
         self.walls()
         self.lot_setup()
+        self.farm_canals()
         self.landmark_lots()
         self.mountain_lots()
         self.town_lots()
@@ -2704,6 +2817,7 @@ class Country:
         self.verges()
         self.farm_lots()
         self.field_plots()
+        self.farm_fields()
         self.ground_zones()
         self.mountain_terrain()
         self.polyline_outputs()
@@ -2887,6 +3001,7 @@ class Country:
             "trails": self.trail_out,
             "rails": self.rail_out,
             "far_roads": self.far_out,
+            "pivots": self.pivots,
             "tiles": tiles,
         }
 

@@ -65,6 +65,11 @@ func _run() -> void:
 		await _props(game)
 		get_tree().quit()
 		return
+	if OS.get_environment("SHOTS") == "farm":
+		# Just Golden Flats' farmland (quick look while working on it).
+		await _farm(game)
+		get_tree().quit()
+		return
 	if OS.get_environment("SHOTS") == "roads":
 		# Just the wide roads (quick look while working on them).
 		await _roads(game)
@@ -223,6 +228,60 @@ func _hills(game) -> void:
 	for i in 4:
 		await get_tree().process_frame
 	await _shot("47_bellerive_hills_map.png")
+	game.hud.full_map.close()
+
+
+## Golden Flats: a pivot circle wide and its pivot tower close, strip
+## fields, the expressway, a farmstead, a pump house at a canal, the
+## farmland meeting the hills, and the flats on the full map.
+func _farm(game) -> void:
+	var c = game.city.country
+	var stops := []
+	var pivots: Array = c.pivots.duplicate()
+	pivots.sort_custom(func(a, b): return a[2] > b[2])
+	var big: Array = pivots[0]
+	stops.append(["65_pivot_circle", Vector2(big[0], big[1]), 200.0])
+	# The span nearest the circle's middle: the pivot tower and the arm.
+	var span := Vector2(big[0], big[1])
+	var near := INF
+	for q: Array in c.plots:
+		if c.plot_types[int(q[5])] == "pivot" and Vector2(q[0], q[1]).distance_to(Vector2(big[0], big[1])) < near:
+			near = Vector2(q[0], q[1]).distance_to(Vector2(big[0], big[1]))
+			span = Vector2(q[0], q[1])
+	stops.append(["66_pivot_tower", span, 40.0])
+	for road in c.roads:
+		if road.name == "Golden Flats Expressway" and road.nodes.size() > 6:
+			stops.append(["67_flats_expressway", c.pos(road.nodes[road.nodes.size() / 2]), 160.0])
+			break
+	for l: Array in c.lots:
+		if c.kinds[int(l[5])] == "pump_house":
+			stops.append(["68_pump_house_canal", Vector2(l[0], l[1]), 90.0])
+			break
+	for q: Array in c.plots:
+		if c.plot_types[int(q[5])] == "farmyard" and float(q[0]) < -700.0 and float(q[1]) < -600.0:
+			stops.append(["69_flats_farmstead", Vector2(q[0], q[1]), 140.0])
+			break
+	stops.append(["70_strip_fields", Vector2(pivots[pivots.size() - 1][0], pivots[pivots.size() - 1][1]), 200.0])
+	stops.append(["71_flats_meet_hills", Vector2(60, -1500), 200.0])
+	for stop in stops:
+		var at: Vector2 = stop[1]
+		var pos := Vector3(at.x, Terrain.height(at.x, at.y), at.y)
+		game.city.stream_now(pos)
+		game.player.global_position = pos
+		game.player.reset_physics_interpolation()
+		game.camera.fixed_focus = pos
+		game.camera.room_size = stop[2]
+		game.camera.snap()
+		await _frames(90)
+		await _shot(stop[0] + ".png")
+	game.camera.fixed_focus = null
+	game.camera.room_size = 0.0
+	var at := Vector2(big[0], big[1])
+	game.player.global_position = Vector3(at.x, 0, at.y)
+	game.hud.full_map.open()
+	for i in 4:
+		await get_tree().process_frame
+	await _shot("72_golden_flats_map.png")
 	game.hud.full_map.close()
 
 

@@ -71,7 +71,7 @@ func _run() -> void:
 		"test_traffic_drives_into_the_country", "test_traffic_turns_round_at_barricades",
 		"test_country_kit_builds_every_kind",
 		"test_country_plots_square_to_their_roads", "test_estates_and_clusters", "test_grounds_kit_builds_every_part",
-		"test_bellerive_hills",
+		"test_bellerive_hills", "test_golden_flats_farmland",
 	]
 	# ONLY=name1,name2 runs just those (handy while working on one test).
 	var only := OS.get_environment("ONLY")
@@ -2969,6 +2969,104 @@ func test_grounds_kit_builds_every_part() -> void:
 ## The Bellerive Hills: the height grid loads, the observatory stands on its
 ## pad up the hill, its tile is raised to the ground, someone on foot stands
 ## on the slope, and a car driven up Crest Drive keeps its wheels on the road.
+## Golden Flats (Sachin, 2026-10-28: "sprawling irrigation fields ... with
+## major highways or expressways going through them, with shortcuts in
+## between, on paved and unpaved roads leading to farmhouses"): the
+## expressway off the Beltway over the Morrow, the section grid of paved
+## roads and dirt tracks, centre pivots whose arms stream with their tiles,
+## strip fields, canals with pump houses, farmsteads with drives.
+func test_golden_flats_farmland() -> void:
+	await _new_game(false)
+	var city = game.city
+	var c = city.country
+	var flats := PackedVector2Array()
+	var world: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/world_map.json"))
+	for r in world.regions:
+		if r.id == "golden_flats":
+			for q in r.polygon:
+				flats.append(Vector2(q[0], q[1]) - city.map_origin)
+	_check(flats.size() > 3, "Golden Flats is on the map")
+	var expressway := []
+	var six_lanes := true
+	var paved := 0
+	var dirt := 0
+	for road in c.roads:
+		var cls: String = c.classes[road.cls].id
+		var mid: Vector2 = c.pos(road.nodes[road.nodes.size() / 2])
+		if road.name == "Golden Flats Expressway":
+			expressway.append(road)
+			six_lanes = six_lanes and cls == "highway" and int(c.classes[road.cls].lanes) == 3
+		elif Geometry2D.is_point_in_polygon(mid, flats):
+			if cls == "road" and (road.name.begins_with("Range Road") or road.name.begins_with("County Road")):
+				paved += 1
+			elif cls == "track":
+				dirt += 1
+	_check(not expressway.is_empty() and six_lanes, "the Golden Flats Expressway runs through the farmland, 6 lanes")
+	_check(paved >= 10 and dirt >= 10, "a section grid: %d paved section roads, %d dirt tracks" % [paved, dirt])
+	# It leaves the Beltway: an expressway node is a Beltway node too.
+	var belt := {}
+	for road in c.roads:
+		if road.name == "Bellerive Beltway":
+			for n in road.nodes:
+				belt[n] = true
+	var joined := false
+	for road in expressway:
+		for n in road.nodes:
+			joined = joined or belt.has(n)
+	_check(joined, "the expressway joins the Beltway")
+	_check(_bridged(c, "Golden Flats Expressway"), "the expressway bridges the Morrow")
+	# Pivots, their spans as plots, the field zones in the tiles.
+	_check(c.pivots.size() >= 12, "centre-pivot circles, got %d" % c.pivots.size())
+	var spans := 0
+	for q: Array in c.plots:
+		if c.plot_types[int(q[5])] == "pivot":
+			spans += 1
+	_check(spans >= c.pivots.size() * 2, "each pivot has its sprinkler spans (%d)" % spans)
+	var zone_tris := {}
+	for key in c.tiles:
+		for part in c.tiles[key].g:
+			var z: String = c.zones[int(part[0])]
+			if z.begins_with("pivot") or z.begins_with("field") or z.begins_with("canal"):
+				zone_tris[z] = zone_tris.get(z, 0) + 1
+	for z in ["pivot_track", "pivot_green", "field_green_row", "field_gold", "canal", "canal_bank"]:
+		_check(zone_tris.get(z, 0) > 0, "%s is on the ground" % z)
+	var pumps := 0
+	var farms := 0
+	for l: Array in c.lots:
+		if c.kinds[int(l[5])] == "pump_house":
+			pumps += 1
+		elif c.kinds[int(l[5])] == "farmhouse" and Geometry2D.is_point_in_polygon(Vector2(l[0], l[1]), flats):
+			farms += 1
+	_check(pumps >= 1 and farms >= 6, "pump houses at the canals (%d), farmsteads (%d)" % [pumps, farms])
+	# A pivot's tile streams in with its tower solid.
+	var big: Array = c.pivots[0]
+	var at := Vector3(big[0], 0.0, big[1])
+	_place_player_at(at + Vector3(0, 1, 0))
+	city.stream_now(at)
+	await _frames(20)
+	var tile: Node3D = c.tile_node(c.tile_key(at))
+	_check(tile != null, "the pivot's tile streams in")
+	var hit: Dictionary = game.get_world_3d().direct_space_state.intersect_ray(
+			PhysicsRayQueryParameters3D.create(at + Vector3(0, 1.0, -3.0), at + Vector3(0, 1.0, 3.0)))
+	var near_tower := false
+	for q: Array in c.plots:
+		if c.plot_types[int(q[5])] == "pivot" and Vector2(q[0], q[1]).distance_to(Vector2(big[0], big[1])) < 30.0:
+			near_tower = true
+	_check(near_tower and not hit.is_empty(), "the pivot tower is solid")
+
+
+## Whether the named road has a bridge edge (over water).
+func _bridged(c, name: String) -> bool:
+	for road in c.roads:
+		if road.name != name:
+			continue
+		for k in road.nodes.size() - 1:
+			var e: int = c.edge_between(road.nodes[k], road.nodes[k + 1])
+			if e >= 0 and c.edge_bridge[e] != 0:
+				return true
+	return false
+
+
 func test_bellerive_hills() -> void:
 	await _new_game(false)
 	var city = game.city

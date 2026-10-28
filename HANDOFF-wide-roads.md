@@ -68,6 +68,43 @@ Order: wide roads (city, then country), then breakable props, then the fields. F
   cab stands on, not the junction straight ahead of its nose: a cab pulled into the parking strip sits
   at an angle and the old cone search picked a junction on another street (it then drove into a block).
 
+## Golden Flats farmland (plan, 2026-10-28)
+
+- F-1 **Where**: Golden Flats County (`world_map.json` region `golden_flats`), the flat land west of the
+  Bellerive Hills between the Cinder Lower and the Morrow, and the strip between the Morrow and the
+  hills' foot. Fields run right up to the mountain outline, where the ground is still flat (the heights
+  fade in 220 m inside it), so the farmland meets the hills without a seam.
+- F-2 **Roads** (`tools/farmland.py`): the Golden Flats Expressway (highway, 6 lanes) leaves the
+  Beltway's north-west corner, bridges the Morrow and runs north-west past Wheaton and the grain
+  elevators out of the play area; a 600 m section grid lined up with the map's existing county roads
+  (x -1550/-950, y -1750/-1050): paved section roads (`road`) on the grid lines, dirt tracks (`track`)
+  on some half-section lines, and a few curving dirt shortcuts across sections. Grid roads stop at the
+  rivers (only the expressway and the map routes bridge them) and skip stretches that run alongside an
+  existing road. Own RNG, so the rest of the country's lots do not shift more than the new roads make them.
+- F-3 **Fields as ground zones**, not plots: the tile cutter already clips zones to the 100 m tiles, so
+  a 270 m pivot circle never pops in half-drawn (plots stream by their centre's tile, LOAD_RADIUS 130).
+  Centre-pivot circles (R 135/100/65: green alfalfa, gold wheat, bare) with wheel-track rings, and
+  rectangular fields with crop rows as stripes (green rows, gold wheat, ploughed furrows); the corners
+  between circles stay dry farmland, as in San Andreas' flats. The old 44 m square field cells stay in
+  the Verdant Hills only.
+- F-4 **Sprinkler arms**: one plot per span (<= 48 m, type `pivot`, part `sprinkler`), so each piece
+  streams with its own tile: a truss on A-frame wheel towers, the pivot tower at the centre, an
+  overhang at the end. Towers have small colliders.
+- F-5 **Canals and pump houses**: concrete-lined canals (zones `canal`, `canal_bank`) beside two paved
+  section roads from the Morrow west; a pump house (new country kit kind `pump_house`) at each canal's
+  river end. Canals have no collision (a car can cross one): accepted, noted.
+- F-6 **Farmsteads** come from the existing `farm_lots` along the new roads, with gravel drives,
+  at least 520 m apart in the flats (one per road piece crowded out the pivots: 57 farmsteads).
+- F-7 **County Road 10 bridges the Cinder Lower**: the land west of it (Ember Canyon Drive) was cut
+  off from the road graph before this task (74 unreached nodes); now 0.
+- F-8 Grid pieces that cannot reach the network (crossing it, or within join_ends' 90 m without
+  crossing water) are dropped.
+
+Measured: 22 pivots (59 spans), 75 paved section-road pieces, 37 dirt-track pieces, 2 pump houses,
+16 farmhouses in the flats, 19 farmyards in all; 6737 nodes, 0 unreached; country.json 1.6 -> 3.9 MB
+(about 48k field triangles; tiles stay small). Greens toned down after the first shots (they rendered
+neon). Shots 65-72 (`SHOTS=farm`).
+
 ## Measured after the change
 
 - Country: 5106 nodes, 633 roads, lots 2335 -> 2056 (fronting 1511 -> 1333), worst lot turn 2.75 deg,

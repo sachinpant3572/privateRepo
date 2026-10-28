@@ -86,7 +86,11 @@ phone.
   `scripts/country.gd`, `country_tiles.gd`, `kits/country_kit.gd`): the
   suburbs (Magnolia Heights, Blackwater Bayou, the east side, the south shore,
   Brisa Beach with Seabreeze Drive and Deco Row), Golden Flats (Wheaton, Ridley
-  Crossing, farms and grain elevators), Saltgrass (bayou, the Gator Farm,
+  Crossing, farms and grain elevators; irrigated farmland laid out by
+  `tools/farmland.py`: centre-pivot circles with sprinkler arms, strip fields
+  in rows, canals with pump houses, a 600 m section grid of paved roads and
+  dirt tracks with dirt shortcuts, and the 6-lane Golden Flats Expressway off
+  the Beltway), Saltgrass (bayou, the Gator Farm,
   airboats) and Verdant Hills (Larkspur, the vineyard). Suburb streets run
   straight on from the city's: nearly every city street that reaches the
   edge carries on out to the Beltway, Sunvale Boulevard, Seabreeze Drive or
@@ -247,7 +251,12 @@ phone.
   pointing behind), handbrake drift, damage and wrecks, parked cars,
   carjacking.
 - **City life**: pedestrians walking the sidewalks (some fight back), traffic
-  following right-hand lanes and stopping for obstacles.
+  following right-hand lanes and stopping for obstacles. Streets and avenues
+  have two lanes each way and a parking strip, boulevards and highways three,
+  the Beltway four; cars pick a lane and keep it.
+- **Breakable roadside props** (`scripts/breakables.gd`): lamp posts, signals,
+  street trees, hydrants (they gush), benches, bins, signs and the like go
+  down when a car hits them, and the car keeps most of its speed.
 - **Wanted levels 1-2**: assault or carjacking gives one star (police on foot);
   hitting a cop or stealing a police car gives two (plus police cars, which
   stop and send an officer out when you're on foot). Stay out of sight to lose
@@ -336,7 +345,9 @@ render every kind of the civic, skyline and shady kits; the screenshots
 include aerial views of Gilt, Midtown, the Wards, Ironwharf and the
 Esplanade's arch (shots 37 to 41), and the traffic circles and the
 Bellerive Hills (45 to 52; `SHOTS=hills` before the command shoots just
-those).
+those). `SHOTS=roads` shoots the wide roads (53 to 58), `SHOTS=props` a car
+through a lamp, a tree and a hydrant (59 to 64), and `SHOTS=farm` Golden
+Flats' farmland (65 to 72).
 
 The country is generated, not hand-made. After changing `data/world_map.json`
 or the street plan, dump the plan and rebuild it (needs `pip install shapely`):

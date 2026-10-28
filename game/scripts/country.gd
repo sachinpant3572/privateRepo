@@ -62,6 +62,8 @@ var paths: Array = []
 var trails: Array = []
 var rails: Array = []
 var far_roads: Array = []
+## Golden Flats' centre-pivot circles for the maps: [x, y, radius, crop zone].
+var pivots: Array = []
 var towns: Array = []
 ## The play area outline(s).
 var area: Array[PackedVector2Array] = []
@@ -147,6 +149,7 @@ func load_data(seed_v := 1234) -> void:
 	trails = d.trails
 	rails = d.rails
 	far_roads = d.far_roads
+	pivots = d.get("pivots", [])
 	towns = d.towns
 	suburbs = d.suburbs
 	for ring in d.area:

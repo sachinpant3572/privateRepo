@@ -11,6 +11,9 @@ const MapImage = preload("res://scripts/map_image.gd")
 ## Metres per pixel: 12 x 9 km makes 2000 x 1500.
 const PX_M := 6.0
 const LAND := Color(0.72, 0.78, 0.62)
+const PIVOT_COLORS := {
+	"pivot_green": Color(0.5, 0.68, 0.36), "pivot_gold": Color(0.86, 0.78, 0.48), "pivot_bare": Color(0.66, 0.55, 0.42),
+}
 const REGION_COLORS := {
 	"desert": Color(0.86, 0.77, 0.58),
 	"military": Color(0.66, 0.65, 0.57),
@@ -156,6 +159,10 @@ static func _streets(img: Image, map_origin: Vector2, city) -> void:
 	var country = city.country
 	if country == null:
 		return
+	# Centre-pivot circles under the roads, in their crop's colour.
+	for pv: Array in country.pivots:
+		var crop: String = pv[3]
+		_disc(img, Vector2(pv[0], pv[1]) + map_origin, float(pv[2]), PIVOT_COLORS.get(crop, PIVOT_COLORS.pivot_green))
 	for road in country.roads:
 		var line := PackedVector2Array()
 		for n in road.nodes:
@@ -163,6 +170,16 @@ static func _streets(img: Image, map_origin: Vector2, city) -> void:
 		var cls: Dictionary = country.classes[road.cls]
 		var col := TRACK if cls.id == "track" else (HIGHWAY if cls.id in ["highway", "freeway"] else ROAD)
 		_line(img, Vector2.ZERO, line, maxf(float(cls.w) * 1.4, 9.0), col)
+
+
+## A filled circle of radius r metres at world point c.
+static func _disc(img: Image, c: Vector2, r: float, color: Color) -> void:
+	var pc := c / PX_M
+	var pr := r / PX_M
+	for y in range(floori(pc.y - pr), ceili(pc.y + pr) + 1):
+		for x in range(floori(pc.x - pr), ceili(pc.x + pr) + 1):
+			if x >= 0 and y >= 0 and x < img.get_width() and y < img.get_height() and Vector2(x, y).distance_to(pc) <= pr:
+				img.set_pixel(x, y, color)
 
 
 static func _local(p: Vector2, map_origin: Vector2) -> Vector3:

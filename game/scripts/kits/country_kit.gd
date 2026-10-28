@@ -19,7 +19,7 @@ const Skyline = preload("res://scripts/kits/skyline_kit.gd")
 const KINDS := [
 	# Rural.
 	"farmhouse", "barn", "silos", "machine_shed", "trailer_home", "shack", "stilt_house",
-	"water_tower", "windpump",
+	"water_tower", "windpump", "pump_house",
 	# Roadside and town.
 	"gas_station", "diner", "motel", "general_store", "truck_stop", "garage", "town_hall",
 	"bar", "shopfront", "house", "mansion", "garden_apartments", "strip_mall",
@@ -39,6 +39,7 @@ const FOOTPRINTS := {
 	"farmhouse": Vector2(24, 26), "barn": Vector2(20, 26), "silos": Vector2(16, 14),
 	"machine_shed": Vector2(24, 18), "trailer_home": Vector2(12, 24), "shack": Vector2(10, 12),
 	"stilt_house": Vector2(14, 16), "water_tower": Vector2(12, 12), "windpump": Vector2(8, 8),
+	"pump_house": Vector2(14, 12),
 	"gas_station": Vector2(36, 32), "diner": Vector2(24, 26), "motel": Vector2(42, 36),
 	"general_store": Vector2(16, 20), "truck_stop": Vector2(72, 60), "garage": Vector2(22, 22),
 	"town_hall": Vector2(30, 30), "bar": Vector2(22, 26), "shopfront": Vector2(9, 16),
@@ -117,6 +118,7 @@ static func build(kind: String, mb, out: Array, size: Vector2, rng: RandomNumber
 		"stilt_house": stilt_house(mb, out, w, d, rng)
 		"water_tower": water_tower(mb, out, w, d, rng)
 		"windpump": windpump(mb, out, w, d, rng)
+		"pump_house": pump_house(mb, out, w, d, rng)
 		"gas_station": gas_station(mb, out, w, d, rng)
 		"diner": diner(mb, out, w, d, rng)
 		"motel": motel(mb, out, w, d, rng)
@@ -998,6 +1000,64 @@ static func water_tower(mb, out: Array, w: float, d: float, rng: RandomNumberGen
 	_cone(mb, Vector3(0, th + tank_h, 0), r + 0.1, r * 0.45, MeshBuilder.glow(paint.darkened(0.12), MeshBuilder.GLOSS), 12)
 	mb.ball(Vector3(0, th + tank_h + r * 0.45 + 0.1, 0), Vector3(0.2, 0.2, 0.2), leg, 5, 2)
 	mb.box(Vector3(0, th * 0.5, -0.47), Vector3(0.4, th, 0.05), DARK)
+
+
+## An irrigation pump house at a canal's head (Golden Flats): a block
+## house with a tin roof and a roll-up door, the big discharge pipes
+## running out the back and down into the ground, an electric meter, a
+## transformer on a pole and a chain-link fence round the yard.
+static func pump_house(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator) -> void:
+	_pad(mb, -w * 0.5, w * 0.5, -d * 0.5, d * 0.5, MeshBuilder.glow(GRAVEL, MeshBuilder.CONCRETE))
+	var hw := minf(w * 0.5, 7.0)
+	var hd := minf(d * 0.4, 3.0)
+	var hx := -w * 0.5 + 1.0 + hw * 0.5
+	var hz := -d * 0.5 + 2.5 + hd * 0.5
+	var block := MeshBuilder.glow(Color(0.74, 0.72, 0.66), MeshBuilder.CONCRETE)
+	mb.box(Vector3(hx, 1.6, hz), Vector3(hw, 3.2, hd), block)
+	_col(out, Vector3(hx, 1.6, hz), Vector3(hw, 3.2, hd))
+	# A lean-to tin roof, falling to the back.
+	var roof := MeshBuilder.glow(TIN.lerp(RUST, rng.randf_range(0.0, 0.4)), MeshBuilder.SEAM_ROOF)
+	var saved: Transform3D = mb.xform
+	mb.xform = saved * Transform3D(Basis(Vector3.RIGHT, -0.12), Vector3(hx, 3.4, hz))
+	mb.box(Vector3.ZERO, Vector3(hw + 0.6, 0.08, hd + 0.8), roof)
+	mb.xform = saved
+	var fz := hz - hd * 0.5 - 0.04
+	mb.box(Vector3(hx - hw * 0.18, 1.3, fz), Vector3(2.4, 2.6, 0.08), MeshBuilder.glow(STEEL.darkened(0.1), MeshBuilder.SIDING))
+	mb.box(Vector3(hx + hw * 0.3, 1.1, fz), Vector3(0.9, 2.1, 0.08), DARK)
+	mb.box(Vector3(hx + hw * 0.3, 2.6, fz - 0.02), Vector3(1.2, 0.35, 0.06), Color(0.2, 0.35, 0.6))
+	# The discharge pipes: out of the back wall, over and down.
+	var pipe := Color(0.36, 0.48, 0.38)
+	var bz := hz + hd * 0.5
+	for k in 2:
+		var px := hx - hw * 0.25 + k * hw * 0.5
+		var top := Vector3(px, 1.8, bz + 1.2)
+		mb.limb(Vector3(px, 1.8, bz - 0.2), top, 0.32, 0.32, pipe, 8)
+		mb.limb(top, Vector3(px, 0.0, bz + 1.2), 0.32, 0.32, pipe, 8)
+		mb.cylinder(top + Vector3(0, -0.4, 0), 0.42, 0.18, pipe.darkened(0.25), 8)
+		mb.box(Vector3(px, 0.2, bz + 1.2), Vector3(1.2, 0.4, 1.2), block)
+		_col(out, Vector3(px, 0.9, bz + 0.7), Vector3(0.8, 1.8, 1.4))
+	# Meter box, and a transformer up a pole beside the house.
+	mb.box(Vector3(hx + hw * 0.5 + 0.12, 1.6, hz), Vector3(0.24, 0.8, 0.6), Color(0.6, 0.62, 0.6))
+	var pole := Vector3(w * 0.5 - 1.2, 0, -d * 0.5 + 2.0)
+	mb.cylinder(pole, 0.14, 8.0, OLD_WOOD.darkened(0.2), 6)
+	mb.box(pole + Vector3(0, 7.6, 0), Vector3(1.8, 0.12, 0.12), OLD_WOOD.darkened(0.2))
+	mb.cylinder(pole + Vector3(0, 5.6, 0.35), 0.32, 1.0, Color(0.55, 0.58, 0.6), 8)
+	_col(out, pole + Vector3(0, 2.0, 0), Vector3(0.3, 4.0, 0.3))
+	# Chain-link round the sides and back (the front stays open to the drive).
+	var link := Color(0.62, 0.64, 0.66)
+	var e := 0.3
+	for seg: Array in [[Vector3(-w * 0.5 + e, 0, -d * 0.5 + e), Vector3(-w * 0.5 + e, 0, d * 0.5 - e)],
+			[Vector3(-w * 0.5 + e, 0, d * 0.5 - e), Vector3(w * 0.5 - e, 0, d * 0.5 - e)],
+			[Vector3(w * 0.5 - e, 0, d * 0.5 - e), Vector3(w * 0.5 - e, 0, -d * 0.5 + e)]]:
+		var a: Vector3 = seg[0]
+		var b: Vector3 = seg[1]
+		var along := b - a
+		var posts := maxi(1, int(along.length() / 2.5))
+		for i in posts + 1:
+			mb.cylinder(a.lerp(b, float(i) / posts), 0.04, 1.8, link, 4)
+		for y: float in [0.1, 1.8]:
+			_beam(mb, a + Vector3(0, y, 0), b + Vector3(0, y, 0), 0.04, link)
+		_col(out, (a + b) * 0.5 + Vector3(0, 0.9, 0), Vector3(absf(along.x), 1.8, absf(along.z)) + Vector3(0.06, 0, 0.06))
 
 
 ## Farm windpump: lattice tower, a many-bladed wheel facing the lane, a tail

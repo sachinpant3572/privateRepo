@@ -23,6 +23,11 @@ ZONE_COLORS = {
     "far_desert": (200, 180, 140), "far_mountains": (150, 140, 130), "far_forest": (90, 120, 80),
     "far_lakeside": (140, 170, 120), "far_parkland": (140, 175, 125), "far_military": (150, 150, 135),
     "far_land": (165, 170, 140),
+    # Golden Flats fields (farmland.py).
+    "pivot_track": (110, 85, 60), "pivot_green": (95, 150, 55), "pivot_gold": (205, 170, 85),
+    "pivot_bare": (140, 105, 70), "field_green_row": (80, 125, 50), "field_green": (110, 160, 65),
+    "field_gold": (215, 185, 100), "field_bare_row": (120, 90, 60), "field_bare": (150, 115, 78),
+    "canal": (50, 85, 95), "canal_bank": (170, 165, 150),
 }
 PART_COLORS = {
     "lawn": (110, 170, 80), "yard": (160, 150, 100), "gravel": (200, 195, 180), "drive": (215, 210, 195),
@@ -33,6 +38,7 @@ PART_COLORS = {
     # Bellerive v3 outskirts.
     "parking": (95, 95, 100), "alley": (150, 145, 140), "paving": (205, 200, 190), "pool": (70, 170, 210),
     "playground": (200, 120, 70), "field": (90, 175, 80), "course": (80, 80, 90),
+    "sprinkler": (235, 235, 240),
 }
 # Lots by kind (others grey-brown; landmarks red).
 KIND_COLORS = {

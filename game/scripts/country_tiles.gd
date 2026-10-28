@@ -75,6 +75,14 @@ const ZONE_GROUND := {
 	"far_land": [Color(0.48, 0.54, 0.34), true],
 	# The Bellerive Hills: dry golden grass under the chaparral.
 	"mountain": [Color(0.6, 0.55, 0.36), false],
+	# Golden Flats fields (tools/farmland.py): pivot circles with wheel
+	# tracks, strip fields in rows, canals in concrete.
+	"pivot_track": [Color(0.42, 0.34, 0.24), false], "pivot_green": [Color(0.3, 0.42, 0.2), false],
+	"pivot_gold": [Color(0.78, 0.66, 0.33), false], "pivot_bare": [Color(0.52, 0.4, 0.28), false],
+	"field_green_row": [Color(0.27, 0.37, 0.17), false], "field_green": [Color(0.38, 0.48, 0.26), false],
+	"field_gold": [Color(0.82, 0.71, 0.38), false], "field_bare_row": [Color(0.44, 0.33, 0.22), false],
+	"field_bare": [Color(0.56, 0.44, 0.3), false], "canal": [Color(0.2, 0.33, 0.35), false],
+	"canal_bank": [Color(0.66, 0.64, 0.58), false],
 }
 ## Tree spacing (metres between trees) and kind per zone.
 const TREES := {

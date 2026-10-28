@@ -148,6 +148,8 @@ static func draw(kind: String, p: Array, tree_kinds: Array, mb, out: Array, rng:
 			_field(mb, local, w, d, v)
 		"course":
 			_course(mb, local, w, d)
+		"sprinkler":
+			_sprinkler(mb, local, w, v)
 	mb.xform = base
 	for col in local:
 		out.append([t * col[0], col[1], float(p[5]) + (col[2] if col.size() > 2 else 0.0)] + col.slice(3))
@@ -348,6 +350,63 @@ static func _crop(mb, w: float, d: float, v: int, rng: RandomNumberGenerator) ->
 			var a := rng.randf() * PI
 			var axis := Vector3(cos(a), 0, sin(a)) * 0.6
 			mb.limb(p + Vector3(0, 0.7, 0) - axis, p + Vector3(0, 0.7, 0) + axis, 0.7, 0.7, Color(0.78, 0.68, 0.4), 8)
+
+
+## One span of a centre pivot's sprinkler arm (Golden Flats), w long along
+## x from the pivot side (-x) out: a galvanised pipe on a sagging truss with
+## drop hoses, carried by a wheeled A-frame tower at the outer end. Variant
+## bit 1: the pivot tower at the inner end; bit 2: the last span, with the
+## overhang and end gun past its tower.
+static func _sprinkler(mb, local: Array, w: float, v: int) -> void:
+	const H := 3.8
+	var galv := MeshBuilder.glow(Color(0.76, 0.78, 0.8), MeshBuilder.METAL)
+	var x0 := -w * 0.5
+	var x1 := w * 0.5
+	mb.limb(Vector3(x0, H, 0), Vector3(x1, H, 0), 0.11, 0.11, galv, 6)
+	# Truss: chords down to a sag at mid-span, struts between.
+	var low := Vector3(0, H - 1.5, 0)
+	Kit._beam(mb, Vector3(x0, H, 0), low, 0.035, galv)
+	Kit._beam(mb, low, Vector3(x1, H, 0), 0.035, galv)
+	for i in range(1, 6):
+		var x := lerpf(x0, x1, i / 6.0)
+		var sag := (H - 1.5) + 1.5 * absf(x) / (w * 0.5)
+		Kit._beam(mb, Vector3(x, H, 0), Vector3(x, sag, 0), 0.025, galv)
+	# Drop hoses with their nozzles.
+	var hose := Color(0.12, 0.13, 0.14)
+	for i in int(w / 3.0):
+		var x := x0 + 1.5 + i * 3.0
+		mb.box(Vector3(x, (H + 1.0) * 0.5, 0), Vector3(0.04, H - 1.0, 0.04), hose)
+	_pivot_tower(mb, local, x1, H, galv)
+	if v & 1:
+		# The pivot: a four-legged tower over the well on a concrete pad.
+		Kit._pad(mb, x0 - 1.8, x0 + 1.8, -1.8, 1.8, MeshBuilder.glow(Color(0.7, 0.69, 0.66), MeshBuilder.CONCRETE), SURFACE_Y + 0.01)
+		for c: Vector2 in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
+			Kit._beam(mb, Vector3(x0 + c.x * 1.3, 0, c.y * 1.3), Vector3(x0, H + 0.3, 0), 0.07, galv)
+		mb.cylinder(Vector3(x0, 0, 0), 0.22, H + 0.6, galv, 8)
+		mb.box(Vector3(x0 + 0.9, 1.3, 0.9), Vector3(0.7, 1.0, 0.35), Color(0.82, 0.8, 0.74))
+		local.append([Vector3(x0, 1.5, 0), Vector3(2.8, 3.0, 2.8)])
+	if v & 2:
+		# Overhang on cables past the last tower, an end gun at its tip.
+		var tip := Vector3(x1 + 2.6, H - 0.4, 0)
+		mb.limb(Vector3(x1, H, 0), tip, 0.06, 0.06, galv, 5)
+		Kit._beam(mb, Vector3(x1, H + 1.0, 0), tip, 0.02, galv)
+		mb.cylinder(Vector3(x1, H, 0), 0.03, 1.0, galv, 4)
+		mb.box(tip + Vector3(0.15, 0.2, 0), Vector3(0.4, 0.25, 0.2), Color(0.25, 0.3, 0.35))
+
+
+## A sprinkler's wheel tower at x: an A-frame down to a base beam, a
+## gearbox and a tyre each side (they roll round the circle, along z).
+static func _pivot_tower(mb, local: Array, x: float, h: float, galv: Color) -> void:
+	const FOOT := 2.2
+	const AXLE := 0.65
+	for s: float in [-1.0, 1.0]:
+		Kit._beam(mb, Vector3(x, h, 0), Vector3(x, AXLE + 0.2, s * FOOT), 0.07, galv)
+		mb.limb(Vector3(x - 0.22, AXLE, s * FOOT), Vector3(x + 0.22, AXLE, s * FOOT), 0.62, 0.62, Color(0.1, 0.1, 0.11), 10)
+		mb.box(Vector3(x - 0.45, AXLE, s * FOOT), Vector3(0.3, 0.3, 0.3), Color(0.2, 0.25, 0.3))
+	Kit._beam(mb, Vector3(x, AXLE + 0.2, -FOOT), Vector3(x, AXLE + 0.2, FOOT), 0.06, galv)
+	Kit._beam(mb, Vector3(x, h * 0.55, -FOOT * 0.45), Vector3(x, h * 0.55, FOOT * 0.45), 0.04, galv)
+	mb.box(Vector3(x, h - 0.6, 0.25), Vector3(0.3, 0.4, 0.2), Color(0.85, 0.82, 0.72))
+	local.append([Vector3(x, 1.0, 0), Vector3(0.9, 2.0, FOOT * 2.0 + 1.2)])
 
 
 ## A vineyard block: trellised rows 2.8 m apart along x, posts at the ends.
