@@ -3,6 +3,8 @@ extends "res://scripts/humanoid.gd"
 ## Missions set a mode and the NPC carries it out: stand (facing the player
 ## when they're close), walk or run to a point, follow the player, fight
 ## them, flee, ride a scooter or sit hidden inside a car.
+## Standing idle they notice what goes on around them (Senses) but only
+## react on the spot (a look, a start, a duck) so a mission never loses them.
 
 enum Mode { IDLE, GOTO, FOLLOW, FIGHT, FLEE, RIDING, PASSENGER }
 
@@ -38,6 +40,21 @@ func setup(name_: String, look_: Dictionary, hostile_ := false) -> void:
 func _ready() -> void:
 	super()
 	add_to_group("npcs")
+	listen()
+
+
+func can_perceive() -> bool:
+	return super() and mode == Mode.IDLE
+
+
+func _choose_reaction(kind: String, near: bool, source, data: Dictionary) -> String:
+	var r := super(kind, near, source, data)
+	match r:
+		"ignore", "look", "startle", "duck", "dodge":
+			return r
+		"flee", "cower", "hands_up":
+			return "duck" if Senses.danger(kind) >= 3 else "startle"
+	return "look"
 
 
 func walk_to(point: Vector3, run := false) -> void:

@@ -11,6 +11,10 @@ const SkyDome = preload("res://scripts/sky.gd")
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const Population = preload("res://scripts/population.gd")
 const StreetPlan = preload("res://scripts/street_plan.gd")
+const PeopleSenses = preload("res://scripts/senses.gd")
+const PedScript = preload("res://scripts/pedestrian.gd")
+const CharKit = preload("res://scripts/kits/character_kit.gd")
+const RigScript = preload("res://scripts/rig.gd")
 
 var game
 var passed := 0
@@ -50,6 +54,9 @@ func _run() -> void:
 		"test_empty_rooms_phone_and_clues",
 		"test_lantern_lights_ambush",
 		"test_people_wear_modern_clothes",
+		"test_people_dress_for_their_kind", "test_reactions_by_kind_of_person", "test_reaction_starts_on_time",
+		"test_people_notice_by_sight_and_sound", "test_poses_stay_in_joint_limits", "test_crowd_reacts_to_a_punch",
+		"test_people_dodge_cars_and_get_up", "test_cops_investigate_off_duty",
 		"test_vehicle_roster_and_parking",
 		"test_vehicle_speed_ranks",
 		"test_player_driving_assists",
@@ -5300,3 +5307,658 @@ func test_new_home_kinds_and_live_cars() -> void:
 	# The marker sits where the static car stood.
 	var near := parks.all(func(p): return lux_off.any(func(c): return Vector2(c[0].x - p.park.x, c[0].z - p.park.z).length() < 0.5))
 	_check(near, "each park marker stands where the static car was")
+
+
+# --- People: looks, senses and reactions ---------------------------------------
+
+## A stand-in city for pedestrians: one sidewalk loop running north-south
+## through `origin`, so someone told to walk at 0 m/s stands facing north.
+func _fake_street(origin: Vector3):
+	var fake := GDScript.new()
+	fake.source_code = "extends RefCounted\nvar sidewalk_loops: Array = []\n"
+	fake.reload()
+	var city = fake.new()
+	city.sidewalk_loops.append(PackedVector3Array([origin + Vector3(0, 0, -80), origin + Vector3(0, 0, 80)]))
+	return city
+
+
+## A pedestrian of `cat` and `personality` standing still at `pos`.
+func _street_ped(city, rng: RandomNumberGenerator, pos: Vector3, yaw: float, cat := "general", personality := "calm"):
+	var ped = PedScript.new()
+	ped.setup(city, rng, 0, 0)
+	ped.point_index = 0
+	ped.step = 1
+	ped.category = cat
+	ped.personality = personality
+	ped.brave = personality == "brave"
+	ped.walk_speed = 0.0
+	ped.position = pos
+	ped.rotation.y = yaw
+	add_child(ped)
+	return ped
+
+
+## Whether `who` shows reaction `r` in its body now.
+func _shows_reaction(who, r: String) -> bool:
+	match r:
+		"startle", "dodge", "duck":
+			return who._action == r
+		"cower", "hands_up", "film", "call":
+			return who.shown_gesture() == r
+		"cheer":
+			return who.shown_gesture() in ["cheer", "clap"]
+		"shout":
+			return who.shown_gesture() in ["shake_fist", "argue"]
+		"flee":
+			return who.style == "panic"
+	return who._look_time > 0.0
+
+
+func _in_limits(r: Vector3, i: int) -> bool:
+	var lo: Vector3 = RigScript.LIMITS[i][0]
+	var hi: Vector3 = RigScript.LIMITS[i][1]
+	return r.is_finite() and r.x >= lo.x - 1e-4 and r.y >= lo.y - 1e-4 and r.z >= lo.z - 1e-4 \
+		and r.x <= hi.x + 1e-4 and r.y <= hi.y + 1e-4 and r.z <= hi.z + 1e-4
+
+
+## Poses a fresh rig on `skel` for `frames` ticks of `st`, calling
+## step(st, f) before each tick when given, and notes in `bad` any joint
+## outside Rig.LIMITS and any value that is not finite. Returns the last
+## bone rotations and, after them, the body's (lift, tilt, roll).
+func _pose_run(skel: Skeleton3D, st, frames: int, label: String, bad: Array, step := Callable()) -> Array:
+	var rig = RigScript.new(skel)
+	for f in frames:
+		if step.is_valid():
+			step.call(st, f)
+		rig.pose(st, 1.0 / 60.0)
+		for i in RigScript.LIMITS.size():
+			if not _in_limits(rig.bone_rotation(i), i) and bad.size() < 12:
+				bad.append("%s: bone %d at %s, frame %d" % [label, i, rig.bone_rotation(i), f])
+		var body := Vector3(skel.position.y, skel.rotation.x, skel.rotation.z)
+		if not body.is_finite() and bad.size() < 12:
+			bad.append("%s: body %s, frame %d" % [label, body, f])
+	var out := []
+	for i in RigScript.LIMITS.size():
+		out.append(rig.bone_rotation(i))
+	out.append(Vector3(skel.position.y, skel.rotation.x, skel.rotation.z))
+	return out
+
+
+## The largest difference between two _pose_run results.
+func _pose_gap(a: Array, b: Array) -> float:
+	var gap := 0.0
+	for i in a.size():
+		var d: Vector3 = (a[i] - b[i]).abs()
+		gap = maxf(gap, maxf(d.x, maxf(d.y, d.z)))
+	return gap
+
+
+## Height of who's hips bone over the ground under them.
+func _hips_height(who) -> float:
+	var skel: Skeleton3D = who.model
+	return (skel.global_transform * skel.get_bone_global_pose(0).origin).y - who.global_position.y
+
+
+## Each kind of person dresses the part within the triangle budget, and the
+## hero's finer mesh and white stripes cost a little more than a plain look.
+func test_people_dress_for_their_kind() -> void:
+	const Player = preload("res://scripts/player.gd")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 21
+	var total := 0
+	var count := 0
+	var rigid := true
+	for cat in CharKit.CATEGORIES:
+		var tris := 0
+		var most := 0
+		var flair := 0
+		var wrong := []
+		for n in 40:
+			var look := CharKit.category_look(rng, cat)
+			var mb := MeshBuilder.new()
+			CharKit.build(mb, look)
+			var t: int = mb.triangle_count()
+			if n < 6:
+				var arrays := mb.commit().surface_get_arrays(0)
+				var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
+				var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
+				for v in range(0, bones.size(), 4):
+					if bones[v] < 0 or bones[v] >= CharKit.BONES.size() or weights[v] != 1.0:
+						rigid = false
+			tris += t
+			most = maxi(most, t)
+			var got: String = look.get("category", "")
+			if got != cat and not (cat == "general" and got in ["medic", "worker", "office"]):
+				wrong.append("category " + got)
+			var outfit: String = look.get("outfit", "")
+			var bottoms: String = look.get("bottoms", "")
+			var bag: String = look.get("bag", "")
+			var hat: String = look.get("headwear", "")
+			match cat:
+				"office":
+					if hat != "" or outfit not in ["suit", "blazer", "polo"] or bottoms in ["joggers", "cargo", "shorts", "leggings"]:
+						wrong.append("%s/%s/%s" % [outfit, bottoms, hat])
+					if look.has("lanyard") or bag == "briefcase" or outfit == "suit":
+						flair += 1
+				"worker":
+					if outfit != "hivis" and look.get("shoe_style", "") != "boots":
+						wrong.append("%s in %s" % [outfit, look.get("shoe_style", "")])
+				"gang":
+					if bag not in ["", "crossbody"] or look.has("glasses"):
+						wrong.append("bag %s glasses %s" % [bag, look.has("glasses")])
+					if look.has("chain") or hat == "bandana":
+						flair += 1
+				"tourist":
+					if look.has("camera") or bag in ["shopping", "backpack"] or hat in ["bucket", "cap"] or look.has("sunglasses"):
+						flair += 1
+				"elderly":
+					if look.get("hair_color") not in CharKit.GREYS or look.has("headphones") or look.has("phone"):
+						wrong.append("hair %s headphones %s phone %s" % [look.get("hair_color"), look.has("headphones"), look.has("phone")])
+					if outfit == "cardigan" or look.has("glasses") or look.has("cane"):
+						flair += 1
+				"athlete":
+					if look.has("bag") or look.has("phone") or bottoms not in ["shorts", "leggings", "joggers"]:
+						wrong.append("bag %s phone %s %s" % [bag, look.has("phone"), bottoms])
+				"shopkeeper":
+					if not look.has("apron"):
+						wrong.append("no apron")
+				"medic":
+					if outfit != "scrubs":
+						wrong.append(outfit)
+		total += tris
+		count += 40
+		_check(wrong.is_empty(), "%s people dress the part %s" % [cat, wrong])
+		_check(tris / 40.0 < 1035.0 and most < 1300, "%s looks within budget: %.0f average, %d at most" % [cat, tris / 40.0, most])
+		if cat in ["office", "gang", "tourist", "elderly"]:
+			_check(flair >= 24, "most %s people carry their kind's touches (%d of 40)" % [cat, flair])
+	_check(rigid, "every category look is bound rigidly to real bones")
+	_check(total / float(count) < 1035.0, "the street as a whole stays within budget, %.0f a person" % (total / float(count)))
+	var hero := MeshBuilder.new()
+	CharKit.build(hero, Player.JULES)
+	var plain_look: Dictionary = Player.JULES.duplicate()
+	plain_look.erase("hero")
+	plain_look.erase("stripes")
+	var plain := MeshBuilder.new()
+	CharKit.build(plain, plain_look)
+	_check(hero.triangle_count() < 1300 and hero.triangle_count() >= plain.triangle_count() + 60,
+		"Jules is built finer than a plain look and stays in budget (%d against %d)" % [hero.triangle_count(), plain.triangle_count()])
+
+
+## Senses.choose(): every answer is a known reaction, each kind of person
+## has a range of them, and the situations people meet get the reaction that
+## kind of person would show. Patrons indoors and mission characters narrow
+## the same choice to what they can do where they are.
+func test_reactions_by_kind_of_person() -> void:
+	const Patron = preload("res://scripts/patron.gd")
+	var used := {}
+	var unknown := []
+	for cat in PeopleSenses.CATEGORIES:
+		var mine := {}
+		for pers in PeopleSenses.PERSONALITIES:
+			for kind in PeopleSenses.KINDS:
+				for near in [false, true]:
+					var r: String = PeopleSenses.choose(cat, pers, kind, near)
+					if r != "ignore" and not PeopleSenses.HOLD.has(r):
+						unknown.append("%s/%s/%s: %s" % [cat, pers, kind, r])
+					used[r] = true
+					mine[r] = true
+		_check(mine.size() >= (5 if cat == "cop" else 8), "%s people have a range of reactions (%d)" % [cat, mine.size()])
+	_check(unknown.is_empty(), "every reaction has a hold time %s" % [unknown])
+	var unused := PeopleSenses.HOLD.keys().filter(func(k): return not used.has(k))
+	_check(unused.is_empty(), "every reaction is shown by someone %s" % [unused])
+	# [category, personality, situation, near, reaction]
+	var table := [
+		["general", "calm", "gunshot", false, "flee"], ["general", "calm", "gunshot", true, "duck"],
+		["general", "timid", "gunshot", true, "cower"], ["elderly", "calm", "gunshot", false, "cower"],
+		["gang", "brave", "gunshot", false, "look"], ["general", "calm", "explosion", false, "flee"],
+		["general", "calm", "aim", true, "hands_up"], ["gang", "brave", "aim", true, "shout"],
+		["elderly", "timid", "car_threat", true, "dodge"],
+		["gang", "calm", "fight", false, "cheer"], ["tourist", "calm", "fight", false, "film"],
+		["office", "calm", "fight", false, "call"], ["shopkeeper", "calm", "fight", false, "call"],
+		["medic", "calm", "fight", false, "look"], ["worker", "brave", "fight", false, "shout"],
+		["general", "timid", "fight", false, "flee"], ["elderly", "timid", "fight", false, "call"],
+		["general", "curious", "fight", false, "film"],
+		["general", "calm", "scream", false, "look"], ["general", "timid", "scream", false, "flee"],
+		["medic", "calm", "crash", false, "help"], ["worker", "calm", "crash", false, "approach"],
+		["general", "calm", "crash", true, "startle"], ["general", "timid", "crash", true, "flee"],
+		["tourist", "calm", "crash", false, "film"],
+		["gang", "calm", "car_on_sidewalk", false, "shout"], ["office", "calm", "car_on_sidewalk", false, "flee"],
+		["medic", "calm", "body", false, "help"], ["gang", "brave", "body", false, "avoid"],
+		["office", "calm", "body", false, "call"], ["general", "timid", "body", false, "flee"],
+		["general", "calm", "horn", true, "startle"], ["gang", "calm", "horn", false, "shout"],
+		["gang", "calm", "siren", false, "hurry"], ["general", "calm", "siren", false, "look"],
+		["office", "calm", "car_close", true, "startle"], ["worker", "calm", "car_close", true, "shout"],
+		["tourist", "calm", "wanted", false, "film"], ["elderly", "calm", "wanted", false, "avoid"],
+		["shopkeeper", "calm", "wanted", false, "call"], ["elderly", "calm", "sprint_past", true, "startle"],
+		["general", "calm", "rain", false, "hurry"], ["athlete", "calm", "rain", false, "ignore"],
+		["cop", "brave", "fight", false, "investigate"], ["cop", "brave", "gunshot", false, "investigate"],
+		["cop", "brave", "car_threat", true, "dodge"], ["cop", "brave", "rain", false, "ignore"],
+	]
+	var off := []
+	for row in table:
+		var r: String = PeopleSenses.choose(row[0], row[1], row[2], row[3])
+		if r != row[4]:
+			off.append("%s %s %s%s: %s, wanted %s" % [row[1], row[0], row[2], " near" if row[3] else "", r, row[4]])
+	_check(off.is_empty(), "%d situations get the reaction their kind of person shows %s" % [table.size(), off])
+	_check(PeopleSenses.danger("gunshot") > PeopleSenses.danger("fight") and PeopleSenses.danger("fight") > PeopleSenses.danger("horn")
+		and PeopleSenses.danger("horn") > PeopleSenses.danger("sprint_past") and PeopleSenses.danger("nothing") == -1,
+		"a shot outranks a fight, a fight a horn, a horn someone running past")
+	_check(PeopleSenses.is_near("fight", 4.0) and not PeopleSenses.is_near("fight", 4.1) and PeopleSenses.is_near("gunshot", 12.0),
+		"near means 4 m for a fight and 12 m for a shot")
+	var staff = Patron.new()
+	staff.staff = true
+	var timid = Patron.new()
+	timid.personality = "timid"
+	var brave = Patron.new()
+	brave.personality = "brave"
+	var npc = Npc.new()
+	var inside := [
+		[staff, "staff", "fight", false, "call"], [staff, "staff", "gunshot", false, "cower"],
+		[staff, "staff", "crash", true, "startle"], [timid, "timid customer", "fight", false, "flee"],
+		[brave, "brave customer", "crash", false, "look"], [brave, "brave customer", "body", false, "look"],
+		[npc, "mission character", "gunshot", false, "duck"], [npc, "mission character", "fight", false, "look"],
+		[npc, "mission character", "car_threat", true, "dodge"], [npc, "mission character", "body", false, "look"],
+		[npc, "mission character", "crash", true, "startle"],
+	]
+	off.clear()
+	for row in inside:
+		var r: String = row[0]._choose_reaction(row[2], row[3], null, {})
+		if r != row[4]:
+			off.append("%s %s: %s, wanted %s" % [row[1], row[2], r, row[4]])
+	_check(off.is_empty(), "staff hold their post, customers leave rather than run over, mission people react on the spot %s" % [off])
+	_check(staff.category == "shopkeeper", "shop staff count as shopkeepers")
+	# Which reaction wins when a second event comes: [new, its danger, old, its danger, takes over].
+	var takeovers := [
+		["look", 3, "cheer", 2, true], ["cheer", 1, "look", 2, false], ["flee", 2, "cheer", 2, true],
+		["flee", 2, "cower", 2, false], ["look", 2, "cheer", 2, false], ["cheer", 2, "look", 2, true],
+		["call", 2, "look", 2, true], ["look", 2, "look", 2, false], ["film", 2, "flee", 2, false],
+	]
+	off.clear()
+	for row in takeovers:
+		if npc._replaces(row[0], row[1], row[2], row[3]) != row[4]:
+			off.append("%s (%d) over %s (%d)" % [row[0], row[1], row[2], row[3]])
+	_check(off.is_empty(), "worse news always takes over; as bad only to get away or to do more than look %s" % [off])
+	for n in [staff, timid, brave, npc]:
+		n.free()
+
+
+## Reaction times stay within 0.15-0.6 s and follow distance, nerve and age;
+## a queued reaction starts on the first physics tick at or after its time,
+## already showing in the body.
+func test_reaction_starts_on_time() -> void:
+	await _free_game()
+	var low := INF
+	var high := -INF
+	for kind in PeopleSenses.KINDS:
+		for cat in PeopleSenses.CATEGORIES:
+			for pers in PeopleSenses.PERSONALITIES:
+				for d in [0.0, 2.0, 10.0, 40.0, 80.0]:
+					var t: float = PeopleSenses.delay(kind, d, pers, cat)
+					low = minf(low, t)
+					high = maxf(high, t)
+	_check(low >= 0.15 - 1e-6 and high <= 0.6 + 1e-6, "every reaction takes 0.15-0.6 s (%.2f-%.2f)" % [low, high])
+	_check(PeopleSenses.delay("gunshot", 60.0) > PeopleSenses.delay("gunshot", 2.0) + 0.15, "a far shot takes longer to reach people")
+	_check(PeopleSenses.delay("fight", 5.0, "timid") < PeopleSenses.delay("fight", 5.0, "brave"), "the timid jump quicker than the brave")
+	_check(PeopleSenses.delay("fight", 5.0, "calm", "elderly") > PeopleSenses.delay("fight", 5.0, "calm", "general") + 0.1, "the elderly react slower")
+	_check(PeopleSenses.delay("car_threat", 4.0) <= 0.16, "a car coming at someone gets the quickest reaction")
+	var o := Vector3(0, 0, 900)
+	var city = _fake_street(o)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 4
+	# [situation, metres away, category, personality, reaction]
+	var rows := [
+		["fight", 3.0, "general", "calm", "look"], ["crash", 20.0, "elderly", "calm", "look"],
+		["car_threat", 4.0, "athlete", "timid", "dodge"], ["body", 6.0, "office", "brave", "help"],
+		["scream", 10.0, "tourist", "curious", "look"], ["gunshot", 50.0, "gang", "calm", "flee"],
+		["horn", 3.0, "worker", "calm", "startle"],
+	]
+	var peds := []
+	for i in rows.size():
+		peds.append(_street_ped(city, rng, o + Vector3(i * 30.0 - 90.0, 0, 0), 0.0, rows[i][2], rows[i][3]))
+	await _frames(2)
+	var due := []
+	for i in rows.size():
+		var row: Array = rows[i]
+		var ped = peds[i]
+		ped.perceive(row[0], ped.global_position + Vector3(row[1], 0, 0), null, row[1], {})
+		var want: float = PeopleSenses.delay(row[0], row[1], row[3], row[2])
+		_check(ped.pending_reaction() == row[4] and absf(ped.pending_in() - want) < 1e-5,
+			"%s %s, %s at %.0f m: '%s' queued in %.3f s (wanted '%s' in %.3f s)" % [row[3], row[2], row[0], row[1], ped.pending_reaction(), ped.pending_in(), row[4], want])
+		due.append(ped.clock + ped.pending_in())
+	var started := []
+	started.resize(rows.size())
+	started.fill(false)
+	for f in 45:
+		await _frames(1)
+		for i in rows.size():
+			var ped = peds[i]
+			if started[i] or ped.reacted_at < 0.0:
+				continue
+			started[i] = true
+			var late: float = ped.reacted_at - due[i]
+			_check(late >= -1e-4 and late <= 1.0 / 60.0 + 1e-4 and ped.reaction == rows[i][4] and _shows_reaction(ped, rows[i][4]),
+				"%s %s starts to %s on the tick it is due (%.4f s late) and shows it" % [rows[i][3], rows[i][2], ped.reaction, late])
+	_check(not started.has(false), "every queued reaction started %s" % [started])
+	for ped in peds:
+		ped.queue_free()
+
+
+## Sounds carry all round to their hearing radius; sights need the view cone
+## (or to be within 3 m). Whoever caused it and whoever was hit are not told,
+## nobody down notices anything, an equal scare only interrupts to get away,
+## and a scream passes panic on to people who never heard the shot.
+func test_people_notice_by_sight_and_sound() -> void:
+	await _free_game()
+	var o := Vector3(0, 0, 1200)
+	var city = _fake_street(o)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 6
+	var ped = _street_ped(city, rng, o, 0.0)
+	await _frames(2)
+	# [situation at o, metres away, degrees off the way the person faces, data, noticed]
+	var cases := [
+		["fight", 8.0, 180.0, {}, true], ["fight", 18.0, 0.0, {}, true], ["fight", 18.0, 180.0, {}, false],
+		["fight", 30.0, 0.0, {}, false], ["body", 2.5, 180.0, {}, true], ["body", 8.0, 180.0, {}, false],
+		["body", 8.0, 0.0, {}, true], ["body", 8.0, 60.0, {}, true], ["body", 8.0, 70.0, {}, false],
+		["gunshot", 50.0, 180.0, {}, true], ["gunshot", 70.0, 180.0, {}, false], ["gunshot", 40.0, 180.0, {"loud": 0.5}, false],
+		["crash", 30.0, 0.0, {}, true], ["crash", 33.0, 180.0, {}, true], ["horn", 20.0, 180.0, {}, true],
+		["siren", 40.0, 90.0, {}, true], ["wanted", 15.0, 90.0, {}, false],
+	]
+	var wrong := []
+	for c in cases:
+		# Facing north (-z), the person stands so that o lies c[2] degrees
+		# off straight ahead.
+		var a := deg_to_rad(c[2])
+		ped.global_position = o + Vector3(sin(a), 0, cos(a)) * c[1]
+		ped.rotation.y = 0.0
+		ped._drop_reactions()
+		PeopleSenses.emit(get_tree(), c[0], o, null, c[3])
+		if (ped.pending_in() >= 0.0) != c[4]:
+			wrong.append("%s %.0f m at %.0f degrees %s" % [c[0], c[1], c[2], c[3]])
+	_check(wrong.is_empty(), "%d sights and sounds are noticed only in range and view %s" % [cases.size(), wrong])
+	ped.global_position = o + Vector3(0, 0, 5)
+	ped._drop_reactions()
+	PeopleSenses.emit(get_tree(), "fight", o, ped, {})
+	_check(ped.pending_in() < 0.0, "whoever starts a fight is not told about it")
+	PeopleSenses.emit(get_tree(), "fight", o, null, {"victim": ped})
+	_check(ped.pending_in() < 0.0, "the one being hit is not told about the fight")
+	ped.knocked_time = 1.0
+	PeopleSenses.emit(get_tree(), "gunshot", o, null, {})
+	_check(ped.pending_in() < 0.0, "nobody notices anything while knocked down")
+	ped.knocked_time = 0.0
+	PeopleSenses.emit(get_tree(), "fight", o, null, {})
+	await _frames(30)
+	_check(ped.reaction == "look" and ped.reaction_kind == "fight", "a calm passer-by turns to look at a fight, got '%s'" % ped.reaction)
+	ped.perceive("scream", o, null, 5.0)
+	_check(ped.pending_in() < 0.0, "a scream as bad as the fight does not swap one look for another")
+	ped.personality = "timid"
+	ped.perceive("scream", o, null, 5.0)
+	_check(ped.pending_reaction() == "flee", "but it does send a timid onlooker running, got '%s'" % ped.pending_reaction())
+	ped._drop_reactions()
+	ped.queue_free()
+	var o2 := o + Vector3(0, 0, 200)
+	var near = _street_ped(city, rng, o2 + Vector3(25, 0, 0), 0.0)
+	var far = _street_ped(city, rng, o2 + Vector3(35, 0, 0), 0.0, "general", "timid")
+	await _frames(2)
+	PeopleSenses.emit(get_tree(), "gunshot", o2, null, {"loud": 0.5})
+	_check(near.pending_reaction() == "flee" and far.pending_in() < 0.0, "a muffled shot is heard 25 m away, not 35 m")
+	await _frames(60)
+	_check(far.reaction == "flee" and far.reaction_kind == "scream",
+		"the scream of someone running sends a timid person 10 m on running too ('%s' at '%s')" % [far.reaction, far.reaction_kind])
+	near.queue_free()
+	far.queue_free()
+
+
+## Every pose the rig makes (standing, every gait, gesture and action,
+## falling, lying, getting up, fighting, riding, sitting, looking, turning
+## and idling) keeps each joint inside Rig.LIMITS with finite values, and
+## each gesture and action visibly moves the body.
+func test_poses_stay_in_joint_limits() -> void:
+	var skel := CharKit.build_rig({})
+	var bad := []
+	var st = RigScript.State.new()
+	st.idle = false
+	var stand := _pose_run(skel, st, 90, "standing", bad)
+	var flat := []
+	for g in RigScript.GESTURES:
+		for seated in [false, true]:
+			st = RigScript.State.new()
+			st.idle = false
+			st.sit = seated
+			st.gesture = g
+			var got := _pose_run(skel, st, 90, g + (" seated" if seated else ""), bad)
+			if not seated and _pose_gap(got, stand) < 0.15:
+				flat.append("%s %.2f" % [g, _pose_gap(got, stand)])
+	_check(flat.is_empty(), "every gesture visibly moves the body %s" % [flat])
+	for style in RigScript.STYLES:
+		for speed in [0.0, 1.4, 2.2, 4.5, 7.0]:
+			for g in ["", "call"]:
+				st = RigScript.State.new()
+				st.style = style
+				st.speed = speed
+				st.gesture = g
+				_pose_run(skel, st, 60, "%s gait at %.1f m/s %s" % [style, speed, g], bad)
+	var still := []
+	for a in RigScript.ACTIONS:
+		var n := int(round(float(RigScript.ACTIONS[a]) * 60.0))
+		var play := func(s, f): s.action_t = float(f) / n if f <= n else -1.0
+		for side in [-1.0, 1.0]:
+			st = RigScript.State.new()
+			st.idle = false
+			st.action = a
+			st.action_side = side
+			var mid := _pose_run(skel, st, n / 2, "%s %+.0f" % [a, side], bad, play)
+			if _pose_gap(mid, stand) < 0.2:
+				still.append("%s %.2f" % [a, _pose_gap(mid, stand)])
+			st = RigScript.State.new()
+			st.action = a
+			st.action_side = side
+			st.speed = 1.4
+			_pose_run(skel, st, n + 20, "%s %+.0f walking" % [a, side], bad, play)
+	_check(still.is_empty(), "every action visibly moves the body halfway through %s" % [still])
+	for dead in [false, true]:
+		for face_down in [false, true]:
+			for seed in [0, 3, 7]:
+				st = RigScript.State.new()
+				st.down = true
+				st.dead = dead
+				st.face_down = face_down
+				st.idle_seed = seed
+				_pose_run(skel, st, 150, "down dead %s front %s seed %d" % [dead, face_down, seed], bad)
+	var rise := func(s, f): s.getup = -1.0 if f < 60 else (f - 60) / 60.0
+	for face_down in [false, true]:
+		st = RigScript.State.new()
+		st.down = true
+		st.face_down = face_down
+		_pose_run(skel, st, 121, "getting up front %s" % face_down, bad, rise)
+	var punches := func(s, f):
+		s.punch = float(f % 17) / 17.0
+		s.punch_left = int(f / 17.0) % 2 == 1
+		s.guard = true
+	st = RigScript.State.new()
+	_pose_run(skel, st, 102, "punches", bad, punches)
+	var kicks := func(s, f): s.kick = float(f % 27) / 27.0
+	st = RigScript.State.new()
+	_pose_run(skel, st, 81, "kicks", bad, kicks)
+	var hit := func(s, f): s.flinch = maxf(1.0 - f / 30.0, 0.0)
+	st = RigScript.State.new()
+	st.guard = true
+	_pose_run(skel, st, 60, "guard and flinch", bad, hit)
+	st = RigScript.State.new()
+	st.ride = true
+	_pose_run(skel, st, 60, "riding", bad)
+	for yaw in [-2.5, 2.5]:
+		for pitch in [-1.0, 1.0]:
+			for speed in [0.0, 1.4]:
+				st = RigScript.State.new()
+				st.look_amount = 1.0
+				st.look_yaw = yaw
+				st.look_pitch = pitch
+				st.speed = speed
+				_pose_run(skel, st, 60, "looking %.1f %.1f" % [yaw, pitch], bad)
+	for turn in [-6.0, 6.0]:
+		for accel in [-8.0, 8.0]:
+			st = RigScript.State.new()
+			st.speed = 4.5
+			st.turn = turn
+			st.accel = accel
+			_pose_run(skel, st, 60, "turning %.0f %.0f" % [turn, accel], bad)
+	# Standing about with nothing to do, idle acts come round in turn.
+	var rig = RigScript.new(skel)
+	st = RigScript.State.new()
+	st.idle_seed = 7
+	var acts := {}
+	for f in 3000:
+		rig.pose(st, 1.0 / 60.0)
+		for i in RigScript.LIMITS.size():
+			if not _in_limits(rig.bone_rotation(i), i) and bad.size() < 12:
+				bad.append("idle: bone %d at %s, frame %d" % [i, rig.bone_rotation(i), f])
+		if rig.idle_act() != "":
+			acts[rig.idle_act()] = true
+	_check(acts.size() >= 5, "standing about, a person works through idle acts (%s)" % [acts.keys()])
+	_check(bad.is_empty(), "every pose keeps each joint inside its limits %s" % [bad])
+	skel.free()
+
+
+## Punch someone in the street and the people round about react each in
+## their own way, on time: the gang cheers, the tourist films, the office
+## worker calls it in, the timid one runs, the brave worker shouts and the
+## medic watches. A cop who catches the player gets their hands up.
+func test_crowd_reacts_to_a_punch() -> void:
+	await _new_game(false)
+	var p = game.player
+	_place_player(_home(), Vector3(7.5, 0, 7.5))
+	var victim = game.population.spawn_ped_at(p.global_position + p.forward() * 1.0)
+	victim.walk_speed = 0.0
+	# [category, personality, where from the player, reaction]
+	var crowd := [
+		["gang", "calm", Vector3(-5, 0, -2), "cheer"], ["tourist", "calm", Vector3(5, 0, -2), "film"],
+		["office", "calm", Vector3(-4, 0, 4), "call"], ["general", "timid", Vector3(4, 0, 4), "flee"],
+		["worker", "brave", Vector3(0, 0, -8), "shout"], ["medic", "calm", Vector3(-7, 0, -6), "look"],
+	]
+	var peds := []
+	for row in crowd:
+		var ped = game.population.spawn_ped_at(p.global_position + row[2])
+		ped.walk_speed = 0.0
+		ped.category = row[0]
+		ped.personality = row[1]
+		ped.brave = row[1] == "brave"
+		peds.append(ped)
+	await _frames(2)
+	var start := []
+	for ped in peds:
+		start.append(ped.global_position)
+	await _press("attack")
+	_check(victim.health < victim.max_health, "the punch lands")
+	var due := []
+	for i in peds.size():
+		_check(peds[i].pending_reaction() == crowd[i][3],
+			"the %s %s sees the punch and is about to %s, got '%s'" % [crowd[i][1], crowd[i][0], crowd[i][3], peds[i].pending_reaction()])
+		due.append(peds[i].clock + peds[i].pending_in())
+	_check(victim.pending_in() < 0.0 and victim.reaction == "", "the one punched reacts to the hit, not to the fight")
+	var seen := []
+	seen.resize(peds.size())
+	seen.fill(false)
+	for f in 45:
+		await _frames(1)
+		for i in peds.size():
+			var ped = peds[i]
+			if seen[i] or ped.reacted_at < 0.0:
+				continue
+			seen[i] = true
+			var late: float = ped.reacted_at - due[i]
+			_check(late >= -1e-4 and late <= 1.0 / 60.0 + 1e-4 and ped.reaction == crowd[i][3] and _shows_reaction(ped, crowd[i][3]),
+				"the %s starts to %s on time (%.4f s late) and shows it ('%s')" % [crowd[i][0], ped.reaction, late, ped.shown_gesture()])
+	_check(not seen.has(false), "everyone in the crowd reacts within 0.75 s %s" % [seen])
+	await _frames(60)
+	for i in peds.size():
+		var moved: float = Vector2(peds[i].global_position.x - start[i].x, peds[i].global_position.z - start[i].z).length()
+		if crowd[i][3] == "flee":
+			_check(moved > 3.0, "the timid one runs off (%.1f m)" % moved)
+		else:
+			_check(moved < 0.6, "the %s stays put to %s (moved %.2f m)" % [crowd[i][0], crowd[i][3], moved])
+	game.police.spawn_cop_at(p.global_position + Vector3(1, 0, 0))
+	await _frames(40)
+	_check(p.shown_gesture() == "hands_up", "a cop at arm's length gets the player's hands up, got '%s'" % p.shown_gesture())
+
+
+## A car coming at someone on foot: they see it, step out of its way in
+## time and are not hurt. Knocked down, people fall, lie, get up in the
+## last stretch of the knockdown and stand when it ends.
+func test_people_dodge_cars_and_get_up() -> void:
+	await _free_game()
+	var o := Vector3(0, 0, 1500)
+	var city = _fake_street(o)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 8
+	var ped = _street_ped(city, rng, o + Vector3(0.3, 0, 0), 0.0)
+	Controls.camera = null
+	await _frames(2)
+	var car = _player_car("sedan", o + Vector3(0, 0, 16), 9.0)
+	Controls.override_vector = Vector2(0, -0.6)
+	var dodged := false
+	for f in 150:
+		await _frames(1)
+		dodged = dodged or (ped.reaction == "dodge" and ped.reaction_kind == "car_threat")
+	Controls.override_vector = null
+	_check(dodged, "someone a car is heading for sees it and dodges")
+	_check(ped.health == ped.max_health and ped.knocked_time <= 0.0 and car.global_position.z < o.z - 4.0,
+		"the car goes by without hitting them (car at z %+.1f, health %.0f)" % [car.global_position.z - o.z, ped.health])
+	_check(absf(ped.global_position.x - o.x) > 1.2, "they stepped out of its path (%.2f m off it)" % absf(ped.global_position.x - o.x))
+	car.queue_free()
+	for knock in [2.0, 1.5]:
+		var length := minf(clampf(knock - RigScript.FALL_TIME - 0.3, 0.6, RigScript.GETUP_TIME), knock - RigScript.FALL_TIME)
+		ped.knock_down(knock)
+		var t := 0.0
+		var rise := -1.0
+		var stood := -1.0
+		var last := -1.0
+		var steady := true
+		var lying := -INF
+		for f in int(knock * 60.0) + 10:
+			await _frames(1)
+			t += 1.0 / 60.0
+			var g: float = ped._getup_progress()
+			if g >= 0.0:
+				if rise < 0.0:
+					rise = t
+				steady = steady and g >= last - 1e-6
+				last = g
+			elif rise < 0.0 and t > RigScript.FALL_TIME + 0.2:
+				lying = maxf(lying, _hips_height(ped))
+			if stood < 0.0 and ped.knocked_time <= 0.0:
+				stood = t
+		await _frames(30)
+		var up := _hips_height(ped)
+		_check(absf(rise - (knock - length)) <= 0.05 and steady,
+			"knocked down %.1f s, they start getting up at %.2f s (wanted %.2f) and keep rising" % [knock, rise, knock - length])
+		_check(absf(stood - knock) <= 0.05, "and stand when it ends (%.2f s)" % stood)
+		_check(lying > -INF and lying < 0.45 and up > 0.75, "hips %.2f m up lying, %.2f m standing after" % [lying, up])
+	ped.queue_free()
+
+
+## On a chase a cop ignores everything else; off duty, a fight draws them
+## over: a point toward it, a brisk walk to within SCENE_RANGE, a word on
+## the radio, then back to the beat.
+func test_cops_investigate_off_duty() -> void:
+	const Cop = preload("res://scripts/cop.gd")
+	await _free_game()
+	var o := Vector3(0, 0, 1800)
+	var cop = Cop.new()
+	cop.position = o + Vector3(0, 0, 10)
+	add_child(cop)
+	await _frames(2)
+	PeopleSenses.emit(get_tree(), "fight", o, null, {})
+	_check(cop.pending_in() < 0.0, "a cop on a chase does not stop for a fight")
+	cop.active = false
+	PeopleSenses.emit(get_tree(), "fight", o, null, {})
+	_check(cop.pending_reaction() == "investigate", "off duty, a fight draws the cop over, got '%s'" % cop.pending_reaction())
+	await _frames(30)
+	_check(cop.reaction == "investigate" and cop.shown_gesture() == "point", "the cop points toward it, got '%s'" % cop.shown_gesture())
+	await _frames(200)
+	var d: float = Vector2(cop.global_position.x - o.x, cop.global_position.z - o.z).length()
+	_check(d < Cop.SCENE_RANGE + 0.5 and cop.shown_gesture() == "call",
+		"walks over to %.1f m and radios it in ('%s')" % [d, cop.shown_gesture()])
+	await _frames(240)
+	_check(cop.reaction == "" and cop.style == "patrol", "then goes back to the beat ('%s', %s)" % [cop.reaction, cop.style])
+	cop.queue_free()

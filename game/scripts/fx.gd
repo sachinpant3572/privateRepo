@@ -51,6 +51,7 @@ func hit(pos: Vector3, strong: bool, involves_player: bool) -> void:
 ## A vehicle hit something at `impact` m/s.
 func crash(pos: Vector3, impact: float, involves_player: bool) -> void:
 	var strength := clampf(impact / 20.0, 0.2, 1.0)
+	preload("res://scripts/senses.gd").emit(get_tree(), "crash", pos, null, {"loud": 0.5 + strength}) # people react
 	_burst("spark", pos + Vector3(0, 0.6, 0), 1.0 + strength)
 	Birds.startle(pos, 20.0 + 30.0 * strength)
 	if impact > 9.0:
@@ -66,6 +67,7 @@ func crash(pos: Vector3, impact: float, involves_player: bool) -> void:
 func knock(pos: Vector3, kind: String, involves_player: bool) -> void:
 	_burst("debris", pos, 0.8)
 	Birds.startle(pos, 25.0)
+	preload("res://scripts/senses.gd").emit(get_tree(), "crash", pos, null, {"loud": 0.6}) # people react
 	match kind:
 		"street_tree", "crepe_myrtle":
 			_burst("leaves", pos + Vector3(0, 1.5, 0), 1.0)
