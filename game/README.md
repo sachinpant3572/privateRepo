@@ -96,7 +96,12 @@ phone.
   draws one of three plans by its lot's size (`country_kit._tier`): e.g. the
   small cottage is a log cabin on a small lot and gains a lean-to, hen house
   and shed on a big one; the adobe is a pueblo, a farmhouse or a hacienda.
-  Yards that differ from the land round them are fenced or walled), Saltgrass (bayou, the Gator Farm,
+  Yards that differ from the land round them are fenced or walled. Every
+  home has a way in from the road: its drive or walk runs out to the road
+  in a surface that suits it (concrete, gravel, caliche, terracotta pavers,
+  a dirt two-track, asphalt), farmyard fences open for the farm homes, and
+  cluster homes get a dirt, gravel or plank path to their camp's track),
+  Saltgrass (bayou, the Gator Farm,
   airboats) and Verdant Hills (Larkspur, the vineyard). Suburb streets run
   straight on from the city's: nearly every city street that reaches the
   edge carries on out to the Beltway, Sunvale Boulevard, Seabreeze Drive or
@@ -352,8 +357,9 @@ include aerial views of Gilt, Midtown, the Wards, Ironwharf and the
 Esplanade's arch (shots 37 to 41), and the traffic circles and the
 Bellerive Hills (45 to 52; `SHOTS=hills` before the command shoots just
 those). `SHOTS=roads` shoots the wide roads (53 to 58), `SHOTS=props` a car
-through a lamp, a tree and a hydrant (59 to 64), and `SHOTS=farm` Golden
-Flats' farmland (65 to 72).
+through a lamp, a tree and a hydrant (59 to 64), `SHOTS=farm` Golden
+Flats' farmland (65 to 72), and `SHOTS=routes` the way in to one home of
+each kind and setting (73).
 
 The country is generated, not hand-made. After changing `data/world_map.json`
 or the street plan, dump the plan and rebuild it (needs `pip install shapely`):

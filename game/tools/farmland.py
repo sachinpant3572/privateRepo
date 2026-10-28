@@ -168,6 +168,7 @@ def grid_roads(area, existing, bridges=None, seed=77):
     # Shortcuts: a road curving across a section from one side to the other,
     # the way a farmer cuts the corner; every other one is paved (an old
     # asphalt lane), the rest dirt.
+    cuts = []
     for sx in _grid_values(x0 - GRID, x1, GRID_X0, GRID):
         for sy in _grid_values(y0 - GRID, y1, GRID_Y0, GRID):
             if rng.random() >= SHORTCUT_ODDS:
@@ -180,14 +181,17 @@ def grid_roads(area, existing, bridges=None, seed=77):
             else:
                 p0, p1 = (sx + a, sy), (sx + GRID - b, sy + GRID)
                 c0, c1 = (p0[0], sy + 260.0), (p1[0], sy + GRID - 260.0)
+            n0 = len(out)
             put(_bezier(p0, c0, c1, p1), "track", "", "farm_cut", LineString())
-    # Paved and dirt in turn among the pieces that made it into the area.
-    k = 0
-    for i, (pts, cls, name, tag) in enumerate(out):
-        if tag == "farm_cut":
-            if k % 2:
+            if len(out) > n0:
+                cuts.append(range(n0, len(out)))
+    # Paved and dirt in turn among the shortcuts that made it into the area,
+    # each one all of a piece.
+    for k, group in enumerate(cuts):
+        if k % 2:
+            for i in group:
+                pts, cls, name, tag = out[i]
                 out[i] = (pts, "lane", name, tag)
-            k += 1
     return out
 
 

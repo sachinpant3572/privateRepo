@@ -452,14 +452,20 @@ static func _clear(ctx: Ctx, p: Vector2, room: float) -> bool:
 	return true
 
 
-## Whether p is within `room` of a lot or plot [x, y, yaw, w, d, ...].
+## Whether p is within `room` of a lot or plot [x, y, yaw, w, d, ...]; a
+## lot's rect runs on out to the road its drives reach (element 9).
 static func _in_rect(p: Vector2, l: Array, room: float) -> bool:
 	var r := p - Vector2(l[0], l[1])
 	var cs := cos(float(l[2]))
 	var sn := sin(float(l[2]))
 	var lx := r.x * cs - r.y * sn
 	var lz := r.x * sn + r.y * cs
-	return absf(lx) < float(l[3]) * 0.5 + room and absf(lz) < float(l[4]) * 0.5 + room
+	var ahead := 0.0
+	if l.size() > 9 and l[9] is Array:
+		for v in l[9]:
+			ahead = maxf(ahead, float(v))
+	var hd := float(l[4]) * 0.5
+	return absf(lx) < float(l[3]) * 0.5 + room and lz < hd + room and lz > -hd - ahead - room
 
 
 # --- Roads -------------------------------------------------------------------------
@@ -646,7 +652,9 @@ static func _lot(ctx: Ctx, i: int) -> void:
 	var local: Array = []
 	var v0: int = ctx.mb.verts.size()
 	var o0 := ctx.out.size()
+	Kit.reach = l[9] if l.size() > 9 else [0.0, 0.0, 0.0]
 	Kit.build(kind, ctx.mb, local, Vector2(l[3], l[4]), rng, l.size() > 8 and int(l[8]) >= 0 and c.plot_types[int(c.plots[int(l[8])][5])] == "estate")
+	Kit.reach = [0.0, 0.0, 0.0]
 	_done(ctx, local, ctx.out)
 	ctx.buildings += 1
 	# The letters stand on the slope as it is; everything else on its pad.

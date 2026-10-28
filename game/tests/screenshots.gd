@@ -70,6 +70,11 @@ func _run() -> void:
 		await _farm(game)
 		get_tree().quit()
 		return
+	if OS.get_environment("SHOTS") == "routes":
+		# Just the ways in from the road to each kind of home.
+		await _routes(game)
+		get_tree().quit()
+		return
 	if OS.get_environment("SHOTS") == "roads":
 		# Just the wide roads (quick look while working on them).
 		await _roads(game)
@@ -290,6 +295,37 @@ func _farm(game) -> void:
 		await get_tree().process_frame
 	await _shot("72_golden_flats_map.png")
 	game.hud.full_map.close()
+
+
+## Each kind of home close up with its drive or path out to the road (or
+## the yard's track): the first lot of each kind, a cluster of each style,
+## and a rowhouse row facing the city's edge.
+func _routes(game) -> void:
+	var c = game.city.country
+	var stops := []
+	var seen := {}
+	for l: Array in c.lots:
+		var kind: String = c.kinds[int(l[5])]
+		var in_plot := int(l[8]) >= 0
+		var key: String = kind + ("@" + c.plot_types[int(c.plots[int(l[8])][5])] if in_plot else "")
+		if seen.has(key) or kind not in ["house", "cape_house", "rowhouse_row", "shack", "stilt_house", "mansion", "garden_apartments", "trailer_home", "farmhouse", "farmhouse_big", "farmhouse_small", "ranch_house", "adobe_farmhouse"]:
+			continue
+		seen[key] = true
+		stops.append(["73_%02d_%s" % [stops.size(), key.replace("@", "_in_")], Vector2(l[0], l[1]), 34.0 if kind != "rowhouse_row" else 50.0])
+	stops.append(["73_%02d_rowhouse_city_edge" % stops.size(), Vector2(391, -121), 60.0])
+	for stop in stops:
+		var at: Vector2 = stop[1]
+		var pos := Vector3(at.x, Terrain.height(at.x, at.y), at.y)
+		game.city.stream_now(pos)
+		game.player.global_position = pos
+		game.player.reset_physics_interpolation()
+		game.camera.fixed_focus = pos
+		game.camera.room_size = stop[2]
+		game.camera.snap()
+		await _frames(90)
+		await _shot(stop[0] + ".png")
+	game.camera.fixed_focus = null
+	game.camera.room_size = 0.0
 
 
 ## A car through a street light, a tree and a hydrant: before, just after,

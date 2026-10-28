@@ -1797,6 +1797,7 @@ static func rowhouse_row(mb, out: Array, w: float, d: float, rng: RandomNumberGe
 			Kit._windows(mb, Vector3(x0 + 0.4, 0.6 + f * FH + 1.6, hb), Vector3(x0 + uw - 0.4, 0.6 + f * FH + 1.6, hb), 2, Vector2(1.0, 1.6), rng, Vector3.BACK, 0.45)
 		# Front yard: a walk to the door and a low iron fence with a gate gap.
 		Kit._pad(mb, dx - 0.6, dx + 0.6, -d * 0.5, hf, MeshBuilder.glow(CONCRETE, MeshBuilder.CONCRETE), 0.05)
+		Kit._route_out(mb, dx - 0.6, dx + 0.6, d, MeshBuilder.glow(CONCRETE, MeshBuilder.CONCRETE))
 		var fz := -d * 0.5 + 0.25
 		if dx - 0.8 - (x0 + 0.1) > 0.4:
 			_fence_panel(mb, Vector3(x0 + 0.1, 0, fz), Vector3(dx - 0.8, 0, fz), 0.65, iron)
@@ -1825,6 +1826,7 @@ static func cape_house(mb, out: Array, w: float, d: float, rng: RandomNumberGene
 	var trim := MeshBuilder.glow(TRIM, MeshBuilder.GLOSS)
 	Kit._pad(mb, -w * 0.5, w * 0.5, -d * 0.5, d * 0.5, _grass())
 	Kit._pad(mb, -0.6, 0.6, -d * 0.5, fz, MeshBuilder.glow(CONCRETE, MeshBuilder.CONCRETE), 0.05)
+	Kit._route_out(mb, -0.6, 0.6, d, MeshBuilder.glow(CONCRETE, MeshBuilder.CONCRETE))
 	Kit._solid(mb, out, Vector3(0, WH * 0.5, cz), Vector3(bw, WH, bd), siding)
 	Kit._gable(mb, 0, cz, WH, bw + 0.4, bd + 0.6, rise, roof, siding)
 	# Two dormers on the front slope.

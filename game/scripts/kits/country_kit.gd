@@ -109,6 +109,7 @@ static func footprint(kind: String) -> Vector2:
 static func build(kind: String, mb, out: Array, size: Vector2, rng: RandomNumberGenerator, in_grounds := false) -> void:
 	var w := maxf(size.x, 3.0)
 	var d := maxf(size.y, 3.0)
+	_lot_w = w
 	match kind:
 		"farmhouse": farmhouse(mb, out, w, d, rng)
 		"farmhouse_big": farmhouse_big(mb, out, w, d, rng)
@@ -189,6 +190,62 @@ static func _pick(list: Array, rng: RandomNumberGenerator):
 
 ## A flat ground surface (top face only) from x0..x1 by z0..z1 at height y:
 ## lawns, forecourts, gravel. Later pads sit a little higher.
+## How far the lot being built lies off its road: metres from its front
+## edge (at x = -w/2, 0, w/2) out to the road surface, 0 where no road lies
+## ahead (lot element 9; country_tiles sets it before each build).
+static var reach: Array = [0.0, 0.0, 0.0]
+## Route surfaces, matched to the house they lead to.
+const ROUTE_GRAVEL := Color(0.62, 0.59, 0.53)
+const CALICHE := Color(0.78, 0.68, 0.52)
+## A route lies on the ground like a drive, over any yard or lawn of the
+## plot round the lot, and only its last ROUTE_TUCK metres (`reach` runs
+## that far under the road; build_country REACH_TUCK) drop under the road's
+## top (y 0), so the end hides under the road.
+const ROUTE_OUT_Y := -0.016
+const ROUTE_TUCK := 0.6
+
+
+## `reach` at x across a lot w wide (a parabola through its three points).
+static func _reach_at(x: float, w: float) -> float:
+	if reach.size() < 3:
+		return 0.0
+	var t := clampf(x / maxf(w * 0.5, 0.1), -1.0, 1.0)
+	var r0: float = reach[0]
+	var r1: float = reach[1]
+	var r2: float = reach[2]
+	return maxf(0.0, r1 + (r2 - r0) * 0.5 * t + (r0 + r2 - 2.0 * r1) * 0.5 * t * t)
+
+
+## A drive or walk x0..x1 from the lot's front edge out to the road (when
+## one lies ahead), and on into the lot to z_in when z_in is given. With
+## `ruts` it is a dirt two-track: two wheel ruts and grass between.
+static func _route_out(mb, x0: float, x1: float, d: float, color: Color, z_in := NAN, ruts := false) -> void:
+	var r := maxf(_reach_at(x0, _lot_w), _reach_at(x1, _lot_w))
+	routes_drawn.append(Vector2(x0, x1))
+	var z0 := -d * 0.5 - r
+	var z1 := -d * 0.5 if is_nan(z_in) else z_in
+	if z1 - z0 < 0.1:
+		return
+	# The road's edge: the tucked end runs on under the road from there.
+	var ze := minf(-d * 0.5, z0 + ROUTE_TUCK + 0.05) if r > 0.0 else -d * 0.5
+	var spans: Array = [[x0, x1]]
+	if ruts:
+		var m := (x0 + x1) * 0.5
+		var half := (x1 - x0) * 0.5
+		spans = [[m - half * 0.55 - 0.35, m - half * 0.55 + 0.35], [m + half * 0.55 - 0.35, m + half * 0.55 + 0.35]]
+	for s: Array in spans:
+		if r > 0.0:
+			_pad(mb, s[0], s[1], z0, ze, color, ROUTE_OUT_Y)
+		if z1 > ze:
+			_pad(mb, s[0], s[1], ze, z1, color, 0.04)
+
+
+## The x spans of the routes the last builds drew (tests clear and read it).
+static var routes_drawn: Array[Vector2] = []
+## The width of the lot being built (for _reach_at); set by build().
+static var _lot_w := 10.0
+
+
 static func _pad(mb, x0: float, x1: float, z0: float, z1: float, color: Color, y := 0.02) -> void:
 	mb.box(Vector3((x0 + x1) * 0.5, y, (z0 + z1) * 0.5), Vector3(x1 - x0, 0.02, z1 - z0), color)
 
@@ -423,7 +480,11 @@ const FENCES := {
 ## lot's edge, the front `front_in` back from the road (the mailbox and the
 ## verge stay outside) with a gap for each gate ([x, width]). With front :=
 ## false the front stays open (paved forecourts, suburb front lawns).
-static func _lot_fence(mb, out: Array, w: float, d: float, style: String, color: Color, gates := [], front := true, front_in := 1.2) -> void:
+## Each front gate [x, width] gets a route out to the road in `route`'s
+## colour (gravel when null, none when false); a gate [x, width, z] also
+## gets one in to z (a door or porch with no drive of its own), and a
+## fourth element true makes it a dirt two-track.
+static func _lot_fence(mb, out: Array, w: float, d: float, style: String, color: Color, gates := [], front := true, front_in := 1.2, route = null) -> void:
 	var t: float = FENCES[style][1]
 	var x0 := -w * 0.5 + 0.1 + t * 0.5
 	var x1 := w * 0.5 - 0.1 - t * 0.5
@@ -436,6 +497,12 @@ static func _lot_fence(mb, out: Array, w: float, d: float, style: String, color:
 		return
 	var cuts := gates.duplicate()
 	cuts.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
+	if not (route is bool):
+		var surface: Color = route if route is Color else MeshBuilder.glow(ROUTE_GRAVEL, MeshBuilder.CONCRETE)
+		for g: Array in cuts:
+			var half: float = maxf(0.5, g[1] * 0.5 - 0.3)
+			var ruts: bool = g.size() > 3 and g[3]
+			_route_out(mb, g[0] - half, g[0] + half, d, surface, g[2] if g.size() > 2 else NAN, ruts)
 	var x := x0
 	for g: Array in cuts:
 		var g0: float = g[0] - g[1] * 0.5
@@ -811,7 +878,7 @@ static func _farmhouse_cottage(mb, out: Array, w: float, d: float, rng: RandomNu
 	_pad(mb, dx - 1.5, dx + 1.5, -d * 0.5, zf + bd, MeshBuilder.glow(GRAVEL, MeshBuilder.CONCRETE), 0.04)
 	_car(mb, out, Vector3(dx, 0, zf + 0.2), 0.0, _pick(PAINTS, rng))
 	_rural_mailbox(mb, Vector3(dx - 2.0, 0, -d * 0.5 + 0.5))
-	_lot_fence(mb, out, w, d, "rail", fence, [[dx, 3.6], [cx, 2.2]])
+	_lot_fence(mb, out, w, d, "rail", fence, [[dx, 3.6], [cx, 2.2, zf - 2.0]])
 
 
 ## Tier 1: the usual two-storey house, full or door-wide porch, kitchen
@@ -844,7 +911,7 @@ static func _farmhouse_usual(mb, out: Array, w: float, d: float, rng: RandomNumb
 	_rural_mailbox(mb, Vector3(dx - 2.2, 0, -d * 0.5 + 0.5))
 	if d * 0.5 - (zf + bd) >= 4.5 and w >= 18.0:
 		Props.oak(mb, out, Vector3(minf(dx, w * 0.5 - 3.8), 0, d * 0.5 - 3.8), rng)
-	_lot_fence(mb, out, w, d, "rail", fence, [[dx, 4.0], [cx, 2.2]])
+	_lot_fence(mb, out, w, d, "rail", fence, [[dx, 4.0], [cx, 2.2, zf - 2.4]])
 
 
 ## Tier 2: a bigger two-storey house with a cross gable over the door, a
@@ -925,7 +992,7 @@ static func _farmhouse_spread(mb, out: Array, w: float, d: float, rng: RandomNum
 	var t1 := gx - gw * 0.5
 	if t1 - t0 >= 4.4:
 		_yard_tree(mb, out, Vector3((t0 + t1) * 0.5, 0, d * 0.5 - 2.6), rng)
-	_lot_fence(mb, out, w, d, "rail", fence, [[gx, 4.8], [cx, 2.2]])
+	_lot_fence(mb, out, w, d, "rail", fence, [[gx, 4.8], [cx, 2.2, zf - 2.4]])
 
 
 ## A porch `pw` wide and `pd` deep before the wall at zf, centred on cx:
@@ -1099,7 +1166,7 @@ static func farmhouse_big(mb, out: Array, w: float, d: float, rng: RandomNumberG
 			_yard_tree(mb, out, Vector3(side * (t0 + t1) * 0.5, 0, d * 0.5 - 2.6), rng)
 	# A white board fence round the yard, gated at the drive and the walk
 	# (or wide where the car stands out front).
-	_lot_fence(mb, out, w, d, "rail", TRIM if rng.randf() < 0.7 else OLD_WOOD, [[drx, 4.0], [cx, 1.8]] if drive else [[cx, 5.6]])
+	_lot_fence(mb, out, w, d, "rail", TRIM if rng.randf() < 0.7 else OLD_WOOD, [[drx, 4.0], [cx, 1.8, zf - pd]] if drive else [[cx, 5.6, zf - pd]])
 
 
 ## A white octagonal gazebo: a raised floor, eight posts, a rail and a
@@ -1205,9 +1272,9 @@ static func farmhouse_small(mb, out: Array, w: float, d: float, rng: RandomNumbe
 	# A picket fence round the yard (weathered boards on the old ones), a
 	# gate at the stoop.
 	if weathered:
-		_lot_fence(mb, out, w, d, "rail", OLD_WOOD.darkened(0.1), [[door, 1.4]])
+		_lot_fence(mb, out, w, d, "rail", OLD_WOOD.darkened(0.1), [[door, 1.4, zf - 1.85]], true, 1.2, MeshBuilder.glow(DIRT.lightened(0.05), MeshBuilder.CONCRETE))
 	else:
-		_lot_fence(mb, out, w, d, "picket", TRIM if rng.randf() < 0.75 else siding, [[door, 1.4]])
+		_lot_fence(mb, out, w, d, "picket", TRIM if rng.randf() < 0.75 else siding, [[door, 1.4, zf - 1.85]], true, 1.2, MeshBuilder.glow(CONCRETE, MeshBuilder.CONCRETE))
 
 
 ## farmhouse_small's plan on a small lot: a log cabin, its gable end to
@@ -1273,7 +1340,7 @@ static func _cabin(mb, out: Array, w: float, d: float, rng: RandomNumberGenerato
 	mb.box(o + Vector3(0, 1.0, -0.62), Vector3(0.7, 1.8, 0.06), OLD_WOOD.darkened(0.3))
 	mb.box(o + Vector3(0, 1.65, -0.66), Vector3(0.16, 0.2, 0.04), Color(0.95, 0.85, 0.4))
 	_rural_mailbox(mb, Vector3(-w * 0.5 + 0.6, 0, -d * 0.5 + 0.4))
-	_lot_fence(mb, out, w, d, "rail", OLD_WOOD.darkened(0.1), [[cx, 2.2]])
+	_lot_fence(mb, out, w, d, "rail", OLD_WOOD.darkened(0.1), [[cx, 3.2, zf - 1.8, true]], true, 1.2, MeshBuilder.glow(DIRT, MeshBuilder.CONCRETE))
 
 
 ## A red hen house on legs with a ramp, and its wire run in front (-Z).
@@ -1379,7 +1446,7 @@ static func ranch_house(mb, out: Array, w: float, d: float, rng: RandomNumberGen
 	var yard := d * 0.5 - zf - bd
 	if yard >= 4.6 and w >= 18.0:
 		Props.oak(mb, out, Vector3(cx - side * bw * 0.3, 0, d * 0.5 - 3.7), rng)
-	_lot_fence(mb, out, w, d, "split", Color(0.5, 0.42, 0.33), [[px, cw + 0.8]], true, 1.0)
+	_lot_fence(mb, out, w, d, "split", Color(0.5, 0.42, 0.33), [[px, cw + 0.8]], true, 1.0, MeshBuilder.glow(CONCRETE, MeshBuilder.CONCRETE))
 
 
 ## ranch_house's plan on a big lot: a long low house with a gabled wing
@@ -1466,7 +1533,7 @@ static func _ranch_l(mb, out: Array, w: float, d: float, rng: RandomNumberGenera
 		mb.cylinder(tp + Vector3(0, 0.7, 0), 0.6, 0.05, WHITE, 8)
 		mb.box(tp + Vector3(0, 1.15, 0), Vector3(0.05, 2.3, 0.05), WHITE)
 		_cone(mb, tp + Vector3(0, 2.0, 0), 1.3, 0.45, _pick(ACCENTS, rng), 8)
-	_lot_fence(mb, out, w, d, "split", Color(0.5, 0.42, 0.33), [[gx, gw + 0.8], [door, 1.6]], true, 1.0)
+	_lot_fence(mb, out, w, d, "split", Color(0.5, 0.42, 0.33), [[gx, gw + 0.8], [door, 1.6, zf - 1.5]], true, 1.0, found)
 
 
 ## An adobe farmhouse: thick stucco walls under a low terracotta roof, a
@@ -1523,7 +1590,8 @@ static func adobe_farmhouse(mb, out: Array, w: float, d: float, rng: RandomNumbe
 	var pw := bw * 0.7
 	var pz := zf - pd
 	mb.box(Vector3(cx, 0.08, zf - pd * 0.5), Vector3(pw, 0.16, pd), MeshBuilder.glow(Color(0.62, 0.42, 0.32), MeshBuilder.BRICK))
-	var posts := maxi(3, int(pw / 2.4) + 1)
+	# An even count, so no post stands on the walk to the door.
+	var posts := maxi(4, (int(pw / 2.4) + 2) / 2 * 2)
 	for i in posts:
 		var x := cx - pw * 0.5 + 0.15 + (pw - 0.3) * i / (posts - 1)
 		_solid(mb, out, Vector3(x, 1.4, pz + 0.15), Vector3(0.24, 2.8, 0.24), post)
@@ -1544,7 +1612,7 @@ static func adobe_farmhouse(mb, out: Array, w: float, d: float, rng: RandomNumbe
 	var fz := -d * 0.5 + 1.2
 	var cxw := (ex + fx) * 0.5
 	var span := absf(fx - ex)
-	var gates := [[cx, 2.6]]
+	var gates := [[cx, 2.6, pz]]
 	if span > 2.5:
 		gates.append([cxw, 2.2])
 		_solid(mb, out, Vector3(cxw, 0.7, zf + bd), Vector3(span + 0.4, 1.4, 0.35), wall)
@@ -1555,7 +1623,7 @@ static func adobe_farmhouse(mb, out: Array, w: float, d: float, rng: RandomNumbe
 		mb.box(Vector3(cxw, 2.98, fz), Vector3(3.4, 0.1, 0.6), tile)
 		for i in 3:
 			_agave(mb, Vector3(cxw + (i - 1) * span * 0.28, 0, (fz + zf) * 0.5 + (i % 2) * 1.6), rng)
-	_lot_fence(mb, out, w, d, "wall", wall, gates)
+	_lot_fence(mb, out, w, d, "wall", wall, gates, true, 1.2, MeshBuilder.glow(CALICHE, MeshBuilder.CONCRETE))
 	# Chile ristras either side of the door.
 	for s: float in [-0.95, 0.95]:
 		mb.box(Vector3(cx + s, 2.0, zf - 0.12), Vector3(0.18, 0.8, 0.18), Color(0.7, 0.12, 0.1))
@@ -1628,7 +1696,7 @@ static func _pueblo(mb, out: Array, w: float, d: float, rng: RandomNumberGenerat
 	_col(out, Vector3(hx, 0.6, hz), Vector3(1.8, 1.2, 1.8))
 	for s: float in [-1.0, 1.0]:
 		_agave(mb, Vector3(cx + s * 2.6, 0, -d * 0.5 + 2.6), rng)
-	_lot_fence(mb, out, w, d, "wall", stucco.darkened(0.06), [[cx, 2.6]])
+	_lot_fence(mb, out, w, d, "wall", stucco.darkened(0.06), [[cx, 2.6, zf - pd]], true, 1.2, MeshBuilder.glow(CALICHE, MeshBuilder.CONCRETE))
 	_rural_mailbox(mb, Vector3(-side * (w * 0.5 - 0.8), 0, -d * 0.5 + 0.4))
 
 
@@ -1713,7 +1781,7 @@ static func _hacienda(mb, out: Array, w: float, d: float, rng: RandomNumberGener
 	for s: float in [-1.0, 1.0]:
 		for k in 2:
 			_agave(mb, Vector3(s * (2.8 + k * 3.0), 0, (-d * 0.5 + 1.2 + zf) * 0.5 + k * 0.6), rng)
-	_lot_fence(mb, out, w, d, "wall", stucco.darkened(0.06), [[0.0, 2.6]])
+	_lot_fence(mb, out, w, d, "wall", stucco.darkened(0.06), [[0.0, 2.6, zf - 0.1]], true, 1.2, MeshBuilder.glow(TERRACOTTA.darkened(0.08), MeshBuilder.BRICK))
 	_rural_mailbox(mb, Vector3(w * 0.5 - 0.8, 0, -d * 0.5 + 0.4))
 
 
@@ -1945,6 +2013,7 @@ static func shack(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator
 			mb.cylinder(Vector3(lerpf(x0 + 0.2, x1 - 0.2, i * 0.5), 0, lerpf(z0 + 0.2, z1 - 0.2, k * 0.5)), 0.16, PH, pile, 5)
 	mb.box(Vector3((x0 + x1) * 0.5, PH, (z0 + z1) * 0.5), Vector3(x1 - x0, 0.14, z1 - z0), MeshBuilder.glow(OLD_WOOD, MeshBuilder.SIDING))
 	mb.box(Vector3(x0 + 1.0, PH * 0.5, z0 - 0.5), Vector3(1.2, PH, 1.0), MeshBuilder.glow(OLD_WOOD.darkened(0.1), MeshBuilder.SIDING))
+	_route_out(mb, x0 + 0.3, x0 + 1.7, d, MeshBuilder.glow(DIRT.lightened(0.04), MeshBuilder.CONCRETE))
 	var sw := (x1 - x0) * 0.72
 	var sd := (z1 - z0) * 0.55
 	var sx := x0 + 0.3 + sw * 0.5
@@ -2024,6 +2093,8 @@ static func stilt_house(mb, out: Array, w: float, d: float, rng: RandomNumberGen
 	for s: float in [-0.5, 0.5]:
 		_beam(mb, Vector3(foot.x, 0.1, sz + s), Vector3(dx0, PH, sz + s), 0.1, pile, 0.06)
 	_col(out, Vector3(dx0 + 1.8, 0.7, sz), Vector3(3.6, 1.4, 1.1))
+	# A plank walk from the front to the stair's foot.
+	_route_out(mb, foot.x - 0.6, foot.x + 0.6, d, MeshBuilder.glow(Color(0.5, 0.42, 0.32), MeshBuilder.SIDING), sz - 0.5)
 	# Skiff and a water tank under the house.
 	_boat(mb, Vector3(dx1 - 1.6, 0.05, hz), 0.0, minf(4.0, hd * 0.8), Color(0.2, 0.35, 0.5))
 	mb.cylinder(Vector3(dx0 + 1.0, 0, hz + hd * 0.25), 0.6, 1.4, Color(0.25, 0.3, 0.28), 8)
@@ -2794,6 +2865,7 @@ static func house(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator
 	# Driveway and path.
 	var drive := MeshBuilder.glow(CONCRETE.lightened(0.05), MeshBuilder.CONCRETE)
 	_pad(mb, gx - gw * 0.5 + 0.2, gx + gw * 0.5 - 0.2, -d * 0.5, fz, drive, 0.04)
+	_route_out(mb, gx - gw * 0.5 + 0.2, gx + gw * 0.5 - 0.2, d, drive)
 	_pad(mb, dx - 0.6, dx + 0.6, fz - 2.0, fz, drive, 0.04)
 	_pad(mb, minf(dx, gx), maxf(dx, gx), fz - 2.0, fz - 0.8, drive, 0.04)
 	for k in 3:
@@ -2906,6 +2978,7 @@ static func mansion(mb, out: Array, w: float, d: float, rng: RandomNumberGenerat
 		var o1 := rc + Vector3(cos(a1), 0, sin(a1)) * (r + 1.6)
 		mb.quad(i0, o0, o1, i1, Vector3.UP, gravel)
 	_pad(mb, -1.6, 1.6, -d * 0.5, rc.z - r, gravel, 0.04)
+	_route_out(mb, -1.6, 1.6, d, gravel)
 	var fr := minf(2.2, r - 2.0)
 	mb.cylinder(rc, fr, 0.6, MeshBuilder.glow(CONCRETE.lightened(0.15), MeshBuilder.CONCRETE), 10)
 	mb.cylinder(rc + Vector3(0, 0.6, 0), fr - 0.25, 0.01, POOL, 10)
@@ -2987,6 +3060,7 @@ static func garden_apartments(mb, out: Array, w: float, d: float, rng: RandomNum
 			mb.box(Vector3(sx, f * FH + 1.6, sz - 1.22), Vector3(1.6, 1.8, 0.06), MeshBuilder.glow(PANE, MeshBuilder.GLASS))
 	# Parking row in front, a dumpster pen, trees at the ends.
 	_pad(mb, -w * 0.5 + 1.0, w * 0.5 - 1.0, -d * 0.5, fz - 4.4, MeshBuilder.glow(ASPHALT, MeshBuilder.ASPHALT), 0.04)
+	_route_out(mb, -2.6, 2.6, d, MeshBuilder.glow(ASPHALT, MeshBuilder.ASPHALT))
 	var n := int((w - 4.0) / 2.7)
 	_stalls(mb, -n * 1.35, fz - 4.6, n, 2.7, minf(5.5, fz - 4.6 + d * 0.5), -1.0)
 	_solid(mb, out, Vector3(w * 0.5 - 2.0, 0.9, d * 0.5 - 1.6), Vector3(3.0, 1.8, 2.0), MeshBuilder.glow(CONCRETE, MeshBuilder.CONCRETE))

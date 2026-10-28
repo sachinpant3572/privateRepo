@@ -79,6 +79,8 @@ static func draw(kind: String, p: Array, tree_kinds: Array, mb, out: Array, rng:
 			Kit._pad(mb, -w * 0.5, w * 0.5, -d * 0.5, d * 0.5, MeshBuilder.glow(DIRT, MeshBuilder.CONCRETE), SURFACE_Y)
 			for s: float in [-1.0, 1.0]:
 				Kit._pad(mb, s * w * 0.25 - 0.25, s * w * 0.25 + 0.25, -d * 0.5, d * 0.5, DIRT.darkened(0.15), SURFACE_Y + 0.004)
+		"footpath":
+			_footpath(mb, w, d, v)
 		"wall":
 			_wall(mb, local, w, d)
 		"hedge":
@@ -156,6 +158,24 @@ static func draw(kind: String, p: Array, tree_kinds: Array, mb, out: Array, rng:
 
 
 # --- Grounds ------------------------------------------------------------------------
+
+## A home's apron or its path to the yard's track (x along the path): beaten
+## dirt (variant 0), gravel (1) or a boardwalk of planks laid across (2).
+## It lies over the yard and its worn patches but under the track it joins.
+static func _footpath(mb, w: float, d: float, variant: int) -> void:
+	match variant:
+		1:
+			Kit._pad(mb, -w * 0.5, w * 0.5, -d * 0.5, d * 0.5, MeshBuilder.glow(GRAVEL, MeshBuilder.CONCRETE), 0.0)
+		2:
+			var wood := Color(0.5, 0.42, 0.32)
+			Kit._pad(mb, -w * 0.5, w * 0.5, -d * 0.5, d * 0.5, MeshBuilder.glow(wood, MeshBuilder.SIDING), 0.0)
+			var n := int(w / 0.6)
+			for i in n:
+				var x := -w * 0.5 + (i + 0.5) * w / n
+				Kit._pad(mb, x - 0.025, x + 0.025, -d * 0.5, d * 0.5, wood.darkened(0.35), 0.002)
+		_:
+			Kit._pad(mb, -w * 0.5, w * 0.5, -d * 0.5, d * 0.5, MeshBuilder.glow(DIRT.lightened(0.04), MeshBuilder.CONCRETE), 0.0)
+
 
 static func _yard(mb, w: float, d: float, wet: bool, rng: RandomNumberGenerator) -> void:
 	var col := WET_YARD if wet else YARD

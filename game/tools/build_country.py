@@ -45,6 +45,8 @@ TILE = 100.0
 # street, 4 m inside them.
 MARGIN = 110.0
 FRAME_IN = 4.0
+# Its width (street_plan.gd CLASSES street): 5 m of it lies beyond the bounds.
+CITY_STREET_W = 18.0
 # Ground beyond the play area, so the edge is a fence, not the end of the world.
 BEYOND = 450.0
 
@@ -113,7 +115,9 @@ PART_KINDS = ["lawn", "yard", "gravel", "drive", "track", "wall", "hedge", "fenc
               "parking", "alley", "paving", "pool", "playground", "field", "course",
               # Golden Flats: a centre pivot's sprinkler span (variant 1 with
               # the pivot tower, 2 with the end overhang; see farmland.py).
-              "sprinkler"]
+              "sprinkler",
+              # A footpath or a home's apron (variant 0 dirt, 1 gravel, 2 planks).
+              "footpath"]
 # Tree kinds for "trees" and "orchard" parts.
 TREE_KINDS = ["oak", "palm", "cypress", "fruit", "magnolia", "jacaranda", "crepe_myrtle", "plane"]
 # Dwellings that go into clusters rather than lots of their own.
@@ -218,6 +222,13 @@ LOOP_NAMES = ["Dogwood Lane", "Hollyhock Lane", "Bayberry Lane", "Sweetgum Lane"
               "Linnet Lane", "Hazel Lane", "Quince Lane"]
 CAPE_PARCEL = (18.0, 30.0)
 CAPE_SETBACK = 8.0
+# Lot routes (HANDOFF-routes R-1): how far ahead of a lot a road may lie
+# for its drive to run out to it, and how far the drive tucks under the road.
+REACH_MAX = 18.0
+REACH_TUCK = 0.6
+# The kinds people live in: every one needs a way in from the road.
+HOME_KINDS = ("house", "cape_house", "rowhouse_row", "shack", "stilt_house", "mansion", "garden_apartments",
+              "trailer_home", "farmhouse", "farmhouse_big", "farmhouse_small", "ranch_house", "adobe_farmhouse")
 GREEN_PLOT = (150.0, 100.0)
 SHORE_PITCH_MIN = 60.0      # closest two shore streets from the city run
 # Pattern tags a road carries from its source into the graph (pc["tag"]).
@@ -2034,9 +2045,14 @@ class Country:
             wx, wy = lx * cs + lz * sn, -lx * sn + lz * cs
             sides.append((max(-wy, -wx), a, b))
         sides.sort(key=lambda s: -s[0])
+        # The rows keep 5 m off the homes' lots (their fences and yards).
+        homes = unary_union([box(x - s[0] * 0.5 - 5.0, z - s[1] * 0.5 - 5.0, x + s[0] * 0.5 + 5.0, z + s[1] * 0.5 + 5.0)
+                             for _, x, z, s in lots if s is not None] or [Point(0, 0).buffer(0.01)])
         for score, a, b in sides[:2]:
             if score > 0.3:
-                parts.append(seg_part("trees", a, b, 8.0, TREE_KINDS.index("oak")))
+                for g in polys_of_lines(LineString([a, b]).difference(homes)):
+                    if g.length >= 10.0:
+                        parts.append(seg_part("trees", g.coords[0], g.coords[-1], 8.0, TREE_KINDS.index("oak")))
         k = self.add_plot(c, yaw, W, D, "farmyard", parts)
         for kind, x, z, size in lots:
             h = frame_point(c, yaw, x, z)
@@ -2476,12 +2492,18 @@ class Country:
             return
         # The yards and the alley: a plot over the whole block.
         zb = {sz: (V - (inset[fz[sz]] + ROW_DEPTH) if fz[sz] else V - 1.0) for sz in (-1, 1)}
-        parts = [part("lawn", 0.0, 0.0, 2.0 * U, 2.0 * V)]
+        # The frame street's outer 5 m lies inside the block: the lawn and
+        # the alley necks stop at its edge, where the rows front.
+        cz = {sz: inset["frame"] if fz[sz] == "frame" else 0.0 for sz in (-1, 1)}
+        cx = {sx: inset["frame"] if fx[sx] == "frame" else 0.0 for sx in (-1, 1)}
+        parts = [part("lawn", (cx[-1] - cx[1]) * 0.5, (cz[-1] - cz[1]) * 0.5,
+                      2.0 * U - cx[-1] - cx[1], 2.0 * V - cz[-1] - cz[1])]
         for g in legs:
             parts.append(part("alley", g, (zb[1] - zb[-1]) * 0.5, ALLEY, zb[1] + zb[-1]))
             for sz in (-1, 1):
                 if fz[sz] is not None:
-                    parts.append(part("alley", g, sz * (zb[sz] + V) * 0.5, ALLEY_NECK, V - zb[sz], 0.0, 1))
+                    parts.append(part("alley", g, sz * (zb[sz] + V - cz[sz]) * 0.5, ALLEY_NECK,
+                                      V - cz[sz] - zb[sz], 0.0, 1))
         if len(legs) == 2:
             parts.append(part("alley", 0.0, 0.0, 2.0 * (U - ALLEY_IN) - ALLEY, ALLEY))
         tree = TREE_KINDS.index("plane")
@@ -2873,8 +2895,68 @@ class Country:
         self.farm_fields()
         self.ground_zones()
         self.mountain_terrain()
+        self.lot_reach()
         self.polyline_outputs()
         self.tiles()
+
+    def lot_reach(self):
+        """Each lot's `reach`: metres from its front edge (at x = -w/2, 0,
+        w/2) straight out to the road surface, plus REACH_TUCK under it,
+        where a road lies within REACH_MAX ahead with nothing between (its
+        own farmyard or parcel aside). The kit runs its drives and walks
+        out that far (HANDOFF-routes R-1, R-2)."""
+        lot_tree = STRtree([lot_poly(l["x"], l["y"], l["yaw"], l["w"], l["d"]) for l in self.lots])
+        plot_polys = [lot_poly(q["x"], q["y"], q["yaw"], q["w"], q["d"]) for q in self.plots]
+        plot_tree = STRtree(plot_polys)
+        water = self.canal_area.union(self.water) if hasattr(self, "canal_area") else self.water
+        # The road surfaces as drawn (road_area adds a 2.5 m keep-out), and
+        # the trails; railways are in the way, not a way in.
+        # The city's frame street counts too: town rows face it.
+        nodes = self.plan["nodes"]
+        frame = [LineString([nodes[a], nodes[b]]).buffer(CITY_STREET_W * 0.5)
+                 for a, b, cls, road in self.plan["edges"] if road == "frame"]
+        surface = unary_union([LineString(pc["pts"]).buffer(CLASSES[pc["cls"]]["w"] * 0.5) for pc in self.pieces] +
+                              [t[0].buffer(CLASSES["trail"]["w"] * 0.5) for t in self.trails] + frame)
+        rails = unary_union([rl[0].buffer(2.5) for rl in self.rails]) if self.rails else Point(0, 0).buffer(0.0)
+        water = water.union(rails)
+        for i, l in enumerate(self.lots):
+            l["reach"] = [0.0, 0.0, 0.0]
+            own = l["plot"]
+            if own >= 0 and self.plots[own]["type"] not in ("farmyard", "parcel"):
+                continue
+            c, yaw, w, d = (l["x"], l["y"]), l["yaw"], l["w"], l["d"]
+            got = []
+            for lx in (-w * 0.5 + 0.3, 0.0, w * 0.5 - 0.3):
+                f = frame_point(c, yaw, lx, -d * 0.5)
+                ray = LineString([f, frame_point(c, yaw, lx, -d * 0.5 - REACH_MAX)])
+                hit = ray.intersection(surface)
+                if hit.is_empty:
+                    got.append(None)
+                    continue
+                r = Point(f).distance(hit)
+                ahead = LineString([f, frame_point(c, yaw, lx, -d * 0.5 - r)])
+                blocked = ahead.length > 0.05 and (
+                    any(int(j) != i and ahead.crosses(lot_tree.geometries[int(j)]) for j in lot_tree.query(ahead))
+                    or any(int(j) != own and self.plots[int(j)]["type"] not in ("verge", "block")
+                           and ahead.intersects(plot_polys[int(j)]) for j in plot_tree.query(ahead))
+                    or ahead.intersects(water))
+                got.append(None if blocked else r)
+            if got[1] is None:
+                continue
+            l["reach"] = [round((g if g is not None else got[1]) + REACH_TUCK, 2) for g in got]
+
+    def routed(self, l):
+        """How a home lot is reached from the road: "reach", "cluster",
+        "estate" or "" for not at all."""
+        if any(r > 0.0 for r in l.get("reach", [])):
+            return "reach"
+        if l["plot"] >= 0:
+            t = self.plots[l["plot"]]["type"]
+            if t == "cluster" and any(q[0] == "footpath" for q in self.plots[l["plot"]]["parts"]):
+                return "cluster"
+            if t == "estate":
+                return "estate"
+        return ""
 
     def report(self):
         """Plot counts, and the worst turn of a lot or plot off the road it fronts."""
@@ -2895,6 +2977,15 @@ class Country:
             if off > worst[0]:
                 worst = (off, item.get("kind", item.get("type")), round(item["x"]), round(item["y"]))
         print("plots:", counts, "turned estate houses:", turned, "worst turn off the fronting road (deg):", worst)
+        ways = collections.Counter()
+        lost = []
+        for l in self.lots:
+            if l["kind"] in HOME_KINDS:
+                how = self.routed(l)
+                ways[how or "none"] += 1
+                if not how:
+                    lost.append((l["kind"], round(l["x"]), round(l["y"])))
+        print("home routes:", dict(ways), "homes with no way in:", len(lost), lost[:8])
         self.self_check()
         self.mountain_check()
 
@@ -3020,7 +3111,7 @@ class Country:
             t["k"] = [gx, gy]
             tiles.append(t)
         lots = [[round(l["x"], 2), round(l["y"], 2), round(l["yaw"], 4), l["w"], l["d"], KINDS.index(l["kind"]),
-                 l["id"], l["zone"], l["plot"]] for l in self.lots]
+                 l["id"], l["zone"], l["plot"], l.get("reach", [0.0, 0.0, 0.0])] for l in self.lots]
         plots = [[round(p["x"], 2), round(p["y"], 2), round(p["yaw"], 4), round(p["w"], 2), round(p["d"], 2),
                   PLOT_TYPES.index(p["type"]),
                   [[PART_KINDS.index(q[0]), round(q[1], 2), round(q[2], 2), round(q[3], 2), round(q[4], 2),
@@ -3246,6 +3337,14 @@ def cluster_layout(W, D, kinds, style, rng):
                 continue
             taken.append(poly)
             homes.append((kind, x, z, rot))
+    track = LineString([(gx, -D * 0.5), (gx, D * 0.5 if style == "trailers" else -D * 0.5 + tl)])
+    footprints = taken[1:1 + len(homes)]
+    for i, (kind, x, z, rot) in enumerate(homes):
+        variant = 2 if wet and kind == "stilt_house" else (1 if kind == "trailer_home" else 0)
+        own = cluster_path(kind, x, z, rot, track, 2.5 if style == "trailers" else 1.75,
+                           [t for j, t in enumerate(footprints) if j != i], variant)
+        parts += own
+        taken += [rect_part_poly(q) for q in own]
     if style != "camp" or rng.random() < 0.5:
         parts += _boundary("fence", W, D, gx, 6.0)
     # Trees, boats, woodpiles and garden patches in the spaces left.
@@ -3271,6 +3370,47 @@ def cluster_layout(W, D, kinds, style, rng):
                                   rng.uniform(-math.pi, math.pi)))
             break
     return parts, homes, gx
+
+
+def cluster_path(kind, x, z, rot, track, track_half, others, variant):
+    """A cluster home's way to the yard's track: an apron along its front
+    and a footpath from the apron's middle to the nearest point of the
+    track, out of the front first when the straight way would cross a home
+    (`others`: footprints to keep off). Parts in the plot frame."""
+    w, d = CLUSTER_LOT.get(kind, LOT[kind])
+    width = 3.0 if kind == "trailer_home" else 1.6
+
+    def at(lx, lz):
+        return frame_point((x, z), rot, lx, lz)
+
+    out = [part("footpath", *at(0.0, -d * 0.5 - 0.9), w, 1.8, rot, variant)]
+    start = at(0.0, -d * 0.5 - 1.6)
+    if track.distance(Point(start)) <= track_half:
+        return out
+    home = lot_poly(x, z, rot, w, d)
+    best = None
+    for out_len in (0.0, 3.0, 6.0, 9.0):
+        p = at(0.0, -d * 0.5 - 1.6 - out_len)
+        q = track.interpolate(track.project(Point(p))).coords[0]
+        legs = ([(start, p)] if out_len > 0.0 else []) + [(p, q)]
+        bad = False
+        for a, b in legs:
+            band = LineString([a, b]).buffer(width * 0.5 + 0.3)
+            if band.intersects(home) or any(band.intersects(t) for t in others):
+                bad = True
+        if not bad:
+            best = legs
+            break
+    if best is None:
+        p = at(0.0, -d * 0.5 - 1.6)
+        best = [(p, track.interpolate(track.project(Point(p))).coords[0])]
+    for a, b in best:
+        if dist(a, b) > 0.3:
+            # Run a little into the track and the apron so the joins close.
+            u = ((b[0] - a[0]) / dist(a, b), (b[1] - a[1]) / dist(a, b))
+            out.append(seg_part("footpath", (a[0] - u[0] * width * 0.5, a[1] - u[1] * width * 0.5),
+                                (b[0] + u[0] * 0.5, b[1] + u[1] * 0.5), width, variant))
+    return out
 
 
 # The houses a kind of farmstead is dealt, a shuffled deck at a time so
@@ -3333,14 +3473,38 @@ def farmyard_layout(template, rng, house="farmhouse", sizes=None):
     yf = yard[1] - yard[3] * 0.5
     parts = [part("gravel", *yard), part("drive", dx, (z0 + yf) * 0.5, 5.0, yf - z0)]
     e = 0.5
-    parts += [seg_part("fence", (-W * 0.5 + e, z0 + e), (dx - 3.0, z0 + e), 0.2, 1),
-              seg_part("fence", (dx + 3.0, z0 + e), (W * 0.5 - e, z0 + e), 0.2, 1),
-              seg_part("fence", (-W * 0.5 + e, z0 + e), (-W * 0.5 + e, D * 0.5 - e), 0.2, 1),
+    # The front fence leaves the drive open and stops at each home's lot,
+    # jogging back to the home's own front fence (1.2 m in), so the home's
+    # gates open on the strip to the road.
+    gaps = [(dx - 3.0, dx + 3.0)]
+    for kind, x, z, size in lots:
+        if size is not None:
+            gaps.append((x - size[0] * 0.5, x + size[0] * 0.5))
+            for ex in gaps[-1]:
+                if not any(a < ex < b for a, b in gaps[:1]):
+                    parts.append(seg_part("fence", (ex, z0 + e), (ex, z - size[1] * 0.5 + 1.2), 0.2, 1))
+    x = -W * 0.5 + e
+    for a, b in sorted(gaps):
+        if a > x + 0.3:
+            parts.append(seg_part("fence", (x, z0 + e), (a, z0 + e), 0.2, 1))
+        x = max(x, b)
+    if x < W * 0.5 - e - 0.3:
+        parts.append(seg_part("fence", (x, z0 + e), (W * 0.5 - e, z0 + e), 0.2, 1))
+    parts += [seg_part("fence", (-W * 0.5 + e, z0 + e), (-W * 0.5 + e, D * 0.5 - e), 0.2, 1),
               seg_part("fence", (W * 0.5 - e, z0 + e), (W * 0.5 - e, D * 0.5 - e), 0.2, 1)]
     if rng.random() < 0.5:
         lots = [(k, -x, z, size) for k, x, z, size in lots]
         parts = _mirror(parts)
     return lots, parts, (W, D)
+
+
+def polys_of_lines(g):
+    """The LineStrings in a (multi)line geometry."""
+    if g.is_empty:
+        return []
+    if g.geom_type == "LineString":
+        return [g]
+    return [h for h in getattr(g, "geoms", []) if h.geom_type == "LineString"]
 
 
 def _steps(a, b, step):

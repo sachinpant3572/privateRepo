@@ -71,7 +71,7 @@ func _run() -> void:
 		"test_traffic_drives_into_the_country", "test_traffic_turns_round_at_barricades",
 		"test_country_kit_builds_every_kind",
 		"test_country_plots_square_to_their_roads", "test_estates_and_clusters", "test_grounds_kit_builds_every_part",
-		"test_bellerive_hills", "test_golden_flats_farmland",
+		"test_bellerive_hills", "test_golden_flats_farmland", "test_every_home_has_a_way_in",
 	]
 	# ONLY=name1,name2 runs just those (handy while working on one test).
 	var only := OS.get_environment("ONLY")
@@ -3135,6 +3135,30 @@ func test_golden_flats_farmland() -> void:
 	for k: String in tiers:
 		all_tiers = all_tiers and not (0 in tiers[k])
 	_check(all_tiers, "every farm-home kind stands on small, usual and big lots: %s" % [tiers])
+	# ... and the three plans differ: built at a small, usual and big size,
+	# each kind stands up a different set of solid heights (a plan only
+	# scaled up keeps its heights).
+	var Kit = preload("res://scripts/kits/country_kit.gd")
+	var same: Array[String] = []
+	for kind: String in tiers:
+		var f: Vector2 = Kit.footprint(kind)
+		var sets := []
+		for s: float in [0.75, 1.0, 1.35]:
+			_check(Kit._tier(kind, f.x * s, f.y * s) == sets.size(), "%s at %.2fx is tier %d" % [kind, s, sets.size()])
+			var out: Array = []
+			var rng := RandomNumberGenerator.new()
+			rng.seed = 7
+			Kit.build(kind, preload("res://scripts/mesh_builder.gd").new(), out, f * s, rng)
+			var heights := {}
+			for col: Array in out:
+				heights[snappedf((col[1] as Vector3).y, 0.1)] = true
+			var hs := heights.keys()
+			hs.sort()
+			sets.append(hs)
+		print("  %s solid heights: %s" % [kind, sets])
+		if sets[0] == sets[1] or sets[1] == sets[2] or sets[0] == sets[2]:
+			same.append(kind)
+	_check(same.is_empty(), "each farm home's small, usual and big plans differ (same solid heights: %s)" % [same])
 	# A pivot's tile streams in with its tower solid.
 	var big: Array = c.pivots[0]
 	var at := Vector3(big[0], 0.0, big[1])
@@ -3294,3 +3318,94 @@ func test_bellerive_hills() -> void:
 	_check(crept < 0.02 and car.velocity == Vector3.ZERO, "a car left on the slope stays put (%.3f m in 3 s)" % crept)
 	car.queue_free()
 	await _frames(2)
+
+
+## Sachin: "Ensure there are routes leading to all houses from the street or
+## road, can be single lane but there should be routes, match the route
+## textures to the building and surroundings". Every home lot either runs
+## its drives out to a road (lot element 9), stands in a cluster whose
+## footpaths join its track, or in an estate whose drive reaches the house
+## (the city's edge street counts as a road). Each home kit, built with a
+## road ahead, draws a route out past its lot's front, none of them through
+## a front fence.
+func test_every_home_has_a_way_in() -> void:
+	await _new_game(false)
+	var c = game.city.country
+	var homes := ["house", "cape_house", "rowhouse_row", "shack", "stilt_house", "mansion", "garden_apartments",
+		"trailer_home", "farmhouse", "farmhouse_big", "farmhouse_small", "ranch_house", "adobe_farmhouse"]
+	var ways := {}
+	var lost: Array[String] = []
+	for l: Array in c.lots:
+		var kind: String = c.kinds[int(l[5])]
+		if kind not in homes:
+			continue
+		var how := ""
+		var reach: Array = l[9] if l.size() > 9 else []
+		if not reach.is_empty() and maxf(maxf(reach[0], reach[1]), reach[2]) > 0.0:
+			how = "reach"
+		elif int(l[8]) >= 0:
+			var plot: Array = c.plots[int(l[8])]
+			var t: String = c.plot_types[int(plot[5])]
+			if t == "estate":
+				how = "estate"
+			elif t == "cluster":
+				for part: Array in plot[6]:
+					if c.part_kinds[int(part[0])] == "footpath":
+						how = "cluster"
+		if how == "":
+			lost.append("%s at (%d, %d)" % [kind, l[0], l[1]])
+		ways[how] = ways.get(how, 0) + 1
+	print("  ways in: %s" % [ways])
+	_check(lost.is_empty() and ways.get("reach", 0) > 1000, "every home has a way in from a road (%d without: %s)" % [lost.size(), lost.slice(0, 5)])
+	# Cluster footpaths: each cluster with homes has as many as it has homes.
+	var short: Array[String] = []
+	for q: Array in c.plots:
+		if c.plot_types[int(q[5])] != "cluster":
+			continue
+		var paths := 0
+		for part: Array in q[6]:
+			if c.part_kinds[int(part[0])] == "footpath":
+				paths += 1
+		var dwellers := 0
+		for l: Array in c.lots:
+			if int(l[8]) >= 0 and c.plots[int(l[8])] == q:
+				dwellers += 1
+		if paths < dwellers:
+			short.append("cluster at (%d, %d): %d homes, %d paths" % [q[0], q[1], dwellers, paths])
+	_check(short.is_empty(), "every cluster home has an apron at least (%s)" % [short.slice(0, 3)])
+	# The kits: with a road 4 m ahead, each home draws a route out past its
+	# front edge, and no route crosses a front fence run.
+	var Kit = preload("res://scripts/kits/country_kit.gd")
+	var MB = preload("res://scripts/mesh_builder.gd")
+	var problems: Array[String] = []
+	for kind: String in homes:
+		var f: Vector2 = Kit.footprint(kind)
+		for s: float in [0.75, 1.0, 1.35]:
+			for seed in 4:
+				var size := f * s
+				var mb = MB.new()
+				var out: Array = []
+				var rng := RandomNumberGenerator.new()
+				rng.seed = seed
+				Kit.reach = [4.0, 4.0, 4.0]
+				Kit.routes_drawn.clear()
+				Kit.build(kind, mb, out, size, rng)
+				Kit.reach = [0.0, 0.0, 0.0]
+				var tag := "%s %.1fx%.1f seed %d" % [kind, size.x, size.y, seed]
+				var ahead := 0.0
+				for v: Vector3 in mb.verts:
+					ahead = maxf(ahead, -size.y * 0.5 - v.z)
+				if Kit.routes_drawn.is_empty() or ahead < 3.9:
+					problems.append("%s: no route out (%.1f m past the front)" % [tag, ahead])
+				for col in out:
+					var cc: Vector3 = col[0]
+					var cs: Vector3 = col[1]
+					# Front fence runs: long, thin, low, near the front edge.
+					if cs.x > 1.0 and cs.z < 0.9 and cs.y <= 2.0 and cc.z < -size.y * 0.5 + 1.6:
+						for r: Vector2 in Kit.routes_drawn:
+							if minf(r.y, cc.x + cs.x * 0.5) - maxf(r.x, cc.x - cs.x * 0.5) > 0.05:
+								problems.append("%s: route %s through the fence at x %.1f" % [tag, r, cc.x])
+	Kit.routes_drawn.clear()
+	for p in problems.slice(0, 8):
+		print("  " + p)
+	_check(problems.is_empty(), "every home kit runs a route out through a gate (%d problems)" % problems.size())
