@@ -24,7 +24,9 @@ static var _water_material: ShaderMaterial
 ## glow a little by day and fully at night. The rest set the material:
 ## GLASS reflects the sky and glints (some panels lit at night), GLOSS is
 ## painted metal or plastic, METAL bare metal, ASPHALT and CONCRETE get
-## their grain, cracks and stains. Anything else (alpha 1) is matte.
+## their grain, cracks and stains (asphalt ages with its shade: near-black
+## fresh asphalt is smooth, grey has some patches and cracks, pale washed-out
+## asphalt many). Anything else (alpha 1) is matte.
 const GLOW_WINDOW := 0.25
 const GLOW_LAMP := 0.5
 const GLOW_NEON := 0.75
@@ -140,12 +142,17 @@ void surface(vec3 base, float code, vec3 wpos, vec3 wnormal, vec3 view_dir, vec2
 		col *= 0.94 + 0.08 * grain;
 		if (c == 1) {
 			// Asphalt: fine aggregate, darker patched squares, sealed cracks.
+			// Its age is its shade (see MeshBuilder.ASPHALT): fresh black
+			// asphalt (wear 0) has no patches or cracks, the usual grey
+			// (wear 1) some, washed-out pale asphalt (2) many, and deep.
+			float wear = clamp((dot(base, vec3(0.3333)) - 0.17) * 9.375, 0.0, 2.2);
 			col *= 0.9 + 0.2 * hash(floor(wpos.xz * 9.0));
 			vec2 pc = floor(wpos.xz / 3.5);
-			float patch = step(0.96, hash(pc + 17.0));
+			float patch = step(1.0 - 0.04 * wear, hash(pc + 17.0));
 			col = mix(col, col * 0.86, patch);
 			float crack = abs(vnoise(wpos.xz * 0.55) * 2.0 - 1.0);
-			col *= mix(0.8, 1.0, smoothstep(0.0, 0.012, crack) + step(0.22, vnoise(wpos.xz * 0.09 + 3.0)));
+			float t = smoothstep(0.0, max(0.012 * wear, 0.0001), crack) + step(0.22 * wear, vnoise(wpos.xz * 0.09 + 3.0));
+			col *= 1.0 + 0.2 * (t - 1.0) * (t < 1.0 ? min(wear, 1.6) : 1.0);
 		} else if (c == 3) {
 			// Concrete: speckle and the odd stain.
 			col *= 0.94 + 0.1 * hash(floor(wpos.xz * 14.0));
@@ -801,6 +808,25 @@ func primitive(mesh: PrimitiveMesh, xform: Transform3D, color: Color) -> void:
 		uvs.append(_uv(xform * src_verts[i], xform.basis * src_normals[i]))
 	for index in arrays[Mesh.ARRAY_INDEX]:
 		indices.append(base + index)
+
+
+## Scales the pattern coordinates of the vertices added since `from`: road
+## slabs, tiles and setts at their own size from the same patterns.
+func scale_uvs(from: int, scale: Vector2) -> void:
+	for i in range(from, uvs.size()):
+		uvs[i] *= scale
+
+
+## Fades the vertices added since `from` whose colour is one of `paints`
+## (exactly, code and all) toward `toward` by `amount`: worn road paint.
+func fade_colors(from: int, paints: Array, toward: Color, amount: float) -> void:
+	if amount <= 0.0:
+		return
+	for i in range(from, colors.size()):
+		if paints.has(colors[i]):
+			var c := colors[i].lerp(toward, amount)
+			c.a = colors[i].a
+			colors[i] = c
 
 
 ## Marks the vertices added since `start` as ground (see ground_ranges).

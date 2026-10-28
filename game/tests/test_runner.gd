@@ -77,6 +77,7 @@ func _run() -> void:
 		"test_country_plots_square_to_their_roads", "test_estates_and_clusters", "test_grounds_kit_builds_every_part",
 		"test_bellerive_hills", "test_golden_flats_farmland", "test_every_home_has_a_way_in", "test_homes_by_wealth",
 		"test_new_home_kinds_and_live_cars", "test_people_walk_the_suburbs", "test_suburb_home_cars_are_live",
+		"test_road_surfaces_and_roadworks", "test_boundaries_vary_by_household",
 	]
 	# ONLY=name1,name2 runs just those (handy while working on one test).
 	var only := OS.get_environment("ONLY")
@@ -3822,7 +3823,7 @@ func test_country_kit_builds_every_kind() -> void:
 					var thin := minf(e.x, e.y) * 2.0
 					var along_x := e.x > e.y
 					var at_edge := absf(c.z) > size.y * 0.5 - 1.6 if along_x else absf(c.x) > size.x * 0.5 - 1.0
-					if thin <= 0.9 and maxf(e.x, e.y) * 2.0 >= 1.5 and s.y <= 2.0 and at_edge:
+					if thin <= 0.9 and maxf(e.x, e.y) * 2.0 >= 1.5 and s.y <= 2.6 and at_edge:
 						runs.append(r)
 						if along_x and c.z > size.y * 0.5 - 1.0 and e.x * 2.0 > size.x * 0.6:
 							back = true
@@ -4560,7 +4561,7 @@ func test_every_home_has_a_way_in() -> void:
 							var cc: Vector3 = col[0]
 							var cs: Vector3 = col[1]
 							# Front fence runs: long, thin, low, near the front edge.
-							if cs.x > 1.0 and cs.z < 0.9 and cs.y <= 2.0 and cc.z < -size.y * 0.5 + 1.6:
+							if cs.x > 1.0 and cs.z < 0.9 and cs.y <= 2.6 and cc.z < -size.y * 0.5 + 1.6:
 								for r: Vector4 in Kit.routes_drawn:
 									# (routes that go out; a farm building's own are in its frame)
 									if r.z > 0.0 and minf(r.y, cc.x + cs.x * 0.5) - maxf(r.x, cc.x - cs.x * 0.5) > 0.05:
@@ -4655,22 +4656,26 @@ func test_homes_by_wealth() -> void:
 	const LUX := Vector3(1.9, 1.5, 4.9)
 	var poor: Array = built.call("house", 1)
 	var rich: Array = built.call("house", 4)
-	var chain := 0
-	var hedge := 0
 	var d: float = Kit.footprint("house").y
-	# Chain-link crosses the front; the board fence of T2-T3 stops at the
-	# sides, so only a run along the front line counts.
+	# The boundary goes by the household (Sachin, 2026-10-28: "some can have
+	# it but others can have their own different types of boundaries"): the
+	# T1 house's is a poor one (open, broken, chain-link, ply, wire, block),
+	# the T4 house's a rich one (hedge, iron, a tall wall, brick), and a
+	# fronted one has a run along the front line beside its gate.
+	var poor_b: Dictionary = Kit.boundary(1, "", hash([3, "boundary"]))
+	var rich_b: Dictionary = Kit.boundary(4, "", hash([3, "boundary"]))
 	var front_runs := func(out: Array) -> int:
 		var k := 0
 		for col in out:
-			k += 1 if is_equal_approx(col[1].y, 1.8) and col[1].z < 0.2 and col[1].x > 1.5 and col[0].z < -d * 0.5 + 2.0 else 0
+			k += 1 if col.size() < 3 and col[1].z < 0.9 and col[1].x > 1.0 and col[0].z < -d * 0.5 + 2.0 else 0
 		return k
-	chain = front_runs.call(poor)
-	var middle: int = front_runs.call(built.call("house", 2))
-	for col in rich:
-		hedge += 1 if is_equal_approx(col[1].y, 1.1) and is_equal_approx(minf(col[1].x, col[1].z), 0.8) else 0
-	_check(count.call(poor, LUX) == 0 and chain >= 1 and middle == 0 and count.call(rich, LUX) == 1 and hedge >= 4,
-		"a T1 house has chain-link across its front (%d runs, T2 %d) and no luxury car, a T4 house a hedge and one (%d runs, %d cars)" % [chain, middle, hedge, count.call(rich, LUX)])
+	var poor_runs: int = front_runs.call(poor)
+	var rich_runs: int = front_runs.call(rich)
+	_check(count.call(poor, LUX) == 0 and poor_b.style in ["", "broken", "chain", "ply", "wire", "block"]
+		and (poor_runs >= 1 or poor_b.style == "") and count.call(rich, LUX) == 1
+		and rich_b.style in ["hedge", "iron", "wall", "brick"] and rich_runs >= 1,
+		"a T1 house has a poor boundary (%s, %d front runs) and no luxury car, a T4 house a rich one (%s, %d runs) and one (%d cars)"
+		% [poor_b.style, poor_runs, rich_b.style, rich_runs, count.call(rich, LUX)])
 	# On the 14 m hill lots the T4 car pulls into the garage rather than
 	# hang over the lot's front edge.
 	var hill_front := INF
@@ -4786,3 +4791,432 @@ func test_new_home_kinds_and_live_cars() -> void:
 	# The marker sits where the static car stood.
 	var near := parks.all(func(p): return lux_off.any(func(c): return Vector2(c[0].x - p.park.x, c[0].z - p.park.z).length() < 0.5))
 	_check(near, "each park marker stands where the static car was")
+
+
+# --- Road surfaces, roadworks, boundaries and gates (the realism pass) --------
+
+## Road surfaces and roadworks (Sachin, 2026-10-28: "every road seems to have
+## same tecture in the city which is opposite from reality, in reality some
+## roads are newly paved, some are being paved so there is a construction
+## sign, to avoid it, otherwise the cars can get stuck or detriyed and also
+## coukd kill people. Some roads are old worn out but still solid, some are
+## too washed out but still good, some are built from tiles, of white or
+## brown colros etc."): the city's streets and the country's roads mix their
+## surfaces by district and class, the same every build; each district has
+## two or three roadworks that close the curb lane one way, the other lanes
+## and every junction still open, with no parked car, sidewalk or taxi stop
+## in them and barriers a car can burst; and a car in traffic drives past
+## one in its open lane without touching it.
+func test_road_surfaces_and_roadworks() -> void:
+	await _new_game(false)
+	var city = game.city
+	var plan = city.plan
+	var CityCells = preload("res://scripts/city_cells.gd")
+	var CountryTiles = preload("res://scripts/country_tiles.gd")
+	# The city's streets: every kind somewhere, the same each time, another
+	# map seed another mix; new tarmac and concrete in the centre, worn and
+	# washed-out in the wards.
+	var kinds := {}
+	var by_style := {}
+	var same := true
+	var moved := 0
+	var streets := 0
+	for e in plan.edge_count():
+		if not plan.drivable(e):
+			continue
+		var cls: String = plan.edge_class(e)
+		var mid: Vector3 = (city.node_pos(plan.edge_a[e]) + city.node_pos(plan.edge_b[e])) * 0.5
+		var style: String = city.district_at(mid).get("style", "quarter")
+		var s: String = CityCells.road_surface(city.seed_value, e, cls, style)
+		same = same and s == CityCells.road_surface(city.seed_value, e, cls, style)
+		moved += 1 if s != CityCells.road_surface(city.seed_value + 1, e, cls, style) else 0
+		streets += 1
+		kinds[s] = kinds.get(s, 0) + 1
+		if not by_style.has(style):
+			by_style[style] = {}
+		by_style[style][s] = by_style[style].get(s, 0) + 1
+	var share := func(styles: Array, which: Array) -> float:
+		var n := 0
+		var k := 0
+		for st: String in styles:
+			var mix: Dictionary = by_style.get(st, {})
+			for s: String in mix:
+				n += int(mix[s])
+				k += int(mix[s]) if s in which else 0
+		return float(k) / maxf(n, 1.0)
+	var centre_new: float = share.call(["downtown", "financial", "civic"], ["fresh", "concrete"])
+	var wards_new: float = share.call(["wards", "bayou"], ["fresh", "concrete"])
+	var wards_washed: float = share.call(["wards", "bayou"], ["washed"])
+	var centre_washed: float = share.call(["downtown", "financial", "civic"], ["washed"])
+	var tiled: int = kinds.get("tile_white", 0) + kinds.get("tile_brown", 0) + kinds.get("pavers", 0) + kinds.get("setts", 0)
+	_check(kinds.size() >= 7 and same and moved > streets / 3 and tiled > 0,
+		"the city's %d streets mix %d surfaces (%s), the same every build, %d another with another seed" % [streets, kinds.size(), kinds, moved])
+	_check(centre_new > wards_new + 0.2 and wards_washed > centre_washed + 0.2,
+		"new tarmac and concrete downtown (%.0f%%, wards %.0f%%), washed-out tarmac in the wards (%.0f%%, downtown %.0f%%)"
+		% [centre_new * 100.0, wards_new * 100.0, wards_washed * 100.0, centre_washed * 100.0])
+	# The country's roads: their surface by class, in stretches along a road.
+	var c = city.country
+	var ckinds := {}
+	var per_road := {}
+	for e in c.edge_a.size():
+		if c.edge_road[e] < 0:
+			continue
+		var s: String = CountryTiles.road_surface(c, e)
+		ckinds[s] = ckinds.get(s, 0) + 1
+		var rd: int = c.edge_road[e]
+		if not per_road.has(rd):
+			per_road[rd] = {}
+		per_road[rd][s] = true
+	var mixed_roads := 0
+	for rd in per_road:
+		mixed_roads += 1 if per_road[rd].size() > 1 else 0
+	_check(ckinds.size() >= 4 and mixed_roads >= 3, "the country's roads mix %d surfaces (%s), %d roads change along their way" % [ckinds.size(), ckinds, mixed_roads])
+	# The roadworks.
+	var per_district := {}
+	var wrong: Array[String] = []
+	var loop_rects: Array[Rect2] = []
+	for loop: PackedVector3Array in city.sidewalk_loops:
+		var r := Rect2(Vector2(loop[0].x, loop[0].z), Vector2.ZERO)
+		for p: Vector3 in loop:
+			r = r.expand(Vector2(p.x, p.z))
+		loop_rects.append(r)
+	for e: int in city.roadworks:
+		var wk: Dictionary = city.roadworks[e]
+		var na: int = plan.edge_a[e]
+		var nb: int = plan.edge_b[e]
+		var pa: Vector3 = city.node_pos(na)
+		var pb: Vector3 = city.node_pos(nb)
+		var length := pa.distance_to(pb)
+		var dir := (pb - pa) / length
+		var right := Vector3(-dir.z, 0, dir.x)
+		var sd: float = wk.side
+		var id: String = city.district_at((pa + pb) * 0.5).get("id", "")
+		per_district[id] = per_district.get(id, 0) + 1
+		var g: Dictionary = StreetPlan.CLASSES[plan.edge_class(e)]
+		var w: float = g.width
+		var tag := "works on %s street %d (%s side %+d, %.0f-%.0f m)" % [g.get("name", plan.edge_class(e)), e, id, int(sd), wk.x0, wk.x1]
+		# One lane shut that way, the far side of the street as it was.
+		var shut: Dictionary = city.lanes_of(na, nb) if sd > 0.0 else city.lanes_of(nb, na)
+		var other: Dictionary = city.lanes_of(nb, na) if sd > 0.0 else city.lanes_of(na, nb)
+		if int(shut.get("lanes", 0)) != int(g.lanes) - 1 or int(shut.get("lanes", 0)) < 1 or int(shut.get("closed", 0)) != 1:
+			wrong.append("%s: %d lanes open that way of %d" % [tag, int(shut.get("lanes", 0)), int(g.lanes)])
+		if int(other.get("lanes", 0)) != int(g.lanes) or other.has("closed"):
+			wrong.append("%s: the other way lost a lane" % tag)
+		# The open lanes keep clear of the barrier line.
+		var zi: float = float(g.middle) + float(g.lane_w) * (int(g.lanes) - 1) + 0.35
+		var outer: float = city.lane_offset(shut, 0) + float(g.lane_w) * 0.5
+		if outer > zi - 0.25 + 0.01:
+			wrong.append("%s: the open lane runs to %.2f m, the barriers start at %.2f m" % [tag, outer, zi - 0.25])
+		# No car parked in it, its taper or its sign.
+		for spot: Array in city.parked_spots:
+			var q: Vector3 = spot[0] - pa
+			var x := q.dot(dir)
+			var z := q.dot(right) * sd
+			if x > wk.x0 - 25.0 and x < wk.x1 + 25.0 and z > 0.0 and z < w * 0.5 + 1.0:
+				wrong.append("%s: a car parked in it at %.0f m" % [tag, x])
+		# A taxi stop there moves out of it.
+		var stop: Vector3 = city.clear_of_works(na, nb, pa + dir * (wk.x0 + wk.x1) * 0.5)
+		var sx := (stop - pa).dot(dir)
+		if sx > wk.x0 - city.WORKS_TAPER - 1.0 and sx < wk.x1 + city.WORKS_TAPER + 1.0:
+			wrong.append("%s: a taxi stop left at %.0f m" % [tag, sx])
+		# No sidewalk loop through the pit.
+		var pit := PackedVector2Array()
+		for corner: Vector2 in [Vector2(wk.x0, zi), Vector2(wk.x1, zi), Vector2(wk.x1, w * 0.5 - 0.25), Vector2(wk.x0, w * 0.5 - 0.25)]:
+			var p3: Vector3 = pa + dir * corner.x + right * sd * corner.y
+			pit.append(Vector2(p3.x, p3.z))
+		var pit_rect := Rect2(pit[0], Vector2.ZERO).expand(pit[1]).expand(pit[2]).expand(pit[3]).grow(0.5)
+		for i in loop_rects.size():
+			if not loop_rects[i].intersects(pit_rect):
+				continue
+			var loop: PackedVector3Array = city.sidewalk_loops[i]
+			for j in loop.size():
+				var u := Vector2(loop[j].x, loop[j].z)
+				var v := Vector2(loop[(j + 1) % loop.size()].x, loop[(j + 1) % loop.size()].z)
+				var hit := Geometry2D.is_point_in_polygon(u, pit)
+				for k in 4:
+					hit = hit or Geometry2D.segment_intersects_segment(u, v, pit[k], pit[(k + 1) % 4]) != null
+				if hit:
+					wrong.append("%s: a sidewalk runs through the pit" % tag)
+					break
+	# Every junction still reached from the start (the works close a lane,
+	# never a street).
+	var start: int = city.nearest_node(city.spawn_point)
+	var seen := {start: true}
+	var todo: Array[int] = [start]
+	while not todo.is_empty():
+		var n: int = todo.pop_back()
+		for m: int in city.next_nodes(n):
+			if m < city.COUNTRY_BASE and not seen.has(m):
+				seen[m] = true
+				todo.append(m)
+	var stranded := 0
+	for n in plan.node_count():
+		if city.drive_node(n) and not city.next_nodes(n).is_empty() and not seen.has(n):
+			stranded += 1
+	for e: int in city.roadworks:
+		if not (seen.has(plan.edge_a[e]) and seen.has(plan.edge_b[e])):
+			wrong.append("works street %d cut off from the start" % e)
+	var most := 0
+	for id in per_district:
+		most = maxi(most, per_district[id])
+	for p in wrong.slice(0, 20):
+		print("  " + p)
+	_check(city.roadworks.size() >= 6 and per_district.size() >= 3 and most <= 3 and wrong.is_empty() and stranded == 0,
+		"%d roadworks in %d districts (at most %d in one) each shut one lane one way, clear of parked cars, taxi stops and sidewalks; %d junctions cut off (%d problems)"
+		% [city.roadworks.size(), per_district.size(), most, stranded, wrong.size()])
+	# A car in traffic on the works side of the nearest works.
+	var best_e := -1
+	var best_d := INF
+	for e: int in city.roadworks:
+		var at: Vector3 = (city.node_pos(plan.edge_a[e]) + city.node_pos(plan.edge_b[e])) * 0.5
+		if at.distance_to(city.spawn_point) < best_d:
+			best_d = at.distance_to(city.spawn_point)
+			best_e = e
+	if best_e < 0:
+		_check(false, "a street with roadworks to drive past")
+		return
+	var wk: Dictionary = city.roadworks[best_e]
+	var sd: float = wk.side
+	var na: int = plan.edge_a[best_e]
+	var nb: int = plan.edge_b[best_e]
+	var pa: Vector3 = city.node_pos(na)
+	var pb: Vector3 = city.node_pos(nb)
+	var length := pa.distance_to(pb)
+	var dir := (pb - pa) / length
+	var right := Vector3(-dir.z, 0, dir.x)
+	var g: Dictionary = StreetPlan.CLASSES[plan.edge_class(best_e)]
+	var zi: float = float(g.middle) + float(g.lane_w) * (int(g.lanes) - 1) + 0.35
+	var from := na if sd > 0.0 else nb
+	var to := nb if sd > 0.0 else na
+	var xa: float = wk.x0 if sd > 0.0 else wk.x1
+	var xb: float = wk.x1 if sd > 0.0 else wk.x0
+	var works_at: Vector3 = pa + dir * (wk.x0 + wk.x1) * 0.5
+	game.player.global_position = works_at - right * sd * (float(g.width) * 0.5 + 2.5) + Vector3(0, 0.5, 0)
+	game.player.reset_physics_interpolation()
+	city.stream_now(works_at)
+	await _frames(2)
+	var barriers: Array[CollisionShape3D] = []
+	for cell in city.get_children():
+		for body in cell.get_children():
+			if not body is StaticBody3D:
+				continue
+			for s in body.get_children():
+				if s is CollisionShape3D and s.has_meta("brk") and s.get_meta("brk").kind == "roadworks" \
+						and s.global_position.distance_to(works_at) < (wk.x1 - wk.x0) * 0.5 + 30.0:
+					barriers.append(s)
+	var x_start: float = clampf(xa - sd * (city.WORKS_TAPER + 30.0), 2.0, length - 2.0)
+	var lanes: Dictionary = city.lanes_of(from, to)
+	var heading := dir * sd
+	var car = Vehicle.new()
+	car.kind = "sedan"
+	car.city = city
+	car.position = pa + dir * x_start + right * sd * city.lane_offset(lanes, 0) + Vector3(0, 0.3, 0)
+	car.rotation.y = atan2(-heading.x, -heading.z)
+	car.rng.seed = 11
+	car.start_traffic(city, from, to)
+	game.add_child(car)
+	var widest := -INF
+	var past := false
+	var frames := 0
+	for f in 900:
+		await _frames(1)
+		frames = f
+		var q: Vector3 = car.global_position - pa
+		var x := q.dot(dir)
+		if x > wk.x0 - 1.0 and x < wk.x1 + 1.0:
+			widest = maxf(widest, q.dot(right) * sd)
+		if (x - xb) * sd > 6.0:
+			past = true
+			break
+	var burst := barriers.filter(func(s): return s.get_meta("brk").get("down", false)).size()
+	_check(barriers.size() >= 6 and past and not car.wrecked and widest < zi - 0.25 - 0.6 and burst == 0,
+		"a car in traffic drives past the roadworks %.0f m off in its open lane in %.1f s (%s; out to %.2f m, barriers from %.2f m; %d of %d barriers burst)"
+		% [best_d, frames / 60.0, "past" if past else "stuck", widest, zi - 0.25, burst, barriers.size()])
+	car.queue_free()
+	await _frames(1)
+
+
+## Boundaries and gates by household (Sachin, 2026-10-28: "every home does
+## not need to have same length and height of gate, make it mixed please" and
+## "every house should not same kind of fence some can have it but others can
+## have their own different types of boundaries, from wood, concrete, ply,
+## some high some low etc, depending upon the people, location etc."):
+## boundary() gives each tier several fronts, poor ones at T0-T1 and rich
+## ones at T4-T5, from knee-high to over 2 m, sides and back always, the same
+## for the same household, the zone leaning the pick; farms, adobes, ward
+## yards and estate walls vary too; built homes hang gates of mixed width,
+## kind and height, none standing in a way out, and every collider is a real
+## box.
+func test_boundaries_vary_by_household() -> void:
+	await _free_game()
+	var Kit = preload("res://scripts/kits/country_kit.gd")
+	var MB = preload("res://scripts/mesh_builder.gd")
+	var Grounds = preload("res://scripts/kits/grounds_kit.gd")
+	var CityCells = preload("res://scripts/city_cells.gd")
+	const POOR := ["", "broken", "chain", "ply", "wire", "block"]
+	const RICH := ["hedge", "iron", "wall", "brick"]
+	var fronts: Array[Dictionary] = []
+	var heights: Array[Array] = []
+	var styles := {}
+	var gate_kinds := {}
+	var gate_hs := {}
+	var extras := {}
+	var walks := [0, 0]
+	var wrong: Array[String] = []
+	for t in 6:
+		fronts.append({})
+		heights.append([])
+		for s in 80:
+			var b: Dictionary = Kit.boundary(t, "", hash([s, "boundary"]))
+			if b.hash() != Kit.boundary(t, "", hash([s, "boundary"])).hash():
+				wrong.append("T%d seed %d: another boundary the second time" % [t, s])
+			fronts[t][b.style] = fronts[t].get(b.style, 0) + 1
+			styles[b.style] = true
+			styles[b.back] = true
+			if b.style != "":
+				heights[t].append(b.h)
+			if b.back == "" or b.back_h < 1.0:
+				wrong.append("T%d seed %d: sides and back %s %.2f m" % [t, s, b.back, b.back_h])
+			if (t <= 1 and not b.style in POOR) or (t >= 4 and not b.style in RICH):
+				wrong.append("T%d seed %d: a %s front" % [t, s, b.style])
+			gate_kinds[b.gate] = true
+			gate_hs[b.gate_h] = true
+			extras[b.drive_extra] = true
+			walks[1 if b.walk > 0.0 else 0] += 1
+	var mean := func(list: Array) -> float:
+		var sum := 0.0
+		for h: float in list:
+			sum += h
+		return sum / maxf(list.size(), 1.0)
+	var all_h: Array = []
+	for list in heights:
+		all_h.append_array(list)
+	var fewest := 99
+	for t in 6:
+		fewest = mini(fewest, fronts[t].size())
+	var rich_h: float = mean.call(heights[4] + heights[5])
+	var mid_h: float = mean.call(heights[2] + heights[3])
+	var materials := ["picket", "board", "slat", "ply", "block", "wall", "chain", "iron", "hedge", "brick", "wire", "stone", "broken", "low"]
+	var missing := materials.filter(func(m): return not styles.has(m))
+	for p in wrong.slice(0, 20):
+		print("  " + p)
+	_check(wrong.is_empty() and fewest >= 3 and missing.is_empty() and all_h.min() <= 0.8 and all_h.max() >= 2.3 and rich_h > mid_h + 0.4,
+		"boundaries: at least %d fronts a tier (T0 %s, T5 %s), poor at T0-T1 and rich at T4-T5, %.2f-%.2f m (T4-T5 %.2f m, T2-T3 %.2f m), sides and back always, missing %s (%d problems)"
+		% [fewest, fronts[0].keys(), fronts[5].keys(), all_h.min(), all_h.max(), rich_h, mid_h, missing, wrong.size()])
+	_check(gate_kinds.size() == 4 and gate_hs.size() >= 8 and extras.size() >= 8 and walks[0] > 0 and walks[1] > 0,
+		"gates: %s, %d heights, %d drive gate margins, %d with a walk gate and %d without" % [gate_kinds.keys(), gate_hs.size(), extras.size(), walks[1], walks[0]])
+	# The zone leans the pick: stone walls in the mountains.
+	var stone := [0, 0]
+	for s in 120:
+		stone[0] += 1 if Kit.boundary(3, "", hash([s, "zone"])).style == "stone" else 0
+		stone[1] += 1 if Kit.boundary(3, "mountain", hash([s, "zone"])).style == "stone" else 0
+	_check(stone[1] > stone[0] + 10, "T3 stone fronts: %d in the mountains, %d elsewhere" % [stone[1], stone[0]])
+	# Farms, adobes, ward back yards and estate walls.
+	var farm := {}
+	var farm_h := {}
+	var adobe := {}
+	for s in 60:
+		var r := RandomNumberGenerator.new()
+		r.seed = s
+		var f: Dictionary = Kit._farm_fence(r, "rail", Color.WHITE)
+		farm[f.style] = true
+		farm_h[f.h] = true
+		adobe[Kit._adobe_wall(r, Color.WHITE).style] = true
+	var yard_h := {}
+	var open_yards := 0
+	var yr := RandomNumberGenerator.new()
+	yr.seed = 5
+	for k in 40:
+		var out: Array = []
+		CityCells._yard_fence(MB.new(), out, Vector3(0, 0, -3), Vector3(0, 0, 3), yr)
+		open_yards += 1 if out.is_empty() else 0
+		for col in out:
+			yard_h[snappedf(col[1].y, 0.05)] = true
+	var wall_h := {}
+	var wall_look := {}
+	for p in 40:
+		var look: Array = Grounds._wall_look(hash([p, "plot"]))
+		wall_h[look[0]] = true
+		wall_look[look[1]] = true
+	_check(farm.size() >= 3 and farm.has("") and farm_h.size() >= 4 and adobe.size() >= 3 and yard_h.size() >= 4 and wall_h.size() >= 5 and wall_look.size() >= 3,
+		"farm fences %s (%d heights), adobe walls %s, ward yards at %d heights (%d open), estate walls at %d heights in %d looks"
+		% [farm.keys(), farm_h.size(), adobe.keys(), yard_h.size(), open_yards, wall_h.size(), wall_look.size()])
+	# Built homes: gates of mixed kind, width and height; no boundary part in
+	# a way out from the lot's front edge to 2.5 m in; every collider a real box;
+	# the same household the same each build.
+	var leaf_counts := {}
+	var leaf_hs := {}
+	var gate_ws := {}
+	var problems: Array[String] = []
+	Kit.record_routes = true
+	Kit.reach = [4.0, 4.0, 4.0]
+	for kind: String in ["house", "trailer_home", "mansion", "exec_house", "cheap_block", "bungalow_barred", "res_tower", "midrise_condo",
+			"farmhouse", "farmhouse_small", "farmhouse_big", "ranch_house", "adobe_farmhouse", "shack", "stilt_house", "garden_apartments"]:
+		var size: Vector2 = Kit.footprint(kind)
+		for tier in 6:
+			for seed in (6 if kind == "house" else 1):
+				var rng := RandomNumberGenerator.new()
+				rng.seed = seed + 17 * tier
+				var out: Array = []
+				Kit.wealth = tier
+				Kit.routes_drawn.clear()
+				Kit.build(kind, MB.new(), out, size, rng)
+				Kit.wealth = -1
+				var tag := "%s T%d seed %d" % [kind, tier, rng.seed]
+				var leaves := 0
+				for col in out:
+					if not col is Array:
+						continue
+					var cc: Vector3 = col[0]
+					var cs: Vector3 = col[1]
+					if not (cc.is_finite() and cs.is_finite()) or cs.x <= 0.0 or cs.y <= 0.0 or cs.z <= 0.0:
+						problems.append("%s: collider at %s size %s" % [tag, cc, cs])
+						continue
+					if col.size() > 2:
+						continue
+					if (is_equal_approx(cs.x, 0.08) or is_equal_approx(cs.z, 0.08)) and cc.z < -size.y * 0.5 + 4.5:
+						leaves += 1
+						leaf_hs[snappedf(cs.y, 0.05)] = true
+					if cs.y > 2.6 or cc.z - cs.z * 0.5 > -size.y * 0.5 + 2.5 or cc.z + cs.z * 0.5 < -size.y * 0.5:
+						continue
+					# Only the boundary's kind of thing (runs, leaves, posts, piers,
+					# hedges: under 1.2 m through): the household's car on its drive
+					# and a shack's deck the walk climbs onto are meant to be there.
+					if minf(cs.x, cs.z) > 1.2:
+						continue
+					for r: Vector4 in Kit.routes_drawn:
+						if r.z <= 0.0:
+							continue
+						var m := (r.x + r.y) * 0.5
+						var half := maxf(0.2, (r.y - r.x) * 0.5 - 0.4)
+						if minf(m + half, cc.x + cs.x * 0.5) - maxf(m - half, cc.x - cs.x * 0.5) > 0.02:
+							problems.append("%s: %s by %s in the way out %.1f-%.1f" % [tag, cc, cs, r.x, r.y])
+				if kind == "house":
+					leaf_counts[leaves] = true
+					# Gate widths: the gaps between the front line's runs.
+					var runs: Array = []
+					for col in out:
+						if col is Array and col.size() == 2 and col[1].x > 0.3 and col[1].z < 0.9 and absf(col[0].z - (-size.y * 0.5 + 1.2)) < 0.1:
+							runs.append(Vector2(col[0].x - col[1].x * 0.5, col[0].x + col[1].x * 0.5))
+					runs.sort_custom(func(a: Vector2, c: Vector2) -> bool: return a.x < c.x)
+					for i in range(1, runs.size()):
+						if runs[i].x - runs[i - 1].y > 0.5:
+							gate_ws[snappedf(runs[i].x - runs[i - 1].y, 0.1)] = true
+	# The same household builds the same boundary.
+	var twice: Array = []
+	for k in 2:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 9
+		var out: Array = []
+		Kit.wealth = 3
+		Kit.build("house", MB.new(), out, Kit.footprint("house"), rng)
+		Kit.wealth = -1
+		twice.append(out)
+	Kit.routes_drawn.clear()
+	Kit.record_routes = false
+	Kit.reach = [0.0, 0.0, 0.0]
+	for p in problems.slice(0, 40):
+		print("  " + p)
+	_check(problems.is_empty() and twice[0] == twice[1] and leaf_counts.size() >= 3 and leaf_hs.size() >= 4 and gate_ws.size() >= 4,
+		"built homes: gates with %s leaves at %d heights, ways out %d widths, the same each build (%s), colliders sane and no way out blocked (%d problems)"
+		% [leaf_counts.keys(), leaf_hs.size(), gate_ws.size(), twice[0] == twice[1], problems.size()])

@@ -1936,12 +1936,24 @@ static func bungalow_barred(mb, out: Array, w: float, d: float, rng: RandomNumbe
 	for i in 3:
 		if dw >= 2.0:
 			_bin(mb, Vector3(dcx + side * (dw * 0.5 - 0.45), 0, fz + 0.5 + i * 0.8), 0.0, bins[i])
-	# The front fence: chain-link with a gate at the path and an open drive.
+	# The front by the household: chain-link at a height of its own, ply
+	# sheets, wire, block, a run gone to ruin, or none; a gap at the path
+	# and an open drive.
 	var fzf := -hd + 0.25
 	var gaps := [[px - 0.6, px + 0.6]]
 	if dw >= 2.0:
 		gaps.append([dcx - dw * 0.5 + 0.1, dcx + dw * 0.5 + 0.2])
-	_chainlink_x(mb, out, -hw + 0.15, hw - 0.15, fzf, 1.2, gaps, rng, false, 2)
+	var bound := Kit.boundary(Kit._wealth(0, 1, 1), Kit.zone, hash([rng.seed, "boundary"]))
+	var fs: String = bound.style
+	if fs == "chain":
+		_chainlink_x(mb, out, -hw + 0.15, hw - 0.15, fzf, minf(bound.h, 1.8), gaps, rng, false, 2)
+	elif fs != "":
+		var fx := -hw + 0.15
+		gaps.sort_custom(func(ga: Array, gb: Array) -> bool: return ga[0] < gb[0])
+		for g: Array in gaps + [[hw - 0.15, hw - 0.15]]:
+			if g[0] - fx > 0.8:
+				Kit._fence_run(mb, out, Vector3(fx + 0.15, 0, fzf), Vector3(g[0] - 0.15, 0, fzf), fs, Kit._worn(bound.color, 0), bound.h)
+			fx = maxf(fx, g[1])
 	Kit._pad(mb, px - 0.55, px + 0.55, -hd, fz - 2.7, conc, 0.05)
 	# A car on blocks or a beater in the drive.
 	var roll := rng.randf()
