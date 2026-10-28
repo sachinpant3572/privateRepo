@@ -123,7 +123,7 @@ neon). Shots 65-72 (`SHOTS=farm`).
   crossing (or makes one hung from its far end a dirt track), and `join_ends` no longer adds a join
   that runs back along the road's own line (it hid those ends).
 - Measured: flats homes big 5, plain 7, small 16, ranch 10, adobe 8; 15 flats farms, 46 farmyards
-  in all; 6586 nodes, 0 unreached; country.json 3.8 MB. Gallery page `country_8_farmhouses.png`,
+  in all; 21 pivots; 6586 nodes, 0 unreached; country.json 3.8 MB. Gallery page `country_8_farmhouses.png`,
   shots 69a-69e.
 
 ## Measured after the change
