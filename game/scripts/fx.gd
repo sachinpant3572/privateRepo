@@ -6,6 +6,8 @@ extends Node3D
 ## draw calls.
 
 const SKID_COUNT := 400
+## Loud bursts (crashes, knocked props, fights) startle nearby birds.
+const Birds = preload("res://scripts/birds.gd")
 
 ## Off in headless runs (tests), where slowing time would only slow tests.
 var enabled := true
@@ -40,6 +42,7 @@ func _process(_delta: float) -> void:
 ## A punch or kick landed. Only fights involving the player freeze time.
 func hit(pos: Vector3, strong: bool, involves_player: bool) -> void:
 	_burst("spark", pos + Vector3(0, 1.2, 0), 1.6 if strong else 1.0)
+	Birds.startle(pos, 14.0 if strong else 9.0)
 	if involves_player:
 		hit_stop(0.09 if strong else 0.05)
 		shake(0.35 if strong else 0.15)
@@ -49,6 +52,7 @@ func hit(pos: Vector3, strong: bool, involves_player: bool) -> void:
 func crash(pos: Vector3, impact: float, involves_player: bool) -> void:
 	var strength := clampf(impact / 20.0, 0.2, 1.0)
 	_burst("spark", pos + Vector3(0, 0.6, 0), 1.0 + strength)
+	Birds.startle(pos, 20.0 + 30.0 * strength)
 	if impact > 9.0:
 		_burst("debris", pos + Vector3(0, 0.6, 0), 1.0)
 	if involves_player:
@@ -61,6 +65,7 @@ func crash(pos: Vector3, impact: float, involves_player: bool) -> void:
 ## debris, leaves off a tree, sparks off a lamp, a hydrant's gusher.
 func knock(pos: Vector3, kind: String, involves_player: bool) -> void:
 	_burst("debris", pos, 0.8)
+	Birds.startle(pos, 25.0)
 	match kind:
 		"street_tree", "crepe_myrtle":
 			_burst("leaves", pos + Vector3(0, 1.5, 0), 1.0)

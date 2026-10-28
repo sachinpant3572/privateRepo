@@ -43,6 +43,7 @@ func _run() -> void:
 		"test_minimap_routes_to_waypoint", "test_state_map_shows_the_whole_state",
 		"test_night_lights_the_city", "test_headlights_follow_the_ground",
 		"test_graphics_quality_presets", "test_real_lights_at_night",
+		"test_sky_follows_the_sun_and_moon", "test_stars_by_light_pollution", "test_birds_by_day_not_at_night", "test_birds_startle_and_budget",
 		"test_homecoming_runs_start_to_finish",
 		"test_failed_mission_can_be_retried",
 		"test_empty_rooms_phone_and_clues",
@@ -1677,6 +1678,276 @@ func test_headlights_follow_the_ground() -> void:
 	car.set_real_light(false)
 	_check(beams.visible and beams.material_override == MeshBuilder.ground_glow_material() and car._lamp_glow.visible and car._lamp_glow.material_override == MeshBuilder.glow_material(), "at night, with no real light to spare, the beams and tail pool are drawn on the ground; the lamp glows stay at the lamps")
 	car.queue_free()
+
+
+# --- Sky and birds (sky.gd, birds.gd) ----------------------------------------------
+
+## The sky shader draws the sun's disc on the scene light's bearing at every
+## daylight hour (on the light itself from 8 to 16, sinking to the horizon at
+## sunrise and sunset), the moon by night with its phase moving on each day,
+## and gives way to the plain room colour indoors. Look up points a camera
+## at the sky; the game's own top-down camera frames none of it.
+func test_sky_follows_the_sun_and_moon() -> void:
+	await _new_game(false)
+	var SkyDome = load("res://scripts/sky.gd")
+	var atm = game.atmosphere
+	atm.minutes_per_second = 0.0
+	atm.weather_changes = false
+	atm.set_weather("clear", true)
+	var env: Environment = atm.env
+	var mat: ShaderMaterial = atm.sky.material
+	_check(env.background_mode == Environment.BG_SKY and env.sky != null and env.sky.sky_material == mat and mat.shader.get_mode() == Shader.MODE_SKY, "the world's background is the sky shader")
+	var worst_bearing := 0.0
+	var worst_mid := 0.0
+	var worst_param := 0.0
+	for h in [6.2, 7.0, 8.0, 10.0, 12.0, 14.0, 16.0, 17.0, 17.8]:
+		atm.hour = h
+		atm._apply(0.0)
+		var light: Vector3 = atm.sun.transform.basis.z.normalized()
+		var disc: Vector3 = atm.sky.sun_dir
+		worst_bearing = maxf(worst_bearing, absf(rad_to_deg(Vector2(light.x, light.z).angle_to(Vector2(disc.x, disc.z)))))
+		if h >= 8.0 and h <= 16.0:
+			worst_mid = maxf(worst_mid, rad_to_deg(light.angle_to(disc)))
+		var shown: Vector3 = mat.get_shader_parameter("sun_dir")
+		worst_param = maxf(worst_param, rad_to_deg(shown.angle_to(disc)))
+	_check(worst_bearing < 0.5 and worst_mid < 0.5 and worst_param < 0.01, "the sun disc is on the light's bearing all day (worst %.2f deg) and on the light from 8 to 16 (worst %.2f deg); the shader draws it there" % [worst_bearing, worst_mid])
+	atm.hour = 6.2
+	atm._apply(0.0)
+	var low: float = rad_to_deg(asin(atm.sky.sun_dir.y))
+	_check(low < 8.0 and atm.sky.sun_amount > 0.9, "at 6:12 the sun is just up in the east (%.1f deg high, bearing %.0f)" % [low, rad_to_deg(atan2(atm.sky.sun_dir.x, -atm.sky.sun_dir.z))])
+	atm.hour = 22.0
+	atm._apply(0.0)
+	var night_light: Vector3 = atm.sun.transform.basis.z.normalized()
+	var phase0: float = atm.sky.moon_phase
+	_check(atm.sky.sun_amount == 0.0 and atm.sky.sun_dir.y < 0.0 and atm.sky.moon_amount > 0.9 and atm.sky.moon_dir.angle_to(night_light) < 0.01 and atm.sky.moon_dir.y > 0.3, "at night the sun is down and the moon is up where the light comes from")
+	for h in [23.5, 3.0, 12.0, 22.0]:
+		atm.hour = h
+		atm._apply(0.0)
+	var moved := fposmod(atm.sky.moon_phase - phase0, 1.0)
+	_check(atm.sky.day == 1 and absf(moved - 1.0 / SkyDome.LUNAR_DAYS) < 0.001, "a day later the moon's phase has moved on by 1/%d (%.3f)" % [int(SkyDome.LUNAR_DAYS), moved])
+	atm.indoors = true
+	atm._apply(0.0)
+	await _frames(2)
+	_check(env.background_mode == Environment.BG_COLOR and not atm.birds.view.visible, "indoors: a plain dark background and no birds")
+	atm.indoors = false
+	atm._apply(0.0)
+	_check(env.background_mode == Environment.BG_SKY, "back outside, the sky")
+	# Look up: a camera at eye height facing a bearing and a pitch.
+	var cam := Camera3D.new()
+	game.add_child(cam)
+	var at := Vector3(1200.0, Terrain.height(1200.0, -1300.0), -1300.0)
+	var xf: Transform3D = SkyDome.look_up(cam, env, at, 90.0, 30.0)
+	var fwd := -xf.basis.z
+	_check(absf(rad_to_deg(asin(fwd.y)) - 30.0) < 0.1 and absf(rad_to_deg(atan2(fwd.x, -fwd.z)) - 90.0) < 0.1 and absf(xf.origin.y - at.y - 1.7) < 0.01 and SkyDome.looks_at_sky(cam) and env.fog_enabled, "Look up: eye high on the hill, 30 degrees up facing east, the sky in frame and the ground hazed into it")
+	SkyDome.horizon_haze(env, false)
+	cam.queue_free()
+	_check(not env.fog_enabled and not SkyDome.looks_at_sky(game.camera), "the top-down view frames no sky (so the sky is redrawn only 4 times a second)")
+
+
+## Stars by light pollution: few and faint downtown, more in the suburbs, the
+## whole sky and the Milky Way from the dark hills, a beach and the edge of
+## the desert; none by day or under cloud. An orange glow hangs over the
+## city: all round downtown, a dome over the town on its bearing from out of
+## town.
+func test_stars_by_light_pollution() -> void:
+	await _new_game(false)
+	var SkyDome = load("res://scripts/sky.gd")
+	var atm = game.atmosphere
+	atm.minutes_per_second = 0.0
+	atm.weather_changes = false
+	atm.set_weather("clear", true)
+	var places := [["downtown", Vector2(300, 250)], ["suburbs", Vector2(-350, 100)], ["hills", Vector2(1200, -1300)], ["beach", Vector2(-2033, 1791)], ["desert edge", Vector2(-2667, -1959)]]
+	var night := {}
+	var text := ""
+	var by_day := 0.0
+	var clouded := 0.0
+	var day_glow := 0.0
+	for place in places:
+		var p: Vector2 = place[1]
+		game.player.global_position = Vector3(p.x, Terrain.height(p.x, p.y) + 0.5, p.y)
+		atm.hour = 23.0
+		atm._apply(0.0)
+		night[place[0]] = [atm.sky.stars, atm.sky.milky, atm.sky.glow_amount, atm.sky.material.get_shader_parameter("stars"), SkyDome.glow_at(p), atm.sky.material.get_shader_parameter("glow_lobe")]
+		text += " %s %.2f" % [place[0], atm.sky.stars]
+		atm.set_weather("cloudy", true)
+		clouded = maxf(clouded, atm.sky.stars)
+		atm.set_weather("clear", true)
+		atm.hour = 12.0
+		atm._apply(0.0)
+		by_day = maxf(by_day, atm.sky.stars)
+		day_glow = maxf(day_glow, atm.sky.glow_amount + float(atm.sky.material.get_shader_parameter("glow_around")))
+	var dark := minf(night.hills[0], minf(night.beach[0], night["desert edge"][0]))
+	_check(night.downtown[0] <= 0.12 and night.downtown[0] < night.suburbs[0] and night.suburbs[0] < dark and dark >= 0.75, "stars at 23:00 by light pollution:" + text)
+	var shader_ok := true
+	for k in night:
+		shader_ok = shader_ok and absf(float(night[k][3]) - float(night[k][0])) < 0.0001
+	_check(shader_ok, "the sky shader shows the stars worked out for the place")
+	_check(night.downtown[1] == 0.0 and night.suburbs[1] == 0.0 and minf(night.hills[1], night.beach[1]) > 0.5, "the Milky Way only away from the lights (hills %.2f, beach %.2f)" % [night.hills[1], night.beach[1]])
+	_check(by_day == 0.0 and clouded == 0.0, "no stars by day or under cloud")
+	var town_glow: Dictionary = night.downtown[4]
+	var hill_glow: Dictionary = night.hills[4]
+	var dome: Vector4 = hill_glow.lobes[0]
+	var shown: Vector4 = night.hills[5][0]
+	var off := absf(rad_to_deg(Vector2(dome.x, dome.y).angle_to(Vector2(300, 250) - Vector2(1200, -1300))))
+	_check(town_glow.around >= 1.0 and hill_glow.around < 0.1 and off < 25.0 and dome.z > 0.2 and shown.is_equal_approx(dome) and night.downtown[2] > night.hills[2] and day_glow == 0.0, "the city glows orange at night: all round downtown (%.2f), from the hills a dome over town (%.0f deg off its bearing, %.2f); not by day (%.2f)" % [town_glow.around, off, dome.z, day_glow])
+
+
+## Birds by day, the kinds of the place: pigeons and crows downtown, gulls at
+## the beach, egrets and herons in the bayou, hawks over the hills; they
+## leave at dusk when bats come out, and none fly at night or in a storm.
+func test_birds_by_day_not_at_night() -> void:
+	await _new_game(false)
+	var atm = game.atmosphere
+	atm.minutes_per_second = 0.0
+	atm.weather_changes = false
+	atm.set_weather("clear", true)
+	var birds = atm.birds
+	var places := {"city": Vector2(300, 250), "beach": Vector2(-2033, 1791), "bayou": Vector2(-966, 366), "hills": Vector2(1200, -1300), "farm": Vector2(584, -1824)}
+	var wrong := []
+	for h in places:
+		var got: String = birds.habitat_at(places[h])
+		if got != h:
+			wrong.append("%s reads %s" % [h, got])
+	_check(wrong.is_empty() and birds.habitat_at(Vector2(300, 2600)) == "beach", "habitats by place, open sea for gulls %s" % [wrong])
+	var Birds = load("res://scripts/birds.gd")
+	var kinds := {}
+	var misplaced := []
+	for h in ["city", "beach", "bayou", "hills"]:
+		var p: Vector2 = places[h]
+		var at := Vector3(p.x, Terrain.height(p.x, p.y), p.y)
+		game.player.global_position = at + Vector3(0, 0.5, 0)
+		game.city.stream_now(at)
+		atm.hour = 10.0 if h != "city" else 9.0
+		await _frames(2)
+		var seen := {}
+		for f in birds.flocks:
+			seen[f.kind] = seen.get(f.kind, 0) + 1
+			# Each flock is a kind of the ground it was started over (a beach
+			# point's circle also takes in canals and bayou, with their egrets).
+			var where: String = birds.habitat_at(f.home)
+			var fits := false
+			for e in Birds.HABITATS.get(where, Birds.HABITATS.country):
+				fits = fits or e[0] == f.kind
+			if not fits:
+				misplaced.append("%s over %s near %s" % [f.kind, where, h])
+		kinds[h] = seen
+		if h == "city":
+			_check(birds.flocks.size() >= 8 and birds.bird_count() >= 40 and birds.view.visible and birds.mm.visible_instance_count >= birds.bird_count(), "by day %d birds in %d flocks round the player" % [birds.bird_count(), birds.flocks.size()])
+		atm.hour = 2.0
+		await _frames(2)
+	_check(misplaced.is_empty() and kinds.city.get("pigeon", 0) + kinds.city.get("crow", 0) > 0 and not kinds.city.has("egret") and kinds.beach.get("gull", 0) > 0 and kinds.bayou.get("egret", 0) + kinds.bayou.get("heron", 0) > 0 and kinds.hills.get("hawk", 0) > 0, "kinds by place: %s, each a kind of its ground %s" % [kinds, misplaced])
+	# Back in town: the day ends, the day birds leave and the bats come out.
+	var town := Vector3(300, 0, 250)
+	game.player.global_position = town + Vector3(0, 0.5, 0)
+	atm.hour = 19.0
+	await _frames(2)
+	var day_flocks: int = birds.flocks.size()
+	atm.hour = 19.35
+	await _frames(3)
+	var leaving := 0
+	for f in birds.flocks:
+		if f.kind != "bat" and f.state == "leave":
+			leaving += 1
+	_check(day_flocks >= 8 and leaving == day_flocks, "at 19:21 the day birds head off (%d of %d flocks)" % [leaving, day_flocks])
+	atm.hour = 23.0
+	await _frames(2)
+	_check(birds.bird_count() == 0 and not birds.view.visible, "no birds at night")
+	atm.hour = 19.8
+	await _frames(2)
+	var bats := 0
+	for f in birds.flocks:
+		bats += 1 if f.kind == "bat" else 100
+	_check(bats > 0 and bats <= birds.BAT_FLOCKS, "a few bat flocks at dusk and nothing else (%d)" % [bats])
+	atm.hour = 12.0
+	atm.set_weather("storm", true)
+	await _frames(2)
+	_check(birds.bird_count() == 0, "no birds in a storm")
+	atm.set_weather("rain", true)
+	birds.refresh()
+	_check(birds.flocks.size() > 0 and birds.flocks.size() <= birds.RAIN_FLOCKS, "fewer flocks in the rain (%d)" % birds.flocks.size())
+
+
+## Birds land on roofs and open ground and burst up from people on foot,
+## moving cars and loud events (Birds.startle: a crash, a gunshot); all of
+## them are one MultiMesh, one draw call, with a fixed budget.
+func test_birds_startle_and_budget() -> void:
+	await _new_game(false)
+	var Birds = load("res://scripts/birds.gd")
+	var atm = game.atmosphere
+	atm.minutes_per_second = 0.0
+	atm.weather_changes = false
+	atm.set_weather("clear", true)
+	atm.hour = 10.0
+	var town := Vector3(300, 0, 250)
+	game.city.stream_now(town)
+	game.player.global_position = town + Vector3(0, 0.5, 0)
+	await _frames(3)
+	var birds = atm.birds
+	var probe := {"kind": "pigeon"}
+	var roofs := 0
+	var spots := 0
+	var buried := 0
+	for i in 12:
+		var s = birds._landing_spot(probe, town + Vector3(0, 0, 60), 50.0)
+		if s != null:
+			spots += 1
+			var ground := Terrain.height(s.x, s.z)
+			roofs += 1 if s.y > ground + 2.5 else 0
+			if Birds._in_lot(game.city, Vector2(s.x, s.z)) and s.y < ground + Birds.LOT_TOP - 0.001:
+				buried += 1
+	_check(spots >= 8 and roofs >= 1 and buried == 0, "pigeons find places to land in town (%d of 12 tries, %d on roofs), on top of the lots' paving (%d under it)" % [spots, roofs, buried])
+	var gull_spot = birds._landing_spot({"kind": "gull"}, Vector3(300, 0, 2600), 40.0)
+	_check(gull_spot == null, "gulls do not land on the open sea")
+	# A perched flock, and another 150 m off.
+	var near := town + Vector3(70, 0, 0)
+	var flock: Dictionary = birds.spawn("pigeon", near, true)
+	var far: Dictionary = birds.spawn("crow", town + Vector3(-150, 0, 0), true)
+	for f in [flock, far]:
+		if f.state != "perch":
+			birds._set_down(f, Vector3(f.pos.x, Terrain.height(f.pos.x, f.pos.z), f.pos.z))
+	var start: Vector3 = flock.pos
+	var n: int = Birds.startle(start, 20.0)
+	_check(n >= 1 and flock.state == "flee" and far.state == "perch", "a bang scatters the flock near it and not one 220 m off")
+	await _frames(60)
+	var moved: float = Vector2(flock.pos.x - start.x, flock.pos.z - start.z).length()
+	_check(flock.lift > 0.9 and moved > 10.0 and flock.pos.y > start.y + 4.0, "it bursts up and away (%.0f m off, %.1f m up in a second)" % [moved, flock.pos.y - start.y])
+	# Someone on foot walks up to a perched flock.
+	birds._set_down(flock, Vector3(near.x, Terrain.height(near.x, near.z), near.z))
+	await _frames(20)
+	_check(flock.state == "perch", "the flock settles again with nobody near")
+	game.player.global_position = flock.pos + Vector3(3, 0.5, 0)
+	await _frames(20)
+	_check(flock.state == "flee", "a person on foot coming close flushes it")
+	game.player.global_position = town + Vector3(0, 0.5, 0)
+	# A car going past; a parked one does not.
+	birds._set_down(flock, Vector3(near.x, Terrain.height(near.x, near.z), near.z))
+	var car = Vehicle.new()
+	car.kind = "sedan"
+	game.add_child(car)
+	car.global_position = flock.pos + Vector3(0, 0, 6)
+	await _frames(2)
+	car.speed = 0.0
+	birds._check_threats()
+	var parked_ok: bool = flock.state == "perch"
+	car.speed = 9.0
+	birds._check_threats()
+	_check(parked_ok and flock.state == "flee", "a moving car flushes the flock, a parked one does not")
+	car.queue_free()
+	# A crash nearby (Fx) startles them too.
+	birds._set_down(flock, Vector3(near.x, Terrain.height(near.x, near.z), near.z))
+	Fx.crash(flock.pos + Vector3(10, 0, 0), 15.0, false)
+	_check(flock.state == "flee", "a crash nearby sets them off")
+	# Budget: one MultiMesh of 320 birds in one surface, no shadow casting
+	# (the blob shadows are part of the mesh); full, it stops at 20 flocks.
+	var draws := 0
+	for node in birds.find_children("*", "GeometryInstance3D", true, false):
+		draws += 1
+	var mesh: ArrayMesh = birds.mm.mesh
+	var verts: int = mesh.surface_get_array_len(0)
+	_check(draws == 1 and birds.view is MultiMeshInstance3D and mesh.get_surface_count() == 1 and birds.mm.instance_count == 320 and birds.view.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF and verts * 320 <= 12000, "one draw call: %d birds of %d vertices (shadow quad included), no shadow pass" % [birds.mm.instance_count, verts])
+	while not birds.spawn("starling", town + Vector3(randf_range(-80, 80), 0, randf_range(-80, 80))).is_empty():
+		pass
+	_check(birds.flocks.size() == Birds.MAX_FLOCKS and birds.bird_count() <= 320 and birds.mm.visible_instance_count <= 320, "full up at %d flocks, %d birds" % [birds.flocks.size(), birds.bird_count()])
 
 
 func test_homecoming_runs_start_to_finish() -> void:

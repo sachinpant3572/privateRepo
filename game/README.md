@@ -360,6 +360,13 @@ cd game && xvfb-run -a -s "-screen 0 1280x720x24" godot --rendering-driver openg
   --resolution 1280x720 res://tests/screenshots.tscn -- /path/to/out_dir
 ```
 
+With `res://tests/sky_shots.tscn` the sky (16 views): looking up at night
+from downtown, the suburbs, the hills, a beach and the desert's edge, the
+moon, a cloudy night, sunrise and sunset, birds by day from below and above,
+and the sky in the river, the sea and wet roads from above.
+`ONLY=s03_hills_night,...` shoots just those; `SKY_DEBUG=1` prints where the
+flocks near each view are on screen.
+
 The same command with `res://tests/gallery.tscn` renders the asset gallery
 (every building, landmark, vehicle and prop, and posed people; `-- <out_dir>
 vehicles` shoots only the vehicles: every kind, each row and the trucks close
