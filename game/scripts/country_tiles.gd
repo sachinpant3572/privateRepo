@@ -14,6 +14,7 @@ const Props = preload("res://scripts/kits/prop_kit.gd")
 const Kit = preload("res://scripts/kits/country_kit.gd")
 const Grounds = preload("res://scripts/kits/grounds_kit.gd")
 const Terrain = preload("res://scripts/terrain.gd")
+const Flora = preload("res://scripts/kits/flora_kit.gd")
 
 ## Zones whose home cars are live parked cars (Kit.live_cars) rather than
 ## static models: Bellerive's suburbs (HANDOFF-bellerive-expand.md BX-2).
@@ -108,19 +109,41 @@ const ZONE_GROUND := {
 	"field_bare": [Color(0.56, 0.44, 0.3), false], "canal": [Color(0.2, 0.33, 0.35), false],
 	"canal_bank": [Color(0.66, 0.64, 0.58), false],
 }
-## Tree spacing (metres between trees) and kind per zone.
+## Tree spacing (metres between trees) and kind per zone: one kind, or a
+## {kind: weight} mix (kits/flora_kit.gd makes the wild kinds). Eucalyptus
+## lines California's farm windbreaks; the desert has yucca and cactus.
 const TREES := {
-	"land": [36.0, "round"], "farmland": [90.0, "round"], "bayou": [15.0, "cypress"],
-	"hills": [26.0, "cypress"], "heights": [15.0, "round"], "bayou_town": [16.0, "cypress"],
-	"fringe": [28.0, "round"], "eastside": [18.0, "palm"], "beach_town": [16.0, "palm"],
-	"shore": [18.0, "palm"], "town": [22.0, "round"], "sand": [70.0, "palm"],
-	"far_desert": [40.0, "shrub"], "far_mountains": [22.0, "pine"], "far_forest": [12.0, "pine"],
-	"far_lakeside": [22.0, "round"], "far_parkland": [24.0, "round"], "far_military": [90.0, "shrub"],
-	"far_land": [30.0, "round"],
-	"mountain": [10.0, "chaparral"],
+	"land": [36.0, {"round": 4, "live_oak": 3, "eucalyptus": 1, "toyon": 2}],
+	"farmland": [90.0, {"round": 3, "eucalyptus": 3, "live_oak": 2}],
+	"bayou": [15.0, "cypress"],
+	"hills": [26.0, {"cypress": 4, "round": 2, "live_oak": 2}],
+	"heights": [15.0, {"round": 3, "live_oak": 2, "cypress": 1, "eucalyptus": 1}],
+	"bayou_town": [16.0, "cypress"],
+	"fringe": [28.0, {"round": 2, "toyon": 3, "shrub": 2, "live_oak": 1, "dry_grass": 2}],
+	"eastside": [18.0, {"palm": 1, "round": 1}], "beach_town": [16.0, "palm"],
+	"shore": [18.0, "palm"], "town": [22.0, {"round": 3, "live_oak": 2, "cypress": 1}], "sand": [70.0, "palm"],
+	"far_desert": [40.0, {"shrub": 3, "yucca": 2, "prickly_pear": 1, "rock": 1, "dry_grass": 2}],
+	"far_mountains": [22.0, {"pine": 5, "live_oak": 1, "rock": 2}],
+	"far_forest": [12.0, {"pine": 5, "round": 1, "toyon": 1}],
+	"far_lakeside": [22.0, {"round": 3, "sycamore": 2, "pine": 1}],
+	"far_parkland": [24.0, {"round": 3, "live_oak": 2, "sycamore": 1}],
+	"far_military": [90.0, "shrub"],
+	"far_land": [30.0, {"round": 3, "live_oak": 2, "toyon": 1}],
+	# On raised ground the hills' ecology picks (Flora.pick); this is the
+	# flat foot of the range.
+	"mountain": [12.0, {"chaparral": 3, "live_oak": 1, "dry_grass": 2, "toyon": 1}],
 }
+## Zones that are wild ground: on the hills they take the ecology's ground
+## colour, plants and ground cover.
+const WILD := ["mountain", "land", "fringe", "hills", "far_land", "far_parkland", "far_forest", "far_mountains"]
 const TREE_GRID := 10.0
 const MAX_TREES := 120
+## Grass tufts, small bushes and stones between the plants on wild hill
+## ground: a finer grid, capped per tile and scaled by `cover`.
+const COVER_GRID := 5.0
+const MAX_COVER := 200
+## Ground cover density (main.gd: half on Low quality).
+static var cover := 1.0
 const POND_GRID := 25.0
 const LIGHT_CLASSES := ["street", "avenue"]
 const POLE_CLASSES := ["road", "lane", "track"]
@@ -143,6 +166,8 @@ class Ctx:
 	## Whether the tile lies on the hills, and its ground's vertices in mb.
 	var hill := false
 	var ground_end := 0
+	## Per ground vertex: 1 where it is wild ground (WILD), for _hill_shade.
+	var wild := PackedByteArray()
 	## Lots and plots on the hills' flat pads, lifted as one piece:
 	## [first vertex, end vertex, first collider, end collider, height].
 	var rigid: Array = []
@@ -329,6 +354,7 @@ static func _ground(ctx: Ctx, parts: Array) -> void:
 		# Plain colour: the grass code's mown stripes read as a lawn, not a field.
 		var color: Color = g[0]
 		var flat: Array = part[1]
+		var v0: int = ctx.mb.verts.size()
 		for k in range(0, flat.size() - 5, 6):
 			var a := Vector2(flat[k], flat[k + 1])
 			var b := Vector2(flat[k + 2], flat[k + 3])
@@ -338,6 +364,12 @@ static func _ground(ctx: Ctx, parts: Array) -> void:
 			else:
 				ctx.mb.tri(_v3(a, GROUND_Y), _v3(b, GROUND_Y), _v3(cc, GROUND_Y), Vector3.UP, color)
 			ctx.tris.append([a, b, cc, zone])
+		if ctx.hill:
+			var n: int = ctx.mb.verts.size()
+			ctx.wild.resize(n)
+			if zone in WILD:
+				for i in range(v0, n):
+					ctx.wild[i] = 1
 
 
 ## A ground triangle on the hills, split until no edge is longer than
@@ -411,7 +443,7 @@ static func _drape(ctx: Ctx) -> void:
 			v.y += h - HILL_GROUND_DROP * minf(1.0, h * 0.5)
 			var n := Terrain.normal(v.x, v.z)
 			mb.normals[i] = n
-			mb.colors[i] = _hill_shade(mb.colors[i], n, h)
+			mb.colors[i] = _hill_shade(mb.colors[i], n, h, v, i < ctx.wild.size() and ctx.wild[i] == 1)
 		else:
 			v.y += h
 		mb.verts[i] = v
@@ -432,10 +464,16 @@ static func _drape(ctx: Ctx) -> void:
 ## Ground colour on the hills, so the relief reads from above: baked
 ## shade from a low north-west light, dark chaparral on the north faces,
 ## golden grass on the south ones, and bare rock showing near the top.
-## The alpha (the surface code) is kept.
-static func _hill_shade(c: Color, n: Vector3, h: float) -> Color:
+## Wild ground first takes the ecology's patchy mix of golden and green
+## grass and rock (Flora.ground), as GTA V's hills do. The alpha (the
+## surface code) is kept.
+static func _hill_shade(c: Color, n: Vector3, h: float, at := Vector3.ZERO, wild := false) -> Color:
 	var lit := clampf(1.0 + 2.2 * (n.dot(HILL_LIGHT) - HILL_LIGHT.y), 0.55, 1.3)
 	var rgb := Color(c.r, c.g, c.b)
+	if wild:
+		rgb = rgb.lerp(Flora.ground(Flora.moisture(at.x, at.z, h, n), n, h), 0.85)
+		rgb = rgb.lerp(HILL_SCRUB, clampf(-n.z * 2.5, 0.0, 0.3))
+		return Color(rgb.r * lit, rgb.g * lit, rgb.b * lit, c.a)
 	rgb = rgb.lerp(HILL_SCRUB, clampf(-n.z * 2.5, 0.0, 0.55))
 	rgb = rgb.lerp(HILL_GOLD, clampf(n.z * 2.5, 0.0, 0.35))
 	rgb = rgb.lerp(HILL_ROCK, clampf((h - 70.0) / 60.0, 0.0, 0.4))
@@ -934,6 +972,11 @@ static func _pond(ctx: Ctx, cpt: Vector2) -> void:
 
 
 static func _trees(ctx: Ctx) -> void:
+	_scatter(ctx)
+	_cover(ctx)
+
+
+static func _scatter(ctx: Ctx) -> void:
 	var n := int(ctx.rect.size.x / TREE_GRID)
 	var count := 0
 	for gx in n:
@@ -945,17 +988,75 @@ static func _trees(ctx: Ctx) -> void:
 			var zone := _zone_at(ctx, p)
 			if zone == "" or not TREES.has(zone):
 				continue
-			var spacing: float = TREES[zone][0]
-			if roll > (TREE_GRID / spacing) * (TREE_GRID / spacing):
+			var kind := ""
+			var h := Terrain.height(p.x, p.y) if ctx.hill else 0.0
+			if h > 0.5 and zone in WILD:
+				# The hills' ecology: denser where wet, sparse on dry faces.
+				var nrm := Terrain.normal(p.x, p.y)
+				var m := Flora.moisture(p.x, p.y, h, nrm)
+				if roll > 0.3 + 0.7 * m:
+					continue
+				kind = Flora.pick(p.x, p.y, h, nrm, m, ctx.rng)
+			else:
+				var spacing: float = TREES[zone][0]
+				if roll > (TREE_GRID / spacing) * (TREE_GRID / spacing):
+					continue
+				var k = TREES[zone][1]
+				kind = Flora.pick_from(k, ctx.rng) if k is Dictionary else k
+			if not _clear(ctx, p, 1.0 if kind in Flora.SOFT or kind == "shrub" else 2.5):
 				continue
-			var kind: String = TREES[zone][1]
-			if kind == "palm" and zone == "eastside" and ctx.rng.randf() < 0.5:
-				kind = "round"
-			elif kind == "chaparral" and ctx.rng.randf() < 0.18:
-				kind = "round" # a live oak among the scrub
-			if not _clear(ctx, p, 2.5 if kind != "shrub" else 1.0):
+			_plant(ctx, p, kind)
+			count += 1
+
+
+## One plant at p; on the hills it rises as one piece to the ground under
+## its trunk instead of being bent over the slope.
+static func _plant(ctx: Ctx, p: Vector2, kind: String) -> void:
+	var v0: int = ctx.mb.verts.size()
+	var o0: int = ctx.out.size()
+	if not Flora.plant(ctx.mb, ctx.props, _v3(p, GROUND_Y), kind, ctx.rng):
+		_tree(ctx, _v3(p, GROUND_Y), kind)
+	if ctx.hill:
+		_rigid(ctx, v0, o0, p)
+
+
+## Ground cover between the plants on wild hill ground: grass tufts (straw
+## where dry, green where wet), small bushes and stones.
+static func _cover(ctx: Ctx) -> void:
+	if not ctx.hill or cover <= 0.0:
+		return
+	var n := int(ctx.rect.size.x / COVER_GRID)
+	var count := 0
+	var cap := int(MAX_COVER * cover)
+	for gx in n:
+		for gy in n:
+			if count >= cap:
+				return
+			var p := ctx.rect.position + Vector2(gx + ctx.rng.randf(), gy + ctx.rng.randf()) * COVER_GRID
+			var roll := ctx.rng.randf()
+			if roll > 0.55 * cover:
 				continue
-			_tree(ctx, _v3(p, GROUND_Y), kind)
+			var h := Terrain.height(p.x, p.y)
+			if h <= 0.5 or not (_zone_at(ctx, p) in WILD):
+				continue
+			var nm := Terrain.normal(p.x, p.y)
+			var m := Flora.moisture(p.x, p.y, h, nm)
+			var kind := "dry_grass" if m < 0.5 else "green_grass"
+			var pick := ctx.rng.randf()
+			if pick < 0.12 + Flora.steep(nm) * 0.8:
+				kind = "stone"
+			elif pick < 0.3:
+				kind = "toyon" if m > 0.55 else ("chaparral" if m > 0.35 else "dry_grass")
+			if not _clear(ctx, p, 0.8):
+				continue
+			var v0: int = ctx.mb.verts.size()
+			if kind == "stone":
+				Flora.rock(ctx.mb, ctx.props, _v3(p, GROUND_Y), ctx.rng, ctx.rng.randf_range(0.3, 0.8))
+			elif kind == "dry_grass" or kind == "green_grass":
+				Flora.tufts(ctx.mb, _v3(p, GROUND_Y), ctx.rng, Flora.STRAW if kind == "dry_grass" else Flora.BLADE, 2)
+			else:
+				Flora.plant(ctx.mb, ctx.props, _v3(p, GROUND_Y), kind, ctx.rng)
+			_rigid(ctx, v0, ctx.out.size(), p)
 			count += 1
 
 
@@ -970,14 +1071,6 @@ static func _tree(ctx: Ctx, p: Vector3, kind: String) -> void:
 		"shrub":
 			mb.clump(p + Vector3(0, 0.5, 0), Vector3(1.0, 0.6, 1.0) * rng.randf_range(0.7, 1.3), Props._leaf(Color(0.42, 0.45, 0.28)), seed, 5, 3)
 			return
-		"chaparral":
-			# Sage and chamise: low, wide, dusty olive clumps.
-			var leaf := Props._leaf(Color(0.33, 0.38, 0.22).lerp(Color(0.46, 0.47, 0.32), rng.randf()))
-			var r := rng.randf_range(1.6, 3.0)
-			mb.clump(p + Vector3(0, 0.7, 0), Vector3(r, 0.9, r * rng.randf_range(0.7, 1.0)), leaf, seed, 6, 3)
-			if rng.randf() < 0.5:
-				mb.clump(p + Vector3(r * 0.8, 0.5, rng.randf_range(-1.0, 1.0)), Vector3(r * 0.6, 0.6, r * 0.6), leaf.darkened(0.1), seed + 1, 5, 3)
-			return
 		"cypress":
 			var h := rng.randf_range(7.0, 11.0)
 			mb.cylinder(p, 0.45, 1.0, BARK, 6)
@@ -985,13 +1078,6 @@ static func _tree(ctx: Ctx, p: Vector3, kind: String) -> void:
 			var leaf := Props._leaf(Color(0.3, 0.4, 0.2).lerp(Color(0.38, 0.44, 0.24), rng.randf()))
 			mb.clump(p + Vector3(0, h * 0.7, 0), Vector3(1.8, h * 0.32, 1.8), leaf, seed, 6, 4)
 			mb.clump(p + Vector3(rng.randf_range(-0.8, 0.8), h * 0.45, rng.randf_range(-0.8, 0.8)), Vector3(1.4, 1.0, 1.4), leaf.darkened(0.08), seed + 1, 5, 3)
-		"pine":
-			var h := rng.randf_range(8.0, 13.0)
-			mb.cylinder(p, 0.25, h * 0.5, BARK, 5)
-			var leaf := Props._leaf(Color(0.2, 0.32, 0.2).lerp(Color(0.26, 0.36, 0.22), rng.randf()))
-			for i in 3:
-				var t := 0.4 + i * 0.2
-				mb.clump(p + Vector3(0, h * t, 0), Vector3(2.4 - i * 0.6, 1.3, 2.4 - i * 0.6), leaf.lightened(i * 0.04), seed + i, 6, 3)
 		_:
 			var h := rng.randf_range(5.0, 8.0)
 			var r := rng.randf_range(2.2, 3.4)

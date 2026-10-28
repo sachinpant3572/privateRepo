@@ -130,6 +130,11 @@ func _run() -> void:
 		await _blood(game)
 		get_tree().quit()
 		return
+	if OS.get_environment("SHOTS") == "flora":
+		# The hills' plants and green/dry ground (0.23).
+		await _flora(game)
+		get_tree().quit()
+		return
 	if OS.get_environment("SHOTS") == "exhaust":
 		# Exhaust by kind and norms, tyre smoke and tyre marks (0.23).
 		await _exhaust(game)
@@ -289,6 +294,56 @@ func _hills(game) -> void:
 		await get_tree().process_frame
 	await _shot("47_bellerive_hills_map.png")
 	game.hud.full_map.close()
+
+
+## The hills' ecology (0.23): a wet canyon floor, a dry south face, a
+## green north face, the pines up high, a eucalyptus grove, and two wide
+## views showing the golden and green patches.
+func _flora(game) -> void:
+	var Flora = preload("res://scripts/kits/flora_kit.gd")
+	var best := {}
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var b: Rect2 = Terrain.bounds
+	for i in 6000:
+		var x := b.position.x + rng.randf() * b.size.x
+		var z := b.position.y + rng.randf() * b.size.y
+		var h := Terrain.height(x, z)
+		if h < 8.0:
+			continue
+		var n := Terrain.normal(x, z)
+		var m: float = Flora.moisture(x, z, h, n)
+		var score := {
+			"canyon": m - h / 60.0,
+			"south": -m + n.z,
+			"north": m - n.z,
+			"pines": (h - 60.0) / 40.0 + m if h > 65.0 else -INF,
+			"grove": Flora.noise(x, z, 90.0, 3) - h / 80.0,
+		}
+		for k: String in score:
+			if score[k] > best.get(k, [-INF])[0]:
+				best[k] = [score[k], Vector2(x, z)]
+	var stops := []
+	var names := {"canyon": "flora_1_canyon", "south": "flora_2_south_face", "north": "flora_3_north_face",
+		"pines": "flora_4_pines", "grove": "flora_5_eucalyptus"}
+	for k: String in names:
+		if best.has(k):
+			stops.append([names[k], best[k][1], 45.0])
+	stops.append(["flora_6_wide_observatory", Vector2(1050, -905), 220.0])
+	stops.append(["flora_7_wide_canyon", Vector2(760, -1150), 260.0])
+	for stop in stops:
+		var at: Vector2 = stop[1]
+		var pos := Vector3(at.x, Terrain.height(at.x, at.y), at.y)
+		game.city.stream_now(pos)
+		game.player.global_position = pos
+		game.player.reset_physics_interpolation()
+		game.camera.fixed_focus = pos
+		game.camera.room_size = stop[2]
+		game.camera.snap()
+		await _frames(90)
+		await _shot(stop[0] + ".png")
+	game.camera.fixed_focus = null
+	game.camera.room_size = 0.0
 
 
 ## Golden Flats: a pivot circle wide and its pivot tower close, strip

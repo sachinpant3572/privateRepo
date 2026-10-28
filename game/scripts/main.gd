@@ -187,6 +187,8 @@ func apply_settings() -> void:
 	graphics.apply(settings)
 	Fx.set_blood(settings.get("blood", true) != false)
 	Fx.set_quality(graphics.quality)
+	# Phones on Low get half the hills' grass tufts and stones.
+	Country.Tiles.cover = 0.5 if graphics.quality == "low" else 1.0
 	var scheme: String = settings.get("controls", "stick")
 	Controls.scheme = scheme if Controls.SCHEMES.has(scheme) else "stick"
 	# Headless runs (tests, tools) go flat out.

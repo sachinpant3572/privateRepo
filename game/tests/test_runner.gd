@@ -95,7 +95,7 @@ func _run() -> void:
 		"test_game_log_file_and_rotation", "test_game_log_snapshot_and_events", "test_game_log_report_copy_and_off",
 		"test_screen_shake_setting", "test_settings_sliders_snap_and_apply",
 		"test_blood_melee_spurts_and_spatters", "test_blood_car_hits_smear_and_pool", "test_blood_bleed_toggle_cap_and_fade",
-		"test_exhaust_by_kind_and_norms", "test_tyre_marks_and_smoke",
+		"test_exhaust_by_kind_and_norms", "test_tyre_marks_and_smoke", "test_flora_kit_and_hill_ecology",
 	]
 	# ONLY=name1,name2 runs just those (handy while working on one test).
 	var only := OS.get_environment("ONLY")
@@ -4666,6 +4666,9 @@ func test_country_kit_builds_every_kind() -> void:
 				var solids: Array[Rect2] = []
 				var back := false
 				for col in out:
+					# Porch roofs are sight-only (camera rays), not solid.
+					if col.size() > 3 and col[3].get("sight", false):
+						continue
 					var c: Vector3 = col[0]
 					var s: Vector3 = col[1]
 					var yaw: float = col[2] if col.size() > 2 else 0.0
@@ -7976,3 +7979,97 @@ func _tyre_puffs() -> int:
 	for c in Fx.puffs.colors():
 		n += int(c.r > 0.85 and c.r < 0.93)
 	return n
+
+
+## 0.23: the hills mix golden and green ground by aspect, low ground and
+## patches, and grow a GTA V-like mix of oaks, sycamores, pines, chaparral,
+## yucca, grass and rock that follows the same moisture.
+func test_flora_kit_and_hill_ecology() -> void:
+	var Flora = preload("res://scripts/kits/flora_kit.gd")
+	var Tiles = preload("res://scripts/country_tiles.gd")
+	await _new_game(false)
+	var c = game.city.country
+	# Every species builds, with its collider where it should stop a car.
+	for kind: String in Flora.KINDS:
+		var mb = MeshBuilder.new()
+		var props: Array = []
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 3
+		var ok: bool = Flora.plant(mb, props, Vector3(500, 0, 500), kind, rng)
+		_check(ok and mb.verts.size() > 0, "%s builds (%d verts)" % [kind, mb.verts.size()])
+		if kind in ["live_oak", "sycamore", "eucalyptus", "pine"]:
+			_check(props.size() == 1, "%s has a trunk collider" % kind)
+	# Sample the hills: north faces are wetter than south faces, the ground
+	# shows both golden and green, and the picks follow the moisture.
+	var north := [0.0, 0]
+	var south := [0.0, 0]
+	var gold := 0
+	var green := 0
+	var kinds := {}
+	var dry_kinds := 0
+	var wet_kinds := 0
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	var b: Rect2 = Terrain.bounds
+	for i in 4000:
+		var x := b.position.x + rng.randf() * b.size.x
+		var z := b.position.y + rng.randf() * b.size.y
+		var h := Terrain.height(x, z)
+		if h < 5.0:
+			continue
+		var n := Terrain.normal(x, z)
+		var m: float = Flora.moisture(x, z, h, n)
+		if n.z < -0.2:
+			north[0] += m
+			north[1] += 1
+		elif n.z > 0.2:
+			south[0] += m
+			south[1] += 1
+		var col: Color = Flora.ground(m, n, h)
+		if col.r > col.g + 0.08:
+			gold += 1
+		elif col.g > col.r + 0.05:
+			green += 1
+		var k: String = Flora.pick(x, z, h, n, m, rng)
+		kinds[k] = kinds.get(k, 0) + 1
+		if k in ["yucca", "prickly_pear", "dry_grass"]:
+			dry_kinds += 1 if m < 0.45 else 0
+		if k in ["sycamore", "green_grass"]:
+			wet_kinds += 1 if m > 0.5 else 0
+	_check(north[1] > 50 and south[1] > 50, "the sample finds north and south faces (%d, %d)" % [north[1], south[1]])
+	if north[1] > 0 and south[1] > 0:
+		var mn: float = north[0] / north[1]
+		var ms: float = south[0] / south[1]
+		_check(mn > ms + 0.15, "north faces are wetter than south faces (%.2f against %.2f)" % [mn, ms])
+	var total := gold + green
+	_check(total > 0 and gold > total / 4 and green > total / 4, "the hills mix golden and green ground (%d golden, %d green)" % [gold, green])
+	_check(kinds.size() >= 10, "the hills grow at least 10 kinds (%s)" % str(kinds))
+	_check(dry_kinds > 0 and wet_kinds > 0, "dry plants grow on dry ground and wet ones on wet ground (%d, %d)" % [dry_kinds, wet_kinds])
+	# Hill tiles build with plants and ground cover in reasonable time, and
+	# each tree trunk stands on the ground under it, not sunk or floating.
+	var keys: Array = []
+	for key: Vector2i in c.tiles:
+		var r := Rect2(Vector2(key) * c.tile_size, Vector2.ONE * c.tile_size)
+		var mid := r.get_center()
+		if Terrain.height(mid.x, mid.y) > 25.0:
+			keys.append(key)
+		if keys.size() >= 6:
+			break
+	_check(keys.size() >= 3, "found hill tiles to build (%d)" % keys.size())
+	var worst := 0
+	var off := 0.0
+	var trunks := 0
+	for key: Vector2i in keys:
+		var t0 := Time.get_ticks_usec()
+		var built: Dictionary = Tiles.build(c, key)
+		worst = maxi(worst, Time.get_ticks_usec() - t0)
+		for p: Array in built.props:
+			var s: Vector3 = p[1]
+			if absf(s.y - 3.0) > 0.01:
+				continue
+			var at: Vector3 = p[0]
+			trunks += 1
+			off = maxf(off, absf(at.y - 1.5 - Terrain.height(at.x, at.z)))
+	_check(trunks > 0, "the hill tiles grow trees (%d trunks)" % trunks)
+	_check(off < 0.05, "trunks stand on the slope (worst %.2f m off)" % off)
+	_check(worst < 250000, "a hill tile builds in %.0f ms" % (worst / 1000.0))
