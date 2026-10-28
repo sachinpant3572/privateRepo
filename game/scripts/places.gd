@@ -171,14 +171,15 @@ static func build_suburbs(city, places: Array) -> Array:
 
 ## Where a country shop kind's door is, in its lot frame (x across, y back
 ## from the lot centre; the road is at -d/2): DOOR_OUT in front of the
-## facade. Mirrors the fronts in country_kit.gd (diner, general_store,
+## front. Mirrors the fronts in country_kit.gd (diner, general_store,
 ## shopfront, strip_mall: the middle unit).
 static func suburb_door(kind: String, w: float, d: float) -> Vector2:
 	var fz := 0.0
 	var x := 0.0
 	match kind:
 		"diner":
-			fz = d * 0.5 - 1.0 - 3.0 - clampf(d * 0.26, 5.0, 8.0)
+			# The facade, less the vestibule in front of it (1.6 m).
+			fz = d * 0.5 - 1.0 - 3.0 - clampf(d * 0.26, 5.0, 8.0) - 1.6
 		"general_store":
 			fz = -d * 0.5 + 3.2
 		"shopfront":

@@ -15,6 +15,8 @@ const Buildings = preload("res://scripts/kits/building_kit.gd")
 const Props = preload("res://scripts/kits/prop_kit.gd")
 const Civic = preload("res://scripts/kits/civic_kit.gd")
 const Skyline = preload("res://scripts/kits/skyline_kit.gd")
+const Shady = preload("res://scripts/kits/shady_kit.gd")
+const Homes = preload("res://scripts/kits/homes_kit.gd")
 
 const KINDS := [
 	# Rural.
@@ -32,6 +34,9 @@ const KINDS := [
 	"aurum_hangar",
 	# The Bellerive Hills (one each, the masts two): the skyline kit's monuments.
 	"observatory", "hill_letters", "radio_mast",
+	# Bellerive homes by wealth (BX-4): a T5 tower, T3-T4 condos, a T0-T1
+	# walk-up, a T4 executive house and an estate gatehouse.
+	"res_tower", "midrise_condo", "cheap_block", "exec_house", "gatehouse",
 ]
 
 ## The usual lot of each kind: x along the street, y deep, metres.
@@ -57,6 +62,8 @@ const FOOTPRINTS := {
 	"cruise_terminal": Vector2(120, 52), "torque_tone": Vector2(40, 36),
 	"aurum_hangar": Vector2(72, 64),
 	"observatory": Vector2(64, 44), "hill_letters": Vector2(150, 26), "radio_mast": Vector2(18, 18),
+	"res_tower": Vector2(34, 34), "midrise_condo": Vector2(30, 22), "cheap_block": Vector2(34, 18),
+	"exec_house": Vector2(24, 22), "gatehouse": Vector2(10, 8),
 }
 
 const FLOOR := 3.2
@@ -99,6 +106,8 @@ const BRICKS := [Color(0.6, 0.32, 0.25), Color(0.52, 0.28, 0.22), Color(0.68, 0.
 
 
 static func footprint(kind: String) -> Vector2:
+	if not FOOTPRINTS.has(kind) and kind in Shady.kinds():
+		return Shady.default_size(kind)
 	return FOOTPRINTS.get(kind, Vector2(16, 16))
 
 
@@ -160,12 +169,19 @@ static func build(kind: String, mb, out: Array, size: Vector2, rng: RandomNumber
 		"observatory": Skyline.observatory(mb, out, w, d, rng)
 		"hill_letters": Skyline.hillside_letters(mb, out, w, d, rng)
 		"radio_mast": Skyline.radio_mast(mb, out, w, d, rng)
+		"res_tower": Homes.res_tower(mb, out, w, d, rng)
+		"midrise_condo": Homes.midrise_condo(mb, out, w, d, rng)
+		"cheap_block": Homes.cheap_block(mb, out, w, d, rng)
+		"exec_house": Homes.exec_house(mb, out, w, d, rng)
+		"gatehouse": Homes.gatehouse(mb, out, w, d, rng)
 		_:
 			# Government buildings and terraced homes come from the civic
-			# kit; an unknown kind is a plain block, so a typo shows instead
-			# of a hole.
+			# kit, the rough side of town from the shady kit; an unknown
+			# kind is a plain block, so a typo shows instead of a hole.
 			if kind in Civic.kinds():
 				Civic.build(kind, mb, out, Vector2(w, d), rng)
+			elif kind in Shady.kinds():
+				Shady.build(kind, mb, out, Vector2(w, d), rng)
 			else:
 				_solid(mb, out, Vector3(0, 2.0, 0), Vector3(w * 0.6, 4.0, d * 0.6), Color(1.0, 0.0, 1.0))
 
@@ -482,7 +498,11 @@ static func _sub(kind: String, mb, out: Array, offset: Vector3, yaw: float, size
 	_lot_w = saved_w
 	mb.xform = saved
 	for col in sub:
-		out.append([rot * col[0] + offset, col[1], yaw + (col[2] if col.size() > 2 else 0.0)] + col.slice(3))
+		if col is Dictionary:
+			# A live car's parking spot (see live_cars), moved into this lot.
+			out.append({"park": rot * col.park + offset, "yaw": yaw + col.yaw, "tier": col.tier})
+		else:
+			out.append([rot * col[0] + offset, col[1], yaw + (col[2] if col.size() > 2 else 0.0)] + col.slice(3))
 
 
 ## A square post from the ground to h, with a collider.
@@ -748,15 +768,31 @@ static func _worn(c: Color, t: int) -> Color:
 	return o
 
 
+## Whether the homes' own cars are live (country_tiles sets it per lot,
+## like wealth and reach): when true, _wealth_car draws no car and no
+## collider but appends {"park": Vector3(x, 0, z), "yaw": yaw, "tier": t}
+## to `out` in the lot frame, for the traffic layer to park a car there
+## that can drive off. A dead car on blocks stays static.
+static var live_cars := false
+
 ## The household's car: a beater at T0-T1 (or a dead one on blocks), a
-## sedan at T2-T3, a luxury car at T4-T5.
+## sedan at T2-T3, a luxury car at T4-T5. Draws from rng the same way
+## whether or not live_cars is set, so the rest of the lot is the same.
 static func _wealth_car(mb, out: Array, p: Vector3, yaw: float, t: int, rng: RandomNumberGenerator) -> void:
+	var paint: Color
+	var style := CAR_SEDAN
 	if t >= 4:
-		_car(mb, out, p, yaw, _pick(LUXURY_PAINTS, rng), true, CAR_LUXURY)
+		paint = _pick(LUXURY_PAINTS, rng)
+		style = CAR_LUXURY
 	elif t <= 1:
-		_car(mb, out, p, yaw, _pick(PAINTS, rng), true, CAR_BLOCKS if t == 0 and rng.randf() < 0.4 else CAR_BEATER)
+		paint = _pick(PAINTS, rng)
+		style = CAR_BLOCKS if t == 0 and rng.randf() < 0.4 else CAR_BEATER
 	else:
-		_car(mb, out, p, yaw, _pick(PAINTS, rng))
+		paint = _pick(PAINTS, rng)
+	if live_cars and style != CAR_BLOCKS:
+		out.append({"park": Vector3(p.x, 0.0, p.z), "yaw": yaw, "tier": t})
+		return
+	_car(mb, out, p, yaw, paint, true, style)
 
 
 ## Yard junk round a poor home, about 2 m across from p toward `toward`

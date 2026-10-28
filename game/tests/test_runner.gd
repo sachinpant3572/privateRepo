@@ -76,6 +76,7 @@ func _run() -> void:
 		"test_country_kit_builds_every_kind",
 		"test_country_plots_square_to_their_roads", "test_estates_and_clusters", "test_grounds_kit_builds_every_part",
 		"test_bellerive_hills", "test_golden_flats_farmland", "test_every_home_has_a_way_in", "test_homes_by_wealth",
+		"test_new_home_kinds_and_live_cars",
 	]
 	# ONLY=name1,name2 runs just those (handy while working on one test).
 	var only := OS.get_environment("ONLY")
@@ -4650,3 +4651,74 @@ func test_homes_by_wealth() -> void:
 			if (col[1] as Vector3).is_equal_approx(LUX) and Vector3(col[0].x, 0.0, col[0].z).distance_to(at) < 15.0:
 				cars += 1
 	_check(rich_lot >= 0 and cars >= 1, "a tile build gives a T4 street house its luxury car (lot %d, %d cars)" % [rich_lot, cars])
+
+
+## The newer home kinds (homes_kit.gd): each builds at every tier inside its
+## triangle budget, the tiers read differently, and the live-car hook swaps a
+## home's parked car for a park marker without changing anything else.
+func test_new_home_kinds_and_live_cars() -> void:
+	var Kit = preload("res://scripts/kits/country_kit.gd")
+	var Shady = preload("res://scripts/kits/shady_kit.gd")
+	var MB = preload("res://scripts/mesh_builder.gd")
+	var build := func(kind: String, tier: int, seed_v: int, live := false) -> Array:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed_v
+		Kit.wealth = tier
+		Kit.live_cars = live
+		var mb = MB.new()
+		var out: Array = []
+		Kit.build(kind, mb, out, Kit.footprint(kind), rng)
+		Kit.wealth = -1
+		Kit.live_cars = false
+		return [mb, out]
+	var tinted := func(mb, c: Color) -> int:
+		var k := 0
+		for col: Color in mb.colors:
+			if col.is_equal_approx(c):
+				k += 1
+		return k
+	var problems: Array[String] = []
+	for kind: String in ["res_tower", "midrise_condo", "cheap_block", "exec_house", "gatehouse"]:
+		if kind not in Kit.KINDS:
+			problems.append("%s not in KINDS" % kind)
+			continue
+		for tier in 6:
+			var r: Array = build.call(kind, tier, 5 + tier)
+			var tris: int = r[0].triangle_count()
+			if tris <= 0 or tris > 5000:
+				problems.append("%s T%d: %d triangles" % [kind, tier, tris])
+	_check(problems.is_empty(), "the new home kinds build at every tier in budget %s" % [problems])
+	# cheap_block: T0 boards up more windows than T1; midrise_condo: only T4
+	# has the roof pool.
+	var boards := [0, 0]
+	for seed_v in 6:
+		for t in 2:
+			boards[t] += tinted.call(build.call("cheap_block", t, seed_v)[0], Shady.PLYWOOD.darkened(0.4))
+	_check(boards[0] > boards[1], "a T0 cheap block has more boarded windows than a T1 (%s)" % [boards])
+	var pool3: int = tinted.call(build.call("midrise_condo", 3, 4)[0], Kit.POOL)
+	var pool4: int = tinted.call(build.call("midrise_condo", 4, 4)[0], Kit.POOL)
+	_check(pool3 == 0 and pool4 > 0, "a T4 midrise condo has a roof pool, a T3 none (%d, %d)" % [pool3, pool4])
+	# Live cars: a T4 house gives park markers instead of its luxury car, and
+	# with the hook off it builds exactly as before.
+	const LUX := Vector3(1.9, 1.5, 4.9)
+	var off: Array = build.call("house", 4, 3)
+	var again: Array = build.call("house", 4, 3)
+	var on: Array = build.call("house", 4, 3, true)
+	var parks: Array = on[1].filter(func(c): return c is Dictionary)
+	var solid_on: Array = on[1].filter(func(c): return c is Array)
+	var lux_off: Array = off[1].filter(func(c): return c is Array and (c[1] as Vector3).is_equal_approx(LUX))
+	var lux_on: Array = solid_on.filter(func(c): return (c[1] as Vector3).is_equal_approx(LUX))
+	_check(off[1] == again[1] and off[0].verts == again[0].verts and lux_off.size() >= 1 and not off[1].any(func(c): return c is Dictionary),
+		"with live cars off a T4 house builds the same, with its car (%d)" % lux_off.size())
+	var shapes_ok := parks.all(func(p): return p.size() == 3 and p.park is Vector3 and p.park.y == 0.0 and p.yaw is float and p.tier == 4)
+	var car_left := 0
+	for p: Dictionary in parks:
+		for v: Vector3 in on[0].verts:
+			if v.y > 0.5 and v.y < 1.6 and Vector2(v.x - p.park.x, v.z - p.park.z).length() < 0.7:
+				car_left += 1
+	var others_same: bool = solid_on == off[1].filter(func(c): return not (c[1] as Vector3).is_equal_approx(LUX))
+	_check(parks.size() >= 1 and parks.size() == lux_off.size() and shapes_ok and lux_on.is_empty() and car_left == 0 and others_same,
+		"with live cars on a T4 house gives %d park markers, no car mesh (%d verts) or collider (%d)" % [parks.size(), car_left, lux_on.size()])
+	# The marker sits where the static car stood.
+	var near := parks.all(func(p): return lux_off.any(func(c): return Vector2(c[0].x - p.park.x, c[0].z - p.park.z).length() < 0.5))
+	_check(near, "each park marker stands where the static car was")
