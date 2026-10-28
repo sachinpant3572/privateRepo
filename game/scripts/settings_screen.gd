@@ -359,6 +359,43 @@ func _game_tab() -> void:
 		else:
 			reset.text = "Tap again to erase everything")
 	_row(reset, "Erases all progress and starts the story again. Tap twice.")
+	_log_section()
+
+
+## Log: on/off, the HUD's BUG button, Report issue, Export and Copy, and a
+## line saying what the last of those did.
+func _log_section() -> void:
+	var game = phone.game
+	var s: Dictionary = game.settings
+	var lg = game.game_log
+	var head: Label = phone._text("Log", 22, phone.ACCENT)
+	_list.add_child(head)
+	var status: Label = phone._text(lg.last_status if lg.last_status != "" else "Nothing exported yet.", 16, Color(1.0, 0.85, 0.4))
+	var say := func(): status.text = lg.last_status
+	_row(phone._toggle("Log", s.get("log", true), func(on): s["log"] = on; game.apply_settings()),
+		"Notes down every second (FPS, frame times, cars and people round you, where you are, weather, camera) and everything that happens, with every error, to share when something goes wrong.")
+	_row(phone._toggle("BUG button", s.get("log_button", true), func(on): s["log_button"] = on; game.apply_settings()),
+		"A small BUG button under SKY on the screen: tap it the moment something goes wrong to mark it in the log.")
+	var rb: Button = phone._button("Report issue", Callable())
+	rb.pressed.connect(func():
+		if lg.report("settings") == 0:
+			lg.last_status = "Turn the log on first"
+			say.call()
+			return
+		lg.export(func(_ok, _where): say.call())
+		say.call())
+	_row(rb, "Marks this moment (everything now and the last minute) and saves the log for you to send.")
+	var eb: Button = phone._button("Export log", Callable())
+	eb.pressed.connect(func():
+		lg.export(func(_ok, _where): say.call())
+		say.call())
+	_row(eb, "Saves the log as a text file: pick Downloads or Drive in the Save box, then share it.")
+	var cb: Button = phone._button("Copy log", Callable())
+	cb.pressed.connect(func():
+		lg.copy_to_clipboard()
+		say.call())
+	_row(cb, "Copies the newest part (up to 200 KB) to paste into a chat.")
+	_list.add_child(status)
 
 
 # --- Widgets ---------------------------------------------------------------------

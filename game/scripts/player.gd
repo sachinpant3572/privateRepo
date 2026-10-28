@@ -123,6 +123,7 @@ func try_enter_vehicle() -> void:
 
 func enter_vehicle(car) -> void:
 	vehicle = car
+	GameLog.event("enter_car", {"car": car.kind, "model": car.model_name(), "stolen": car.has_ai_driver(), "at": car.global_position})
 	car.take_player(self)
 	riding = car.shows_rider
 	visible = riding
@@ -134,6 +135,7 @@ func enter_vehicle(car) -> void:
 ## In the back of a cab: hidden and carried, the cab keeps its driver.
 func enter_as_passenger(car) -> void:
 	vehicle = car
+	GameLog.event("enter_car", {"car": car.kind, "passenger": true, "at": car.global_position})
 	passenger = true
 	riding = false
 	visible = false
@@ -146,6 +148,7 @@ func exit_vehicle(thrown := false) -> void:
 	var car = vehicle
 	if car == null:
 		return
+	GameLog.event("exit_car", {"car": car.kind, "thrown": thrown, "speed": absf(car.speed) * 3.6, "car_hp": car.health, "at": car.global_position})
 	vehicle = null
 	riding = false
 	var was_passenger := passenger

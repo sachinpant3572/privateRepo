@@ -16,6 +16,7 @@ const CharacterKit = preload("res://scripts/kits/character_kit.gd")
 const Rig = preload("res://scripts/rig.gd")
 const Senses = preload("res://scripts/senses.gd")
 const L = preload("res://scripts/layers.gd")
+const GameLog = preload("res://scripts/game_log.gd")
 
 signal died(who)
 ## A punch or kick connected; `kick` is true for the combo finisher.
@@ -241,6 +242,7 @@ func hit_by_vehicle(vehicle, impact_speed: float) -> void:
 	away.y = 0.0
 	velocity = away.normalized() * impact_speed * 0.6 + vehicle.velocity * 0.4
 	_face_down = away.dot(forward()) > 0.0
+	GameLog.person("hit_by_car", self, {"kmh": impact_speed * 3.6, "car": vehicle.kind, "by_player": vehicle.driver_node() != null and vehicle.driver_node().is_in_group("player")})
 	take_hit(vehicle.driver_node(), impact_speed * 3.5, Vector3.ZERO)
 	if not dead:
 		knock_down(2.0, away)
@@ -251,6 +253,8 @@ func hit_by_vehicle(vehicle, impact_speed: float) -> void:
 ## when given, decides the fall: away from the facing goes onto the back,
 ## along it onto the front.
 func knock_down(seconds: float, push := Vector3.ZERO) -> void:
+	if seconds > 0.0:
+		GameLog.person("knockdown", self, {"secs": seconds})
 	knocked_time = seconds
 	_knock_total = seconds
 	if push.length_squared() > 0.0001:
@@ -260,6 +264,7 @@ func knock_down(seconds: float, push := Vector3.ZERO) -> void:
 
 
 func _die() -> void:
+	GameLog.person("death", self, {"killer": GameLog.name_of(killer)})
 	dead = true
 	health = 0.0
 	knocked_time = 0.0

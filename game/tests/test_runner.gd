@@ -15,6 +15,7 @@ const PeopleSenses = preload("res://scripts/senses.gd")
 const PedScript = preload("res://scripts/pedestrian.gd")
 const CharKit = preload("res://scripts/kits/character_kit.gd")
 const RigScript = preload("res://scripts/rig.gd")
+const GameLog = preload("res://scripts/game_log.gd")
 
 var game
 var passed := 0
@@ -89,6 +90,7 @@ func _run() -> void:
 		"test_bellerive_hills", "test_golden_flats_farmland", "test_every_home_has_a_way_in", "test_homes_by_wealth",
 		"test_new_home_kinds_and_live_cars", "test_people_walk_the_suburbs", "test_suburb_home_cars_are_live",
 		"test_road_surfaces_and_roadworks", "test_traffic_flows_past_roadworks", "test_boundaries_vary_by_household",
+		"test_game_log_file_and_rotation", "test_game_log_snapshot_and_events", "test_game_log_report_copy_and_off",
 	]
 	# ONLY=name1,name2 runs just those (handy while working on one test).
 	var only := OS.get_environment("ONLY")
@@ -2201,6 +2203,176 @@ func _talk_until(cond: Callable, limit: int) -> void:
 		if game.hud._dialogue.visible:
 			game.hud._advance_dialogue()
 		await _frames(1)
+
+
+# --- Game log -------------------------------------------------------------------
+
+const LOG_TEST_DIR := "user://test_logs"
+
+## Every key a snapshot line carries in a running game (LOGGING.md).
+const SNAP_KEYS := ["clock", "fps", "fps_min", "ft_avg", "ft_max", "f33", "f50", "frames", "cpu", "phys",
+	"draws", "prims", "objs", "mem", "vmem", "nodes", "orphans", "bodies", "pairs", "paused",
+	"cars", "cars30", "cars60", "moving", "people", "people30", "peds", "traffic", "cops", "copcars",
+	"lit_cars", "lit_lamps", "cells", "cell_job", "tiles", "game_time", "hour", "weather", "rain", "wet",
+	"clouds", "night", "pos", "head", "mode", "speed", "area", "area_kind", "region", "in_city", "road",
+	"road_cls", "surface", "road_d", "indoors", "hp", "cash", "wanted", "act", "mission", "step",
+	"outfit", "cam", "zoom", "dzoom", "pitch", "fov", "cam_d", "cam_h", "turn", "look_up", "hitches"]
+
+
+func _clear_log_dir(dir: String) -> void:
+	var d := DirAccess.open(dir)
+	if d == null:
+		return
+	for f in d.get_files():
+		d.remove(f)
+
+
+## A log on its own (no game) writing to a test folder.
+func _test_log(on: bool, max_bytes := GameLog.MAX_BYTES):
+	_clear_log_dir(LOG_TEST_DIR)
+	var lg = GameLog.new()
+	lg.dir = LOG_TEST_DIR
+	lg.max_bytes = max_bytes
+	add_child(lg)
+	lg.settings_applied({"log": on, "quality": "high"})
+	return lg
+
+
+func _log_text(lg) -> String:
+	lg.flush()
+	return FileAccess.get_file_as_string(lg.path(0))
+
+
+func test_game_log_file_and_rotation() -> void:
+	var lg = _test_log(true, 6000)
+	_check(FileAccess.file_exists(lg.path(0)), "log0 is created")
+	var text := _log_text(lg)
+	_check(text.begins_with("t=") and text.contains("kind=session") and text.contains("kind=device")
+		and text.contains("kind=settings"), "log starts with the session header")
+	for i in 600:
+		lg.log_event("filler", {"i": i, "pad": "x".repeat(60)})
+		if i % 20 == 0:
+			lg.flush()
+	lg.flush()
+	_check(FileAccess.file_exists(lg.path(1)) and FileAccess.file_exists(lg.path(2)), "log rotates into log1 and log2")
+	_check(not FileAccess.file_exists(LOG_TEST_DIR.path_join("log3.txt")), "only %d files are kept" % GameLog.FILES)
+	var big := 0
+	for i in GameLog.FILES:
+		big = maxi(big, FileAccess.get_file_as_bytes(lg.path(i)).size())
+	_check(big < 6000 + 4000, "each file stays near the size cap (%d bytes)" % big)
+	_check(FileAccess.get_file_as_string(lg.path(1)).contains("continued=1"), "a rotated file starts with the header again")
+	var line := GameLog._kv({"kind": "x", "s": "two words", "v": Vector3(1.04, 2, 3), "b": true, "e": ""})
+	_check(line == " x_kind=x s=\"two words\" v=1.0,2.0,3.0 b=1 e=-", "values format as k=v (%s)" % line)
+	lg.queue_free()
+	await _frames(1)
+	_clear_log_dir(LOG_TEST_DIR)
+
+
+func test_game_log_snapshot_and_events() -> void:
+	await _new_game(false)
+	var lg = game.game_log
+	_check(lg.started and lg.enabled and FileAccess.file_exists(lg.path(0)), "the game starts its log")
+	var s: Dictionary = lg.snapshot()
+	var missing := []
+	for k in SNAP_KEYS:
+		if not s.has(k):
+			missing.append(k)
+	_check(missing.is_empty(), "snapshot has every field (missing %s)" % [missing])
+	_check(s.get("mode") == "foot" and s.get("area", "-") != "-" and s.get("road", "-") != "-",
+		"snapshot: on foot in %s on %s" % [s.get("area"), s.get("road")])
+	# Enter a car.
+	var car = _spawn_car(_home(), Vector3(0, 0, -3), 0.0)
+	_place_player(_home(), Vector3.ZERO)
+	await _frames(2)
+	await _press("interact")
+	_check(game.player.vehicle == car, "player gets in the car")
+	_check(str(lg.snapshot().get("mode")).begins_with("drive:"), "snapshot shows driving")
+	# A settings change.
+	game.settings["show_fps"] = not game.settings.get("show_fps", true)
+	game.apply_settings()
+	# Engine and script errors and warnings (a real push_error would fail run.sh).
+	push_warning("game log test warning 4471")
+	lg._catcher._log_error("test_fn", "res://tests/fake.gd", 12, "game log test error 4472", "why",
+		false, Logger.ERROR_TYPE_SCRIPT, [] as Array[ScriptBacktrace])
+	lg._drain_errors()
+	lg._tick(Time.get_ticks_usec())
+	var text := _log_text(lg)
+	_check(text.contains("kind=enter_car car="), "entering the car is logged")
+	_check(text.contains("kind=settings show_fps="), "a settings change is logged")
+	_check(text.contains("kind=warning") and text.contains("4471"), "a pushed warning is logged")
+	_check(text.contains("kind=error type=script") and text.contains("4472") and text.contains("fake.gd:12"),
+		"a script error is logged")
+	_check(text.contains("kind=snap") and text.contains("mode=drive:"), "the 1 s snapshot is written")
+	# Cost: one snapshot line (the 1 s tick) and one frame's bookkeeping.
+	var costs := []
+	for i in 30:
+		var t0 := Time.get_ticks_usec()
+		lg._write(lg._line("snap", lg.snapshot()))
+		costs.append(Time.get_ticks_usec() - t0)
+	costs.sort()
+	var tick_us: int = costs[costs.size() / 2]
+	var road_costs := []
+	for i in 30:
+		var t0 := Time.get_ticks_usec()
+		lg._refresh_road(true)
+		road_costs.append(Time.get_ticks_usec() - t0)
+	road_costs.sort()
+	var road_us: int = road_costs[road_costs.size() / 2]
+	lg._next_tick_us = Time.get_ticks_usec() + 60_000_000
+	lg._next_road_us = lg._next_tick_us
+	var t1 := Time.get_ticks_usec()
+	for i in 10000:
+		lg._process(0.016)
+	var frame_us := (Time.get_ticks_usec() - t1) / 10000.0
+	print("  game log cost: snapshot line %d us, road lookup %d us (medians of 30), per frame %.2f us" % [tick_us, road_us, frame_us])
+	# Budget 0.2 ms on a desktop release build; the headless debug build in
+	# a shared container runs slower, so the gate here is 0.3 ms.
+	_check(tick_us < 300, "snapshot under budget (%d us)" % tick_us)
+	_check(road_us < 300, "road lookup under budget (%d us)" % road_us)
+	_check(frame_us < 20.0, "per-frame cost is tiny (%.2f us)" % frame_us)
+
+
+func test_game_log_report_copy_and_off() -> void:
+	await _new_game(false)
+	var lg = game.game_log
+	for i in 300:
+		lg.log_event("filler", {"i": i, "pad": "y".repeat(80)})
+	var n: int = lg.report("test")
+	_check(n > 0, "report returns its number")
+	var text := _log_text(lg)
+	var at := text.find("kind=REPORT n=%d" % n)
+	_check(at >= 0 and text.find("kind=report_snap", at) > at and text.find("kind=REPORT_END n=%d" % n, at) > at,
+		"report writes a REPORT block with a snapshot")
+	_check(text.contains("\n> t="), "report repeats the last minute of the log")
+	var copy: String = lg.copy_text(8192)
+	_check(copy.to_utf8_buffer().size() <= 8192, "copy keeps to its cap (%d bytes)" % copy.to_utf8_buffer().size())
+	_check(copy.begins_with("t=") and copy.contains("kind=session") and copy.contains("older lines cut"),
+		"a cut copy keeps the session header")
+	var done := []
+	lg.export(func(ok, where): done.append([ok, where]))
+	_check(done.size() == 1 and done[0][0] and FileAccess.file_exists(done[0][1]), "export writes a file (%s)" % [done])
+	if done.size() == 1 and FileAccess.file_exists(done[0][1]):
+		DirAccess.remove_absolute(done[0][1])
+	# Off: nothing more is written.
+	game.settings["log"] = false
+	game.apply_settings()
+	var size_off := FileAccess.get_file_as_bytes(lg.path(0)).size()
+	_check(_log_text(lg).contains("kind=log_off"), "turning the log off is noted")
+	lg.log_event("should_not_appear", {})
+	lg._tick(Time.get_ticks_usec())
+	lg.flush()
+	_check(FileAccess.get_file_as_bytes(lg.path(0)).size() == size_off, "log off writes nothing")
+	_check(lg.report("off") == 0, "no report while off")
+	game.settings["log"] = true
+	game.apply_settings()
+	_check(_log_text(lg).contains("kind=log_on"), "the log turns back on")
+	# Off from the start: no file at all.
+	var off = _test_log(false)
+	off.log_event("nope", {})
+	off.flush()
+	_check(not FileAccess.file_exists(off.path(0)), "a log that starts off makes no file")
+	off.queue_free()
+	await _frames(1)
 
 
 func _new_game(with_population: bool) -> void:

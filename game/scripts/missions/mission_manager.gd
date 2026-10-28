@@ -28,6 +28,8 @@ void fragment() {
 
 signal changed
 
+const GameLog = preload("res://scripts/game_log.gd")
+
 ## Save format: 1 had progress, cash, phone and settings; 2 adds the bag.
 const SAVE_VERSION := 2
 
@@ -125,6 +127,7 @@ func start(id: String, teleport := false) -> void:
 	m.manager = self
 	add_child(m)
 	active = m
+	GameLog.event("mission_start", {"id": id, "teleport": teleport})
 	if game.interiors != null:
 		game.interiors.force_out()
 	if teleport:
@@ -149,6 +152,7 @@ func _run(m) -> void:
 
 func _pass(m) -> void:
 	m.ended = true
+	GameLog.event("mission_pass", {"id": m.id, "reward": m.reward})
 	clear_markers()
 	set_objective("")
 	hud.hide_dialogue()
@@ -174,6 +178,7 @@ func fail(m, reason: String) -> void:
 	if m != active or m.ended:
 		return
 	m.ended = true
+	GameLog.event("mission_fail", {"id": m.id, "why": reason})
 	clear_markers()
 	set_objective("")
 	hud.hide_dialogue()
@@ -200,6 +205,7 @@ func retry() -> void:
 func abandon() -> void:
 	if active == null:
 		return
+	GameLog.event("mission_abandon", {"id": active.id})
 	active.ended = true
 	clear_markers()
 	set_objective("")
@@ -223,6 +229,8 @@ func on_player_down(text: String) -> void:
 
 
 func set_objective(text: String) -> void:
+	if text != objective_text and text != "":
+		GameLog.event("mission_step", {"id": active.id if active != null else "", "step": text})
 	objective_text = text
 	if hud:
 		hud.set_objective(text)
@@ -304,6 +312,7 @@ func save_game() -> void:
 	var f := FileAccess.open(save_path, FileAccess.WRITE)
 	if f:
 		f.store_string(JSON.stringify(data))
+	GameLog.event("save", {"ok": f != null, "done": done.size(), "cash": game.cash})
 
 
 func load_game() -> void:
@@ -319,6 +328,7 @@ func load_game() -> void:
 	# Version 1 saves (no "version") had no bag: it starts empty.
 	var inv = data.get("inventory") if int(data.get("version", 1)) >= 2 else null
 	game.inventory.load_save(inv if typeof(inv) == TYPE_DICTIONARY else {})
+	GameLog.event("load", {"version": int(data.get("version", 1)), "done": done.size(), "cash": game.cash})
 
 
 ## Wipes progress (phone > Settings > New game).

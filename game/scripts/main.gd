@@ -17,6 +17,7 @@ const Interiors = preload("res://scripts/interiors.gd")
 const Inventory = preload("res://scripts/inventory.gd")
 const Taxi = preload("res://scripts/taxi.gd")
 const Graphics = preload("res://scripts/graphics.gd")
+const GameLog = preload("res://scripts/game_log.gd")
 
 const RESPAWN_DELAY := 2.5
 
@@ -35,10 +36,12 @@ var graphics
 var missions
 var interiors
 var taxi
+## The game log (Settings > Game > Log).
+var game_log
 var inventory = Inventory.new()
 var respawning := false
 var cash := 0
-var settings := {"shadows": true, "show_fps": true, "weather": "auto", "detail": "high", "controls": "stick", "view": "perspective", "zoom": 1.0, "angle": 65.0, "auto_tilt": true, "camera_turn": "car", "drive_zoom": 1.0, "fps_limit": 120, "quality": "high", "bloom": true, "aa": false, "vivid": true, "real_lights": true}
+var settings := {"shadows": true, "show_fps": true, "weather": "auto", "detail": "high", "controls": "stick", "view": "perspective", "zoom": 1.0, "angle": 65.0, "auto_tilt": true, "camera_turn": "car", "drive_zoom": 1.0, "fps_limit": 120, "quality": "high", "bloom": true, "aa": false, "vivid": true, "real_lights": true, "log": true, "log_button": true}
 ## Settings > Graphics > FPS limit.
 const FPS_LIMITS := [30, 60, 75, 90, 120]
 ## Player-set map waypoint (a road node position) or null.
@@ -47,6 +50,10 @@ var waypoint = null
 
 func _ready() -> void:
 	add_to_group("game")
+	# First, so it hears errors while the world builds.
+	game_log = GameLog.new()
+	game_log.game = self
+	add_child(game_log)
 	atmosphere = Atmosphere.new()
 	add_child(atmosphere)
 	graphics = Graphics.new()
@@ -177,6 +184,7 @@ func apply_settings() -> void:
 	Engine.max_fps = 0 if DisplayServer.get_name() == "headless" else fps_limit()
 	if missions:
 		missions.save_game()
+	game_log.settings_applied(settings)
 
 
 ## The saved FPS limit, or 120 if it isn't one of FPS_LIMITS.
@@ -237,6 +245,7 @@ func _respawn(text: String, point: Vector3) -> void:
 	if respawning:
 		return
 	respawning = true
+	GameLog.event("respawn", {"why": text})
 	player.controllable = false
 	hud.show_message(text)
 	missions.on_player_down(text)
