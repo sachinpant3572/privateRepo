@@ -40,16 +40,22 @@ const PITCH_TALL := 85.0
 ## that keeps the player and the ground round the view in sight.
 const PITCHES := [65.0, 70.0, 75.0, 80.0, 85.0]
 const PITCH_EVERY := 0.25
-## Tipping up is at once; easing back down waits PITCH_HOLD seconds after the
-## last tip up and PITCH_VOTES checks in a row that agree, then goes one step
-## (5 degrees) at a time, so the camera doesn't hunt at driving speed.
-const PITCH_HOLD := 3.0
-const PITCH_VOTES := 4
+## Tipping up is at once while the player is hidden; for the ground round the
+## view alone it waits for PITCH_VOTES checks in a row that agree. Either way
+## it rises at most PITCH_STEP a check. Tipping down waits PITCH_HOLD seconds
+## after the last tip up and PITCH_VOTES agreeing checks, then drops to the
+## highest of them. So the camera neither hunts at driving speed nor stays
+## steep long after a passing tower (E-1).
+const PITCH_HOLD := 1.5
+const PITCH_VOTES := 3
+const PITCH_STEP := 10.0
 var perspective_pitch := PITCH_LOW
 var _pitch_want := PITCH_LOW
 var _pitch_t := 0.0
 var _pitch_hold := 0.0
 var _pitch_votes := 0
+var _pitch_recent: Array[float] = []
+var _player_hidden := false
 var _player := Vector3.ZERO
 const PERSPECTIVE_FOV := 35.0
 ## Size of the see-through hole when a building blocks the view of the player.
@@ -165,6 +171,7 @@ func snap() -> void:
 	_pitch_t = 0.0
 	_pitch_hold = 0.0
 	_pitch_votes = 0
+	_pitch_recent.clear()
 	_update_pitch(0.0)
 	_frame(0.0)
 
@@ -216,16 +223,21 @@ func _update_pitch(delta: float) -> void:
 	elif _pitch_t <= 0.0 and is_inside_tree():
 		_pitch_t = PITCH_EVERY
 		var pick := best_pitch(_player, _focus, _pitch_want)
+		_pitch_recent.append(pick)
+		if _pitch_recent.size() > PITCH_VOTES:
+			_pitch_recent.pop_front()
 		if delta <= 0.0:
 			_pitch_want = pick
 		elif pick > _pitch_want + 0.1:
-			_pitch_want = pick
-			_pitch_hold = PITCH_HOLD
 			_pitch_votes = 0
+			var agreed: bool = _pitch_recent.size() == PITCH_VOTES and _pitch_recent.min() > _pitch_want + 0.1
+			if _player_hidden or agreed:
+				_pitch_want = minf(pick if _player_hidden else _pitch_recent.min(), _pitch_want + PITCH_STEP)
+				_pitch_hold = PITCH_HOLD
 		elif pick < _pitch_want - 0.1:
 			_pitch_votes += 1
 			if _pitch_hold <= 0.0 and _pitch_votes >= PITCH_VOTES:
-				_pitch_want = maxf(pick, _pitch_want - 5.0)
+				_pitch_want = _pitch_recent.max()
 				_pitch_votes = 0
 		else:
 			_pitch_votes = 0
@@ -260,6 +272,9 @@ func best_pitch(player: Vector3, center: Vector3, now := PITCH_LOW) -> float:
 			if not space.intersect_ray(PhysicsRayQueryParameters3D.create(player + Vector3(0.0, h, 0.0), eye, L.WORLD)).is_empty():
 				score += 3
 				break
+		# Whether the player is hidden at the current pitch (read by _update_pitch).
+		if absf(pitch - now) < 0.1:
+			_player_hidden = score >= 3
 		for g in open:
 			if not space.intersect_ray(PhysicsRayQueryParameters3D.create(g, eye, L.WORLD)).is_empty():
 				score += 1

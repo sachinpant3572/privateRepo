@@ -825,69 +825,24 @@ func test_perspective_camera() -> void:
 	_check(all_on, "the car stays on screen driving each way flat out")
 	_check(all_far, "the road shows far ahead on a 20:9 phone: %s" % ", ".join(report))
 	_check(all_loaded, "the screen's corners lie inside the cells loaded round the middle of the screen")
-	# A real drive along downtown streets at 28 m/s: the tilt settles instead of
-	# hunting, and the corners of a 20:9 screen are over loaded cells.
-	rng.seed = 11
-	var wide_x: float = (rect.size.y * 20.0 / 9.0 - rect.size.x) * 0.5
-	var t := 0.0
-	var turns := 0
-	var changes := 0
-	var last_dir := 0.0
-	var last_want: float = cam._pitch_want
-	var checked := 0
-	var unloaded := 0
-	var tries := 0
-	while t < 40.0 and tries < 300:
-		tries += 1
-		var a := Vector3(rng.randf_range(win.position.x, win.end.x), 0.0, rng.randf_range(win.position.y, win.end.y))
-		if not str(city.district_at(a).get("id", "")) in ["gilt_district", "midtown"]:
-			continue
-		var b := a + Vector3(rng.randf_range(-600.0, 600.0), 0.0, rng.randf_range(-600.0, 600.0))
-		var pts: PackedVector3Array = city.route(city.node_pos(city.nearest_node(a)), city.node_pos(city.nearest_node(b)))
-		if pts.size() < 4:
-			continue
-		car.global_position = pts[0]
-		car.velocity = Vector3.ZERO
-		# The player rides along, as in a real car: the city streams round them.
-		game.player.global_position = pts[0]
-		game.player.reset_physics_interpolation()
-		city.stream_now(pts[0])
-		cam.snap()
-		last_want = cam._pitch_want
-		last_dir = 0.0
-		for k in range(1, pts.size()):
-			var from: Vector3 = pts[k - 1]
-			var leg: Vector3 = pts[k] - from
-			leg.y = 0.0
-			var s := 0.0
-			while s < leg.length() and t < 40.0:
-				await game.get_tree().physics_frame
-				s += 28.0 / 60.0
-				t += 1.0 / 60.0
-				car.velocity = leg.normalized() * 28.0
-				car.global_position = Vector3(from.x, 0.0, from.z) + leg.normalized() * minf(s, leg.length())
-				game.player.global_position = car.global_position
-				var w: float = cam._pitch_want
-				if absf(w - last_want) > 0.1:
-					changes += 1
-					if last_dir != 0.0 and signf(w - last_want) != last_dir:
-						turns += 1
-					last_dir = signf(w - last_want)
-					last_want = w
-				if Engine.get_process_frames() % 15 == 0:
-					for c in [Vector2(-wide_x, 0.0), Vector2(rect.end.x + wide_x, 0.0), Vector2(-wide_x, rect.end.y), Vector2(rect.end.x + wide_x, rect.end.y)]:
-						var co: Vector3 = cam.project_ray_origin(c)
-						var cn: Vector3 = cam.project_ray_normal(c)
-						var cell: int = city.cell_at(co + cn * (-co.y / cn.y))
-						if cell >= 0:
-							checked += 1
-							if city.cell_node(cell) == null:
-								unloaded += 1
-	var per_min := turns / maxf(t, 1.0) * 60.0
-	_check(t > 30.0 and changes > 0 and per_min <= 8.0, "driving downtown the tilt changes %d times and turns back %.1f times a minute (%.0f s driven)" % [changes, per_min, t])
-	# A cell can be a frame or two behind in the build queue (seen 0-7 of 2,500
-	# points, all well inside the load radius), so allow 1%.
-	_check(checked > 100 and unloaded * 100 <= checked, "driving, the 20:9 screen's corners are over loaded cells (%d of %d not yet built)" % [unloaded, checked])
+	# Real drives along city routes, the player riding along. Downtown at
+	# 30 m/s the tilt settles instead of hunting (the first picker turned back
+	# 19.5 times a minute on this drive); in the low-rise districts it stays
+	# low (the first hold kept it above 67 degrees 21% of the time here). Each
+	# corner of a 20:9 screen is over a cell the city loads.
+	var down: Dictionary = await _route_drive(cam, car, 5, ["gilt_district", "midtown"], [], 40.0)
+	var low: Dictionary = await _route_drive(cam, car, 3, LOW_RISE, LOW_RISE, 40.0)
+	# Zoom 130%, where the screen's corners reach past the cells round the player.
+	game.settings["zoom"] = 1.3
+	game.apply_settings()
+	var wide: Dictionary = await _route_drive(cam, car, 7, LOW_RISE + ["gilt_district", "midtown"], [], 20.0)
+	game.settings["zoom"] = 1.0
+	game.apply_settings()
+	var per_min: float = down.turns / maxf(down.t, 1.0) * 60.0
+	_check(down.t > 30.0 and down.changes > 0 and per_min <= 12.0, "driving downtown the tilt changes %d times and turns back %.1f times a minute (%.0f s driven)" % [down.changes, per_min, down.t])
+	var steep: float = low.steep / maxf(low.frames, 1.0)
+	_check(low.frames > 1200 and steep <= 0.15, "driving through low-rise districts the camera is above 67 degrees %.0f%% of the time" % (steep * 100.0))
+	_check(wide.corners > 100 and down.corners + low.corners > 200 and down.outside + low.outside + wide.outside == 0, "driving, every 20:9 screen corner is over a cell the city streams in (%d missing; at 130%%: %d of %d corners, %d were still in the build queue)" % [down.outside + low.outside, wide.outside, wide.corners, down.queued + low.queued + wide.queued])
 	cam.target = game.player
 	drive.queue_free()
 	car.queue_free()
@@ -1147,6 +1102,90 @@ func _free_game() -> void:
 
 
 ## The road node next to the spawn point (in front of Union Station).
+const LOW_RISE := ["lantern_quarter", "floodline_wards", "morrow_point", "ironwharf"]
+
+
+## Drives `car` (with the player riding along) at 30 m/s along routes from
+## random points in the districts `from` (to points in `to`, if any) for
+## `seconds`, counting tilt changes and turn-backs, frames above 67 degrees
+## outside downtown, and 20:9 screen corners the city's streaming leaves
+## unloaded once its build queue has run.
+func _route_drive(cam, car: CharacterBody3D, seed: int, from: Array, to: Array, seconds: float) -> Dictionary:
+	var city = game.city
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	var win: Rect2 = city.window
+	var rect: Rect2 = cam.get_viewport().get_visible_rect()
+	var wide_x: float = (rect.size.y * 20.0 / 9.0 - rect.size.x) * 0.5
+	var out := {"t": 0.0, "changes": 0, "turns": 0, "steep": 0, "frames": 0, "corners": 0, "outside": 0, "queued": 0}
+	var tries := 0
+	while out.t < seconds and tries < 400:
+		tries += 1
+		var a := Vector3(rng.randf_range(win.position.x, win.end.x), 0.0, rng.randf_range(win.position.y, win.end.y))
+		if not str(city.district_at(a).get("id", "")) in from:
+			continue
+		var b := a + Vector3(rng.randf_range(-600.0, 600.0), 0.0, rng.randf_range(-600.0, 600.0))
+		if not to.is_empty() and not str(city.district_at(b).get("id", "")) in to:
+			continue
+		var pts: PackedVector3Array = city.route(city.node_pos(city.nearest_node(a)), city.node_pos(city.nearest_node(b)))
+		if pts.size() < 4:
+			continue
+		car.global_position = pts[0]
+		car.velocity = Vector3.ZERO
+		game.player.global_position = pts[0]
+		game.player.reset_physics_interpolation()
+		city.stream_now(pts[0])
+		cam.snap()
+		var last_want: float = cam._pitch_want
+		var last_dir := 0.0
+		for k in range(1, pts.size()):
+			var start: Vector3 = pts[k - 1]
+			var leg: Vector3 = pts[k] - start
+			leg.y = 0.0
+			var s := 0.0
+			while s < leg.length() and out.t < seconds:
+				await game.get_tree().physics_frame
+				s += 30.0 / 60.0
+				out.t += 1.0 / 60.0
+				car.velocity = leg.normalized() * 30.0
+				car.global_position = Vector3(start.x, 0.0, start.z) + leg.normalized() * minf(s, leg.length())
+				game.player.global_position = car.global_position
+				var w: float = cam._pitch_want
+				if absf(w - last_want) > 0.1:
+					out.changes += 1
+					if last_dir != 0.0 and signf(w - last_want) != last_dir:
+						out.turns += 1
+					last_dir = signf(w - last_want)
+					last_want = w
+				if not str(city.district_at(car.global_position).get("id", "")) in ["gilt_district", "midtown"]:
+					out.frames += 1
+					if cam.perspective_pitch > 67.0:
+						out.steep += 1
+				if Engine.get_process_frames() % 15 == 0:
+					var cells: Array = []
+					for c in [Vector2(-wide_x, 0.0), Vector2(rect.end.x + wide_x, 0.0), Vector2(-wide_x, rect.end.y), Vector2(rect.end.x + wide_x, rect.end.y)]:
+						var co: Vector3 = cam.project_ray_origin(c)
+						var cn: Vector3 = cam.project_ray_normal(c)
+						var cell: int = city.cell_at(co + cn * (-co.y / cn.y))
+						if cell >= 0:
+							cells.append(cell)
+							if city.cell_node(cell) == null:
+								out.queued += 1
+					# Builds run on a worker thread in wall-clock time, so let the
+					# city's own streaming finish its queue before judging it.
+					for n in 60:
+						city._finish_task()
+						city._stream_tick = 0.0
+						city._process(0.0)
+						if city._task < 0:
+							break
+					for cell in cells:
+						out.corners += 1
+						if city.cell_node(cell) == null:
+							out.outside += 1
+	return out
+
+
 func _home() -> int:
 	return game.city.nearest_node(game.city.spawn_point)
 

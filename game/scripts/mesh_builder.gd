@@ -274,7 +274,7 @@ void fragment() {
 	vec3 axis = normalize(mix(cam_back, to_eye / reach, cone));
 	float t = dot(rel, axis);
 	float keep = 1.0;
-	if (world_pos.y > 0.4 && t > 1.0 && UV2.x < 0.5) {
+	if (world_pos.y > 0.4 && t > 1.0) {
 		float shrink = mix(1.0, max((reach - t) / reach, 0.05), cone);
 		float d = length(rel - axis * t) / (cut_radius * shrink);
 		keep = smoothstep(0.7, 1.0, d);

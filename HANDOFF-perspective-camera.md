@@ -65,10 +65,13 @@ buildings, flying later, keep north-up and outlines): "Yes lets build this as be
 - E-1 Steeper tilt by sight, not by height: every 0.25 s `best_pitch` tries 65, 70, 75, 80 and 85°
   and takes the lowest from whose (unbacked) camera spot the player and all but one of up to seven
   open-ground points (a ring at 0.3 x size and the look-ahead point) are in sight; going lower needs all
-  in sight; if none works, the one hiding least, steeper on a tie. Pitch eases (~1 s). Tipping up is at
-  once; tipping down waits 3 s after the last tip up and 4 agreeing checks, then one 5° step at a time
-  (review: at 28 m/s downtown the one-point margin alone reversed 9-12 times a minute, with flips like
-  65-85-65 inside 0.3 s; now 6 a minute, each after a hold, and camera pops 13 -> 3, as at a fixed 65°).
+  in sight; if none works, the one hiding least, steeper on a tie. Pitch eases (~1 s).
+  Tipping up is at once only while the player is hidden; for ground points alone it waits for 3
+  agreeing checks (0.75 s); at most 10° a check. Tipping down waits 1.5 s after the last tip up and 3
+  agreeing checks, then drops to the highest of them. Measured at 30 m/s (downtown / low-rise):
+  turn-backs 9-12 a minute -> 2.8; tilt travel 116-149 -> 51°/min; time above 67° in low-rise
+  districts 13-19% -> 7-11%. Rejected on review: tip up at once with a 3 s hold and 5° steps down
+  (no hunting, but steep 35-44% of the time in low-rise districts, up to 28 s at a stretch).
   Rejected first try: tilting by the tallest roof round the view (25 -> 80 m) left the hero hidden 18%
   downtown, no better than 65°, because the tower in the way is often not the tallest sampled.
   Speed does not tip it: at 75° the road ahead north-south fell from about 62 to 57 m.
@@ -114,14 +117,21 @@ buildings, flying later, keep north-up and outlines): "Yes lets build this as be
   a tower (the band widens up to 3x); the picker scores the unbacked eye, so a pitch change can still
   pop the camera out over a tower; city cells don't carry the ground mark (the city is flat, and the
   band only touches what is above the player's feet). Phone frame rate and the 4x4 ghost pattern at
-  phone DPI are not measured.
+  phone DPI are not measured; a phone builds city cells more slowly, so corner pop-in at 30 m/s
+  may show there. Speed does not steepen the tilt (E-1); Sachin can overrule.
 - A straight-down 90° "2D" view: about 1-2 hours for the camera, plus 0.5-1 session for roof signs
   and stronger hair and hat colours. Not started.
 - Aircraft do not exist yet; the band follows any vehicle the camera targets (item 4: steep and high).
 
 ## Gates
 
-- `game/tests/run.sh`: 708 checks passed, 0 failed (61 tests; `test_perspective_camera` has 22 checks,
-  including a 40 s downtown drive: tilt turns back <= 8 a minute, 20:9 corners over loaded cells).
+- `game/tests/run.sh`: 709 checks passed, 0 failed (61 tests). `test_perspective_camera` (23 checks)
+  drives city routes at 30 m/s: downtown turn-backs <= 12 a minute (old picker 19.5, now 7.5),
+  low-rise time above 67° <= 15% (first hold 21%, now 0%), and 20:9 corners over streamed cells at
+  100% and 130% zoom after the build queue drains. That last check also passes with the view
+  streaming (E-3) reverted: the player's own radius covers the corners; E-3 starts builds earlier.
 - Shots: tour (53), place shots (12), `SHOTS=view` (16, with 82_drive) rendered with no errors.
-- Review of phase 2 (one serious: pitch hunting at speed) fixed; leftovers under Open.
+- Phase 2 reviews (two): pitch hunting at speed, then the steep hold in low-rise districts, a tilt
+  check that passed on the old code and a streaming check that depended on build-thread timing; fixed.
+  The hole cut no longer skips marked ground (a hill between player and camera ghosts like a
+  building, and bridges cut again).
