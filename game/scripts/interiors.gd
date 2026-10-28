@@ -13,6 +13,7 @@ extends Node
 const InteriorKit = preload("res://scripts/kits/interior_kit.gd")
 const CharacterKit = preload("res://scripts/kits/character_kit.gd")
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
+const GameLog = preload("res://scripts/game_log.gd")
 const Places = preload("res://scripts/places.gd")
 const Patron = preload("res://scripts/patron.gd")
 const ShopMenu = preload("res://scripts/shop_menu.gd")
@@ -196,6 +197,7 @@ func _process(delta: float) -> void:
 func enter(p: Dictionary) -> void:
 	if state != State.OUTSIDE:
 		return
+	GameLog.event("enter_place", {"name": p.get("name", ""), "type": p.get("type", ""), "district": p.get("district_name", "")})
 	state = State.ENTERING
 	place = p
 	near = {}
@@ -240,6 +242,7 @@ func enter(p: Dictionary) -> void:
 func leave() -> void:
 	if state != State.INSIDE:
 		return
+	GameLog.event("leave_place", {"name": place.get("name", "")})
 	state = State.LEAVING
 	menu.close()
 	var player = game.player
@@ -276,6 +279,7 @@ func leave() -> void:
 func force_out() -> void:
 	if state == State.OUTSIDE:
 		return
+	GameLog.event("leave_place", {"name": place.get("name", ""), "forced": true})
 	_visit += 1
 	if _tween and _tween.is_valid():
 		# Finish the fade rather than kill it, so enter() or leave()

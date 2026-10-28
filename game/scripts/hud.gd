@@ -28,6 +28,7 @@ var context_prompt := []
 var _health: ProgressBar
 var _stars: Control
 var _perf: Label
+var bug_button: Button
 var _prompt: Label
 var _message: Label
 var _message_tween: Tween
@@ -122,6 +123,16 @@ func _ready() -> void:
 	sky_button.focus_mode = Control.FOCUS_NONE
 	sky_button.pressed.connect(_toggle_look_up)
 	root.add_child(sky_button)
+	# Mark an issue in the game log (Settings > Game > Log).
+	bug_button = Button.new()
+	bug_button.text = "BUG"
+	bug_button.tooltip_text = "Mark an issue in the log"
+	bug_button.add_theme_font_size_override("font_size", 14)
+	_anchor(bug_button, Vector2(1, 0), Rect2(-196, 254, 56, 40))
+	bug_button.focus_mode = Control.FOCUS_NONE
+	bug_button.modulate.a = 0.6
+	bug_button.pressed.connect(_report_bug)
+	root.add_child(bug_button)
 
 	# Eat a snack from the bag (H).
 	_snack = Button.new()
@@ -185,6 +196,7 @@ func _process(delta: float) -> void:
 	var player = game.player
 	_health.value = player.health / player.max_health * 100.0
 	_perf.visible = game.settings.get("show_fps", true)
+	bug_button.visible = game.settings.get("log", true) and game.settings.get("log_button", true)
 	_perf.text = "FPS %d  draws %d" % [Engine.get_frames_per_second(), Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)]
 	_blink += delta
 	var indoors: bool = game.interiors != null and game.interiors.state != game.interiors.State.OUTSIDE
@@ -455,6 +467,12 @@ func _update_district(pos: Vector3) -> void:
 		return
 	_district_id = d.id
 	show_banner(d.name)
+
+
+## Marks an issue in the game log (the HUD's BUG button).
+func _report_bug() -> void:
+	if game.game_log != null and game.game_log.report("hud") > 0:
+		show_banner("Issue marked - Settings > Game > Export log to share")
 
 
 ## A name across the top of the screen for a moment (districts, places).

@@ -68,6 +68,10 @@ func _run() -> void:
 		page.show_tab(t)
 		await _ui_frames(4)
 		await _shot("settings_%s.png" % t.to_lower())
+	# The Game tab's Log section, at the bottom.
+	page._scroll.scroll_vertical = 100000
+	await _ui_frames(4)
+	await _shot("settings_game_log.png")
 	get_tree().quit()
 
 
