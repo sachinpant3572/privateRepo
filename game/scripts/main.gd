@@ -41,9 +41,11 @@ var game_log
 var inventory = Inventory.new()
 var respawning := false
 var cash := 0
-var settings := {"shadows": true, "show_fps": true, "weather": "auto", "detail": "high", "controls": "stick", "view": "perspective", "zoom": 1.0, "angle": 65.0, "auto_tilt": true, "camera_turn": "car", "drive_zoom": 1.0, "fps_limit": 120, "quality": "high", "bloom": true, "aa": false, "vivid": true, "real_lights": true, "log": true, "log_button": true}
+var settings := {"shadows": true, "show_fps": true, "weather": "auto", "detail": "high", "controls": "stick", "view": "perspective", "zoom": 1.0, "angle": 65.0, "auto_tilt": true, "camera_turn": "car", "drive_zoom": 1.0, "fps_limit": 120, "quality": "high", "bloom": true, "aa": false, "vivid": true, "real_lights": true, "log": true, "log_button": true, "shake": 50}
 ## Settings > Graphics > FPS limit.
 const FPS_LIMITS := [30, 60, 75, 90, 120]
+## Settings > Camera > Screen shake, in percent of the full shake (0 is off).
+const SHAKES := [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 ## Player-set map waypoint (a road node position) or null.
 var waypoint = null
 
@@ -165,6 +167,7 @@ func apply_settings() -> void:
 		camera.turn_view = turn
 		camera.turn_steps = steps
 		camera.recenter()
+	camera.shake_strength = shake_percent() / 100.0
 	var reach := maxf(camera.zoom, 1.0)
 	# A camera flatter than 65 degrees sees further up the screen. Turning
 	# with the car it widens and flattens at speed, up the short side.
@@ -191,6 +194,13 @@ func apply_settings() -> void:
 func fps_limit() -> int:
 	var f = settings.get("fps_limit", 120)
 	return int(f) if (f is int or f is float) and FPS_LIMITS.has(int(f)) else 120
+
+
+## The saved screen shake in percent, or 50 if it isn't one of SHAKES
+## (saves from before 0.23 have none).
+func shake_percent() -> int:
+	var v = settings.get("shake", 50)
+	return int(v) if (v is int or v is float) and is_equal_approx(float(v), roundf(float(v))) and SHAKES.has(int(v)) else 50
 
 
 ## After "New game": back to Union Station and the first mission.

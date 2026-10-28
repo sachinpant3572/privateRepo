@@ -92,6 +92,7 @@ func _run() -> void:
 		"test_new_home_kinds_and_live_cars", "test_people_walk_the_suburbs", "test_suburb_home_cars_are_live",
 		"test_road_surfaces_and_roadworks", "test_traffic_flows_past_roadworks", "test_boundaries_vary_by_household",
 		"test_game_log_file_and_rotation", "test_game_log_snapshot_and_events", "test_game_log_report_copy_and_off",
+		"test_screen_shake_setting", "test_settings_sliders_snap_and_apply",
 	]
 	# ONLY=name1,name2 runs just those (handy while working on one test).
 	var only := OS.get_environment("ONLY")
@@ -804,22 +805,22 @@ func test_perspective_camera() -> void:
 	phone._settings()
 	var page = phone.settings_page
 	page.show_tab("Camera")
-	var angle_s = page.steppers.get("Angle")
-	var zoom_s = page.steppers.get("Distance")
-	var drive_s = page.steppers.get("Drive zoom-out")
+	var angle_s = page.sliders.get("Angle")
+	var zoom_s = page.sliders.get("Distance")
+	var drive_s = page.sliders.get("Drive zoom-out")
 	var tilt_b = _find_button(page, "Look down near towers: ")
 	var reset_b = _find_button(page, "Reset camera")
 	_check(angle_s != null and zoom_s != null and drive_s != null and tilt_b != null and reset_b != null and angle_s.get_meta("value").text == "65°" and zoom_s.get_meta("value").text == "100%" and drive_s.get_meta("value").text == "100%", "Settings > Camera has Distance (100%), Drive zoom-out (100%), Angle (65°), Look down near towers and Reset camera")
 	if angle_s != null and zoom_s != null and drive_s != null and tilt_b != null and reset_b != null:
 		for n in 4:
-			angle_s.get_meta("less").pressed.emit()
+			_slide(angle_s, -1)
 		tilt_b.pressed.emit()
-		zoom_s.get_meta("more").pressed.emit()
-		drive_s.get_meta("less").pressed.emit()
+		_slide(zoom_s, 1)
+		_slide(drive_s, -1)
 		phone.close()  # the open phone pauses the game
 		await _frames(240)
-		_check(angle_s.get_meta("value").text == "45°" and tilt_b.text.ends_with("OFF") and cam.pitches() == [45.0] and absf(cam.perspective_pitch - 45.0) < 0.5 and game.settings["angle"] == 45.0, "Angle - four times: 45° with tilt off holds the camera at %.1f degrees" % cam.perspective_pitch)
-		_check(cam.zoom == 1.15 and game.settings["zoom"] == 1.15 and cam.drive_zoom == 0.75 and drive_s.get_meta("value").text == "75%", "Distance + gives 115%, Drive zoom-out - gives 75%")
+		_check(angle_s.get_meta("value").text == "45°" and tilt_b.text.ends_with("OFF") and cam.pitches() == [45.0] and absf(cam.perspective_pitch - 45.0) < 0.5 and game.settings["angle"] == 45.0, "Angle four steps down: 45° with tilt off holds the camera at %.1f degrees" % cam.perspective_pitch)
+		_check(cam.zoom == 1.15 and game.settings["zoom"] == 1.15 and cam.drive_zoom == 0.75 and drive_s.get_meta("value").text == "75%", "Distance a step up gives 115%, Drive zoom-out a step down gives 75%")
 		_check(game.city.LOAD_RADIUS > 105.0 * 1.15 * 1.25, "at 45° and Distance 115%% the city loads to %.0f m" % game.city.LOAD_RADIUS)
 		tilt_b.pressed.emit()
 		_check(cam.pitches() == [45.0, 50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0], "with tilt on it picks from 45° up to 85°")
@@ -827,14 +828,14 @@ func test_perspective_camera() -> void:
 		await _frames(240)
 		_check(cam.perspective_pitch < 52.0, "and among low buildings it stays near 45° (%.1f)" % cam.perspective_pitch)
 		for n in cam.ANGLES.size() + 2:
-			angle_s.get_meta("more").pressed.emit()
+			_slide(angle_s, 1)
 		phone.close()  # the open phone pauses the game
 		await _frames(240)
 		var below: Vector3 = cam.project_ray_normal(cam.get_viewport().get_visible_rect().get_center())
-		_check(absf(cam.perspective_pitch - 90.0) < 0.5 and below.y < -0.99 and angle_s.get_meta("more").disabled and not angle_s.get_meta("less").disabled, "Angle 90° looks straight down, and + stops there rather than wrapping")
+		_check(absf(cam.perspective_pitch - 90.0) < 0.5 and below.y < -0.99 and angle_s.get_meta("slider").value == angle_s.get_meta("slider").max_value and game.settings["angle"] == 90.0, "Angle 90° looks straight down, and the slider stops there rather than wrapping")
 		for n in cam.DRIVE_ZOOMS.size() + 1:
-			drive_s.get_meta("less").pressed.emit()
-		_check(cam.drive_zoom == 0.0 and drive_s.get_meta("value").text == "Off" and drive_s.get_meta("less").disabled, "Drive zoom-out goes down to Off")
+			_slide(drive_s, -1)
+		_check(cam.drive_zoom == 0.0 and drive_s.get_meta("value").text == "Off" and drive_s.get_meta("slider").value == 0, "Drive zoom-out goes down to Off")
 		reset_b.pressed.emit()
 		phone.close()  # the open phone pauses the game
 		await _frames(240)
@@ -1339,15 +1340,12 @@ func test_camera_ninety_turns() -> void:
 	await _frames(1)
 	_check(phone.visible and phone.settings_page.visible and phone.open_count == opened, "the HUD gear opens Settings (and does not count as checking the phone)")
 	phone.settings_page.show_tab("Camera")
-	var turn_b: Button = null
-	for b in phone.settings_page.find_children("*", "Button", true, false):
-		if b.text.begins_with("Camera turn"):
-			turn_b = b
+	var turn_s = phone.settings_page.sliders["Camera turn"]
 	var seen := []
 	for i in 3:
-		turn_b.pressed.emit()
-		seen.append("%s/%s" % [turn_b.text.trim_prefix("Camera turn: "), str(game.settings.get("camera_turn"))])
-	_check(seen == ["Follow/car", "90° turns/steps", "North up/north"] and not cam.turn_view, "Settings > Camera turn cycles: %s" % ", ".join(seen))
+		turn_s.get_meta("slider").value = i
+		seen.append("%s/%s" % [turn_s.get_meta("value").text, str(game.settings.get("camera_turn"))])
+	_check(seen == ["Follow/car", "90° turns/steps", "North up/north"] and not cam.turn_view, "Settings > Camera turn slides: %s" % ", ".join(seen))
 	game.settings["camera_turn"] = "steps"
 	game.apply_settings()
 	_check(cam.turn_view and cam.turn_steps, "a saved 90° turns loads as 90° turns")
@@ -1366,16 +1364,16 @@ func test_settings_page_tabs_and_preview() -> void:
 	_check(page.visible and not phone._frame.visible and get_tree().paused and page._back.text == "CLOSE", "the gear opens the full-screen Settings page with the game paused")
 	_check(cam.process_mode == Node.PROCESS_MODE_ALWAYS and page.preview.render_target_update_mode == SubViewport.UPDATE_ALWAYS and page.get_viewport().disable_3d, "while it is open the camera runs, the preview draws and the hidden game view does not")
 	# Every tab, each setting with a line under it saying what it does.
-	var want := {"Camera": ["View: ", "Look down near towers: ", "Camera turn: ", "Reset camera", "Distance", "Drive zoom-out", "Angle"],
+	var want := {"Camera": ["View: ", "Look down near towers: ", "Camera turn", "Screen shake", "Reset camera", "Distance", "Drive zoom-out", "Angle"],
 		"Graphics": ["Quality", "Bloom: ", "Smooth edges: ", "Vivid colour: ", "Real lights: ", "Detail: ", "Shadows: ", "FPS limit", "Show FPS: "],
-		"Controls": ["Driving: "],
-		"Game": ["Weather: ", "Skip 3 hours", "New game", "Log: ", "BUG button: ", "Report issue", "Export log", "Copy log"]}
+		"Controls": ["Driving"],
+		"Game": ["Weather", "Skip 3 hours", "New game", "Log: ", "BUG button: ", "Report issue", "Export log", "Copy log"]}
 	for t in page.TABS:
 		page.show_tab(t)
 		await _idle(1)
 		var missing := []
 		for w in want[t]:
-			if _find_button(page._list, w) == null and not page.steppers.has(w):
+			if _find_button(page._list, w) == null and not page.sliders.has(w):
 				missing.append(w)
 		var hinted := true
 		# The Log section's heading and status line sit outside the rows.
@@ -1387,12 +1385,12 @@ func test_settings_page_tabs_and_preview() -> void:
 	page.show_tab("Camera")
 	var spot: Vector3 = game.player.global_position
 	var before: float = cam.size
-	page.steppers["Distance"].get_meta("more").pressed.emit()
-	page.steppers["Distance"].get_meta("more").pressed.emit()
+	_slide(page.sliders["Distance"], 1)
+	_slide(page.sliders["Distance"], 1)
 	await _idle(150)
 	_check(cam.zoom == 1.3 and cam.size > before * 1.2 and absf(page.preview_cam.size - cam.size) < 0.01 and page.preview_cam.global_transform.origin.distance_to(cam.global_transform.origin) < 0.01 and get_tree().paused and game.player.global_position.distance_to(spot) < 0.01, "Distance 130%% eases the paused view out from %.1f to %.1f m, and the preview matches it" % [before, cam.size])
 	var foot: float = cam.size
-	page.steppers["Drive zoom-out"].get_meta("less").pressed.emit()
+	_slide(page.sliders["Drive zoom-out"], -1)
 	await _idle(150)
 	_check(cam.preview_drive and page._drive_b.text.ends_with("Driving fast") and cam.size > foot * 1.5, "touching Drive zoom-out previews driving fast (%.1f m at 75%%)" % cam.size)
 	page._drive_b.pressed.emit()
@@ -1400,14 +1398,14 @@ func test_settings_page_tabs_and_preview() -> void:
 	_check(not cam.preview_drive and absf(cam.size - foot) < 1.0, "Preview: As now goes back to the walking view (%.1f m)" % cam.size)
 	# FPS limit.
 	page.show_tab("Graphics")
-	var fps = page.steppers.get("FPS limit")
-	_check(fps != null and fps.get_meta("value").text == "120" and fps.get_meta("more").disabled, "FPS limit starts at 120, the top of the list")
-	fps.get_meta("less").pressed.emit()
-	fps.get_meta("less").pressed.emit()
-	_check(game.settings["fps_limit"] == 75 and game.fps_limit() == 75 and fps.get_meta("value").text == "75" and Engine.max_fps == 0, "FPS limit - twice gives 75 (headless runs stay uncapped)")
+	var fps = page.sliders.get("FPS limit")
+	_check(fps != null and fps.get_meta("value").text == "120" and fps.get_meta("slider").value == fps.get_meta("slider").max_value, "FPS limit starts at 120, the top of the list")
+	_slide(fps, -1)
+	_slide(fps, -1)
+	_check(game.settings["fps_limit"] == 75 and game.fps_limit() == 75 and fps.get_meta("value").text == "75" and Engine.max_fps == 0, "FPS limit two steps down gives 75 (headless runs stay uncapped)")
 	for n in 5:
-		fps.get_meta("less").pressed.emit()
-	_check(game.fps_limit() == 30 and fps.get_meta("less").disabled, "and stops at 30")
+		_slide(fps, -1)
+	_check(game.fps_limit() == 30 and fps.get_meta("slider").value == 0, "and stops at 30")
 	var odd := []
 	for v in [45, "60", null, 90.0]:
 		game.settings["fps_limit"] = v
@@ -1417,10 +1415,10 @@ func test_settings_page_tabs_and_preview() -> void:
 	# Scrolling: buttons let drags through to the list, and a drag that
 	# becomes a scroll cancels the button it began on.
 	var stops := 0
-	for b in page._list.find_children("*", "BaseButton", true, false) + phone._body.find_children("*", "BaseButton", true, false):
+	for b in page._list.find_children("*", "BaseButton", true, false) + page._list.find_children("*", "Slider", true, false) + phone._body.find_children("*", "BaseButton", true, false):
 		if b.mouse_filter != Control.MOUSE_FILTER_PASS:
 			stops += 1
-	_check(stops == 0 and page._scroll.get_v_scroll_bar().custom_minimum_size.x >= 36 and page._scroll.scroll_deadzone > 0, "list buttons pass drags to their scroll, which has a wide bar")
+	_check(stops == 0 and page._scroll.get_v_scroll_bar().custom_minimum_size.x >= 36 and page._scroll.scroll_deadzone > 0, "list buttons and sliders pass drags to their scroll, which has a wide bar")
 	await _idle(2)
 	var db = _find_button(page._list, "Detail: ")
 	# Window pixels (the headless window is tiny and stretched).
@@ -1451,10 +1449,9 @@ func test_settings_page_tabs_and_preview() -> void:
 	_check(get_tree().paused and atm.hour == 0.0 and not is_equal_approx(atm.sun.light_energy, day_sun) and not lit and car.headlights_on() and car._lamp_glow.visible, "skipping to midnight while paused relights the preview and turns the headlights on")
 	car.queue_free()
 	var weather_was = game.settings.get("weather", "auto")
-	var wb = _find_button(page._list, "Weather: ")
-	while not wb.text.ends_with("RAIN"):
-		wb.pressed.emit()
-	_check(is_equal_approx(atm.rain, 0.6) and is_equal_approx(atm.clouds, 0.85) and atm._rain.can_process(), "Weather rain shows at once in the paused preview, drops falling (rain %.2f)" % atm.rain)
+	var wb = page.sliders["Weather"]
+	wb.get_meta("slider").value = wb.get_meta("values").find("rain")
+	_check(wb.get_meta("value").text == "Rain" and is_equal_approx(atm.rain, 0.6) and is_equal_approx(atm.clouds, 0.85) and atm._rain.can_process(), "Weather rain shows at once in the paused preview, drops falling (rain %.2f)" % atm.rain)
 	game.settings["weather"] = weather_was
 	atm.set_weather("clear", true)
 	page.show_tab("Camera")
@@ -1658,18 +1655,18 @@ func test_graphics_quality_presets() -> void:
 	s["real_lights"] = false
 	game.apply_settings()
 	_check(game.graphics.cars == 0 and game.graphics.lamps == 0 and is_equal_approx(get_viewport().scaling_3d_scale, 1.0), "Real lights OFF gives no real lights at all")
-	# The page: the stepper steps the preset and redraws the toggles.
+	# The page: the slider picks the preset and redraws the toggles.
 	var page = game.hud.phone.settings_page
 	game.hud.settings_button.pressed.emit()
 	await _idle(2)
 	page.show_tab("Graphics")
 	await _idle(1)
-	var row = page.steppers["Quality"]
+	var row = page.sliders["Quality"]
 	_check(row.get_meta("value").text == "Medium *", "the page shows Medium * (changed by hand), got %s" % row.get_meta("value").text)
-	row.get_meta("more").pressed.emit()
+	_slide(row, 1)
 	await _idle(2)
-	row = page.steppers["Quality"]
-	_check(s.quality == "high" and s.real_lights and s.bloom and row.get_meta("value").text == "High" and _find_button(page._list, "Bloom: ON") != null, "+ steps to High, which sets every effect back (got %s)" % row.get_meta("value").text)
+	row = page.sliders["Quality"]
+	_check(s.quality == "high" and s.real_lights and s.bloom and row.get_meta("value").text == "High" and row.get_meta("slider").value == 2 and _find_button(page._list, "Bloom: ON") != null, "a step up slides to High, which sets every effect back (got %s)" % row.get_meta("value").text)
 	_find_button(page._list, "Bloom: ON").pressed.emit()
 	await _idle(1)
 	_check(not env.glow_enabled and row.get_meta("value").text == "High *", "turning Bloom off works at once and marks the preset")
@@ -7197,3 +7194,189 @@ func test_car_fire_then_explodes() -> void:
 	_check(near.health < near.max_health and near.global_position.distance_to(near_at) > 0.05, "the car beside it is shoved %.2f m and damaged" % near.global_position.distance_to(near_at))
 	car.queue_free()
 	near.queue_free()
+
+
+## Settings > Camera > Screen shake (0.23, Sachin: "screen shake is too
+## much, give me a slider"): the strength scales the view's shake offset,
+## 0 holds it still, 100% is the shake before 0.23, 50% is the default, and
+## it saves, loads and falls back to 50% for saves without it.
+func test_screen_shake_setting() -> void:
+	await _new_game(false)
+	var cam = game.camera
+	_check(game.settings.get("shake") == 50 and game.shake_percent() == 50 and is_equal_approx(cam.shake_strength, 0.5), "a new game shakes at 50%% (got %s)" % [game.settings.get("shake")])
+	# The offset at one moment of a full shake, at 100%, 50% and 0%.
+	var full := []
+	for pct in [100, 50, 0]:
+		game.settings["shake"] = pct
+		game.apply_settings()
+		cam._trauma = 1.0
+		cam._shake_t = 0.37
+		cam._apply_shake(0.0)
+		full.append(Vector2(cam.h_offset, cam.v_offset))
+	var want := Vector2(sin(0.37 * 1.13) + sin(0.37 * 2.71) * 0.5, sin(0.37 * 1.37 + 1.0) + sin(0.37 * 3.07) * 0.5) * 0.9
+	_check(full[0].distance_to(want) < 0.0001 and full[0].length() > 0.5, "at 100%% the offset is the full shake before 0.23 (%s, want %s)" % [full[0], want])
+	_check(full[1].distance_to(want * 0.5) < 0.0001, "at 50%% it is half (%s)" % full[1])
+	_check(full[2] == Vector2.ZERO, "at Off there is no offset (%s)" % full[2])
+	# In play, through shake(): Off never moves the view; 100% does.
+	var most := [0.0, 0.0]
+	for i in 2:
+		game.settings["shake"] = [0, 100][i]
+		game.apply_settings()
+		cam.shake(1.0)
+		for f in 20:
+			await _frames(1)
+			most[i] = maxf(most[i], Vector2(cam.h_offset, cam.v_offset).length())
+		cam._trauma = 0.0
+	_check(most[0] == 0.0 and most[1] > 0.3, "a shake at Off moves the view 0 m, at 100%% up to %.2f m" % most[1])
+	# Bad saved values fall back to 50%.
+	var odd := []
+	for v in [45, "loud", null, 100.0, -10, 30.0, 20.5]:
+		game.settings["shake"] = v
+		odd.append(game.shake_percent())
+	_check(odd == [50, 50, 50, 100, 50, 30, 50], "a saved shake not on the list loads as 50%%: %s" % [odd])
+	# Save and load, through a throwaway file.
+	var mm = game.missions
+	mm.save_enabled = true
+	mm.save_path = "user://test_save_shake.json"
+	game.settings["shake"] = 30
+	game.apply_settings()
+	mm.save_game()
+	# (apply_settings saves too, so the change after the save is not applied.)
+	game.settings["shake"] = 80
+	cam.shake_strength = 0.8
+	mm.load_game()
+	game.apply_settings()
+	_check(game.settings["shake"] == 30 and is_equal_approx(cam.shake_strength, 0.3), "Screen shake 30%% survives save and load (%s)" % [game.settings["shake"]])
+	# A save from before 0.23 has no "shake": a fresh game loading it keeps 50%.
+	game.settings["shake"] = 50
+	var f := FileAccess.open(mm.save_path, FileAccess.WRITE)
+	f.store_string(JSON.stringify({"version": 2, "done": [], "cash": 10, "phone": false, "settings": {"zoom": 1.15, "fps_limit": 60}, "inventory": {}}))
+	f.close()
+	mm.load_game()
+	game.apply_settings()
+	_check(game.settings["shake"] == 50 and is_equal_approx(cam.shake_strength, 0.5) and cam.zoom == 1.15, "an old save without it loads at 50% and keeps its other settings")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(mm.save_path))
+	mm.save_enabled = false
+	game.settings["zoom"] = 1.0
+	game.settings["fps_limit"] = 120
+	game.apply_settings()
+
+
+## Every setting with several values is a slider (0.23): one tick per value,
+## a drag snaps to the nearest, the name of the value shows above it, and
+## the value is applied at once. A tap jumps to a tick; a swipe that starts
+## on a slider and turns into a scroll changes nothing.
+func test_settings_sliders_snap_and_apply() -> void:
+	await _new_game(false)
+	var cam = game.camera
+	var phone = game.hud.phone
+	var page = phone.settings_page
+	var s: Dictionary = game.settings
+	game.hud.settings_button.pressed.emit()
+	await _idle(2)
+	# What each setting looks like in the game once applied.
+	var state := {
+		"zoom": func(): return cam.zoom,
+		"drive_zoom": func(): return cam.drive_zoom,
+		"angle": func(): return cam.base_pitch,
+		"camera_turn": func(): return "north" if not cam.turn_view else "steps" if cam.turn_steps else "car",
+		"shake": func(): return roundi(cam.shake_strength * 100.0),
+		"quality": func(): return game.graphics.quality,
+		"fps_limit": func(): return game.fps_limit(),
+		"controls": func(): return Controls.scheme,
+		"weather": func(): return "auto" if game.atmosphere.weather_changes else game.atmosphere.weather,
+	}
+	var want := {"Camera": ["Distance", "Drive zoom-out", "Angle", "Camera turn", "Screen shake"],
+		"Graphics": ["Quality", "FPS limit"], "Controls": ["Driving"], "Game": ["Weather"]}
+	var keep: Dictionary = s.duplicate(true)
+	for t in page.TABS:
+		page.show_tab(t)
+		await _idle(1)
+		var names: Array = page.sliders.keys()
+		names.sort()
+		var expect: Array = want[t].duplicate()
+		expect.sort()
+		_check(names == expect, "tab %s has sliders %s (want %s)" % [t, names, expect])
+		for n in want[t]:
+			# Quality redraws the tab, so the row is looked up afresh.
+			var row = page.sliders.get(n)
+			if row == null:
+				_check(false, "%s is a slider" % n)
+				continue
+			var bar = row.get_meta("slider")
+			var values: Array = row.get_meta("values")
+			var key: String = row.get_meta("key")
+			var shape: bool = bar is HSlider and bar.min_value == 0 and bar.max_value == values.size() - 1 and bar.step == 1.0 and bar.tick_count == values.size() and bar.ticks_on_borders and bar.mouse_filter == Control.MOUSE_FILTER_PASS and bar.custom_minimum_size.y >= 56 and bar.get_theme_icon("grabber").get_width() >= 40
+			var wrong := []
+			for i in values.size():
+				# A drag lands between ticks; it snaps to the nearest.
+				bar.value = i + (0.4 if i < values.size() - 1 else -0.4)
+				var got = state[key].call()
+				var same: bool = is_equal_approx(float(got), float(values[i])) if values[i] is float or values[i] is int else got == values[i]
+				if bar.value != i or s[key] != values[i] or not same or row.get_meta("value").text == "":
+					wrong.append("%s->%s/%s/%s" % [values[i], bar.value, s[key], got])
+			_check(shape and wrong.is_empty(), "%s: a slider over %d values that snaps and applies each one (wrong: %s)" % [n, values.size(), wrong])
+			if t == "Graphics":
+				await _idle(1)
+		for k in keep:
+			s[k] = keep[k]
+		game.apply_settings()
+	# Named values show their names; Off and percentages show as such.
+	page.show_tab("Camera")
+	await _idle(1)
+	var shake_s = page.sliders["Screen shake"]
+	shake_s.get_meta("slider").value = 0
+	var off_text: String = shake_s.get_meta("value").text
+	cam._trauma = 0.0
+	shake_s.get_meta("slider").value = 5
+	_check(off_text == "Off" and shake_s.get_meta("value").text == "50%" and cam._trauma > 0.5 and page.sliders["Camera turn"].get_meta("value").text == "North up", "Screen shake shows Off and 50%%, and a change shakes the preview once (trauma %.2f); Camera turn shows North up" % cam._trauma)
+	cam._trauma = 0.0
+	# A tap on the track jumps to the nearest tick, as a finger would.
+	var dist = page.sliders["Distance"]
+	var bar: HSlider = dist.get_meta("slider")
+	await _idle(2)
+	var r: Rect2 = bar.get_global_rect()
+	var to_window: Transform2D = get_viewport().get_final_transform()
+	var left: Vector2 = to_window * (r.position + Vector2(3.0, r.size.y * 0.5))
+	var right: Vector2 = to_window * (r.position + Vector2(r.size.x - 3.0, r.size.y * 0.5))
+	await _slider_press(left, true)
+	await _slider_press(left, false)
+	_check(bar.value == 0 and s["zoom"] == 0.6 and cam.zoom == 0.6 and dist.get_meta("value").text == "60%", "a tap at the left end of Distance picks 60%% (value %s, zoom %s)" % [bar.value, s["zoom"]])
+	# The finger goes down at the right end (Distance jumps to 130%), then the
+	# drag turns into a scroll: it goes back to 60% and the slider lets go.
+	await _slider_press(right, true)
+	var jumped: float = cam.zoom
+	page._scroll.scroll_started.emit()
+	var mm := InputEventMouseMotion.new()
+	mm.position = (left + right) * 0.5
+	mm.global_position = mm.position
+	mm.button_mask = MOUSE_BUTTON_MASK_LEFT
+	mm.relative = mm.position - right
+	get_viewport().push_input(mm)
+	await _idle(1)
+	await _slider_press((left + right) * 0.5, false)
+	_check(jumped == 1.3 and bar.value == 0 and s["zoom"] == 0.6 and cam.zoom == 0.6 and dist.get_meta("value").text == "60%" and page._held == null, "a swipe that starts on a slider and scrolls puts the setting back (jumped to %s, now %s)" % [jumped, s["zoom"]])
+	await _slider_press(right, true)
+	await _slider_press(right, false)
+	_check(bar.value == 6 and cam.zoom == 1.3, "and the slider still works after (%s)" % bar.value)
+	phone.close()
+	s["zoom"] = 1.0
+	game.apply_settings()
+
+
+## Presses (or releases) the left button at window pixel `at`.
+func _slider_press(at: Vector2, down: bool) -> void:
+	var ev := InputEventMouseButton.new()
+	ev.button_index = MOUSE_BUTTON_LEFT
+	ev.position = at
+	ev.global_position = at
+	ev.pressed = down
+	ev.button_mask = MOUSE_BUTTON_MASK_LEFT if down else 0
+	get_viewport().push_input(ev)
+	await _idle(1)
+
+
+## Moves a settings slider `by` ticks, as a drag would; it stops at the ends.
+func _slide(row, by: int) -> void:
+	var bar: HSlider = row.get_meta("slider")
+	bar.value = bar.value + by

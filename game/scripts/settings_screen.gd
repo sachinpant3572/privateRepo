@@ -11,9 +11,9 @@ const HINT := Color(0.62, 0.66, 0.74)
 var phone
 ## The open tab (kept between visits).
 var tab := "Camera"
-## The steppers on the open tab by name (Distance, Drive zoom-out, Angle,
-## FPS limit), for tests.
-var steppers := {}
+## The sliders on the open tab by name (Distance, Drive zoom-out, Angle,
+## Camera turn, Screen shake, Quality, FPS limit, Driving, Weather).
+var sliders := {}
 var preview: SubViewport
 var preview_cam: Camera3D
 var _aspect: AspectRatioContainer
@@ -24,6 +24,12 @@ var _back: Button
 var _drive_b: Button
 var _cam_mode := Node.PROCESS_MODE_INHERIT
 var _world_tick := 0.0
+## The slider under the finger and the settings as they were when it went
+## down (put back if the drag turns into a scroll).
+var _held: HSlider = null
+var _held_from := {}
+var _grab_tex: Texture2D
+var _grab_hi_tex: Texture2D
 
 
 func _ready() -> void:
@@ -72,6 +78,7 @@ func _ready() -> void:
 	_scroll.custom_minimum_size = Vector2(500, 0)
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	phone.touch_scroll(_scroll)
+	_scroll.scroll_started.connect(_drop_held)
 	body.add_child(_scroll)
 	var pad := MarginContainer.new()
 	pad.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -221,7 +228,8 @@ func show_tab(t: String) -> void:
 	tab = t
 	for k in _tabs:
 		_tabs[k].set_pressed_no_signal(k == t)
-	steppers.clear()
+	sliders.clear()
+	_held = null
 	for c in _list.get_children():
 		_list.remove_child(c)
 		c.queue_free()
@@ -234,11 +242,6 @@ func show_tab(t: String) -> void:
 
 
 # --- Tabs ------------------------------------------------------------------------
-
-func _turn_label() -> String:
-	var cam = phone.game.camera
-	return "Camera turn: " + ("North up" if not cam.turn_view else "90° turns" if cam.turn_steps else "Follow")
-
 
 func _tilt_label() -> String:
 	return "Look down near towers: " + ("ON" if phone.game.camera.auto_tilt else "OFF")
@@ -254,14 +257,13 @@ func _camera_tab() -> void:
 		game.apply_settings()
 		vb.text = "View: " + s["view"].to_upper())
 	_row(vb, "Perspective tips the city in 3D. Classic looks flat down on it like a map.")
-	_row(_stepper("Distance", "zoom", cam.ZOOMS, func(): return cam.zoom, func(v): return "%d%%" % roundi(v * 100.0)),
+	_row(_slider("Distance", "zoom", cam.ZOOMS, func(): return cam.zoom, func(v): return "%d%%" % roundi(v * 100.0)),
 		"How far away the camera sits. Higher shows more of the city.")
-	var drive := _stepper("Drive zoom-out", "drive_zoom", cam.DRIVE_ZOOMS, func(): return cam.drive_zoom, func(v): return "Off" if v == 0.0 else "%d%%" % roundi(v * 100.0))
+	var drive := _slider("Drive zoom-out", "drive_zoom", cam.DRIVE_ZOOMS, func(): return cam.drive_zoom, func(v): return "Off" if v == 0.0 else "%d%%" % roundi(v * 100.0))
 	# Shown at speed: a change here switches the preview to driving.
-	for b in [drive.get_meta("less"), drive.get_meta("more")]:
-		b.pressed.connect(_preview_driving.bind(true))
+	drive.get_meta("slider").value_changed.connect(func(_v): _preview_driving(true))
 	_row(drive, "How far the camera backs out as a car speeds up. Off keeps the walking distance.")
-	_row(_stepper("Angle", "angle", cam.ANGLES, func(): return cam.base_pitch, func(v): return "%d°" % roundi(v)),
+	_row(_slider("Angle", "angle", cam.ANGLES, func(): return cam.base_pitch, func(v): return "%d°" % roundi(v)),
 		"How steeply the camera looks down (perspective view). 90° is straight down.")
 	var tilt_b: Button = phone._button(_tilt_label(), Callable())
 	tilt_b.pressed.connect(func():
@@ -269,13 +271,15 @@ func _camera_tab() -> void:
 		game.apply_settings()
 		tilt_b.text = _tilt_label())
 	_row(tilt_b, "Among tall buildings the camera tips further down (up to 85°) so towers don't hide you or the street, then goes back to your Angle. OFF keeps your Angle always. Shows among towers.")
-	var turn_b: Button = phone._button(_turn_label(), Callable())
-	turn_b.pressed.connect(func():
-		# Follow -> 90° turns -> North up -> Follow.
-		s["camera_turn"] = "car" if not cam.turn_view else "north" if cam.turn_steps else "steps"
-		game.apply_settings()
-		turn_b.text = _turn_label())
-	_row(turn_b, "Follow: the view turns with the car and your walk. 90° turns: only when you turn a whole corner. North up: never turns. Shows once you move.")
+	# From the most turning to none.
+	_row(_slider("Camera turn", "camera_turn", ["car", "steps", "north"],
+		func(): return "north" if not cam.turn_view else "steps" if cam.turn_steps else "car",
+		func(v): return {"car": "Follow", "steps": "90° turns", "north": "North up"}[v]),
+		"Follow: the view turns with the car and your walk. 90° turns: only when you turn a whole corner. North up: never turns. Shows once you move.")
+	# Let go, the preview gives a bump at the new strength.
+	_row(_slider("Screen shake", "shake", game.SHAKES, func(): return game.shake_percent(),
+		func(v): return "Off" if v == 0 else "%d%%" % v, Callable(), func(): cam.shake(0.7)),
+		"How hard hits, crashes and explosions shake the view. 100% is the full shake; Off holds it still. Let go and the preview shakes once.")
 	var reset_b: Button = phone._button("Reset camera", Callable())
 	reset_b.pressed.connect(func():
 		s["angle"] = cam.PITCH_LOW
@@ -284,7 +288,7 @@ func _camera_tab() -> void:
 		s["drive_zoom"] = 1.0
 		game.apply_settings()
 		tilt_b.text = _tilt_label()
-		for row in steppers.values():
+		for row in sliders.values():
 			row.get_meta("refresh").call())
 	_row(reset_b, "Back to 65°, look down near towers on, 100% distance and drive zoom-out.")
 
@@ -293,13 +297,11 @@ func _graphics_tab() -> void:
 	var game = phone.game
 	var s: Dictionary = game.settings
 	var G = game.Graphics
-	var q := _stepper("Quality", "quality", G.QUALITIES, func(): return s.get("quality", "high"),
-		func(v): return str(v).capitalize() + ("" if _matches_preset(s) else " *"))
-	for b in [q.get_meta("less"), q.get_meta("more")]:
-		b.pressed.connect(func():
-			G.pick(s, s["quality"])
-			game.apply_settings()
-			show_tab.call_deferred("Graphics"))
+	# Picking a level sets every effect below it, which redraws them (once
+	# the finger lets go).
+	var q := _slider("Quality", "quality", G.QUALITIES, func(): return s.get("quality", "high"),
+		func(v): return str(v).capitalize() + ("" if _matches_preset(s) else " *"),
+		func(v): G.pick(s, v), func(): show_tab.call_deferred("Graphics"))
 	_row(q, "Low runs fastest on older phones; Ultra looks best (smooth edges, shadows from your headlights). Picking one sets everything below; * means you changed something by hand.")
 	var effect := func(label: String, key: String, hint: String):
 		_row(phone._toggle(label, s.get(key, true), func(on):
@@ -318,7 +320,7 @@ func _graphics_tab() -> void:
 		q.get_meta("refresh").call())
 	_row(db, "Low: flat colours, no grain or puddles, lighter rain. Easier on older phones.")
 	effect.call("Shadows", "shadows", "Sun shadows. OFF runs faster.")
-	_row(_stepper("FPS limit", "fps_limit", game.FPS_LIMITS, func(): return game.fps_limit(), func(v): return str(v)),
+	_row(_slider("FPS limit", "fps_limit", game.FPS_LIMITS, func(): return game.fps_limit(), func(v): return str(v)),
 		"The most frames a second the game draws. Lower saves battery and heat. 30, 60 and 120 run smoothest on a 120 Hz screen; 75 and 90 can judder there.")
 	_row(phone._toggle("Show FPS", s.get("show_fps", true), func(on): s["show_fps"] = on; game.apply_settings()),
 		"The frame counter in the corner.")
@@ -326,25 +328,15 @@ func _graphics_tab() -> void:
 
 func _controls_tab() -> void:
 	var game = phone.game
-	var cb: Button = phone._button("Driving: " + Controls.SCHEME_NAMES[Controls.scheme], Callable())
-	cb.pressed.connect(func():
-		game.settings["controls"] = Controls.SCHEMES[(Controls.SCHEMES.find(Controls.scheme) + 1) % Controls.SCHEMES.size()]
-		game.apply_settings()
-		cb.text = "Driving: " + Controls.SCHEME_NAMES[Controls.scheme])
-	_row(cb, "Steering in a car: a stick, left and right arrows, or tilting the phone. The pedals stay on the right.")
+	_row(_slider("Driving", "controls", Controls.SCHEMES, func(): return Controls.scheme, func(v): return Controls.SCHEME_NAMES[v]),
+		"Steering in a car: a stick, left and right arrows, or tilting the phone. The pedals stay on the right.")
 
 
 func _game_tab() -> void:
 	var game = phone.game
 	var s: Dictionary = game.settings
-	var weathers := ["auto", "clear", "rain", "storm"]
-	var wb: Button = phone._button("Weather: " + s.get("weather", "auto").to_upper(), Callable())
-	wb.pressed.connect(func():
-		var i := (weathers.find(s.get("weather", "auto")) + 1) % weathers.size()
-		s["weather"] = weathers[i]
-		game.apply_settings()
-		wb.text = "Weather: " + weathers[i].to_upper())
-	_row(wb, "AUTO changes through the day; or hold it clear, rain or storm.")
+	_row(_slider("Weather", "weather", ["auto", "clear", "rain", "storm"], func(): return s.get("weather", "auto"), func(v): return str(v).capitalize()),
+		"Auto changes through the day; or hold it Clear, Rain or Storm.")
 	var tb: Button = phone._button("Skip 3 hours (now %s)" % game.atmosphere.clock_text(), Callable())
 	tb.pressed.connect(func():
 		game.atmosphere.hour = fmod(game.atmosphere.hour + 3.0, 24.0)
@@ -422,42 +414,121 @@ func _row(widget: Control, hint: String) -> void:
 	_list.add_child(gap)
 
 
-## A setting with - and + buttons either side of its value: `values` in
-## order, `now` reads the current one, `shown` formats it. Steps stop at the
-## ends rather than wrapping round.
-func _stepper(label: String, key: String, values: Array, now: Callable, shown: Callable) -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
+## A setting as a slider across the list that snaps to each of `values` (in
+## order, a tick for each), with its name and the value now (`shown`) on the
+## line above. `now` reads the current value. Moving it stores the value
+## under `key` and applies it at once, so the preview follows the finger;
+## `on_set` runs first with the value picked. `done` runs once the change is
+## settled: at once for a tap, after the finger lets go for a drag.
+func _slider(label: String, key: String, values: Array, now: Callable, shown: Callable, on_set := Callable(), done := Callable()) -> VBoxContainer:
+	var row := VBoxContainer.new()
+	row.add_theme_constant_override("separation", 0)
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", 8)
+	row.add_child(top)
 	var name_l: Label = phone._text(label, 20, Color.WHITE)
 	name_l.autowrap_mode = TextServer.AUTOWRAP_OFF
 	name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(name_l)
-	var less: Button = phone._button("-", Callable())
-	var more: Button = phone._button("+", Callable())
+	top.add_child(name_l)
 	var value: Label = phone._text("", 20, Color(1.0, 0.85, 0.4))
-	value.custom_minimum_size = Vector2(80, 0)
-	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	for b in [less, more]:
-		b.custom_minimum_size = Vector2(64, 56)
-	row.add_child(less)
-	row.add_child(value)
-	row.add_child(more)
+	value.autowrap_mode = TextServer.AUTOWRAP_OFF
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	top.add_child(value)
+	var bar := HSlider.new()
+	bar.min_value = 0
+	bar.max_value = values.size() - 1
+	bar.step = 1
+	bar.rounded = true
+	bar.tick_count = values.size()
+	bar.ticks_on_borders = true
+	bar.scrollable = false
+	bar.focus_mode = Control.FOCUS_NONE
+	# Drags reach the list too, so a swipe that starts on it still scrolls
+	# (_drop_held then puts the setting back).
+	bar.mouse_filter = Control.MOUSE_FILTER_PASS
+	bar.custom_minimum_size = Vector2(0, 56)
+	_style(bar)
+	row.add_child(bar)
 	var refresh := func():
-		var i := values.find(now.call())
-		value.text = shown.call(now.call())
-		less.disabled = i <= 0
-		more.disabled = i < 0 or i >= values.size() - 1
-	var step := func(by: int):
-		var i := clampi(values.find(now.call()) + by, 0, values.size() - 1)
-		phone.game.settings[key] = values[i]
+		var v = now.call()
+		bar.set_value_no_signal(maxi(values.find(v), 0))
+		value.text = shown.call(v)
+	bar.value_changed.connect(func(at: float):
+		var v = values[clampi(roundi(at), 0, values.size() - 1)]
+		phone.game.settings[key] = v
+		if on_set.is_valid():
+			on_set.call(v)
 		phone.game.apply_settings()
 		refresh.call()
-	less.pressed.connect(step.bind(-1))
-	more.pressed.connect(step.bind(1))
+		if done.is_valid():
+			if _held == bar:
+				row.set_meta("pending", true)
+			else:
+				done.call())
+	# The press comes before the value jumps to the finger.
+	bar.drag_started.connect(func():
+		_held = bar
+		_held_from = phone.game.settings.duplicate(true))
+	bar.drag_ended.connect(func(_changed: bool):
+		if _held == bar:
+			_held = null
+		if row.get_meta("pending", false):
+			row.set_meta("pending", false)
+			done.call())
 	row.set_meta("refresh", refresh)
-	row.set_meta("less", less)
-	row.set_meta("more", more)
+	row.set_meta("slider", bar)
 	row.set_meta("value", value)
+	row.set_meta("values", values)
+	row.set_meta("key", key)
 	refresh.call()
-	steppers[label] = row
+	sliders[label] = row
 	return row
+
+
+## A drag that began on a slider and turned into a scroll puts back the
+## settings as they were before the finger went down, and lets go of the
+## slider, so the rest of the swipe only scrolls.
+func _drop_held() -> void:
+	var bar := _held
+	_held = null
+	if bar == null or not is_instance_valid(bar):
+		return
+	phone.game.settings.merge(_held_from, true)
+	phone.game.apply_settings()
+	# Hiding a slider drops its grab and the press it was tracking.
+	bar.visible = false
+	bar.visible = true
+	for row in sliders.values():
+		row.set_meta("pending", false)
+		row.get_meta("refresh").call()
+
+
+## A thick track, the part up to the handle in the accent colour, and a
+## round handle big enough to find under a thumb.
+func _style(bar: HSlider) -> void:
+	if _grab_tex == null:
+		_grab_tex = _disc(40, Color.WHITE)
+		_grab_hi_tex = _disc(40, Color(1.0, 0.85, 0.4))
+	var track := StyleBoxFlat.new()
+	track.bg_color = Color(1, 1, 1, 0.16)
+	track.set_corner_radius_all(6)
+	track.content_margin_top = 6
+	track.content_margin_bottom = 6
+	bar.add_theme_stylebox_override("slider", track)
+	var fill: StyleBoxFlat = track.duplicate()
+	fill.bg_color = phone.ACCENT
+	bar.add_theme_stylebox_override("grabber_area", fill)
+	bar.add_theme_stylebox_override("grabber_area_highlight", fill)
+	bar.add_theme_icon_override("grabber", _grab_tex)
+	bar.add_theme_icon_override("grabber_highlight", _grab_hi_tex)
+
+
+## A filled circle `d` pixels across with a soft edge.
+static func _disc(d: int, fill: Color) -> ImageTexture:
+	var img := Image.create_empty(d, d, false, Image.FORMAT_RGBA8)
+	var r := d * 0.5
+	for y in d:
+		for x in d:
+			var edge := clampf(r - 0.5 - Vector2(x + 0.5 - r, y + 0.5 - r).length(), 0.0, 1.0)
+			img.set_pixel(x, y, Color(fill, fill.a * edge))
+	return ImageTexture.create_from_image(img)

@@ -47,13 +47,18 @@ phone.
   full-screen page with tabs, a line under each setting saying what it
   does, and a live preview of the game view beside the list (the game stays
   paused; "Preview: Driving fast" shows the view at full speed, and touching
-  Drive zoom-out switches to it). Camera: view, Distance 60-130%, Drive
-  zoom-out Off-100%, Angle 40-90° with - and + buttons, look down near
+  Drive zoom-out switches to it). Every setting with more than two choices
+  is a thumb-sized slider that snaps to a tick per choice and shows the
+  choice above it (since 0.23); on/off settings stay buttons. Camera: view,
+  Distance 60-130%, Drive zoom-out Off-100%, Angle 40-90°, look down near
   towers (among tall buildings the camera tips further down, up to 85°, then
-  back to your Angle), camera turn, reset. Graphics: Quality (Low, Medium, High,
+  back to your Angle), camera turn (Follow, 90° turns, North up), Screen
+  shake Off-100% in 10% steps (default 50%; 100% is the shake before 0.23;
+  letting go shakes the preview once), reset. Graphics: Quality (Low, Medium, High,
   Ultra) and its effects one by one (bloom, smooth edges, vivid colour, real
   lights), detail high/low, shadows, FPS limit (30, 60, 75, 90, 120), FPS counter. Controls: driving
-  layout. Game: weather, skip time, new game.
+  layout (Stick, Arrows or Tilt). Game: weather (Auto, Clear, Rain, Storm), skip time, new game.
+  A swipe that starts on a slider and scrolls the list puts the setting back.
 - **Minimap and full map**: round north-up minimap with landmark icons,
   mission blips (on the rim when off the map), police while wanted and the
   GPS route; tap it (or M) for the full map: pan, pinch or scroll to zoom,
