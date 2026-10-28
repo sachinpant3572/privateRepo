@@ -16,55 +16,55 @@ extends RefCounted
 ## ask for "scooter" and "sports" by name.
 const KINDS := {
 	"compact": {"name": "Nimbi Pip", "category": "compact", "size": Vector3(1.75, 1.5, 3.7),
-		"max_speed": 18.0, "accel": 10.0, "turn": 2.7, "mass": 1.15, "grip": 8.5, "power_fade": 0.55,
+		"max_speed": 27.0, "corner_g": 10.5, "accel": 10.0, "turn": 2.7, "mass": 1.15, "grip": 8.5, "power_fade": 0.55,
 		"steer_fade": 0.15, "steer_low": 4.0, "reverse": 7.0, "health": 80.0, "roll": 0.0016},
 	"sedan": {"name": "Calder Seren", "category": "sedan", "size": Vector3(1.9, 1.4, 4.2),
-		"max_speed": 20.5, "accel": 10.5, "turn": 2.4},
+		"max_speed": 31.0, "accel": 10.5, "turn": 2.4},
 	"ev": {"name": "Ionis Lumen", "category": "electric", "size": Vector3(1.95, 1.4, 4.7),
-		"max_speed": 22.0, "accel": 13.5, "turn": 2.4, "mass": 2.0, "grip": 8.5, "brake": 34.0,
+		"max_speed": 34.0, "corner_g": 11.5, "accel": 14.8, "turn": 2.4, "mass": 2.0, "grip": 8.5, "brake": 34.0,
 		"power_fade": 0.08, "reverse": 9.0, "health": 105.0, "roll": 0.0011},
 	"luxury": {"name": "Aurelle Empyre", "category": "luxury", "size": Vector3(2.0, 1.5, 5.3),
-		"max_speed": 21.0, "accel": 10.0, "turn": 2.2, "mass": 2.2, "grip": 7.5, "drift": 1.4,
+		"max_speed": 33.0, "corner_g": 10.5, "accel": 10.0, "turn": 2.2, "mass": 2.2, "grip": 7.5, "drift": 1.4,
 		"power_fade": 0.45, "steer_fade": 0.3, "health": 130.0, "roll": 0.0016},
 	"taxi": {"name": "Calder Seren Taxi", "category": "taxi", "size": Vector3(1.9, 1.4, 4.2),
-		"max_speed": 20.5, "accel": 10.5, "turn": 2.4, "mass": 1.55, "health": 110.0},
+		"max_speed": 30.0, "accel": 10.5, "turn": 2.4, "mass": 1.55, "health": 110.0},
 	"police": {"name": "Calder Interceptor", "category": "police", "size": Vector3(1.95, 1.4, 4.4),
-		"max_speed": 23.0, "accel": 12.0, "turn": 2.5, "mass": 2.2, "grip": 8.5, "drift": 1.6, "brake": 36.0,
+		"max_speed": 36.0, "corner_g": 12.0, "accel": 12.0, "turn": 2.5, "mass": 2.2, "grip": 8.5, "drift": 1.6, "brake": 36.0,
 		"power_fade": 0.4, "steer_fade": 0.25, "reverse": 9.0, "health": 160.0, "roll": 0.0016},
 	"crossover": {"name": "Kaito Rove", "category": "crossover", "size": Vector3(1.9, 1.65, 4.5),
-		"max_speed": 19.5, "accel": 10.0, "turn": 2.4, "mass": 1.7, "grip": 7.5, "brake": 30.0,
+		"max_speed": 30.0, "corner_g": 10.0, "accel": 10.0, "turn": 2.4, "mass": 1.7, "grip": 7.5, "brake": 30.0,
 		"steer_fade": 0.25, "health": 110.0, "roll": 0.0018, "pitch": 0.0016},
 	"suv": {"name": "Bastion Summit", "category": "suv", "size": Vector3(2.05, 1.9, 5.1),
-		"max_speed": 18.5, "accel": 9.0, "turn": 2.1, "mass": 2.5, "grip": 6.5, "drift": 1.4, "brake": 28.0,
+		"max_speed": 29.0, "corner_g": 9.0, "accel": 9.0, "turn": 2.1, "mass": 2.5, "grip": 6.5, "drift": 1.4, "brake": 28.0,
 		"steer_fade": 0.4, "steer_low": 5.5, "health": 150.0, "roll": 0.0024, "pitch": 0.0018},
 	"pickup": {"name": "Bastion Haulmark", "category": "pickup", "size": Vector3(2.0, 1.6, 4.9),
-		"max_speed": 18.5, "accel": 9.0, "turn": 2.1, "mass": 2.4, "grip": 6.5, "drift": 1.3, "brake": 28.0,
+		"max_speed": 29.0, "corner_g": 9.0, "accel": 9.0, "turn": 2.1, "mass": 2.4, "grip": 6.5, "drift": 1.3, "brake": 28.0,
 		"power_fade": 0.55, "steer_fade": 0.35, "health": 150.0, "roll": 0.0022, "pitch": 0.0016},
 	"van": {"name": "Kargo Courier", "category": "van", "size": Vector3(2.0, 2.2, 4.8),
-		"max_speed": 17.0, "accel": 8.0, "turn": 2.0, "mass": 2.3, "grip": 6.5, "drift": 1.4, "brake": 26.0,
+		"max_speed": 26.0, "corner_g": 8.5, "accel": 8.0, "turn": 2.0, "mass": 2.3, "grip": 6.5, "drift": 1.4, "brake": 26.0,
 		"power_fade": 0.6, "steer_fade": 0.4, "steer_low": 5.5, "reverse": 7.0, "health": 140.0,
 		"roll": 0.0026, "pitch": 0.002},
 	"box_truck": {"name": "Drayman 26 Box", "category": "truck", "size": Vector3(2.5, 3.3, 7.5),
-		"max_speed": 14.5, "accel": 5.0, "turn": 1.7, "mass": 6.5, "grip": 5.5, "drift": 1.2, "brake": 20.0,
+		"max_speed": 23.0, "corner_g": 7.5, "accel": 5.0, "turn": 1.7, "mass": 6.5, "grip": 5.5, "drift": 1.2, "brake": 20.0,
 		"power_fade": 0.65, "steer_fade": 0.55, "steer_low": 6.5, "reverse": 5.0, "health": 240.0,
 		"roll": 0.003, "pitch": 0.0024},
 	"sports": {"name": "Vesper GT", "category": "sports", "size": Vector3(1.95, 1.1, 4.1),
-		"max_speed": 26.5, "accel": 14.0, "turn": 2.8, "mass": 1.45, "grip": 10.0, "drift": 1.7, "slide": 0.2,
+		"max_speed": 42.0, "corner_g": 13.5, "accel": 14.0, "turn": 2.8, "mass": 1.45, "grip": 10.0, "drift": 1.7, "slide": 0.2,
 		"brake": 38.0, "power_fade": 0.35, "steer_fade": 0.12, "steer_low": 4.5, "health": 95.0,
 		"roll": 0.0008, "pitch": 0.0008},
 	"muscle": {"name": "Brennan Ironside", "category": "muscle", "size": Vector3(2.0, 1.3, 4.9),
-		"max_speed": 25.5, "accel": 13.5, "turn": 2.4, "mass": 1.75, "grip": 6.0, "drift": 0.9, "slide": 0.5,
+		"max_speed": 40.0, "corner_g": 11.5, "accel": 13.5, "turn": 2.4, "mass": 1.75, "grip": 6.0, "drift": 0.9, "slide": 0.5,
 		"brake": 30.0, "power_fade": 0.4, "health": 120.0, "roll": 0.0014, "pitch": 0.0014},
 	"super": {"name": "Zentari Vex", "category": "supercar", "size": Vector3(2.05, 1.05, 4.6),
-		"max_speed": 30.5, "accel": 16.5, "turn": 3.0, "mass": 1.4, "grip": 12.0, "drift": 2.4, "brake": 42.0,
+		"max_speed": 48.0, "corner_g": 15.0, "accel": 17.5, "turn": 3.0, "mass": 1.4, "grip": 12.0, "drift": 2.4, "brake": 42.0,
 		"power_fade": 0.3, "steer_fade": 0.08, "steer_low": 4.5, "reverse": 7.0, "health": 85.0,
 		"roll": 0.0005, "pitch": 0.0006},
 	"motorbike": {"name": "Raijin Kaze 900", "category": "motorbike", "size": Vector3(0.8, 1.2, 2.1),
-		"max_speed": 28.0, "accel": 16.0, "turn": 3.4, "mass": 0.28, "grip": 9.5, "drift": 2.0, "brake": 34.0,
+		"max_speed": 44.0, "corner_g": 12.0, "accel": 16.5, "turn": 3.4, "mass": 0.28, "grip": 9.5, "drift": 2.0, "brake": 34.0,
 		"power_fade": 0.35, "steer_fade": 0.15, "steer_low": 2.0, "reverse": 3.0, "health": 55.0,
 		"lean": 0.55, "rider": true},
 	"scooter": {"name": "Vela e-Moped", "category": "scooter", "size": Vector3(0.8, 1.2, 1.9),
-		"max_speed": 15.5, "accel": 10.5, "turn": 3.4, "mass": 0.15, "grip": 8.5, "drift": 2.0, "brake": 24.0,
+		"max_speed": 20.0, "corner_g": 9.0, "accel": 10.5, "turn": 3.4, "mass": 0.15, "grip": 8.5, "drift": 2.0, "brake": 24.0,
 		"power_fade": 0.15, "steer_fade": 0.1, "steer_low": 2.0, "reverse": 3.0, "health": 45.0,
 		"lean": 0.5, "rider": true},
 }
@@ -77,13 +77,16 @@ const KINDS := {
 ##   (rear-drive power oversteer).
 ## brake: braking (m/s²). power_fade: share of accel left at top speed is
 ##   1 - power_fade (0 = flat electric torque, high = runs out of breath).
+## corner_g: the most sideways acceleration (m/s²) the tyres hold, so the
+##   fastest the heading can swing at speed v is corner_g / v: a car at
+##   speed turns on a wide arc, as on a real road.
 ## steer_fade: share of the turn rate lost at top speed (understeer);
 ##   steer_low: speed (m/s) below which steering fades out (bikes: low).
 ## reverse: top reverse speed (m/s). health: damage before it is wrecked.
 ## roll, pitch: body tilt (rad) per m/s² of sideways and forward
 ##   acceleration; lean: two-wheelers lean into turns by this share of the
 ##   balanced lean angle (the rider leans with them).
-const HANDLING := {"mass": 1.5, "grip": 8.0, "drift": 1.5, "slide": 0.0, "brake": 32.0, "power_fade": 0.5,
+const HANDLING := {"mass": 1.5, "grip": 8.0, "corner_g": 11.0, "drift": 1.5, "slide": 0.0, "brake": 32.0, "power_fade": 0.5,
 	"steer_fade": 0.2, "steer_low": 5.0, "reverse": 8.0, "health": 100.0, "roll": 0.0012, "pitch": 0.0012,
 	"lean": 0.0, "rider": false}
 ## Weighted pick list for civilian traffic. No two-wheelers: traffic has no

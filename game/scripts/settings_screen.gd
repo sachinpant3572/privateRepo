@@ -292,14 +292,32 @@ func _camera_tab() -> void:
 func _graphics_tab() -> void:
 	var game = phone.game
 	var s: Dictionary = game.settings
+	var G = game.Graphics
+	var q := _stepper("Quality", "quality", G.QUALITIES, func(): return s.get("quality", "high"),
+		func(v): return str(v).capitalize() + ("" if _matches_preset(s) else " *"))
+	for b in [q.get_meta("less"), q.get_meta("more")]:
+		b.pressed.connect(func():
+			G.pick(s, s["quality"])
+			game.apply_settings()
+			show_tab.call_deferred("Graphics"))
+	_row(q, "Low runs fastest on older phones; Ultra looks best (smooth edges, shadows from your headlights). Picking one sets everything below; * means you changed something by hand.")
+	var effect := func(label: String, key: String, hint: String):
+		_row(phone._toggle(label, s.get(key, true), func(on):
+			s[key] = on
+			game.apply_settings()
+			q.get_meta("refresh").call()), hint)
+	effect.call("Bloom", "bloom", "Bright lights (lamps, neon, headlights) glow softly round the edges.")
+	effect.call("Smooth edges", "aa", "Anti-aliasing (4x MSAA): no jagged edges. Costs speed on older phones.")
+	effect.call("Vivid colour", "vivid", "A touch more colour and contrast.")
+	effect.call("Real lights", "real_lights", "Headlights, street lamps and police lights light up the road, walls and people round them at night. OFF keeps only the painted glow on the ground.")
 	var db: Button = phone._button("Detail: " + s.get("detail", "high").to_upper(), Callable())
 	db.pressed.connect(func():
 		s["detail"] = "low" if s.get("detail", "high") == "high" else "high"
 		game.apply_settings()
-		db.text = "Detail: " + s["detail"].to_upper())
+		db.text = "Detail: " + s["detail"].to_upper()
+		q.get_meta("refresh").call())
 	_row(db, "Low: flat colours, no grain or puddles, lighter rain. Easier on older phones.")
-	_row(phone._toggle("Shadows", s.get("shadows", true), func(on): s["shadows"] = on; game.apply_settings()),
-		"Sun shadows. OFF runs faster.")
+	effect.call("Shadows", "shadows", "Sun shadows. OFF runs faster.")
 	_row(_stepper("FPS limit", "fps_limit", game.FPS_LIMITS, func(): return game.fps_limit(), func(v): return str(v)),
 		"The most frames a second the game draws. Lower saves battery and heat. 30, 60 and 120 run smoothest on a 120 Hz screen; 75 and 90 can judder there.")
 	_row(phone._toggle("Show FPS", s.get("show_fps", true), func(on): s["show_fps"] = on; game.apply_settings()),
@@ -346,6 +364,15 @@ func _game_tab() -> void:
 # --- Widgets ---------------------------------------------------------------------
 
 ## A setting and the line under it saying what it does.
+## True while the effects are as the chosen quality preset sets them.
+func _matches_preset(s: Dictionary) -> bool:
+	var preset: Dictionary = phone.game.Graphics.PRESETS.get(s.get("quality", "high"), {})
+	for k in phone.game.Graphics.KEYS:
+		if preset.get(k) != s.get(k):
+			return false
+	return true
+
+
 func _row(widget: Control, hint: String) -> void:
 	_list.add_child(widget)
 	_list.add_child(phone._text(hint, 16, HINT))

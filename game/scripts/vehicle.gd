@@ -27,7 +27,12 @@ const CORNER_RADIUS := 5.0
 ## Wheel steering (arrows, tilt): full lock aims this far (radians) off
 ## the nose, which _drive turns into full steer; seconds to reach it.
 const WHEEL_ANGLE := 0.5
-const STEER_IN := 0.2
+const STEER_IN := 0.3
+## The tightest circle (m) any vehicle turns on, however slow.
+const MIN_RADIUS := 3.5
+## Seconds the player's car takes to build up (or shed) a turn, as a real
+## body takes a moment to start rotating: no snap into the bend.
+const YAW_IN := 0.18
 const TRAFFIC_THROTTLE := 0.6
 ## Traffic never cruises faster than this (m/s), whatever the model.
 const TRAFFIC_CRUISE := 13.0
@@ -66,6 +71,8 @@ var _wheel := false
 var _coast := false
 ## The wheel eased toward the arrows' full lock, as a thumb turns it.
 var _steer_in := 0.0
+## The heading's turn rate (rad/s) of the player's car, eased by YAW_IN.
+var _yaw_rate := 0.0
 
 var rng := RandomNumberGenerator.new()
 ## Bikes and scooters show their rider (see player.gd).
@@ -110,6 +117,13 @@ var _model: MeshInstance3D
 var _gloss: MeshInstance3D
 var _ahead: RayCast3D
 var _beams: MeshInstance3D
+## The lamps' own glow on the car, lit with the headlights.
+var _lamp_glow: MeshInstance3D
+## A real spot light in front, live only while Graphics gives this car one of
+## the few real lights its quality allows (set_real_light).
+var _real_light: SpotLight3D
+## A police car's light bar throws red and blue round it, with the real light.
+var _bar_light: OmniLight3D
 var _size := Vector3.ONE
 var _skid_dist := 0.0
 var _smoke_time := 0.0
@@ -586,8 +600,20 @@ func _drive(delta: float) -> void:
 				target = minf(target, assisted)
 		var grip_turn: float = clampf(pace / _spec.steer_low, 0.0, 1.0) * (1.0 - _spec.steer_fade * clampf(pace / max_speed, 0.0, 1.0))
 		steer = clampf(angle * 2.0, -1.0, 1.0)
-		yaw = steer * turn_rate * grip_turn * delta * (1.6 if handbrake else 1.0)
+		var rate_want: float = steer * turn_rate * grip_turn * (1.6 if handbrake else 1.0)
+		# The tyres hold only so much sideways pull (corner_g = v * yaw rate)
+		# and the wheels turn only so far: at speed the arc widens. The
+		# handbrake lets the tail come round past grip (a drift).
+		var cap: float = minf(_spec.corner_g / maxf(pace, 0.1), pace / MIN_RADIUS + 0.3)
+		rate_want = clampf(rate_want, -cap * (1.8 if handbrake else 1.0), cap * (1.8 if handbrake else 1.0))
+		if driver == Driver.PLAYER:
+			_yaw_rate = lerpf(_yaw_rate, rate_want, 1.0 - exp(-delta / YAW_IN))
+		else:
+			_yaw_rate = rate_want
+		yaw = _yaw_rate * delta
 		rotate_y(yaw)
+	else:
+		_yaw_rate = 0.0
 
 	var rate: float = accel * (1.0 - _spec.power_fade * clampf(pace / max_speed, 0.0, 1.0))
 	_hard_brake = false
@@ -634,11 +660,12 @@ func _drive(delta: float) -> void:
 
 ## Speed (m/s) at which this model's heading turns as fast as a car on a
 ## CORNER_RADIUS circle at full lock: v = R * turn * (1 - steer_fade * v /
-## max_speed), solved for v. The path is tighter than R, since the velocity
+## max_speed), solved for v, and no faster than its tyres hold that
+## circle (v² / R = corner_g). The path is tighter than R, since the velocity
 ## lags the heading by the model's grip.
 func _corner_speed() -> float:
 	var k: float = CORNER_RADIUS * turn_rate
-	return k / (1.0 + k * _spec.steer_fade / max_speed)
+	return minf(k / (1.0 + k * _spec.steer_fade / max_speed), sqrt(_spec.corner_g * CORNER_RADIUS))
 
 
 ## Tilts the model: cars roll out of turns and pitch back under power and
@@ -754,6 +781,9 @@ func _flash_lights(delta: float) -> void:
 	var phase := int(_light_time * 4.0) % 2 == 0
 	_lights[0].visible = on and phase
 	_lights[1].visible = on and not phase
+	if _bar_light != null:
+		_bar_light.visible = on and _real_light.visible
+		_bar_light.light_color = Color(1.0, 0.12, 0.1) if phase else Color(0.15, 0.35, 1.0)
 
 
 ## Skid marks and tyre smoke when drifting or braking hard, splashes on wet
@@ -793,7 +823,49 @@ func _effects(delta: float) -> void:
 ## also called by the settings preview, which runs with the game paused.
 func update_beams() -> void:
 	if _beams != null:
-		_beams.visible = not wrecked and (driver != Driver.NONE or _deployed) and _game != null and _game.atmosphere.night_amount() > 0.05
+		var on := headlights_on()
+		_lamp_glow.visible = on
+		# A real light draws its own cone on the road; the painted beams are
+		# for the cars further off that have none.
+		_beams.visible = on and (_real_light == null or not _real_light.visible)
+
+
+## True while the headlights are on: at night, with someone driving (or the
+## car out on a job), and not wrecked.
+func headlights_on() -> bool:
+	return not wrecked and (driver != Driver.NONE or _deployed) and _game != null and _game.atmosphere.night_amount() > 0.05
+
+
+## Gives this car a real headlight (lights the road, kerbs, walls and people
+## in front of it) or takes it away. `energy` follows how dark it is.
+func set_real_light(on: bool, energy := 0.0, shadow := false) -> void:
+	if on and _real_light == null:
+		_real_light = SpotLight3D.new()
+		_real_light.light_color = Color(1.0, 0.93, 0.78)
+		_real_light.spot_range = 30.0
+		_real_light.spot_angle = 32.0
+		_real_light.spot_attenuation = 0.6
+		_real_light.spot_angle_attenuation = 1.2
+		_real_light.position = Vector3(0, 0.75 if not shows_rider else 0.95, -_size.z * 0.5 - 0.15)
+		_real_light.rotation.x = deg_to_rad(-9.0)
+		_real_light.light_specular = 0.4
+		add_child(_real_light)
+		if is_police:
+			_bar_light = OmniLight3D.new()
+			_bar_light.omni_range = 9.0
+			_bar_light.omni_attenuation = 1.4
+			_bar_light.position = Vector3(0, 1.7, 0.35)
+			_bar_light.visible = false
+			_model.add_child(_bar_light)
+	if _real_light != null:
+		_real_light.visible = on
+		_real_light.light_energy = energy
+		_real_light.shadow_enabled = on and shadow
+		if _bar_light != null:
+			_bar_light.light_energy = energy * 0.3
+			if not on:
+				_bar_light.visible = false
+	update_beams()
 
 
 func _build_model() -> void:
@@ -824,10 +896,11 @@ func _build_model() -> void:
 	_beams.extra_cull_margin = 4.0
 	_beams.visible = false
 	add_child(_beams)
-	var lamp_glow := glow.make_instance()
-	lamp_glow.material_override = MeshBuilder.glow_material()
-	lamp_glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_beams.add_child(lamp_glow) # shown with the beams
+	_lamp_glow = glow.make_instance()
+	_lamp_glow.material_override = MeshBuilder.glow_material()
+	_lamp_glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_lamp_glow.visible = false
+	add_child(_lamp_glow)
 	if is_police:
 		for i in 2:
 			var light := MeshInstance3D.new()

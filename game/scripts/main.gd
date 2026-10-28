@@ -16,6 +16,7 @@ const MissionManager = preload("res://scripts/missions/mission_manager.gd")
 const Interiors = preload("res://scripts/interiors.gd")
 const Inventory = preload("res://scripts/inventory.gd")
 const Taxi = preload("res://scripts/taxi.gd")
+const Graphics = preload("res://scripts/graphics.gd")
 
 const RESPAWN_DELAY := 2.5
 
@@ -30,13 +31,14 @@ var police
 var population
 var hud
 var atmosphere
+var graphics
 var missions
 var interiors
 var taxi
 var inventory = Inventory.new()
 var respawning := false
 var cash := 0
-var settings := {"shadows": true, "show_fps": true, "weather": "auto", "detail": "high", "controls": "stick", "view": "perspective", "zoom": 1.0, "angle": 65.0, "auto_tilt": true, "camera_turn": "car", "drive_zoom": 1.0, "fps_limit": 120}
+var settings := {"shadows": true, "show_fps": true, "weather": "auto", "detail": "high", "controls": "stick", "view": "perspective", "zoom": 1.0, "angle": 65.0, "auto_tilt": true, "camera_turn": "car", "drive_zoom": 1.0, "fps_limit": 120, "quality": "high", "bloom": true, "aa": false, "vivid": true, "real_lights": true}
 ## Settings > Graphics > FPS limit.
 const FPS_LIMITS := [30, 60, 75, 90, 120]
 ## Player-set map waypoint (a road node position) or null.
@@ -47,6 +49,9 @@ func _ready() -> void:
 	add_to_group("game")
 	atmosphere = Atmosphere.new()
 	add_child(atmosphere)
+	graphics = Graphics.new()
+	graphics.game = self
+	add_child(graphics)
 
 	city = City.new()
 	add_child(city)
@@ -165,6 +170,7 @@ func apply_settings() -> void:
 	City.UNLOAD_RADIUS = 150.0 * reach
 	Country.LOAD_RADIUS = 130.0 * reach
 	Country.UNLOAD_RADIUS = 210.0 * reach
+	graphics.apply(settings)
 	var scheme: String = settings.get("controls", "stick")
 	Controls.scheme = scheme if Controls.SCHEMES.has(scheme) else "stick"
 	# Headless runs (tests, tools) go flat out.

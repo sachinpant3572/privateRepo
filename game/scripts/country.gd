@@ -496,6 +496,8 @@ func _add_tile(key: Vector2i, built: Dictionary) -> void:
 			shape.rotation.y = c[2] if c.size() > 2 else 0.0
 			if c.size() > 3:
 				shape.set_meta("brk", c[3])
+				if c[3].has("light"):
+					shape.add_to_group("lamps")
 			body.add_child(shape)
 	root.set_meta("buildings", built.buildings)
 	root.set_meta("parks", _open_parks(built.get("parks", [])))

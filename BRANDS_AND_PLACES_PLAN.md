@@ -488,13 +488,40 @@ Rename them in the first build session.
 6. **Respray clears stars when unseen.** This is a proposal from the
    research and is not built.
 
-## 9. Open questions for Sachin
+## 9. Sachin's answers (2026-10-28) and what they change
 
-1. Option A, B or C, and B1 or B2?
-2. Should luxury clothing unlock by story beat (as in San Andreas) or by
-   cash alone?
-3. Should the mall be one enterable interior holding several shops, or
-   separate storefronts? One interior costs about one extra session but
-   looks more real.
-4. Do you want any brand to become real merch one day? If so, run the
-   knockout search on that brand first.
+- **Unlocks, three ways.** Some places are open from the start, some open
+  for cash, and some open after clearing a named mission. Plan: everyday
+  places (corner stores, fuel, diners, barbers, the cheap clothing tier,
+  the gym) open from the start; the mixed-luxury tier, car dealers, the
+  tattoo parlour and the electronics flagship open for cash (a one-off
+  "membership" or deposit, scaled to the district's land value); the top
+  luxury tier, the gun shop, the pawn and the respray open after story
+  missions, each tied to the mission that introduces it. Each place in the
+  build list gets an `unlock` field: `start`, `cash:<amount>` or
+  `mission:<id>`.
+- **Several malls, each with its own character,** instead of one mall or
+  loose shopfronts. Proposed first three: an upscale glass mall by the
+  Aurum Boulevard (luxury and mixed tiers, valet, marble), a family
+  mid-market mall off the freeway (department store, food court, cinema,
+  cheap tier), and an older strip-and-indoor mall on the East side
+  (discount clothes, phone repair, pawn, arcade). Each mall is one
+  enterable interior holding several shops (about one extra session per
+  mall layout; later malls reuse the shell).
+- **Merch: yes.** Every name on the roster (section 5) gets the knockout
+  search in section 6 before it is used in a build, not only the ones
+  picked for merch; anything that comes back close to a live mark is
+  renamed. The search itself is a draft list for a trademark lawyer, not
+  clearance.
+
+## 10. Still open
+
+1. Option A, B or C, and B1 or B2 (section 4)? A is about 42 enterable
+   anchors covering all 19 categories in every district (about 5
+   sessions); B is the 13 must-have categories only, about 20 places,
+   towns later (about 3 sessions); C is the full matrix of about 145
+   places (about 9-10 sessions). B1 names all about 220 brands now, with
+   storefronts only for the enterable set and the rest on billboards and
+   outfits (about 1 session); B2 names only the about 45 brands that have
+   enterable places now (about half a session). Recommended: A with B1.
+   Nothing on brands is built until this is picked.

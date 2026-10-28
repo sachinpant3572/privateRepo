@@ -38,6 +38,12 @@ static func _breaks(mb, out: Array, from: Array, kind: String, glow, cols := 1) 
 		col.append(info)
 
 
+## Marks the last collider as a lamp whose light sits at `offset` from the
+## collider's centre (Graphics hangs a real light there for the nearest few).
+static func _lamp(out: Array, offset: Vector3) -> void:
+	out[out.size() - 1][3]["light"] = offset
+
+
 ## Black cast-iron gas lamp with a warm lantern (Lantern Quarter). With a
 ## `glow` builder, also the pool of light it throws at night.
 static func gas_lamp(mb, out: Array, p: Vector3, glow = null) -> void:
@@ -52,6 +58,7 @@ static func gas_lamp(mb, out: Array, p: Vector3, glow = null) -> void:
 	mb.box(p + Vector3(0, 3.95, 0), Vector3(0.12, 0.2, 0.12), iron)
 	out.append([p + Vector3(0, 1.5, 0), Vector3(0.3, 3.0, 0.3)])
 	_breaks(mb, out, from, "gas_lamp", glow)
+	_lamp(out, Vector3(0, 1.85, 0))
 
 
 ## LED street light: a slim steel pole with a tapered arm toward `dir`
@@ -75,6 +82,7 @@ static func street_light(mb, out: Array, p: Vector3, dir: Vector3, glow = null, 
 			mb.box(p + along * side * 0.38 + Vector3(0, 4.0, 0), along * 0.5 + Vector3(0, 1.3, 0) + dir.abs() * 0.03, flag if side < 0.0 else flag.lightened(0.15))
 	out.append([p + Vector3(0, 2.0, 0), Vector3(0.3, 4.0, 0.3)])
 	_breaks(mb, out, from, "street_light", glow)
+	_lamp(out, dir * 2.4 + Vector3(0, 3.85, 0))
 
 
 ## Mast-arm traffic signal: the pole stands at p, the arm reaches 5 m over

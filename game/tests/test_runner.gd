@@ -42,6 +42,7 @@ func _run() -> void:
 		"test_punch_combo_ends_in_knockdown_kick",
 		"test_minimap_routes_to_waypoint", "test_state_map_shows_the_whole_state",
 		"test_night_lights_the_city", "test_headlights_follow_the_ground",
+		"test_graphics_quality_presets", "test_real_lights_at_night",
 		"test_homecoming_runs_start_to_finish",
 		"test_failed_mission_can_be_retried",
 		"test_empty_rooms_phone_and_clues",
@@ -945,7 +946,7 @@ func test_camera_turns_with_car() -> void:
 	await _frames(120)
 	_check(car.speed > 12.0 and absf(cam.yaw) < 0.05, "stick up drives on (%.1f m/s) and the view stays put going straight" % car.speed)
 	# Leaning the stick right turns the car right; the view follows, never
-	# faster than 90 degrees a second.
+	# faster than 45 degrees a second (0.21: faster made Sachin dizzy).
 	var max_rate := 0.0
 	var last: float = cam.yaw
 	Controls.override_vector = Vector2(0.7, -0.7)
@@ -958,16 +959,16 @@ func test_camera_turns_with_car() -> void:
 		was = now
 		max_rate = maxf(max_rate, rad_to_deg(absf(wrapf(cam.yaw - last, -PI, PI))) * 60.0)
 		last = cam.yaw
-	_check(turned < -deg_to_rad(60.0), "leaning the stick right turns the car right (%.0f degrees)" % rad_to_deg(-turned))
+	_check(turned < -deg_to_rad(20.0), "leaning the stick right turns the car right (%.0f degrees)" % rad_to_deg(-turned))
 	Controls.override_vector = Vector2(0, -1)
-	for f in 150:
+	for f in 180:
 		await _frames(1)
 		max_rate = maxf(max_rate, rad_to_deg(absf(wrapf(cam.yaw - last, -PI, PI))) * 60.0)
 		last = cam.yaw
 	var face: float = TopDownCamera._heading(-car.global_basis.z)
 	var lag: float = absf(wrapf(cam.yaw - face, -PI, PI))
-	_check(lag < deg_to_rad(4.0), "out of the turn the view settles behind the car (%.1f degrees off)" % rad_to_deg(lag))
-	_check(max_rate <= 90.5, "the view turns at most 90 degrees a second (%.0f)" % max_rate)
+	_check(lag < deg_to_rad(4.0), "out of the turn the view settles behind the car within 3 s (%.1f degrees off)" % rad_to_deg(lag))
+	_check(max_rate <= 45.5, "the view turns at most 45 degrees a second (%.0f)" % max_rate)
 	# Up the screen is now the car's way ahead, in the stick's frame too.
 	var up: Vector3 = cam.ground_axes()[1]
 	_check(up.dot(-car.global_basis.z) > 0.99 and cam.input_axes()[1].dot(up) > 0.99, "screen up is the car's heading, for the view and the stick")
@@ -1009,8 +1010,8 @@ func test_camera_turns_with_car() -> void:
 	cam.fixed_focus = null
 	car.queue_free()
 	# Flat out the screen shows the road well ahead (Chinatown Wars players
-	# found too little of it): 3.3 s of it or more, 70 m or more in the fastest
-	# cars (a sedan saw 60 m, 2.9 s, before the wider, flatter framing).
+	# found too little of it): 70 m or more, 2.2 s or more at a sedan's top
+	# speed (31 m/s since 0.21; at 0.20's 20.5 m/s it was 3.3 s).
 	for kind in ["sedan", "super"]:
 		var fast = _player_car(kind, Vector3(-200.0 if kind == "sedan" else 200.0, 0, 600.0), 0.0)
 		p.vehicle = fast
@@ -1022,7 +1023,7 @@ func test_camera_turns_with_car() -> void:
 		var cn: Vector3 = cam.project_ray_normal(Vector2(rect.size.x * 0.5, 0.0))
 		var top: Vector3 = co + cn * ((fast.global_position.y - co.y) / cn.y)
 		var ahead: float = (top - fast.global_position).dot(-fast.global_basis.z)
-		var want: float = 70.0 if kind == "super" else fast.speed * 3.3
+		var want: float = 70.0 if kind == "super" else maxf(70.0, fast.speed * 2.2)
 		_check(ahead > want, "%s flat out at %.1f m/s: the screen shows %.0f m ahead, %.1f s (%.0f m framed, %.0f degrees)" % [kind, fast.speed, ahead, ahead / fast.speed, cam.size, cam.perspective_pitch])
 		Controls.override_vector = null
 		fast.queue_free()
@@ -1168,12 +1169,12 @@ func test_camera_ninety_turns() -> void:
 	for f in 90:
 		await _frames(1)
 		max_yaw = maxf(max_yaw, absf(cam.yaw))
-	_check(steered > deg_to_rad(10.0) and max_yaw < 0.01, "a %.0f-degree steer leaves the view where it is (moved %.2f degrees)" % [rad_to_deg(steered), rad_to_deg(max_yaw)])
+	_check(steered > deg_to_rad(5.0) and max_yaw < 0.01, "a %.0f-degree steer leaves the view where it is (moved %.2f degrees)" % [rad_to_deg(steered), rad_to_deg(max_yaw)])
 	# A corner: the view waits STEP_HOLD past 80 degrees, then turns to east.
 	Controls.override_vector = Vector2(0.7, -0.7)
 	var off_at := -1
 	var moved_at := -1
-	for f in 360:
+	for f in 480:
 		await _frames(1)
 		var h: float = TopDownCamera._heading(-car.global_basis.z)
 		if h < -deg_to_rad(85.0):
@@ -1315,7 +1316,7 @@ func test_settings_page_tabs_and_preview() -> void:
 	_check(cam.process_mode == Node.PROCESS_MODE_ALWAYS and page.preview.render_target_update_mode == SubViewport.UPDATE_ALWAYS and page.get_viewport().disable_3d, "while it is open the camera runs, the preview draws and the hidden game view does not")
 	# Every tab, each setting with a line under it saying what it does.
 	var want := {"Camera": ["View: ", "Look down near towers: ", "Camera turn: ", "Reset camera", "Distance", "Drive zoom-out", "Angle"],
-		"Graphics": ["Detail: ", "Shadows: ", "Show FPS: ", "FPS limit"],
+		"Graphics": ["Quality", "Bloom: ", "Smooth edges: ", "Vivid colour: ", "Real lights: ", "Detail: ", "Shadows: ", "FPS limit", "Show FPS: "],
 		"Controls": ["Driving: "],
 		"Game": ["Weather: ", "Skip 3 hours", "New game"]}
 	for t in page.TABS:
@@ -1390,12 +1391,12 @@ func test_settings_page_tabs_and_preview() -> void:
 	car.global_position = game.player.global_position + Vector3(8, 0, 0)
 	car.driver = Vehicle.Driver.PLAYER
 	await _idle(2)
-	var lit: bool = car._beams.visible
+	var lit: bool = car.headlights_on()
 	page.show_tab("Game")
 	for i in 4:
 		_find_button(page._list, "Skip 3 hours").pressed.emit()
 	await _idle(20)
-	_check(get_tree().paused and atm.hour == 0.0 and not is_equal_approx(atm.sun.light_energy, day_sun) and not lit and car._beams.visible, "skipping to midnight while paused relights the preview and turns the headlights on")
+	_check(get_tree().paused and atm.hour == 0.0 and not is_equal_approx(atm.sun.light_energy, day_sun) and not lit and car.headlights_on() and car._lamp_glow.visible, "skipping to midnight while paused relights the preview and turns the headlights on")
 	car.queue_free()
 	var weather_was = game.settings.get("weather", "auto")
 	var wb = _find_button(page._list, "Weather: ")
@@ -1553,6 +1554,95 @@ func test_night_lights_the_city() -> void:
 	_check(not game.city.glow_visible, "lamp pools are off by day")
 
 
+## Settings > Graphics > Quality sets every effect; a toggle changed by hand
+## marks the preset with a *; old saves without the new keys get High.
+func test_graphics_quality_presets() -> void:
+	await _new_game(false)
+	var G = game.Graphics
+	var s: Dictionary = game.settings
+	var env: Environment = game.atmosphere.env
+	_check(s.quality == "high" and env.glow_enabled and env.adjustment_enabled and get_viewport().msaa_3d == Viewport.MSAA_DISABLED and game.graphics.cars == 2 and game.graphics.lamps == 4, "a new game starts on High: bloom and vivid colour on, no MSAA, 2 car and 4 lamp lights")
+	G.pick(s, "ultra")
+	game.apply_settings()
+	_check(env.glow_enabled and get_viewport().msaa_3d == Viewport.MSAA_4X and game.graphics.cars == 3 and game.graphics.car_shadow, "Ultra adds 4x MSAA, a third car light and a shadow from the player's headlights")
+	G.pick(s, "low")
+	game.apply_settings()
+	_check(not env.glow_enabled and not env.adjustment_enabled and not game.atmosphere.sun.shadow_enabled and s.detail == "low" and game.graphics.cars == 1 and game.graphics.lamps == 0 and is_equal_approx(get_viewport().scaling_3d_scale, 0.8), "Low: no bloom, shadows or vivid colour, low detail, 80% 3D scale, only the player's headlights are real")
+	G.pick(s, "medium")
+	s["real_lights"] = false
+	game.apply_settings()
+	_check(game.graphics.cars == 0 and game.graphics.lamps == 0 and is_equal_approx(get_viewport().scaling_3d_scale, 1.0), "Real lights OFF gives no real lights at all")
+	# The page: the stepper steps the preset and redraws the toggles.
+	var page = game.hud.phone.settings_page
+	game.hud.settings_button.pressed.emit()
+	await _idle(2)
+	page.show_tab("Graphics")
+	await _idle(1)
+	var row = page.steppers["Quality"]
+	_check(row.get_meta("value").text == "Medium *", "the page shows Medium * (changed by hand), got %s" % row.get_meta("value").text)
+	row.get_meta("more").pressed.emit()
+	await _idle(2)
+	row = page.steppers["Quality"]
+	_check(s.quality == "high" and s.real_lights and s.bloom and row.get_meta("value").text == "High" and _find_button(page._list, "Bloom: ON") != null, "+ steps to High, which sets every effect back (got %s)" % row.get_meta("value").text)
+	_find_button(page._list, "Bloom: ON").pressed.emit()
+	await _idle(1)
+	_check(not env.glow_enabled and row.get_meta("value").text == "High *", "turning Bloom off works at once and marks the preset")
+	page._back.pressed.emit()
+	await _idle(2)
+	# A save from before 0.21 has none of the new keys.
+	var old := {"shadows": true, "detail": "high"}
+	var fresh: Dictionary = game.settings.duplicate()
+	fresh.merge(old, true)
+	_check(fresh.has("quality") and fresh.has("bloom"), "keys missing from an old save keep their defaults")
+
+
+## After dark the nearest cars and street lamps get real lights (they light
+## the road, kerbs, walls and people round them); further off, the painted
+## glow stays. Knocked-down lamps and wrecked cars go dark.
+func test_real_lights_at_night() -> void:
+	await _new_game(false)
+	game.atmosphere.hour = 22.0
+	var car = _spawn_car(_home(), Vector3(0, 0, -3), 0.0)
+	_place_player(_home(), Vector3.ZERO)
+	await _frames(2)
+	await _press("interact")
+	var other = _spawn_car(_home(), Vector3(4, 0, -12), 0.0)
+	other.driver = Vehicle.Driver.SCRIPT
+	var far = _spawn_car(_home(), Vector3(-4, 0, -30), 0.0)
+	far.driver = Vehicle.Driver.SCRIPT
+	await _frames(5)
+	var gfx = game.graphics
+	gfx.rescan()
+	_check(game.player.vehicle == car and car._real_light != null and car._real_light.visible and car._real_light.light_energy > 2.0, "the player's car gets a real headlight at night")
+	_check(not car._beams.visible and car._lamp_glow.visible, "a car with a real light drops the painted beams but keeps its lamp glow")
+	_check(gfx.lit_cars.size() == 2 and gfx.lit_cars.has(other) and not gfx.lit_cars.has(far) and far._beams.visible, "High lights the 2 nearest cars; the third keeps painted beams")
+	var spot: SpotLight3D = car._real_light
+	var ahead: Vector3 = -spot.global_transform.basis.z
+	_check(ahead.dot(-car.global_transform.basis.z) > 0.9 and ahead.y < -0.05 and spot.spot_range >= 25.0, "the headlight points ahead and a little down, %.0f m long" % spot.spot_range)
+	var lit: Array = gfx.lit_lamps()
+	var ok := lit.size() > 0
+	var worst := 0.0
+	for shape in lit:
+		var info: Dictionary = shape.get_meta("brk")
+		var light_y: float = shape.global_position.y + info.light.y
+		var ground: float = shape.global_position.y - (shape.shape as BoxShape3D).size.y * 0.5
+		var want := 5.85 if info.kind == "street_light" else 3.35
+		worst = maxf(worst, absf(light_y - ground - want))
+	_check(ok and lit.size() <= 4 and worst < 0.1, "the nearest street lamps (%d) light up, at their heads (worst %.2f m off)" % [lit.size(), worst])
+	if ok:
+		var shape = lit[0]
+		shape.get_meta("brk")["down"] = true
+		gfx.rescan()
+		_check(not gfx.lit_lamps().has(shape), "a knocked-down lamp goes dark")
+	other.wrecked = true
+	gfx.rescan()
+	_check(not gfx.lit_cars.has(other) and not other._real_light.visible, "a wrecked car's lights go out")
+	game.atmosphere.hour = 12.0
+	await _frames(3)
+	gfx.rescan()
+	_check(not car._real_light.visible and gfx.lit_lamps().is_empty() and not car._beams.visible, "by day no real lights are on")
+
+
 ## Head and tail lights lie on the ground, so they show on hills too (they
 ## were flat at the car's height and sank into the road going uphill).
 func test_headlights_follow_the_ground() -> void:
@@ -1583,7 +1673,8 @@ func test_headlights_follow_the_ground() -> void:
 	car.driver = Vehicle.Driver.PLAYER
 	await _frames(10)
 	var beams: MeshInstance3D = car._beams
-	_check(beams.visible and beams.material_override == MeshBuilder.ground_glow_material() and beams.get_child(0).material_override == MeshBuilder.glow_material(), "at night the beams and tail pool are drawn on the ground; the lamp glows stay at the lamps")
+	car.set_real_light(false)
+	_check(beams.visible and beams.material_override == MeshBuilder.ground_glow_material() and car._lamp_glow.visible and car._lamp_glow.material_override == MeshBuilder.glow_material(), "at night, with no real light to spare, the beams and tail pool are drawn on the ground; the lamp glows stay at the lamps")
 	car.queue_free()
 
 
@@ -2060,7 +2151,7 @@ func test_vehicle_speed_ranks() -> void:
 		var want: float = VehicleKit.KINDS[kind].max_speed
 		_check(absf(top[kind] - want) < want * 0.03, "%s reaches its top speed %.1f m/s, got %.1f" % [kind, want, top[kind]])
 	var by_top := ["super", "motorbike", "sports", "muscle", "police", "ev", "luxury", "sedan", "crossover", "suv",
-		"compact", "van", "scooter", "box_truck"]
+		"compact", "van", "box_truck", "scooter"]
 	for i in by_top.size() - 1:
 		_check(top[by_top[i]] > top[by_top[i + 1]], "top speed: %s %.1f > %s %.1f" % [by_top[i], top[by_top[i]], by_top[i + 1], top[by_top[i + 1]]])
 	var by_launch := ["super", "motorbike", "ev", "sports", "muscle", "police", "sedan", "luxury", "crossover", "compact",
@@ -2070,7 +2161,7 @@ func test_vehicle_speed_ranks() -> void:
 		var b: String = by_launch[i + 1]
 		_check(t15.get(a, 99.0) < t15.get(b, 99.0), "0-15 m/s: %s %.2f s < %s %.2f s" % [a, t15.get(a, 99.0), b, t15.get(b, 99.0)])
 	_check(t15.ev < t15.sedan * 0.7, "electric torque: EV 0-15 %.2f s well under the sedan's %.2f s" % [t15.ev, t15.sedan])
-	_check(not t15.has("box_truck"), "the box truck never reaches 15 m/s")
+	_check(t15.get("box_truck", 99.0) > t15.get("van", 99.0) + 1.0, "the box truck is the slowest to 15 m/s (%.2f s, van %.2f s)" % [t15.get("box_truck", 99.0), t15.get("van", 99.0)])
 
 
 ## The player's car on the empty track: corner assist and wall hits (Sachin:
@@ -2090,18 +2181,21 @@ func test_player_driving_assists() -> void:
 	await _frames(15)
 	_check(car.speed > 18.5, "a swerve at 20 m/s keeps %.1f m/s" % car.speed)
 	car.queue_free()
-	# A 90-degree snap at top speed: the car slows for the turn and runs on
-	# much less than the 13.5-19.5 m it did without the assist.
+	# A 90-degree snap at top speed: the assist brakes hard for the turn, so
+	# the car runs on little more than its braking distance (top speeds are
+	# road speeds since 0.21, and the tyres hold only corner_g).
 	var kinds := ["sedan", "suv", "super"]
 	for k in kinds.size():
 		var kind: String = kinds[k]
-		car = _player_car(kind, Vector3(-60.0 + k * 20.0, 0, k * 40.0), VehicleKit.KINDS[kind].max_speed)
+		var spec: Dictionary = VehicleKit.spec(kind)
+		car = _player_car(kind, Vector3(-60.0 + k * 20.0, 0, k * 60.0), spec.max_speed)
 		Controls.override_vector = Vector2(1, 0)
 		var run_on := 0.0
-		for f in 120:
+		for f in 150:
 			await _frames(1)
-			run_on = maxf(run_on, k * 40.0 - car.global_position.z)
-		_check(run_on < 11.0, "%s at top speed turning 90 degrees runs on %.1f m" % [kind, run_on])
+			run_on = maxf(run_on, k * 60.0 - car.global_position.z)
+		var stopping: float = spec.max_speed * spec.max_speed / (2.0 * spec.brake)
+		_check(run_on < stopping + 9.0, "%s at top speed turning 90 degrees runs on %.1f m (braking distance %.1f m)" % [kind, run_on, stopping])
 		car.queue_free()
 	# A wall along x = 3 for the scrape and the pin.
 	var L = preload("res://scripts/layers.gd")
@@ -2190,7 +2284,9 @@ func test_driving_layouts() -> void:
 			Controls.tilt_override = Vector3(4.0, -8.9, 0.0) # right side down
 		await _frames(45)
 		var turned := heading.signed_angle_to(-car.global_basis.z, Vector3.UP)
-		_check(turned < -0.6, "%s layout: steering right with GAS turns right (%.2f rad)" % [scheme, turned])
+		# At 12-16 m/s the tyres hold about 0.75 rad/s (corner_g), less the
+		# wheel's STEER_IN and the body's YAW_IN.
+		_check(turned < -0.3, "%s layout: steering right with GAS turns right (%.2f rad)" % [scheme, turned])
 		_check(car.speed > 9.0, "%s layout: no corner assist braking (%.1f m/s)" % [scheme, car.speed])
 		# Off the gas, still steering: it rolls on.
 		Input.action_release("gas")

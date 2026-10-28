@@ -67,6 +67,11 @@ func _run() -> void:
 		await _lights(game)
 		get_tree().quit()
 		return
+	if OS.get_environment("SHOTS") == "nightfx":
+		# Real lights and effects at night at each graphics quality.
+		await _nightfx(game)
+		get_tree().quit()
+		return
 	if OS.get_environment("SHOTS") == "props":
 		await _props(game)
 		get_tree().quit()
@@ -464,6 +469,55 @@ func _lights(game) -> void:
 		print("lights %s grade %.1f%%" % [stop[0], 100.0 * (Terrain.height(pos.x + dir.x * 10.0, pos.z + dir.z * 10.0) - pos.y) / 10.0])
 		await _shot(stop[0] + ".png")
 		car.queue_free()
+	game.camera.fixed_focus = null
+	game.camera.room_size = 0.0
+	game.player.visible = true
+
+
+## Night at each graphics quality: a car's real headlight on the road with
+## a parked car in its beam, the street lamps round it, and a police car's
+## light bar (87); then the Lantern Quarter's gas lamps at High (88).
+func _nightfx(game) -> void:
+	game.atmosphere.hour = 22.0
+	game.player.visible = false
+	var at := Vector2(690, 470)
+	var pos := Vector3(at.x, Terrain.height(at.x, at.y), at.y)
+	game.city.stream_now(pos)
+	game.player.global_position = pos + Vector3(0, 0, 4)
+	var cars := []
+	for spec in [["sedan", Vector3.ZERO, Vehicle.Driver.PLAYER], ["van", Vector3(1.5, 0, -11), Vehicle.Driver.NONE], ["police", Vector3(-6, 0, 4), Vehicle.Driver.SCRIPT]]:
+		var car = Vehicle.new()
+		car.kind = spec[0]
+		car.is_police = spec[0] == "police"
+		game.add_child(car)
+		car.global_position = pos + spec[1]
+		car.driver = spec[2]
+		car._deployed = car.is_police # parked on a job, bar flashing
+		cars.append(car)
+	Wanted.level = 1 # the bar flashes while someone is wanted
+	game.camera.fixed_focus = pos + Vector3(0, 0, -6)
+	game.camera.room_size = 40.0
+	game.camera.snap()
+	for q in ["low", "medium", "high", "ultra"]:
+		game.Graphics.pick(game.settings, q)
+		game.apply_settings()
+		await _frames(30)
+		print("nightfx %s: %d car lights, %d lamp lights" % [q, game.graphics.lit_cars.size(), game.graphics.lit_lamps().size()])
+		await _shot("87_night_%s.png" % q)
+	game.Graphics.pick(game.settings, "high")
+	game.apply_settings()
+	Wanted.level = 0
+	for car in cars:
+		car.queue_free()
+	var sq: Vector3 = game.city.landmark_front("lantern_square")
+	game.city.stream_now(sq)
+	game.player.global_position = sq
+	game.camera.fixed_focus = sq
+	game.camera.room_size = 34.0
+	game.camera.snap()
+	await _frames(30)
+	print("nightfx lantern: %d lamp lights" % game.graphics.lit_lamps().size())
+	await _shot("88_night_lantern_high.png")
 	game.camera.fixed_focus = null
 	game.camera.room_size = 0.0
 	game.player.visible = true

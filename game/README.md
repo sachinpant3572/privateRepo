@@ -50,8 +50,9 @@ phone.
   Drive zoom-out switches to it). Camera: view, Distance 60-130%, Drive
   zoom-out Off-100%, Angle 40-90° with - and + buttons, look down near
   towers (among tall buildings the camera tips further down, up to 85°, then
-  back to your Angle), camera turn, reset. Graphics: detail high/low,
-  shadows, FPS limit (30, 60, 75, 90, 120), FPS counter. Controls: driving
+  back to your Angle), camera turn, reset. Graphics: Quality (Low, Medium, High,
+  Ultra) and its effects one by one (bloom, smooth edges, vivid colour, real
+  lights), detail high/low, shadows, FPS limit (30, 60, 75, 90, 120), FPS counter. Controls: driving
   layout. Game: weather, skip time, new game.
 - **Minimap and full map**: round north-up minimap with landmark icons,
   mission blips (on the rim when off the map), police while wanted and the
@@ -337,8 +338,9 @@ Install `build/solvera-prototype-debug.apk` (built by `tools/build_apk.sh`, arm6
 debug-signed). Android will ask you to allow installing from that source.
 
 If a low-end phone struggles at night or in the rain, set Settings >
-Graphics > Detail to LOW (flat colours, lighter rain) or turn shadows off; a
-lower FPS limit there saves battery and heat.
+Graphics > Quality to Low (or Medium), or set Detail to LOW (flat colours,
+lighter rain) or turn shadows off; a lower FPS limit there saves battery
+and heat.
 
 ## Develop in a cloud session
 
@@ -382,7 +384,7 @@ at the Aurum Tower, Midtown and Lantern Square, on foot and driving (80),
 the perspective camera backed out of a tower and with the view band
 turning buildings round the player see-through (81), and driving flat out
 east and north through Midtown and past the Aurum Tower (82), and Settings > Angle at
-45, 55, 65, 75 and 90° with tilt off at the Aurum Tower and Lantern Square (83), and the camera turning with the car flat out east, south and west (84). `SHOTS=lights` shows a car's headlights at night on the flat and up and down the hills (86). `res://tests/occlusion_probe.tscn`
+45, 55, 65, 75 and 90° with tilt off at the Aurum Tower and Lantern Square (83), and the camera turning with the car flat out east, south and west (84). `SHOTS=lights` shows a car's headlights at night on the flat and up and down the hills (86); `SHOTS=nightfx` shows real headlights, street lamps and a police light bar at each graphics quality (87) and the Lantern Quarter's gas lamps (88). `res://tests/occlusion_probe.tscn`
 (headless) measures how much of the hero and the street each camera
 setting hides (HANDOFF-perspective-camera.md).
 

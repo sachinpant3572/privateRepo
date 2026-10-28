@@ -140,6 +140,8 @@ var _yaw_goal := 0.0
 var _yaw_chasing := false
 ## Re-centre: chase the goal at once, past the dead zone and holds.
 var _yaw_forced := false
+## The swing under way was asked for (the compass, a new car): quick caps.
+var _yaw_quick := false
 var _still := 0.0
 ## The heading the stick reads its directions in. On foot it is taken from
 ## the view when the stick is pressed and held while the thumb stays put, so
@@ -161,18 +163,30 @@ var _walked := false
 var _yaw_node: Node3D = null
 ## Below this speed the view keeps its heading (parked, turning on the spot).
 const YAW_MIN_SPEED := 3.0
-## Swings smaller than this (lane changes, wobbles) don't turn the view.
-const YAW_DEAD := 0.12
+## Swings smaller than this (lane changes, wobbles, slight bends) don't
+## turn the view (Sachin, 0.20: the view turning on every slight turn made
+## him dizzy).
+const YAW_DEAD := 0.21
 const YAW_SETTLE := 0.01
-## How long the view takes to close half the gap: slower standing, quicker
-## at speed and for the compass (out of a 90-degree turn it is behind the
-## car about a second after the car straightens).
-const YAW_HALF_SLOW := 0.35
-const YAW_HALF_FAST := 0.25
-## Comfort caps, in radians per second and per second squared (90 and 180
-## degrees): the view never whips round.
-const YAW_RATE_MAX := PI * 0.5
-const YAW_ACCEL_MAX := PI
+## How long the view takes to close half the gap: slower standing, a little
+## quicker at speed. The car turns on screen first and the view comes round
+## after it, out of a 90-degree turn about two seconds after it straightens.
+const YAW_HALF_SLOW := 0.8
+const YAW_HALF_FAST := 0.6
+## Comfort caps, in radians per second and per second squared (45 and 60
+## degrees): the view never whips round, and starts and stops gently.
+const YAW_RATE_MAX := PI * 0.25
+const YAW_ACCEL_MAX := PI / 3.0
+## A swing the player asks for (the compass, getting into a car facing
+## another way) is quicker: half-life YAW_HALF_QUICK, 90 and 180 degrees.
+const YAW_HALF_QUICK := 0.25
+const YAW_RATE_QUICK := PI * 0.5
+const YAW_ACCEL_QUICK := PI
+## On foot the view keeps its 0.20 pace (the calmer driving caps are for
+## the car): squaring up closes half the gap in FOOT_HALF, and it eases in
+## and out at up to WALK_ACCEL_MAX.
+const FOOT_HALF := 0.35
+const WALK_ACCEL_MAX := PI
 ## The last few degrees close at least this fast (8 degrees a second), so
 ## the swing ends instead of creeping.
 const YAW_RATE_MIN := 0.14
@@ -333,6 +347,9 @@ func _update_yaw(node: Node3D, delta: float) -> void:
 	if not turns():
 		_yaw_goal = 0.0
 		if absf(wrapf(yaw, -PI, PI)) > YAW_SETTLE:
+			# Back to north up is the player's choice: a quick swing.
+			if not _yaw_chasing:
+				_yaw_quick = true
 			_yaw_chasing = true
 		if fixed_focus != null:
 			yaw = 0.0
@@ -349,6 +366,7 @@ func _update_yaw(node: Node3D, delta: float) -> void:
 			_step_time = 0.0
 			_yaw_chasing = true
 			_yaw_forced = false
+			_yaw_quick = true
 		elif speed > YAW_MIN_SPEED and not _yaw_forced:
 			var face := _heading(fwd)
 			var slip := wrapf(_heading(flat) - face, -PI, PI)
@@ -374,8 +392,8 @@ func _update_yaw(node: Node3D, delta: float) -> void:
 			_yaw_chasing = true
 		elif _walked and not held and not turn_steps:
 			# Let go mid-turn: the view eases to a stop where it is (just past,
-			# at YAW_ACCEL_MAX), rather than chasing the old walk at car rates.
-			_yaw_goal = yaw + _yaw_rate * absf(_yaw_rate) / (2.0 * YAW_ACCEL_MAX)
+			# at WALK_ACCEL_MAX), rather than chasing the old walk at car rates.
+			_yaw_goal = yaw + _yaw_rate * absf(_yaw_rate) / (2.0 * WALK_ACCEL_MAX)
 		elif _still >= SQUARE_AFTER:
 			_yaw_goal = snappedf(yaw, PI * 0.5)
 			_yaw_chasing = true
@@ -391,26 +409,36 @@ func _update_yaw(node: Node3D, delta: float) -> void:
 		_yaw_chasing = false
 		_yaw_forced = false
 		return
+	var quick := _yaw_forced or _yaw_quick
+	var on_foot := node == target
+	var accel_max := YAW_ACCEL_QUICK if quick else (WALK_ACCEL_MAX if on_foot else YAW_ACCEL_MAX)
 	if not _yaw_chasing:
-		_yaw_rate = move_toward(_yaw_rate, 0.0, YAW_ACCEL_MAX * delta)
+		_yaw_rate = move_toward(_yaw_rate, 0.0, accel_max * delta)
 	else:
 		var v = node.get("velocity")
 		var speed := Vector2(v.x, v.z).length() if v is Vector3 else 0.0
-		var half := YAW_HALF_FAST if _yaw_forced else lerpf(YAW_HALF_SLOW, YAW_HALF_FAST, clampf(speed / TURN_FULL_SPEED, 0.0, 1.0))
+		var half := YAW_HALF_QUICK if quick else lerpf(YAW_HALF_SLOW, YAW_HALF_FAST, clampf(speed / TURN_FULL_SPEED, 0.0, 1.0))
 		if walking:
 			half = WALK_HALF
+		elif on_foot and not quick:
+			half = FOOT_HALF
 		var want := gap * log(2.0) / half
 		if absf(want) < YAW_RATE_MIN:
 			want = signf(gap) * minf(YAW_RATE_MIN, absf(gap) / delta)
-		var cap := WALK_RATE_MAX if walking else YAW_RATE_MAX
+		var cap := WALK_RATE_MAX if walking else (YAW_RATE_QUICK if quick or on_foot else YAW_RATE_MAX)
 		want = clampf(want, -cap, cap)
-		_yaw_rate = move_toward(_yaw_rate, want, YAW_ACCEL_MAX * delta)
+		# Braking into the goal no harder than accel_max allows, so the view
+		# eases to a stop rather than overshooting it.
+		var stop := sqrt(2.0 * accel_max * absf(gap))
+		want = clampf(want, -stop, stop)
+		_yaw_rate = move_toward(_yaw_rate, want, accel_max * delta)
 		if absf(gap) < YAW_SETTLE and absf(_yaw_rate) < 0.05:
 			# Landed: exactly on the goal, so north up is square to the pixels.
 			_yaw_rate = 0.0
 			yaw = _yaw_goal
 			_yaw_chasing = false
 			_yaw_forced = false
+			_yaw_quick = false
 	yaw = wrapf(yaw + _yaw_rate * delta, -PI, PI)
 	# The stick's frame follows the view while it is let go or the player
 	# drives, so getting out with the stick held walks the way the view faces.
