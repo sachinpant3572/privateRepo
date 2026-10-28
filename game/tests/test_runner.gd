@@ -98,6 +98,7 @@ func _run() -> void:
 		"test_exhaust_by_kind_and_norms", "test_tyre_marks_and_smoke", "test_flora_kit_and_hill_ecology",
 		"test_new_kinds_build_and_drive", "test_convertible_roof_meshes", "test_convertible_occupants_show_with_roof_down",
 		"test_roof_button_only_when_nearly_stopped", "test_bicycle_rider_and_pedals", "test_new_kinds_in_pools",
+		"test_bicycle_no_fire_and_crash_throws_rider",
 	]
 	# ONLY=name1,name2 runs just those (handy while working on one test).
 	var only := OS.get_environment("ONLY")
@@ -8426,3 +8427,43 @@ func test_new_kinds_in_pools() -> void:
 		up[2] += int(VehicleKit.roof_up_at_spawn(rng, false, true))
 	_check(up[0] > 330 and up[0] < 470, "by day in the dry about 60%% leave open (%d of 1000 shut)" % up[0])
 	_check(up[1] > 750 and up[2] > 750, "mostly shut at night (%d) and in the rain (%d)" % [up[1], up[2]])
+
+
+## 0.23: a bicycle never catches fire, and riding one into a truck at
+## about 28 km/h throws the rider off.
+func test_bicycle_no_fire_and_crash_throws_rider() -> void:
+	await _new_game(false)
+	var node := _home()
+	var bike = Vehicle.new()
+	bike.kind = "bicycle"
+	bike.city = game.city
+	bike.position = game.city.node_pos(node) + Vector3(0, 0, 2.0)
+	game.add_child(bike)
+	await _frames(1)
+	bike._damage(bike.max_health * 0.9, true)
+	_check(bike._fire == null and not bike.wrecked, "a bicycle at 10%% health does not burn")
+	bike.health = bike.max_health
+	var truck = Vehicle.new()
+	truck.kind = "box_truck"
+	truck.city = game.city
+	truck.position = game.city.node_pos(node) + Vector3(0, 0, -10.0)
+	truck.rotation.y = PI / 2.0
+	game.add_child(truck)
+	await _frames(1)
+	var p = game.player
+	p.enter_vehicle(bike)
+	await _frames(2)
+	_check(p.vehicle == bike, "the player rides the bicycle")
+	bike.speed = 7.8
+	bike.velocity = Vector3(0, 0, -7.8)
+	# Pedalling: with no gas a bicycle coasts to a stop short of the truck.
+	Input.action_press("gas")
+	for f in 120:
+		await _frames(1)
+		if p.vehicle == null:
+			break
+	Input.action_release("gas")
+	_check(p.vehicle == null, "riding into a truck at 28 km/h throws the rider off")
+	_check(bike._fire == null, "and the bicycle still does not burn")
+	bike.queue_free()
+	truck.queue_free()
