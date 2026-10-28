@@ -269,6 +269,30 @@ func _settings() -> void:
 		game.apply_settings()
 		zb.text = "Zoom: %d%%" % roundi(game.camera.zoom * 100.0))
 	_body.add_child(zb)
+	# Camera angle, for trying angles out (perspective view only).
+	var angles: Array = game.camera.ANGLES
+	var angle_b := _button("Angle: %d°" % roundi(game.camera.base_pitch), Callable())
+	angle_b.pressed.connect(func():
+		s["angle"] = angles[(angles.find(game.camera.base_pitch) + 1) % angles.size()]
+		game.apply_settings()
+		angle_b.text = "Angle: %d°" % roundi(game.camera.base_pitch))
+	_body.add_child(angle_b)
+	var tilt_b := _button("Tilt near towers: " + ("ON" if game.camera.auto_tilt else "OFF"), Callable())
+	tilt_b.pressed.connect(func():
+		s["auto_tilt"] = not game.camera.auto_tilt
+		game.apply_settings()
+		tilt_b.text = "Tilt near towers: " + ("ON" if game.camera.auto_tilt else "OFF"))
+	_body.add_child(tilt_b)
+	var reset_b := _button("Reset camera", Callable())
+	reset_b.pressed.connect(func():
+		s["angle"] = game.camera.PITCH_LOW
+		s["auto_tilt"] = true
+		s["zoom"] = 1.0
+		game.apply_settings()
+		angle_b.text = "Angle: %d°" % roundi(game.camera.base_pitch)
+		tilt_b.text = "Tilt near towers: ON"
+		zb.text = "Zoom: 100%")
+	_body.add_child(reset_b)
 	_body.add_child(_toggle("Shadows", s.get("shadows", true), func(on): s["shadows"] = on; game.apply_settings()))
 	_body.add_child(_toggle("Show FPS", s.get("show_fps", true), func(on): s["show_fps"] = on; game.apply_settings()))
 	var weathers := ["auto", "clear", "rain", "storm"]

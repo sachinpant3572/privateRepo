@@ -776,6 +776,41 @@ func test_perspective_camera() -> void:
 	_check(absf(cam.size - cam.FOOT_SIZE * 1.3) < 0.5 and game.city.LOAD_RADIUS > 130.0, "Zoom 130%% frames %.1f m on foot and loads cells to %.0f m" % [cam.size, game.city.LOAD_RADIUS])
 	game.settings["zoom"] = 1.0
 	game.apply_settings()
+	# Settings > Angle and Tilt near towers, driven from the phone, and Reset
+	# camera putting angle, tilt and zoom back.
+	var phone = game.hud.phone
+	phone.open()
+	phone._settings()
+	var angle_b = _find_button(phone._body, "Angle: ")
+	var tilt_b = _find_button(phone._body, "Tilt near towers: ")
+	var zoom_b = _find_button(phone._body, "Zoom: ")
+	var reset_b = _find_button(phone._body, "Reset camera")
+	_check(angle_b != null and tilt_b != null and reset_b != null and angle_b.text == "Angle: 65°", "Settings has Angle (65°), Tilt near towers and Reset camera")
+	if angle_b != null and tilt_b != null and reset_b != null:
+		for n in cam.ANGLES.size():
+			if cam.base_pitch == 45.0:
+				break
+			angle_b.pressed.emit()
+		tilt_b.pressed.emit()
+		zoom_b.pressed.emit()
+		phone.close()  # the open phone pauses the game
+		await _frames(240)
+		_check(angle_b.text == "Angle: 45°" and tilt_b.text.ends_with("OFF") and cam.pitches() == [45.0] and absf(cam.perspective_pitch - 45.0) < 0.5 and game.settings["angle"] == 45.0, "Angle 45° with tilt off holds the camera at %.1f degrees" % cam.perspective_pitch)
+		tilt_b.pressed.emit()
+		_check(cam.pitches() == [45.0, 50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0], "with tilt on it picks from 45° up to 85°")
+		for n in cam.ANGLES.size():
+			if cam.base_pitch == 90.0:
+				break
+			angle_b.pressed.emit()
+		phone.close()  # the open phone pauses the game
+		await _frames(240)
+		var below: Vector3 = cam.project_ray_normal(cam.get_viewport().get_visible_rect().get_center())
+		_check(absf(cam.perspective_pitch - 90.0) < 0.5 and below.y < -0.99, "Angle 90° looks straight down")
+		reset_b.pressed.emit()
+		phone.close()  # the open phone pauses the game
+		await _frames(240)
+		_check(angle_b.text == "Angle: 65°" and tilt_b.text.ends_with("ON") and zoom_b.text == "Zoom: 100%" and cam.base_pitch == cam.PITCH_LOW and cam.auto_tilt and cam.zoom == 1.0 and absf(cam.perspective_pitch - 65.0) < 0.5, "Reset camera puts back 65°, tilt on and 100%% zoom (pitch %.1f)" % cam.perspective_pitch)
+	phone.close()
 	# Driving flat out, the view zooms out and leads the car, keeping it on
 	# screen, and the city loads round the middle of the screen.
 	_place_player(_home(), Vector3.ZERO)

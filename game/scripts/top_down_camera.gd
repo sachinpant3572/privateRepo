@@ -37,8 +37,14 @@ const PITCH := 60.0
 const PITCH_LOW := 65.0
 const PITCH_TALL := 85.0
 ## The pitches the camera picks from, every PITCH_EVERY seconds: the lowest
-## that keeps the player and the ground round the view in sight.
+## that keeps the player and the ground round the view in sight. They run
+## from `base_pitch` (Settings > Angle, PITCH_LOW by default) up to
+## PITCH_TALL in 5 degree steps, or are `base_pitch` alone with Settings >
+## Tilt near towers off.
 const PITCHES := [65.0, 70.0, 75.0, 80.0, 85.0]
+const ANGLES := [40.0, 45.0, 50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0]
+var base_pitch := PITCH_LOW
+var auto_tilt := true
 const PITCH_EVERY := 0.25
 ## Tipping up is at once while the player is hidden; for the ground round the
 ## view alone it waits for PITCH_VOTES checks in a row that agree. Either way
@@ -210,7 +216,32 @@ func _cap_lead(lead: Vector3, frame: float, back_out := 0.0) -> Vector3:
 	return lead
 
 
-## Perspective: tips the camera from PITCH_LOW toward PITCH_TALL where
+## Sets Settings > Angle and Tilt near towers, starting the pitch over from
+## the new angle (it eases there).
+func set_angle(pitch: float, tilt: bool) -> void:
+	if is_equal_approx(pitch, base_pitch) and tilt == auto_tilt:
+		return
+	base_pitch = pitch
+	auto_tilt = tilt
+	_pitch_want = pitch
+	_pitch_hold = 0.0
+	_pitch_votes = 0
+	_pitch_recent.clear()
+	_pitch_t = 0.0
+
+
+## The pitches the picker tries now, lowest first.
+func pitches() -> Array[float]:
+	var out: Array[float] = [base_pitch]
+	if auto_tilt:
+		var p := base_pitch + 5.0
+		while p <= PITCH_TALL + 0.1:
+			out.append(p)
+			p += 5.0
+	return out
+
+
+## Perspective: tips the camera from base_pitch toward PITCH_TALL where
 ## buildings would hide the player or the ground round them, so towers lean
 ## out of the way instead of over the street (E-1). `delta` 0 snaps.
 func _update_pitch(delta: float) -> void:
@@ -219,7 +250,7 @@ func _update_pitch(delta: float) -> void:
 	_pitch_t -= delta
 	_pitch_hold -= delta
 	if fixed_focus != null:
-		_pitch_want = PITCH_LOW
+		_pitch_want = base_pitch
 	elif _pitch_t <= 0.0 and is_inside_tree():
 		_pitch_t = PITCH_EVERY
 		var pick := best_pitch(_player, _focus, _pitch_want)
@@ -252,6 +283,10 @@ func _update_pitch(delta: float) -> void:
 ## beside a tower the camera spot is inside it at every pitch, and steeper
 ## leaves the least tower in the way (the see-through ghost does the rest).
 func best_pitch(player: Vector3, center: Vector3, now := PITCH_LOW) -> float:
+	var tries := pitches()
+	if tries.size() == 1:
+		_player_hidden = false
+		return tries[0]
 	var space := get_world_3d().direct_space_state
 	var base := size * 0.5 / tan(deg_to_rad(PERSPECTIVE_FOV) * 0.5)
 	var points: Array[Vector3] = [_ahead]
@@ -263,9 +298,9 @@ func best_pitch(player: Vector3, center: Vector3, now := PITCH_LOW) -> float:
 		var g := Vector3(p.x, Terrain.height(p.x, p.z) + 1.0, p.z)
 		if space.intersect_ray(PhysicsRayQueryParameters3D.create(Vector3(p.x, 400.0, p.z), g, L.WORLD)).is_empty():
 			open.append(g)
-	var best: float = PITCHES[-1]
+	var best: float = tries[-1]
 	var best_score := 1 << 20
-	for pitch: float in PITCHES:
+	for pitch: float in tries:
 		var eye := center + Basis.from_euler(Vector3(deg_to_rad(-pitch), 0.0, 0.0)).z * base
 		var score := 0
 		for h in [0.4, 1.6]:

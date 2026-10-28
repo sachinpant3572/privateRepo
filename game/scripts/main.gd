@@ -36,7 +36,7 @@ var taxi
 var inventory = Inventory.new()
 var respawning := false
 var cash := 0
-var settings := {"shadows": true, "show_fps": true, "weather": "auto", "detail": "high", "controls": "stick", "view": "perspective", "zoom": 1.0}
+var settings := {"shadows": true, "show_fps": true, "weather": "auto", "detail": "high", "controls": "stick", "view": "perspective", "zoom": 1.0, "angle": 65.0, "auto_tilt": true}
 ## Player-set map waypoint (a road node position) or null.
 var waypoint = null
 
@@ -134,6 +134,8 @@ func apply_settings() -> void:
 	# Zoomed out, the city and country load further round the player.
 	var z = settings.get("zoom", 1.0)
 	camera.zoom = float(z) if (z is float or z is int) and camera.ZOOMS.has(float(z)) else 1.0
+	var a = settings.get("angle", 65.0)
+	camera.set_angle(float(a) if (a is float or a is int) and camera.ANGLES.has(float(a)) else camera.PITCH_LOW, settings.get("auto_tilt", true) != false)
 	var reach := maxf(camera.zoom, 1.0)
 	City.LOAD_RADIUS = 105.0 * reach
 	City.UNLOAD_RADIUS = 150.0 * reach

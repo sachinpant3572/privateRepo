@@ -38,7 +38,9 @@ buildings and tips toward 85° among towers; driving, it zooms out and leads
 the car (about 100 m of road ahead east-west, 60 m north-south at top
 speed); buildings that still hide the ground round and ahead of the player
 turn see-through. Settings > View keeps the
-classic flat 60° view below, and Settings > Zoom sets 80-130%. See
+classic flat 60° view below, Settings > Zoom sets 80-130%, and
+Settings > Angle (40-90°), Tilt near towers and Reset camera are there for
+trying angles out. See
 HANDOFF-perspective-camera.md. Full 3D is parked in TODO.md.
 
 **Decision (Oct 26, 2026): classic top-down view only.** North is up, and the

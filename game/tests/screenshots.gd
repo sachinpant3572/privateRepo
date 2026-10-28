@@ -577,6 +577,18 @@ func _views(game) -> void:
 	cam.target = game.player
 	drive.queue_free()
 	body.queue_free()
+	# Settings > Angle, tilt off, on foot: the same two spots from 45 to 90°.
+	for spot: Array in [spots[0], spots[2]]:
+		var pos: Vector3 = spot[1]
+		city.stream_now(pos)
+		game.player.global_position = pos
+		game.player.reset_physics_interpolation()
+		for angle: float in [45.0, 55.0, 65.0, 75.0, 90.0]:
+			cam.set_angle(angle, false)
+			cam.snap()
+			await _frames(20)
+			await _shot("83_angle_%s_%d.png" % [spot[0], angle])
+	cam.set_angle(cam.PITCH_LOW, true)
 
 
 func _shot(file: String) -> void:

@@ -364,7 +364,8 @@ household tier it takes (74). `SHOTS=view` compares the classic and perspective 
 at the Aurum Tower, Midtown and Lantern Square, on foot and driving (80),
 the perspective camera backed out of a tower and with the view band
 turning buildings round the player see-through (81), and driving flat out
-east and north through Midtown and past the Aurum Tower (82). `res://tests/occlusion_probe.tscn`
+east and north through Midtown and past the Aurum Tower (82), and Settings > Angle at
+45, 55, 65, 75 and 90° with tilt off at the Aurum Tower and Lantern Square (83). `res://tests/occlusion_probe.tscn`
 (headless) measures how much of the hero and the street each camera
 setting hides (HANDOFF-perspective-camera.md).
 
