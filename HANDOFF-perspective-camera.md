@@ -78,6 +78,11 @@ what is at least 100mtrs ahead which will lead to car crahes or plane crashes."
 - A straight-down 90° "2D" view: about 1-2 hours for the camera, plus 0.5-1 session for roof signs
   and stronger hair and hat colours. Not started.
 - Aircraft do not exist yet; the band follows any vehicle the camera targets.
+- Sachin prefers moving the camera over cutting holes (Oct 28). Probe with the real tower back-out,
+  120 spots, downtown hero / street hidden: persp65 18-20% / 15-16%; persp75 15-17% / 10-11%;
+  persp85 7% / 4-5% (elsewhere 0-3%); ortho60 20% / 11-14%. A narrower 25° lens changed nothing.
+  Proposed: pitch steepens toward 85° near towers and at speed, speed zoom-out, and ghosted (part-
+  dithered) buildings instead of holes for what is left. Awaiting his pick.
 
 ## Gates
 
