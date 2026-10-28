@@ -37,6 +37,7 @@ func _run() -> void:
 		"test_camera_is_classic_top_down",
 		"test_perspective_camera",
 		"test_camera_turns_with_car",
+		"test_camera_ninety_turns",
 		"test_punch_combo_ends_in_knockdown_kick",
 		"test_minimap_routes_to_waypoint", "test_state_map_shows_the_whole_state",
 		"test_night_lights_the_city",
@@ -1110,6 +1111,189 @@ func test_camera_turns_with_car() -> void:
 	await _frames(180)
 	_check(absf(cam.yaw) < 0.02, "Settings > Camera turn North up turns the view back (%.1f degrees)" % rad_to_deg(cam.yaw))
 
+
+## Settings > Camera turn "90° turns" (H-17): the view holds through
+## steering and dodges, and turns a whole quarter only once the car or the
+## walk has been a corner off it for STEP_HOLD. Also Follow's Drive zoom-out
+## (H-15), the stick's frame through a slow thumb drift and a brush of the
+## dead zone, and letting go mid-turn (H-18), and the HUD gear.
+func test_camera_ninety_turns() -> void:
+	await _free_game()
+	var TopDownCamera = preload("res://scripts/top_down_camera.gd")
+	var cam = TopDownCamera.new()
+	add_child(cam)
+	var p = preload("res://scripts/player.gd").new()
+	p.process_mode = Node.PROCESS_MODE_DISABLED
+	add_child(p)
+	cam.target = p
+	Controls.camera = cam
+	# Follow, flat out: Drive zoom-out sets how far the view widens and how
+	# far it flattens.
+	var car = _player_car("sedan", Vector3(0, 0, 400.0), 0.0)
+	p.vehicle = car
+	cam.snap()
+	Controls.override_vector = Vector2(0, -1)
+	await _frames(240)
+	var fits := true
+	var report := []
+	for dz in [1.0, 0.5, 0.0]:
+		cam.drive_zoom = dz
+		await _frames(240)
+		var want: float = lerpf(cam.FOOT_SIZE, cam.TURN_DRIVE_SIZE, minf(car.speed / cam.TURN_FULL_SPEED, 1.0) * dz)
+		var flat: float = snappedf(cam.TURN_FLATTEN * clampf((car.speed - 8.0) / (cam.TURN_FULL_SPEED - 8.0), 0.0, 1.0), 5.0) * dz
+		if car.speed < 15.0 or absf(cam.size - want) > 1.5 or absf(cam._flatten - flat) > 0.01 or (dz > 0.0 and flat == 0.0):
+			fits = false
+		report.append("%d%% %.0f m, %.1f degrees flatter" % [roundi(dz * 100.0), cam.size, cam._flatten])
+	cam.drive_zoom = 1.0
+	_check(fits, "in Follow, flat out (%.0f m/s), Drive zoom-out sets the framing and the flatten: %s" % [car.speed, ", ".join(report)])
+	# 90° turns: a lane change moves the car, not the view.
+	cam.turn_steps = true
+	cam.recenter()
+	await _frames(60)
+	_check(absf(cam.yaw) < 0.01, "90° turns: driving straight north the view stays north (%.1f degrees)" % rad_to_deg(cam.yaw))
+	var max_yaw := 0.0
+	var h0: float = TopDownCamera._heading(-car.global_basis.z)
+	Controls.override_vector = Vector2(0.35, -0.94)
+	for f in 30:
+		await _frames(1)
+		max_yaw = maxf(max_yaw, absf(cam.yaw))
+	var steered: float = absf(wrapf(TopDownCamera._heading(-car.global_basis.z) - h0, -PI, PI))
+	Controls.override_vector = Vector2(0, -1)
+	for f in 90:
+		await _frames(1)
+		max_yaw = maxf(max_yaw, absf(cam.yaw))
+	_check(steered > deg_to_rad(10.0) and max_yaw < 0.01, "a %.0f-degree steer leaves the view where it is (moved %.2f degrees)" % [rad_to_deg(steered), rad_to_deg(max_yaw)])
+	# A corner: the view waits STEP_HOLD past 80 degrees, then turns to east.
+	Controls.override_vector = Vector2(0.7, -0.7)
+	var off_at := -1
+	var moved_at := -1
+	for f in 360:
+		await _frames(1)
+		var h: float = TopDownCamera._heading(-car.global_basis.z)
+		if h < -deg_to_rad(85.0):
+			Controls.override_vector = Vector2(0, -1)
+		if off_at < 0 and h < -cam.STEP_TURN:
+			off_at = f
+		if moved_at < 0 and absf(cam.yaw) > 0.01:
+			moved_at = f
+	_check(off_at >= 0 and moved_at - off_at >= int(cam.STEP_HOLD * 60.0) - 1, "turning a corner the view holds until the car is %.0f degrees round for %.1f s (waited %.2f s)" % [rad_to_deg(cam.STEP_TURN), cam.STEP_HOLD, (moved_at - off_at) / 60.0])
+	_check(absf(cam.yaw + PI * 0.5) < 0.02, "then it turns a whole quarter, square to the streets (%.1f degrees; the car heads %.0f)" % [rad_to_deg(cam.yaw), rad_to_deg(TopDownCamera._heading(-car.global_basis.z))])
+	# On foot: a quick sidestep does not turn the view, a held one does.
+	Controls.override_vector = null
+	p.vehicle = null
+	car.queue_free()
+	cam.yaw = 0.0
+	cam._yaw_goal = 0.0
+	cam._yaw_rate = 0.0
+	cam._yaw_chasing = false
+	cam._yaw_forced = false
+	await _frames(30)
+	max_yaw = 0.0
+	Controls.override_vector = Vector2(1, 0)
+	p.velocity = Vector3(4.2, 0, 0)
+	for f in 15:
+		await _frames(1)
+		max_yaw = maxf(max_yaw, absf(cam.yaw))
+	Controls.override_vector = null
+	p.velocity = Vector3.ZERO
+	for f in 90:
+		await _frames(1)
+		max_yaw = maxf(max_yaw, absf(cam.yaw))
+	_check(max_yaw < 0.01, "on foot a quarter-second sidestep leaves the view where it is (moved %.2f degrees)" % rad_to_deg(max_yaw))
+	Controls.override_vector = Vector2(1, 0)
+	p.velocity = Vector3(4.2, 0, 0)
+	await _frames(2)
+	var frame: Vector3 = cam.input_axes()[0]
+	await _frames(300)
+	_check(absf(cam.yaw + PI * 0.5) < 0.02 and cam.input_axes()[0].dot(frame) > 0.9999, "walking sideways on, the view turns a quarter (%.1f degrees) and the walk runs straight" % rad_to_deg(cam.yaw))
+	Controls.override_vector = null
+	p.velocity = Vector3.ZERO
+	await _frames(120)
+	_check(absf(cam.yaw + PI * 0.5) < 0.02, "standing still, it stays on the quarter")
+	# Follow: a slow thumb drift mid-turn bends the walk only by the drift
+	# (the frame holds, so the walk never jumps or spirals).
+	cam.turn_steps = false
+	cam.yaw = 0.0
+	cam._yaw_goal = 0.0
+	cam._yaw_rate = 0.0
+	cam._yaw_chasing = false
+	cam._yaw_forced = false
+	await _frames(90)
+	Controls.override_vector = Vector2(1, 0)
+	p.velocity = Vector3(4.2, 0, 0)
+	await _frames(2)
+	frame = cam.input_axes()[0]
+	await _frames(60)
+	var turned_by: float = cam.yaw
+	var w0: float = TopDownCamera._heading(Controls.world_move())
+	for f in 30:
+		var a := deg_to_rad(f + 1.0)
+		Controls.override_vector = Vector2(cos(a), -sin(a))
+		await _frames(1)
+	var bent: float = wrapf(TopDownCamera._heading(Controls.world_move()) - w0, -PI, PI)
+	_check(turned_by < -deg_to_rad(20.0) and absf(bent - deg_to_rad(30.0)) < deg_to_rad(2.0) and cam.input_axes()[0].dot(frame) > 0.9999, "mid-turn (view at %.0f degrees), drifting the thumb 30 degrees up bends the walk %.1f degrees left and keeps the frame" % [rad_to_deg(turned_by), rad_to_deg(bent)])
+	# Brushing the dead zone for a moment keeps the frame too.
+	var held_stick = Controls.override_vector
+	Controls.override_vector = Vector2.ZERO
+	await _frames(4)
+	Controls.override_vector = held_stick
+	await _frames(2)
+	_check(cam.input_axes()[0].dot(frame) > 0.9999 and absf(wrapf(TopDownCamera._heading(Controls.world_move()) - w0 - bent, -PI, PI)) < 0.01, "a thumb brushing the dead zone keeps the frame, so the walk carries straight on")
+	# Letting go mid-turn: the view eases to a stop, never faster.
+	Controls.override_vector = null
+	p.velocity = Vector3.ZERO
+	cam.yaw = 0.0
+	cam._yaw_goal = 0.0
+	cam._yaw_rate = 0.0
+	cam._yaw_chasing = false
+	cam._yaw_forced = false
+	await _frames(30)
+	Controls.override_vector = Vector2(1, 0)
+	p.velocity = Vector3(4.2, 0, 0)
+	await _frames(40)
+	var last: float = cam.yaw
+	await _frames(1)
+	var moving: float = rad_to_deg(absf(wrapf(cam.yaw - last, -PI, PI))) * 60.0
+	var rate := 0.0
+	last = cam.yaw
+	var let_go: float = cam.yaw
+	Controls.override_vector = null
+	p.velocity = Vector3.ZERO
+	for f in 60:
+		await _frames(1)
+		rate = maxf(rate, rad_to_deg(absf(wrapf(cam.yaw - last, -PI, PI))) * 60.0)
+		last = cam.yaw
+	var coast: float = absf(wrapf(cam.yaw - let_go, -PI, PI))
+	_check(moving > 30.0 and rate <= moving + 0.5 and coast < deg_to_rad(12.0), "letting go mid-turn (view at %.0f degrees, turning %.0f degrees a second), it eases to a stop %.1f degrees on, never faster" % [rad_to_deg(let_go), moving, rad_to_deg(coast)])
+	await _frames(150)
+	_check(absf(wrapf(cam.yaw - snappedf(last, PI * 0.5), -PI, PI)) < 0.02, "then squares up with the streets once (%.1f degrees)" % rad_to_deg(cam.yaw))
+	p.queue_free()
+	cam.queue_free()
+	Controls.camera = null
+	# In the game: the setting cycles through the gear's Settings.
+	await _new_game(false)
+	cam = game.camera
+	var phone = game.hud.phone
+	var opened: int = phone.open_count
+	game.hud.settings_button.pressed.emit()
+	await _frames(1)
+	_check(phone.visible and phone._title.text == "Settings" and phone.open_count == opened, "the HUD gear opens Settings (and does not count as checking the phone)")
+	var turn_b: Button = null
+	for b in phone.find_children("*", "Button", true, false):
+		if b.text.begins_with("Camera turn"):
+			turn_b = b
+	var seen := []
+	for i in 3:
+		turn_b.pressed.emit()
+		seen.append("%s/%s" % [turn_b.text.trim_prefix("Camera turn: "), str(game.settings.get("camera_turn"))])
+	_check(seen == ["Follow/car", "90° turns/steps", "North up/north"] and not cam.turn_view, "Settings > Camera turn cycles: %s" % ", ".join(seen))
+	game.settings["camera_turn"] = "steps"
+	game.apply_settings()
+	_check(cam.turn_view and cam.turn_steps, "a saved 90° turns loads as 90° turns")
+	game.settings["camera_turn"] = "north"
+	game.apply_settings()
+	phone.close()
+	await _frames(1)
 
 func test_punch_combo_ends_in_knockdown_kick() -> void:
 	await _new_game(false)

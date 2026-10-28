@@ -282,8 +282,10 @@ phone.
   Gangstar games. Leads ahead of
   cars and zooms out with speed (Settings > Drive zoom-out sets how far).
   The view turns with the car like GTA Chinatown Wars, and on foot follows
-  the way you walk (Settings > Camera turn: Follow or North up); tap the
-  minimap's N to swing it back behind the car.
+  the way you walk (Settings > Camera turn: Follow, 90° turns or North up;
+  90° turns holds the view still until the car or the walk has been a
+  corner off it for 0.4 s, then turns a whole quarter); tap the minimap's
+  N to swing it back behind the car.
 - **HUD**: minimap, health, wanted stars (flashing while police can't see
   you), cash, clock, phone, objective, speed, prompts, FPS and draw-call
   readout.

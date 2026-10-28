@@ -189,6 +189,9 @@ func _process(delta: float) -> void:
 	_cash.text = "$%d" % int(_shown_cash)
 	_clock.text = game.atmosphere.clock_text()
 	_phone_button.visible = game.missions != null and game.missions.phone_unlocked
+	# The gear takes PHONE's slot until the story unlocks the phone.
+	settings_button.offset_left = -196.0 if _phone_button.visible else -76.0
+	settings_button.offset_right = settings_button.offset_left + 56.0
 	_phone_button.modulate = Color(1.0, 0.85, 0.3) if _phone_pulse and int(_blink * 3.0) % 2 == 0 else Color.WHITE
 	_update_dialogue(delta)
 	touch.set_mode(player.vehicle != null and not player.passenger, Controls.scheme, player.passenger)

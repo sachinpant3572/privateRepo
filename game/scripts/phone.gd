@@ -84,7 +84,8 @@ func open() -> void:
 func open_settings() -> void:
 	if visible:
 		return
-	open_count += 1
+	# Not counted in open_count: a mis-tap on the gear must not tick off a
+	# mission's "check your phone".
 	visible = true
 	get_tree().paused = true
 	_settings("CLOSE")
@@ -261,7 +262,8 @@ func _cab() -> void:
 
 
 func _turn_label() -> String:
-	return "Camera turn: " + ("Follow" if game.camera.turn_view else "North up")
+	var cam = game.camera
+	return "Camera turn: " + ("North up" if not cam.turn_view else "90° turns" if cam.turn_steps else "Follow")
 
 
 func _settings(back := "BACK") -> void:
@@ -288,7 +290,8 @@ func _settings(back := "BACK") -> void:
 	_body.add_child(tilt_b)
 	var turn_b := _button(_turn_label(), Callable())
 	turn_b.pressed.connect(func():
-		s["camera_turn"] = "north" if cam.turn_view else "car"
+		# Follow -> 90° turns -> North up -> Follow.
+		s["camera_turn"] = "car" if not cam.turn_view else "north" if cam.turn_steps else "steps"
 		game.apply_settings()
 		turn_b.text = _turn_label())
 	_body.add_child(turn_b)

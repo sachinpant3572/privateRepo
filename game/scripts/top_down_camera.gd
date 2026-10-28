@@ -116,9 +116,17 @@ var _cut := 0.0
 var _trauma := 0.0
 var _shake_t := 0.0
 
-## Settings > Camera turn: Follow (true: behind the car, along the walk)
-## or North up (false).
+## Settings > Camera turn: Follow or 90° turns (true: behind the car, along
+## the walk) or North up (false).
 var turn_view := true
+## Camera turn: 90° turns (H-17). The view holds still until the car, or the
+## walk, has been at least STEP_TURN off it for STEP_HOLD, then turns a
+## whole quarter, square to the street grid: steering and dodging never
+## move it.
+var turn_steps := false
+const STEP_TURN := deg_to_rad(80.0)
+const STEP_HOLD := 0.4
+var _step_time := 0.0
 ## The view's heading in radians: 0 is north up, positive turns the view
 ## anticlockwise as seen from above (Godot's yaw), so a car heading west
 ## points up the screen at PI / 2.
@@ -134,9 +142,17 @@ var _still := 0.0
 ## the view when the stick is pressed and held while the thumb stays put, so
 ## a view following the walk never bends it into a circle; swinging the
 ## thumb more than INPUT_RECAPTURE takes it from the view again (H-14).
+## The thumb direction it was read for trails a slow drift at INPUT_TRAIL,
+## so only a quick swing re-reads it, and a let-go shorter than INPUT_GRACE
+## (a thumb brushing the dead zone) keeps it (H-18).
 var _input_yaw := 0.0
 var _input_dir := Vector2.ZERO
+var _input_idle := 0.0
 const INPUT_RECAPTURE := deg_to_rad(25.0)
+const INPUT_TRAIL := deg_to_rad(120.0)
+const INPUT_GRACE := 0.2
+## Whether the view followed a walk last frame (letting go stops it, H-18).
+var _walked := false
 ## What the view followed last frame: a new car turns the view behind it at
 ## once, before it moves (the stick already steers it car-relative).
 var _yaw_node: Node3D = null
@@ -205,8 +221,9 @@ func _process(delta: float) -> void:
 		# now, so the car stays on screen on the way there too.
 		lead = _cap_lead(Vector3(v.x, 0.0, v.z) * (TURN_LEAD_SECONDS if turns() else LEAD_SECONDS), minf(size, want_size), _back)
 		if turns():
-			# In 5-degree steps, so the pitch picker isn't chasing it.
-			flatten = snappedf(TURN_FLATTEN * clampf((speed - 8.0) / (TURN_FULL_SPEED - 8.0), 0.0, 1.0) * drive_zoom, 5.0)
+			# In 5-degree steps, so the pitch picker isn't chasing it; then
+			# scaled, so each Drive zoom-out flattens by its own amount.
+			flatten = snappedf(TURN_FLATTEN * clampf((speed - 8.0) / (TURN_FULL_SPEED - 8.0), 0.0, 1.0), 5.0) * drive_zoom
 	if flatten != _flatten:
 		_flatten = flatten
 		_pitch_t = 0.0
@@ -264,7 +281,7 @@ func turns() -> bool:
 ## up on foot (it then follows the walk again once the player moves off).
 func recenter() -> void:
 	var node: Node3D = target.focus_node() if target != null else null
-	_yaw_goal = _heading(-node.global_basis.z) if turns() and node != null and node != target else 0.0
+	_yaw_goal = _square(_heading(-node.global_basis.z)) if turns() and node != null and node != target else 0.0
 	_yaw_forced = true
 	_yaw_chasing = true
 
@@ -272,6 +289,24 @@ func recenter() -> void:
 ## The view heading that puts the ground direction `dir` up the screen.
 static func _heading(dir: Vector3) -> float:
 	return atan2(-dir.x, -dir.z)
+
+
+## In 90° turns, the nearest quarter (getting in, the compass, a snap).
+func _square(heading: float) -> float:
+	return snappedf(heading, PI * 0.5) if turn_steps else heading
+
+
+## The goal in 90° turns: the current one, until `heading` has been a
+## corner off it for STEP_HOLD; then the quarter nearest `heading`.
+func _step_goal(heading: float, delta: float) -> float:
+	if absf(wrapf(heading - _yaw_goal, -PI, PI)) < STEP_TURN:
+		_step_time = 0.0
+		return _yaw_goal
+	_step_time += delta
+	if _step_time < STEP_HOLD:
+		return _yaw_goal
+	_step_time = 0.0
+	return snappedf(heading, PI * 0.5)
 
 
 ## Turns the view (H-2, H-5 and H-8 in the handoff). In a vehicle the goal is
@@ -297,14 +332,16 @@ func _update_yaw(node: Node3D, delta: float) -> void:
 		var speed := flat.length()
 		var fwd := -node.global_basis.z
 		if node != _yaw_node:
-			_yaw_goal = _heading(fwd)
+			_yaw_goal = _square(_heading(fwd))
+			_step_time = 0.0
 			_yaw_chasing = true
 			_yaw_forced = false
 		elif speed > YAW_MIN_SPEED and not _yaw_forced:
 			var face := _heading(fwd)
 			var slip := wrapf(_heading(flat) - face, -PI, PI)
 			if absf(slip) < PI * 0.5:
-				_yaw_goal = face + slip * 0.6 * smoothstep(deg_to_rad(15.0), deg_to_rad(60.0), absf(slip))
+				var goal := face + slip * 0.6 * smoothstep(deg_to_rad(15.0), deg_to_rad(60.0), absf(slip))
+				_yaw_goal = _step_goal(goal, delta) if turn_steps else goal
 	else:
 		var speed := Vector2(node.velocity.x, node.velocity.z).length()
 		var held := Controls.move_vector().length() > 0.2
@@ -315,12 +352,19 @@ func _update_yaw(node: Node3D, delta: float) -> void:
 		walking = held and speed > WALK_MIN_SPEED and not _yaw_forced
 		if _yaw_forced:
 			pass
+		elif walking and turn_steps:
+			_yaw_goal = _step_goal(_heading(walk), delta)
 		elif walking and (node != _yaw_node or _yaw_chasing or absf(wrapf(_heading(walk) - yaw, -PI, PI)) > WALK_DEAD):
 			_yaw_goal = _heading(walk)
 			_yaw_chasing = true
+		elif _walked and not turn_steps:
+			# Let go mid-turn: the view eases to a stop where it is (just past,
+			# at YAW_ACCEL_MAX), rather than chasing the old walk at car rates.
+			_yaw_goal = yaw + _yaw_rate * absf(_yaw_rate) / (2.0 * YAW_ACCEL_MAX)
 		elif _still >= SQUARE_AFTER:
 			_yaw_goal = snappedf(yaw, PI * 0.5)
 			_yaw_chasing = true
+	_walked = walking
 	var gap := wrapf(_yaw_goal - yaw, -PI, PI)
 	if absf(gap) > (WALK_DEAD if walking else YAW_DEAD):
 		_yaw_chasing = true
@@ -355,12 +399,23 @@ func _update_yaw(node: Node3D, delta: float) -> void:
 	# drives, so getting out with the stick held walks the way the view faces.
 	_yaw_node = node
 	var stick := Controls.move_vector()
-	if node != target or stick.length() < 0.2:
+	if node != target:
 		_input_yaw = yaw
 		_input_dir = Vector2.ZERO
+		_input_idle = INPUT_GRACE
+	elif stick.length() < 0.2:
+		_input_idle += delta
+		if _input_idle >= INPUT_GRACE:
+			_input_yaw = yaw
+			_input_dir = Vector2.ZERO
 	elif _input_dir == Vector2.ZERO or absf(stick.angle_to(_input_dir)) > INPUT_RECAPTURE:
+		_input_idle = 0.0
 		_input_yaw = yaw
 		_input_dir = stick
+	else:
+		_input_idle = 0.0
+		var drift := _input_dir.angle_to(stick)
+		_input_dir = _input_dir.rotated(clampf(drift, -INPUT_TRAIL * delta, INPUT_TRAIL * delta))
 
 
 func snap() -> void:
@@ -377,12 +432,15 @@ func snap() -> void:
 	if not turns():
 		_yaw_goal = 0.0
 	elif node != target:
-		_yaw_goal = _heading(-node.global_basis.z)
+		_yaw_goal = _square(_heading(-node.global_basis.z))
 	else:
-		_yaw_goal = yaw
+		_yaw_goal = _square(yaw)
+	_step_time = 0.0
 	_update_yaw(node, 0.0)
 	_input_yaw = yaw
 	_input_dir = Vector2.ZERO
+	_input_idle = INPUT_GRACE
+	_walked = false
 	_update_pitch(0.0)
 	_frame(0.0)
 

@@ -140,11 +140,14 @@ func apply_settings() -> void:
 	var a = settings.get("angle", 65.0)
 	var t = settings.get("auto_tilt", true)
 	camera.set_angle(float(a) if (a is float or a is int) and camera.ANGLES.has(float(a)) else camera.PITCH_LOW, t if t is bool else true)
-	# Camera turn: follow (behind the car, Chinatown Wars; along the walk) or
-	# north up. A change eases round.
-	var turn := str(settings.get("camera_turn", "car")) != "north"
-	if turn != camera.turn_view:
+	# Camera turn: follow (behind the car, Chinatown Wars; along the walk),
+	# 90° turns (only whole corners) or north up. A change eases round.
+	var mode := str(settings.get("camera_turn", "car"))
+	var turn := mode != "north"
+	var steps := mode == "steps"
+	if turn != camera.turn_view or steps != camera.turn_steps:
 		camera.turn_view = turn
+		camera.turn_steps = steps
 		camera.recenter()
 	var reach := maxf(camera.zoom, 1.0)
 	# A camera flatter than 65 degrees sees further up the screen. Turning

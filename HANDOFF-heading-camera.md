@@ -72,7 +72,18 @@ Builds on HANDOFF-perspective-camera.md (pitch, tower tilt, see-through ghost, l
   while driving. The look-ahead is capped to the frame, so the car stays on screen. Distance (was
   Zoom) gains 60% and 70%; Angle unchanged. All three are - / + steppers under a Camera heading.
 - H-16 A gear button on the HUD, always shown (the PHONE button only shows once the phone is
-  unlocked), opens the phone straight to Settings.
+  unlocked), opens the phone straight to Settings. It takes PHONE's slot while PHONE is hidden,
+  and does not count as checking the phone (m02 waits for that).
+- H-17 Camera turn "90° turns" (saved "steps"), asked by Sachin to test whether the 0.17 wobble
+  goes: the view holds until the car's heading (with its slip lean) or the walk has been at least
+  80 deg off it for 0.4 s, then turns to the nearest quarter, car and foot alike; getting in, the
+  compass and a snap also square it. Cycle: Follow -> 90° turns -> North up. Cheaper/other options
+  if it feels wrong: a wider Follow dead zone, or the lazy camera (Rejected).
+- H-18 Review fixes to on-foot Follow: the stick frame's thumb direction trails slow drift at
+  120 deg/s, so only a quick swing over 25 deg re-captures (drift used to re-capture mid-turn and
+  jump the walk by however far the view had turned); a let-go under 0.2 s keeps the frame; letting
+  go mid-turn eases the view to a stop where it is instead of chasing the old walk at car rates.
+  Drive zoom-out flatten is snapped to 5 deg before scaling, so 25/50/75% each flatten their share.
 
 ## Rejected
 
@@ -89,6 +100,9 @@ Builds on HANDOFF-perspective-camera.md (pitch, tower tilt, see-through ghost, l
 - Shots 84_turn_* (SHOTS=view).
 - Review (one run): no hard bug; fixed: entering a car, the on-foot stick frame, the back-off memo
   ignoring yaw, full-lock gas, `screen_from_world` frame. Suite timeout 180 -> 300 s (188 s now).
+- test_camera_ninety_turns (H-15 in Follow, H-17, H-18, the gear): see the PR for counts.
+- Store test flake: the window for a second shopper was too short (stays run 20-55 s); now waits
+  up to 150 s for two shoppers (8 of 8 runs pass).
 - Phone FPS: Sachin reports 120 FPS on his phone with 0.17 (2026-10-28), so the 1.5x area holds.
 
 ## Open
