@@ -4,27 +4,12 @@ Sachin, 2026-10-28: "Also build realistic traffic lights, and simulate
 realistic traffic too, based upon the type of district, congestion, events
 happening, what the region is meant for etc. factors."
 
-## Where it starts (survey, file:line at commit 58f901d)
+## Where it started (commit 58f901d)
 
-- Traffic: a fixed bubble of `TRAFFIC_COUNT 8` cars (population.gd:10),
-  spawned at junctions 40-70 m out (`_spawn_traffic` :88). The kind comes
-  from the flat `VehicleKit.CIVILIAN` list. Nothing varies by place or time;
-  `world_map.json` `npc_density` is text that no code reads.
-- Driving: `Vehicle._traffic_ai` (vehicle.gd:629-694) follows lanes on one
-  road graph (city + country, `city.next_nodes`, `lane_point`,
-  `pick_turn`). It cruises at `TRAFFIC_CRUISE 13` m/s everywhere and at
-  6.5 m/s near junctions. A fixed 8 m ray (`_ahead`) brakes it. There are
-  no speed limits (country `edge_speed` exists, unused), no give-way rules
-  and no junction occupancy.
-- Lights: `Props.traffic_light` (prop_kit.gd:91) is a static mesh with a
-  permanently lit green lens, put 60% per downtown block side
-  (city_cells.gd:1968), not per junction approach. Nothing reacts to it.
-- Stop bars already sit at `_setback + gap` (city_cells.gd:365, 508).
-- Districts: `city.district_at(pos)` gives `style` (quarter, docks,
-  downtown, midtown, heights, wards, bayou, brownstone) or town or region
-  kinds. Country: `zone_at`; lots carry tier and land value.
-- Clock: `atmosphere.hour`. Events: wanted level, police cars, missions,
-  roadworks.
+- A fixed bubble of 8 traffic cars from one flat kind list; one speed
+  (13 m/s, 6.5 at junctions); an 8 m ray to brake; random lit-green poles
+  per downtown block side that nothing obeyed. Stop bars already painted
+  at `_setback + gap` (city_cells.gd `_street`).
 
 ## Design (decided)
 
@@ -94,6 +79,47 @@ Demand (density and mix):
 - Events: wanted level (police on the road, traffic yields), roadworks
   (already narrow lanes), wrecks block lanes, and a `traffic.surge(pos,
   radius, factor, secs)` hook for missions.
+
+## Agent build: approach and decisions (2026-10-28)
+
+- `traffic_plan.gd` (static, pure, thread-safe: the cell builder calls it)
+  classifies junctions, places the stop line (`stop_back` = the painted
+  bar), speed limits and pole geometry. `traffic.gd` (child of
+  Population, group "traffic") runs controllers, demand, mix, surges,
+  sirens, the vehicle cache, all-way queues and the lens MultiMesh.
+  Vehicles find it lazily; without one they drive with no controls.
+- Control by leg rank (StreetPlan rank: arterial 4+, collector 2-3,
+  local 1): main group = top leg plus its most opposite leg (dot < -0.7).
+  Arterial main x collector+ cross: signal. Collector x collector: signal
+  in downtown, midtown, docks, quarter; all-way stop elsewhere. Local x
+  local: all-way stop. Anything x local cross: two-way stop on the cross
+  legs. Roundabout ring legs go free, spokes yield. Plan nodes with a
+  country link: never signals. Country junctions: the two best, most
+  opposite legs are major, the rest yield (no stop signs drawn: country
+  tiles are not this package's).
+- Pretimed in downtown, midtown and quarter (always cycle, offset by node
+  hash); semi-actuated elsewhere (rests in main green; a car within 45 m
+  on a cross approach calls the cross phase: min 7 s, max 14 s).
+- Flash 00:00-05:00 (main flashing yellow, cross flashing red = stop),
+  except where both groups are arterial. A knocked-down pole (its brk
+  info `down`) hides its lenses and turns the junction to all-way
+  flashing red. breakables.gd is not edited: the manager polls the info.
+- Poles: far-side mast arm on the departure leg straight ahead (US
+  practice), at the corner (setback + 0.5 from the node, 0.6 m behind the
+  curb, the spot the old random poles used), heads over each lane; else
+  near side on the approach. One cabinet per junction. Ped heads face
+  along the host street and show WALK with their own group's green.
+- Lenses: housings stay baked and dim; lit lenses are one MultiMesh of
+  camera-facing quads (one draw call, no lights), bigger at night. They
+  show from any side, so they read from the top-down camera.
+- Driving: IDM (a_max from the kind's accel, s0 2 m, T 1.4 s, b 3) on the
+  nearest leader along this street and the next (manager's cached list,
+  rescanned every 3 frames); the 8 m ray stays for people and odd
+  obstacles. Stop line = a stationary leader. Yellow: stop if d >
+  v^2/6. Red: stop unless d < v^2/18. Per-driver factor 0.85-1.15 of the
+  limit, capped at 0.9 x the kind's top speed; rain -10% and T +0.4 s.
+- Taxis and scripted cars (`_script_ai`) don't obey lights: not this
+  package's code.
 
 ## Packages
 

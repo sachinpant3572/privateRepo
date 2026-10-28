@@ -85,39 +85,94 @@ static func street_light(mb, out: Array, p: Vector3, dir: Vector3, glow = null, 
 	_lamp(out, dir * 2.4 + Vector3(0, 3.85, 0))
 
 
-## Mast-arm traffic signal: the pole stands at p, the arm reaches 5 m over
-## the road toward `dir` and carries two signal heads (lenses on both
-## faces along the street), a traffic camera and a street-name sign.
-static func traffic_light(mb, out: Array, p: Vector3, dir: Vector3) -> void:
+## Mast-arm traffic signal: the pole stands at p, the arm reaches over the
+## road toward `dir` (along x or z) and carries the signal heads `heads`
+## (distances out along the arm), a traffic camera and a street-name sign.
+## With no `face` (the gallery) the lenses show on both faces along the
+## street, the near head lit green. Junction poles (TrafficPlan.poles)
+## give the one way their lenses `face`, all dim: Traffic lights them. One
+## pole per junction carries the controller `cabinet`; `key` (the pole's
+## id) goes in its breakable info as "signal", so Traffic sees it fall.
+static func traffic_light(mb, out: Array, p: Vector3, dir: Vector3, heads := [2.4, 4.6],
+		face := Vector3.ZERO, cabinet := true, key := "") -> void:
 	var from := _start(mb, null)
 	var paint := MeshBuilder.glow(Color(0.2, 0.22, 0.22), MeshBuilder.GLOSS)
 	mb.cylinder(p + Vector3(0, 0.15, 0), 0.13, 6.0, paint, 6)
 	var along := Vector3(absf(dir.z), 0, absf(dir.x))
-	mb.box(p + dir * 2.6 + Vector3(0, 5.8, 0), Vector3(absf(dir.x) * 5.2 + 0.12, 0.12, absf(dir.z) * 5.2 + 0.12), paint)
-	for k in 2:
-		var head := p + dir * (2.4 + k * 2.2) + Vector3(0, 5.15, 0)
+	var reach: float = float(heads.max()) + 0.6
+	mb.box(p + dir * reach * 0.5 + Vector3(0, 5.8, 0), Vector3(absf(dir.x) * reach + 0.12, 0.12, absf(dir.z) * reach + 0.12), paint)
+	var faces: Array = [along, -along] if face == Vector3.ZERO else [face]
+	for k in heads.size():
+		var head: Vector3 = p + dir * float(heads[k]) + Vector3(0, 5.15, 0)
+		mb.box(head + Vector3(0, 0.35, 0), Vector3(0.06, 0.4, 0.06), paint)
 		mb.box(head, Vector3(0.36, 1.1, 0.36), MeshBuilder.glow(Color(0.16, 0.17, 0.17), MeshBuilder.GLOSS))
 		mb.box(head + Vector3(0, 0.6, 0), Vector3(0.44, 0.05, 0.44), MeshBuilder.glow(Color(0.85, 0.75, 0.2), MeshBuilder.GLOSS))
-		var lit := k == 0
-		for side in [-1.0, 1.0]:
-			var face: Vector3 = head + along * side * 0.2
-			mb.box(face + Vector3(0, 0.33, 0), along * 0.04 + (Vector3.ONE - along) * 0.24, Color(0.45, 0.1, 0.08))
-			mb.box(face, along * 0.04 + (Vector3.ONE - along) * 0.24, Color(0.45, 0.35, 0.08))
-			mb.box(face - Vector3(0, 0.33, 0), along * 0.04 + (Vector3.ONE - along) * 0.24, MeshBuilder.glow(Color(0.2, 0.95, 0.5), MeshBuilder.GLOW_NEON) if lit else Color(0.1, 0.35, 0.18))
+		var lit := face == Vector3.ZERO and k == 0
+		for f: Vector3 in faces:
+			var lens: Vector3 = head + f * 0.2
+			var thin: Vector3 = f.abs() * 0.04 + (Vector3.ONE - f.abs()) * 0.24
+			if face != Vector3.ZERO:
+				# Backplate with the yellow retroreflective border.
+				mb.box(head - f * 0.2, f.abs() * 0.03 + (Vector3.ONE - f.abs()) * 0.6 + Vector3(0, 0.75, 0), Color(0.08, 0.08, 0.08))
+			mb.box(lens + Vector3(0, 0.33, 0), thin, Color(0.4, 0.09, 0.07))
+			mb.box(lens, thin, Color(0.42, 0.33, 0.08))
+			mb.box(lens - Vector3(0, 0.33, 0), thin, MeshBuilder.glow(Color(0.2, 0.95, 0.5), MeshBuilder.GLOW_NEON) if lit else Color(0.08, 0.3, 0.16))
 	mb.box(p + dir * 1.2 + Vector3(0, 6.15, 0), along * 1.6 + Vector3(0, 0.35, 0) + dir.abs() * 0.04, Color(0.12, 0.42, 0.25))
 	mb.box(p + dir * 0.6 + Vector3(0, 5.6, 0), Vector3(0.22, 0.2, 0.22) + dir.abs() * 0.2, MeshBuilder.glow(Color(0.85, 0.86, 0.88), MeshBuilder.GLOSS))
 	# Pedestrian signal and push button.
+	var ped_face: Vector3 = along if face == Vector3.ZERO else face
 	mb.box(p - dir * 0.25 + Vector3(0, 2.8, 0), Vector3(0.36, 0.36, 0.36), Color(0.1, 0.1, 0.1))
-	mb.box(p - dir * 0.25 + Vector3(0, 2.8, 0) + along * 0.19, along * 0.04 + (Vector3.ONE - along) * 0.26, MeshBuilder.glow(Color(1.0, 0.95, 0.85), MeshBuilder.GLOW_NEON))
+	var glyph: Vector3 = ped_face.abs() * 0.04 + (Vector3.ONE - ped_face.abs()) * 0.26
+	mb.box(p - dir * 0.25 + Vector3(0, 2.8, 0) + ped_face * 0.19, glyph, MeshBuilder.glow(Color(1.0, 0.95, 0.85), MeshBuilder.GLOW_NEON) if face == Vector3.ZERO else Color(0.2, 0.18, 0.16))
 	mb.box(p - dir * 0.15 + Vector3(0, 1.1, 0), Vector3(0.14, 0.2, 0.14), Color(0.9, 0.75, 0.2))
-	# Signal controller cabinet behind the pole, toward the buildings.
-	var cab := p + along * 1.0 - dir * 1.3
-	mb.box(cab + Vector3(0, 0.12, 0), along * 0.95 + dir.abs() * 0.7 + Vector3(0, 0.1, 0), MeshBuilder.glow(Color(0.6, 0.6, 0.58), MeshBuilder.CONCRETE))
-	mb.box(cab + Vector3(0, 0.85, 0), along * 0.8 + dir.abs() * 0.5 + Vector3(0, 1.3, 0), MeshBuilder.glow(Color(0.62, 0.66, 0.62), MeshBuilder.GLOSS))
-	mb.box(cab + Vector3(0, 1.52, 0), along * 0.86 + dir.abs() * 0.56 + Vector3(0, 0.05, 0), MeshBuilder.glow(Color(0.7, 0.73, 0.7), MeshBuilder.METAL))
 	out.append([p + Vector3(0, 2.0, 0), Vector3(0.35, 4.0, 0.35)])
-	out.append([cab + Vector3(0, 0.75, 0), along * 0.8 + dir.abs() * 0.5 + Vector3(0, 1.5, 0)])
-	_breaks(mb, out, from, "traffic_light", null, 2)
+	if cabinet:
+		# Signal controller cabinet behind the pole, toward the buildings.
+		var cab := p + along * 1.0 - dir * 1.3
+		mb.box(cab + Vector3(0, 0.12, 0), along * 0.95 + dir.abs() * 0.7 + Vector3(0, 0.1, 0), MeshBuilder.glow(Color(0.6, 0.6, 0.58), MeshBuilder.CONCRETE))
+		mb.box(cab + Vector3(0, 0.85, 0), along * 0.8 + dir.abs() * 0.5 + Vector3(0, 1.3, 0), MeshBuilder.glow(Color(0.62, 0.66, 0.62), MeshBuilder.GLOSS))
+		mb.box(cab + Vector3(0, 1.52, 0), along * 0.86 + dir.abs() * 0.56 + Vector3(0, 0.05, 0), MeshBuilder.glow(Color(0.7, 0.73, 0.7), MeshBuilder.METAL))
+		out.append([cab + Vector3(0, 0.75, 0), along * 0.8 + dir.abs() * 0.5 + Vector3(0, 1.5, 0)])
+	_breaks(mb, out, from, "traffic_light", null, 2 if cabinet else 1)
+	if key != "":
+		out[out.size() - 1][3]["signal"] = key
+
+
+## A stop sign on a post at p, the red octagon facing `face` (along x or
+## z), with an ALL WAY plaque under it at all-way stops (`kind` "all_way"),
+## or (`kind` "yield") a yield triangle.
+static func stop_sign(mb, out: Array, p: Vector3, face: Vector3, kind := "stop") -> void:
+	var from := _start(mb, null)
+	mb.cylinder(p, 0.04, 2.55, MeshBuilder.glow(Color(0.62, 0.64, 0.66), MeshBuilder.METAL), 4)
+	var right := Vector3.UP.cross(face).normalized()
+	var c := p + Vector3(0, 2.25, 0) + face * 0.05
+	var red := MeshBuilder.glow(Color(0.78, 0.08, 0.07), MeshBuilder.GLOSS)
+	var back := Color(0.55, 0.56, 0.58)
+	if kind == "yield":
+		var top_l := c + Vector3(0, 0.3, 0) - right * 0.42
+		var top_r := c + Vector3(0, 0.3, 0) + right * 0.42
+		var tip := c - Vector3(0, 0.42, 0)
+		mb.tri(top_l, top_r, tip, face, red)
+		mb.tri(top_l, top_r, tip, -face, back)
+		var in_l := c + Vector3(0, 0.2, 0) - right * 0.26
+		var in_r := c + Vector3(0, 0.2, 0) + right * 0.26
+		mb.tri(in_l + face * 0.01, in_r + face * 0.01, c - Vector3(0, 0.22, 0) + face * 0.01, face, Color(0.92, 0.92, 0.9))
+	else:
+		var r := 0.38
+		for i in 8:
+			var a0 := TAU * (i + 0.5) / 8.0
+			var a1 := TAU * (i + 1.5) / 8.0
+			var p0 := c + right * cos(a0) * r + Vector3(0, sin(a0) * r, 0)
+			var p1 := c + right * cos(a1) * r + Vector3(0, sin(a1) * r, 0)
+			mb.tri(c, p0, p1, face, red)
+			mb.tri(c, p0, p1, -face, back)
+		# The white legend, as a bar.
+		mb.box(c + face * 0.01, right.abs() * 0.48 + Vector3(0, 0.12, 0) + face.abs() * 0.01, Color(0.95, 0.95, 0.93))
+		if kind == "all_way":
+			mb.box(c - Vector3(0, 0.56, 0), right.abs() * 0.5 + Vector3(0, 0.2, 0) + face.abs() * 0.02, red)
+			mb.box(c - Vector3(0, 0.56, 0) + face * 0.012, right.abs() * 0.36 + Vector3(0, 0.07, 0) + face.abs() * 0.01, Color(0.95, 0.95, 0.93))
+	out.append([p + Vector3(0, 1.2, 0), Vector3(0.12, 2.4, 0.12)])
+	_breaks(mb, out, from, "stop_sign", null)
 
 
 ## Bus shelter facing -Z: glass back and ends, a steel roof, a bench and a

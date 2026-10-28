@@ -66,14 +66,42 @@ const OVERLAP := 0.08
 const OVERLAP_STEP := 0.25
 ## Time constant (s) of the smoothed real motion (`motion`).
 const MOTION_EASE := 0.12
-const TRAFFIC_THROTTLE := 0.6
-## Traffic never cruises faster than this (m/s), whatever the model.
+## Traffic's speed (m/s) where no Traffic manager gives a street's limit.
 const TRAFFIC_CRUISE := 13.0
-## Traffic slows to this (m/s) within TRAFFIC_SLOW_ZONE (m) of a junction.
-const TRAFFIC_TURN_SPEED := 6.5
+## Traffic picks its turn within twice this (m) of a junction, or further
+## at speed.
 const TRAFFIC_SLOW_ZONE := 16.0
 ## Traffic steers for the point this far (m) ahead along its lane.
 const TRAFFIC_LOOKAHEAD := 9.0
+## Traffic driving (0.23): junction controls, limits and demand live in
+## Traffic (a child of Population); the plan of a junction in TrafficPlan.
+const TrafficPlan = preload("res://scripts/traffic_plan.gd")
+const TrafficManager = preload("res://scripts/traffic.gd")
+## Intelligent Driver Model (Treiber 2000): minimum gap (m), time headway
+## (s, +0.4 in rain), comfortable braking (m/s²), and the range the kind's
+## accel is scaled into (accel x 0.3, m/s²).
+const IDM_S0 := 2.0
+const IDM_T := 1.4
+const IDM_B := 3.0
+const IDM_ACCEL := Vector2(1.5, 3.5)
+## Traffic looks again for the vehicle it follows every this many frames.
+const IDM_SCAN := 3
+## Junction speeds (m/s): a turn, and a U-turn.
+const TURN_SPEED := 6.5
+const TIGHT_TURN_SPEED := 4.5
+## A full stop at a sign: seconds standing at the line.
+const STOP_HOLD := 1.0
+## Seconds held at a sign (or a dark signal) before a driver gives up
+## waiting its turn and goes, and at a red before it decides the signal is
+## stuck: no junction locks up for good.
+const GRIDLOCK := 25.0
+const RED_GIVE_UP := 90.0
+## The slowest traffic eases to while a siren comes by (m/s).
+const SIREN_CRAWL := 2.5
+## Seconds stood behind something that never moves off before going round
+## it: a wreck or a parked car, another driver (the player), traffic that
+## isn't queued at a junction.
+const BLOCK_WAIT := Vector3(3.0, 6.0, 10.0)
 ## Seconds a scripted driver (taxi, getaway) waits behind something that
 ## does not move off before it goes round.
 const SCRIPT_WAIT := 3.0
@@ -215,6 +243,50 @@ var _dent_orig: Array = []
 var _dent_at := -1.0
 ## Burning (CarFire child) below FIRE_AT of max health.
 var _fire: Node3D
+## Traffic driving: this driver's cruising speed as a share of the limit
+## (Population sets it); the junction controller (Traffic, looked for
+## every second until there is one); the street the state below is for,
+## its speed limit and lane layout.
+var drive_factor := 1.0
+var _traffic = null
+var _traffic_retry := 0
+var _seg := Vector2i(-2, -2)
+var _limit := TRAFFIC_CRUISE
+var _lane_w := 3.6
+var _lane_park := 0.0
+## The vehicle followed (IDM): the gap to it (m, bumper to bumper) and its
+## speed along the lane; whether the street after the junction has room.
+var _lead = null
+var _lead_gap := INF
+var _lead_speed := 0.0
+var _exit_room := true
+var _scan_tick := 0
+## The junction ahead: its rule for this approach (TrafficPlan GO, SIGNAL,
+## STOP, YIELD), the stop line's distance from its centre and from the
+## front bumper, the turn planned there (0 on, 1 right, -1 left, 2 U-turn)
+## and the speed to take it at.
+var _rule := 0
+var _stop_back := 0.0
+var _line_d := INF
+var _turn := 0
+var _corner_v := INF
+## Held at the line; cleared into the junction; seconds stood at the line
+## and whether a full stop was made; the all-way stop queued at; the
+## yellow's decision (1 go, -1 stop).
+var _held := false
+var _released := false
+var _stopped := 0.0
+var _full_stop := false
+var _queued := -1
+var _amber := 0
+## Waiting at a junction, or queued behind traffic that is.
+var _waiting := false
+## A siren coming; seconds stood behind something that does not move
+## off; going round it (not following it) for this long.
+var _siren := false
+var _block_time := 0.0
+var _bypass_time := 0.0
+var _ignore = null
 
 
 func _ready() -> void:
@@ -626,72 +698,446 @@ func _grip() -> float:
 	return PLAYER_GRIP if driver == Driver.PLAYER else CORNER_GRIP
 
 
+## Traffic: follows its lane junction to junction at the street's limit
+## (its driver's share of it), keeps its distance to the vehicle ahead
+## (IDM), obeys the junction's light or sign, yields to sirens and goes
+## round what blocks its lane for good.
 func _traffic_ai() -> void:
 	if _next_node < 0:
 		throttle = 0.0
 		return
+	var dt := get_physics_process_delta_time()
+	_find_traffic()
+	if Vector2i(_prev_node, _next_node) != _seg:
+		_enter_street()
+	var p := global_position
 	var target: Vector3 = city.lane_point(_prev_node, _next_node, lane)
-	var near := Vector2(target.x - global_position.x, target.z - global_position.z).length()
-	if near < TRAFFIC_SLOW_ZONE and _after_node < 0:
+	var near := Vector2(target.x - p.x, target.z - p.z).length()
+	# The turn is picked in time to slow for it (and to get in lane).
+	if near < maxf(TRAFFIC_SLOW_ZONE * 2.0, speed * speed / 6.0 + 15.0) and _after_node < 0:
 		_after_node = city.pick_turn(_prev_node, _next_node, rng, _long_haul())
+		_plan_turn()
+		target = city.lane_point(_prev_node, _next_node, lane)
 	var turn_in := false
 	if _after_node >= 0:
 		var ls: Vector3 = city.lane_start(_next_node, _after_node, lane)
-		turn_in = Vector2(ls.x - global_position.x, ls.z - global_position.z).length() < 4.0
-	if near < 5.0 or turn_in:
-		var nxt: int = _after_node if _after_node >= 0 else city.pick_turn(_prev_node, _next_node, rng, _long_haul())
-		_prev_node = _next_node
-		_next_node = nxt
-		_after_node = -1
-		# Keep to the same lane where the new street has it; now and then
-		# take another.
-		var lanes: int = city.lane_count(_prev_node, _next_node)
-		lane = mini(lane, lanes - 1)
-		if lanes > 1 and rng.randf() < 0.3:
-			lane = rng.randi() % lanes
+		turn_in = Vector2(ls.x - p.x, ls.z - p.z).length() < 4.0
+	# Held at the line, the car stays on this street however close it is.
+	if (near < 5.0 or turn_in) and not _held:
+		_advance()
+		_enter_street()
 		target = city.lane_point(_prev_node, _next_node, lane)
-	var to := target - global_position
+	var to := target - p
 	to.y = 0.0
+	near = to.length()
 	# Follow the lane line a few metres ahead rather than aiming straight at
 	# the far junction, so a car that turned wide finds its own side of a
 	# boulevard median again instead of cutting across it.
-	var a: Vector3 = city.lane_start(_prev_node, _next_node, lane) if _prev_node >= 0 else global_position
+	var a: Vector3 = city.lane_start(_prev_node, _next_node, lane) if _prev_node >= 0 else p
 	var ab := target - a
 	ab.y = 0.0
+	var u := Vector2(ab.x, ab.z) / ab.length() if ab.length() > 0.5 else Vector2(-global_basis.z.x, -global_basis.z.z).normalized()
+	var d_node := Vector2(to.x, to.z).dot(u)
+	_line_d = d_node - _stop_back - _size.z * 0.5
+	_obey(dt)
+	if _queued >= 0 and _line_d < -1.5:
+		_traffic.depart(_queued, self)
+		_queued = -1
 	var aim := target
 	if ab.length() > TRAFFIC_LOOKAHEAD:
-		var t := clampf((global_position - a).dot(ab) / ab.length_squared(), 0.0, 1.0)
+		var t := clampf((p - a).dot(ab) / ab.length_squared(), 0.0, 1.0)
 		# Far off the lane (a left turn across a boulevard), look nearer, so
 		# the car swings out to its lane before running down it rather than
 		# cutting the corner into the median's nose.
 		var lane_at := a + ab * t
-		var off := Vector2(global_position.x - lane_at.x, global_position.z - lane_at.z).length()
+		var off := Vector2(p.x - lane_at.x, p.z - lane_at.z).length()
 		var ahead := clampf(TRAFFIC_LOOKAHEAD - off, 2.0, TRAFFIC_LOOKAHEAD)
 		aim = a + ab * minf(1.0, t + ahead / ab.length())
-	aim.y = global_position.y
-	desired_dir = (aim - global_position).normalized() if aim.distance_to(global_position) > 0.5 else to.normalized()
-	throttle = minf(TRAFFIC_THROTTLE, TRAFFIC_CRUISE / max_speed)
-	if to.length() < TRAFFIC_SLOW_ZONE:
-		# Slow for the junction, so heavy, understeering models still make
-		# the turn instead of running wide (onto a boulevard median).
-		throttle = minf(throttle, TRAFFIC_TURN_SPEED / max_speed)
-	elif ab.length() > 0.5 and (-global_basis.z).angle_to(ab) > 0.4:
-		# Still coming round from the last junction: hold turn speed until
-		# lined up with the new street, or a fast model runs wide mid-turn.
-		throttle = minf(throttle, TRAFFIC_TURN_SPEED / max_speed)
-	var dt := get_physics_process_delta_time()
+	# Over to the right for a siren; out to the left round a blockage.
+	var side := 0.0
+	if _bypass_time > 0.0:
+		var w: float = _ignore._size.x if _ignore != null and is_instance_valid(_ignore) else 2.0
+		side = -((_size.x + w) * 0.5 + 0.6)
+	elif _siren:
+		side = 1.2 if lane > 0 else clampf((_lane_w - _size.x) * 0.5 - 0.1 + _lane_park, 0.0, 1.2)
+	if side != 0.0:
+		aim += Vector3(-u.y, 0.0, u.x) * side
+	aim.y = p.y
+	desired_dir = (aim - p).normalized() if aim.distance_to(p) > 0.5 else to.normalized()
 	if _reverse_time > 0.0:
 		# Ran into a wall or kerb prop (a wide model missing a corner): back
 		# off, swinging the nose toward the lane, then carry on.
 		_reverse_time -= dt
 		_since_reverse = 0.0
-		var side := signf((-global_basis.z).signed_angle_to(desired_dir, Vector3.UP))
-		desired_dir = global_basis.z.rotated(Vector3.UP, 0.6 * side)
+		var swing := signf((-global_basis.z).signed_angle_to(desired_dir, Vector3.UP))
+		desired_dir = global_basis.z.rotated(Vector3.UP, 0.6 * swing)
 		throttle = 0.7
 		return
 	_since_reverse += dt
 	_yield_time = maxf(_yield_time - dt, -2.0)
-	braking = _ahead.is_colliding() or _yield_time > 0.0
+	var v := maxf(speed, 0.0)
+	var cruise := minf(_limit * drive_factor, max_speed * 0.8)
+	var rain: bool = _traffic != null and _traffic.raining
+	if rain:
+		cruise *= 0.9
+	_scan_tick -= 1
+	if _scan_tick <= 0:
+		_scan_tick = IDM_SCAN
+		_scan_leader(Vector2(a.x, a.z), u, d_node)
+		_siren = _traffic != null and _traffic.siren_near(self)
+	elif _lead_gap < INF:
+		_lead_gap -= (v - _lead_speed) * dt
+	var gap := _lead_gap
+	var lead_v := _lead_speed
+	# The short ray still sees what the lane scan does not: a car cutting
+	# across, a person, a vehicle that is not traffic's.
+	var people := false
+	if _ahead.is_colliding():
+		var hit = _ahead.get_collider()
+		if hit != null and hit.is_in_group("vehicles"):
+			if hit != _ignore:
+				var g := _ahead.global_position.distance_to(_ahead.get_collision_point())
+				if g < gap:
+					gap = g
+					lead_v = maxf(hit.velocity.dot(-global_basis.z), 0.0)
+		elif hit != null:
+			people = true
+	# A line to stop at is a leader standing still.
+	if _held and _line_d + IDM_S0 - 0.4 < gap:
+		gap = _line_d + IDM_S0 - 0.4
+		lead_v = 0.0
+	var acc := _idm(v, cruise, gap, v - lead_v, rain)
+	var v_cmd := clampf(v + acc * dt, 0.0, maxf(cruise, v))
+	if _corner_v < INF:
+		# Down to the turn's speed by 8 m short of the junction's middle.
+		v_cmd = minf(v_cmd, sqrt(_corner_v * _corner_v + 2.0 * IDM_B * maxf(near - 8.0, 0.0)))
+	if ab.length() > 0.5 and (-global_basis.z).angle_to(ab) > 0.4:
+		# Still coming round from the last junction: hold turn speed until
+		# lined up with the new street, or a fast model runs wide mid-turn.
+		v_cmd = minf(v_cmd, TURN_SPEED)
+	if _siren:
+		v_cmd = minf(v_cmd, maxf(v - 4.0 * dt, SIREN_CRAWL))
+	if _bypass_time > 0.0:
+		_bypass_time -= dt
+		v_cmd = minf(v_cmd, 3.0)
+		if _bypass_time <= 0.0:
+			_ignore = null
+	_check_blocked(dt, v)
+	# _drive eases the pedal off by the angle still to steer; undo that, or
+	# a car coming round a bend or a U-turn slows to a stop mid-turn.
+	var off := absf((-global_basis.z).signed_angle_to(desired_dir, Vector3.UP))
+	throttle = minf(v_cmd / (max_speed * lerpf(1.0, 0.45, off / PI)), 1.0)
+	# The brake pedal: an emergency, or holding the car still once stopped.
+	braking = people or _yield_time > 0.0 or acc < -8.5 or (gap < IDM_S0 * 0.5 and v > lead_v + 0.5) \
+			or (acc <= 0.0 and v < 0.3)
+
+
+## Intelligent Driver Model: the acceleration (m/s²) at speed `v` toward
+## `v0`, `s` m behind a leader closing at `dv` m/s (INF: open road).
+func _idm(v: float, v0: float, s: float, dv: float, rain := false) -> float:
+	var a_max := clampf(accel * 0.3, IDM_ACCEL.x, IDM_ACCEL.y)
+	var free := 1.0 - pow(v / maxf(v0, 0.1), 4.0)
+	if s == INF:
+		return maxf(a_max * free, -9.0)
+	var t := IDM_T + (0.4 if rain else 0.0)
+	var want := IDM_S0 + maxf(0.0, v * t + v * dv / (2.0 * sqrt(a_max * IDM_B)))
+	return maxf(a_max * (free - pow(want / maxf(s, 0.1), 2.0)), -9.0)
+
+
+## Waiting at a junction's line, or queued behind traffic that is.
+func is_waiting() -> bool:
+	return _held or _waiting
+
+
+## Finds the junction controller (Traffic), looking again once a second
+## while there is none (a scene without Population drives with no controls).
+func _find_traffic() -> void:
+	if _traffic != null and is_instance_valid(_traffic):
+		return
+	_traffic = null
+	_traffic_retry -= 1
+	if _traffic_retry > 0:
+		return
+	_traffic_retry = 60
+	_traffic = get_tree().get_first_node_in_group("traffic")
+	if _traffic != null:
+		_seg = Vector2i(-2, -2)
+
+
+## On a new street: its limit, lane layout and the junction ahead's rule.
+func _enter_street() -> void:
+	if _queued >= 0 and _traffic != null:
+		_traffic.depart(_queued, self)
+	_queued = -1
+	_seg = Vector2i(_prev_node, _next_node)
+	_released = false
+	_held = false
+	_stopped = 0.0
+	_full_stop = false
+	_amber = 0
+	_scan_tick = 0
+	_block_time = 0.0
+	_rule = TrafficPlan.GO
+	_stop_back = 0.0
+	_limit = TRAFFIC_CRUISE
+	_lane_w = 3.6
+	_lane_park = 0.0
+	if _prev_node >= 0 and _next_node >= 0:
+		var ls: Dictionary = city.lanes_of(_prev_node, _next_node)
+		_lane_w = float(ls.get("lane_w", 3.6))
+		_lane_park = float(ls.get("park", 0.0))
+		if _traffic != null:
+			_rule = _traffic.rule(_next_node, _prev_node)
+			_stop_back = _traffic.stop_back(_next_node, _prev_node)
+			_limit = _traffic.limit(_prev_node, _next_node)
+	_plan_turn()
+
+
+## The turn at the junction ahead (on, right, left, U-turn), the speed to
+## take it at, and the lane for it: the curb lane to turn right, the inside
+## lane to turn left, where it is free.
+func _plan_turn() -> void:
+	_turn = 0
+	_corner_v = INF
+	if _prev_node < 0 or _after_node < 0:
+		return
+	var c: Vector3 = city.node_pos(_next_node)
+	var pa: Vector3 = city.node_pos(_prev_node)
+	var pb: Vector3 = city.node_pos(_after_node)
+	var din := Vector2(c.x - pa.x, c.z - pa.z).normalized()
+	var dout := Vector2(pb.x - c.x, pb.z - c.z).normalized()
+	var ang := absf(din.angle_to(dout))
+	if _after_node == _prev_node or ang > 2.4:
+		_turn = 2
+		_corner_v = TIGHT_TURN_SPEED
+	else:
+		var cr := din.cross(dout)
+		if cr > 0.45:
+			_turn = 1
+		elif cr < -0.45:
+			_turn = -1
+		# A bend in the road: about 1 g sideways round a corner of the
+		# junction's size.
+		if ang > 1.0:
+			_corner_v = TURN_SPEED
+		elif ang > 0.1:
+			_corner_v = maxf(sqrt(100.0 / ang), TURN_SPEED)
+	var lanes: int = city.lane_count(_prev_node, _next_node)
+	if lanes >= 2 and (_turn == 1 or _turn == -1) and not _long_haul():
+		var want := 0 if _turn == 1 else lanes - 1
+		if want != lane and _lane_free(want):
+			lane = want
+
+
+## On to the next street, in the same lane where it has it; now and then
+## another, when it is free.
+func _advance() -> void:
+	var nxt: int = _after_node if _after_node >= 0 else city.pick_turn(_prev_node, _next_node, rng, _long_haul())
+	_prev_node = _next_node
+	_next_node = nxt
+	_after_node = -1
+	var lanes: int = city.lane_count(_prev_node, _next_node)
+	lane = mini(lane, lanes - 1)
+	if lanes > 1 and rng.randf() < 0.3:
+		var k := rng.randi() % lanes
+		if k != lane and _lane_free(k):
+			lane = k
+
+
+## Whether lane k of this street has room beside the car to move into.
+func _lane_free(k: int) -> bool:
+	if _traffic == null or _prev_node < 0:
+		return true
+	var s: Vector3 = city.lane_start(_prev_node, _next_node, k)
+	var e: Vector3 = city.lane_point(_prev_node, _next_node, k)
+	var d := Vector2(e.x - s.x, e.z - s.z)
+	if d.length() < 0.5:
+		return true
+	var u := d.normalized()
+	var me := Vector2(global_position.x - s.x, global_position.z - s.z).dot(u)
+	for v in _traffic.vehicles:
+		if v == self or not is_instance_valid(v):
+			continue
+		var rel := Vector2(v.global_position.x - s.x, v.global_position.z - s.z)
+		var along: float = rel.dot(u) - me
+		if along > -12.0 and along < 14.0 and absf(rel.cross(u)) < 1.9:
+			return false
+	return true
+
+
+## The vehicle to follow: the nearest in this lane ahead (to just past the
+## junction), else in the lane taken on the street after it; and whether
+## that street has room to drive into.
+func _scan_leader(a2: Vector2, u: Vector2, d_node: float) -> void:
+	_lead = null
+	_lead_gap = INF
+	_lead_speed = 0.0
+	_exit_room = true
+	if _traffic == null:
+		return
+	var p2 := Vector2(global_position.x, global_position.z)
+	var me := (p2 - a2).dot(u)
+	var half := _size.z * 0.5
+	var v_me := maxf(speed, 0.0)
+	var reach := 25.0 + 4.0 * v_me
+	var thr := minf(_lane_w * 0.6, (_size.x + 1.9) * 0.5 + 0.3)
+	var u3 := Vector2.ZERO
+	var a3 := Vector2.ZERO
+	if _after_node >= 0:
+		var nl := mini(lane, city.lane_count(_next_node, _after_node) - 1)
+		var s3: Vector3 = city.lane_start(_next_node, _after_node, nl)
+		var e3: Vector3 = city.lane_point(_next_node, _after_node, nl)
+		a3 = Vector2(s3.x, s3.z)
+		u3 = Vector2(e3.x - s3.x, e3.z - s3.z).normalized()
+	for v in _traffic.vehicles:
+		if v == self or v == _ignore or not is_instance_valid(v) or not v.is_inside_tree():
+			continue
+		var q := Vector2(v.global_position.x, v.global_position.z)
+		var fwd := Vector2(-v.global_basis.z.x, -v.global_basis.z.z)
+		var vel := Vector2(v.velocity.x, v.velocity.z)
+		var rel := q - a2
+		var along := rel.dot(u) - me
+		if along > 0.0 and along < reach and along < d_node + 6.0 and absf(rel.cross(u)) < thr:
+			var ext: float = 0.5 * (absf(fwd.dot(u)) * v._size.z + absf(fwd.orthogonal().dot(u)) * v._size.x)
+			var g := along - half - ext
+			if g < _lead_gap:
+				_lead = v
+				_lead_gap = maxf(g, 0.0)
+				_lead_speed = maxf(vel.dot(u), 0.0)
+			continue
+		if u3 == Vector2.ZERO:
+			continue
+		var rel3 := q - a3
+		var al3 := rel3.dot(u3)
+		if al3 > -2.0 and al3 < 40.0 and absf(rel3.cross(u3)) < thr:
+			var ext3: float = 0.5 * (absf(fwd.dot(u3)) * v._size.z + absf(fwd.orthogonal().dot(u3)) * v._size.x)
+			var g3 := maxf(d_node, 0.0) + al3 - half - ext3
+			var v3 := maxf(vel.dot(u3), 0.0)
+			if al3 - ext3 < _size.z + 4.0 and v3 < 1.0:
+				_exit_room = false
+			if g3 < _lead_gap:
+				_lead = v
+				_lead_gap = maxf(g3, 0.0)
+				_lead_speed = v3
+	_waiting = _held or (_lead != null and _lead_gap < 15.0 and _lead.driver == Driver.TRAFFIC and _lead._waiting)
+
+
+## Stood behind something that does not move off: after a while, into
+## another lane if one is free, else round it (BLOCK_WAIT). Queues at a
+## junction are waited out.
+func _check_blocked(dt: float, v: float) -> void:
+	if _lead == null or not is_instance_valid(_lead) or _lead_gap > 8.0 or _lead_speed > 0.5 or v > 0.5 \
+			or _held or _bypass_time > 0.0:
+		_block_time = 0.0
+		return
+	var patience := BLOCK_WAIT.z
+	if _lead.wrecked or _lead.driver == Driver.NONE:
+		patience = BLOCK_WAIT.x
+	elif _lead.driver != Driver.TRAFFIC:
+		patience = BLOCK_WAIT.y
+	elif _lead._waiting:
+		_block_time = 0.0
+		return
+	_block_time += dt
+	if _block_time < patience:
+		return
+	_block_time = 0.0
+	if _prev_node >= 0:
+		var lanes: int = city.lane_count(_prev_node, _next_node)
+		for k in lanes:
+			if k != lane and _lane_free(k):
+				lane = k
+				return
+	_ignore = _lead
+	_bypass_time = (_lead._size.z + _size.z + 6.0) / 3.0
+
+
+## The junction ahead's light or sign: sets `_held` while the car must
+## stop at the line, `_released` once it may go (or has gone) in.
+func _obey(dt: float) -> void:
+	_held = false
+	if _released or _traffic == null or _prev_node < 0 or _rule == TrafficPlan.GO:
+		return
+	if _line_d < -0.5:
+		_released = true
+		return
+	var v := maxf(speed, 0.0)
+	if _line_d > maxf(40.0, v * v / 4.0 + 10.0):
+		return
+	if _line_d < 3.0 and v < 0.3:
+		_stopped += dt
+		if _stopped >= STOP_HOLD:
+			_full_stop = true
+	var n := _next_node
+	var give_up := GRIDLOCK
+	if _rule == TrafficPlan.SIGNAL:
+		var lt: int = _traffic.light(n, _prev_node)
+		if not _traffic.is_dead(n) and lt != TrafficManager.FLASH_RED:
+			give_up = RED_GIVE_UP
+		_held = _signal_hold(n, v, lt)
+	elif _rule == TrafficPlan.STOP:
+		_held = _sign_hold(n, _traffic.kind(n) == TrafficPlan.ALL_STOP)
+	elif _rule == TrafficPlan.YIELD:
+		if _line_d < maxf(12.0, v * v / 6.0 + 4.0):
+			if _traffic.gap_clear(n, self, _prev_node, _after_node, "cross") and _traffic.box_clear(n, self):
+				_released = true
+			else:
+				_held = true
+	# Stood at the line this long, a driver decides the junction is stuck
+	# and goes.
+	if _held and _stopped > give_up:
+		_held = false
+		_released = true
+
+
+## At a signal: whether to hold at the line for light `lt`.
+func _signal_hold(n: int, v: float, lt: int) -> bool:
+	if _traffic.is_dead(n):
+		return _sign_hold(n, true)
+	if lt == TrafficManager.GREEN or lt == TrafficManager.FLASH_YELLOW:
+		_amber = 0
+		# A permissive left (or U-turn) waits for a gap in the oncoming
+		# traffic; nobody drives into a junction they can't leave.
+		if (_turn == -1 or _turn == 2) and _line_d < 8.0 \
+				and not _traffic.gap_clear(n, self, _prev_node, _after_node, "left"):
+			return true
+		return _line_d < 6.0 and not _exit_room
+	if lt == TrafficManager.YELLOW:
+		# Stop if it can comfortably (3 m/s²), else carry on through.
+		if _amber == 0:
+			_amber = -1 if v < 1.0 or _line_d > v * v / 6.0 else 1
+		return _amber < 0
+	if lt == TrafficManager.FLASH_RED:
+		return _sign_hold(n, false)
+	# Red: through if it went on the yellow or can't stop even hard.
+	if (_amber > 0 and v > 2.0) or (v >= 2.0 and _line_d < v * v / 18.0):
+		return false
+	# Right on red after a full stop, when clear.
+	if _turn == 1 and _full_stop and _exit_room and _traffic.gap_clear(n, self, _prev_node, _after_node, "right") \
+			and _traffic.box_clear(n, self):
+		_released = true
+		return false
+	return true
+
+
+## At a stop sign (or a dark signal, or a flashing red): a full stop, then
+## first come first served at an all-way stop, or a gap in the cross
+## traffic at a two-way one.
+func _sign_hold(n: int, all_way: bool) -> bool:
+	if not _full_stop:
+		return true
+	if all_way:
+		if _queued != n:
+			_traffic.arrive(n, self)
+			_queued = n
+		if _exit_room and _traffic.may_go(n, self):
+			_released = true
+			return false
+		return true
+	if _exit_room and _traffic.gap_clear(n, self, _prev_node, _after_node, "cross") and _traffic.box_clear(n, self):
+		_released = true
+		return false
+	return true
 
 
 func _police_ai(delta: float) -> void:

@@ -44,6 +44,7 @@ const Skyline = preload("res://scripts/kits/skyline_kit.gd")
 const Shady = preload("res://scripts/kits/shady_kit.gd")
 const Kit = preload("res://scripts/kits/country_kit.gd")
 const StreetPlan = preload("res://scripts/street_plan.gd")
+const TrafficPlan = preload("res://scripts/traffic_plan.gd")
 
 ## Road and block slabs reach down into the water so quays have walls.
 const SLAB := 1.2
@@ -486,7 +487,32 @@ static func _street(ctx: Ctx, e: int, cls: String) -> void:
 	var wk: Dictionary = city.roadworks.get(e, {})
 	if not wk.is_empty():
 		_works(ctx, wk, cls, w, frame)
+	_controls(ctx, e, frame, [na, nb], [s0, s1])
 	mb.xform = Transform3D.IDENTITY
+
+
+## The junction controls standing on street e (TrafficPlan): the signal
+## mast arms of the junctions at its ends and the stop and yield signs of
+## its approaches.
+static func _controls(ctx: Ctx, e: int, frame: Transform3D, ends: Array, setbacks: Array) -> void:
+	var local: Array = []
+	ctx.mb.xform = frame
+	for i in 2:
+		if setbacks[i] <= 0.0:
+			continue
+		var n: int = ends[i]
+		var j: Dictionary = TrafficPlan.junction(ctx.city, n)
+		if j.kind == TrafficPlan.SIGNALS:
+			for pole in TrafficPlan.poles(ctx.city, n, j):
+				if pole.edge == e:
+					Props.traffic_light(ctx.mb, local, Vector3(pole.x, KERB, pole.z), pole.arm, pole.heads, pole.face, pole.cabinet, pole.key)
+		for sign in TrafficPlan.signs(ctx.city, n, j):
+			if sign.edge == e:
+				Props.stop_sign(ctx.mb, local, Vector3(sign.x, KERB, sign.z), sign.face, sign.kind)
+	if local.is_empty():
+		ctx.mb.xform = Transform3D.IDENTITY
+		return
+	_done(ctx, local, false, ctx.props)
 
 
 ## Dashes between the lanes each way, and a solid line along the parking
@@ -1964,8 +1990,10 @@ static func _furniture(ctx: Ctx, kind: String) -> void:
 						_put(ctx, local, clear, func(): Props.bins(ctx.mb, local, Vector3(minf(4.4, half), 0, 0.2)))
 					if rng.randf() < 0.35:
 						_put(ctx, local, clear, func(): Props.bench(ctx.mb, local, Vector3(maxf(-4.0, -half), 0, 0.4), 0.0))
-					if rng.randf() < 0.6:
-						_put(ctx, local, clear, func(): Props.traffic_light(ctx.mb, local, Vector3(-half - 1.5, 0, 0), street))
+					# (Was a lit signal pole on 6 sides in 10; junction signals
+					# stand where TrafficPlan puts them now, _controls. The
+					# draw stays so the rest of the block is laid out as before.)
+					rng.randf()
 					_modern_street(ctx, local, clear, half, true)
 				"wards":
 					# Power lines on the south-facing sides.

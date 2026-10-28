@@ -3270,12 +3270,12 @@ func test_roads_have_two_lanes_each_way() -> void:
 		pair.append(car)
 	var starts := [pair[0].global_position, pair[1].global_position]
 	var gap_min := INF
-	for f in 150:
+	for f in 270:
 		await _frames(1)
 		gap_min = minf(gap_min, absf((pair[1].global_position - pair[0].global_position).dot(right)))
 	var went := [(pair[0].global_position - starts[0]).dot(dir), (pair[1].global_position - starts[1]).dot(dir)]
 	_check(went[0] > 15.0 and went[1] > 15.0 and gap_min > 2.6,
-		"two cars abreast on %s drive on (%.0f m and %.0f m in 2.5 s), %.1f m apart at the closest" % [city.plan.edge_class(edge), went[0], went[1], gap_min])
+		"two cars abreast on %s drive on (%.0f m and %.0f m in 4.5 s), %.1f m apart at the closest" % [city.plan.edge_class(edge), went[0], went[1], gap_min])
 
 
 ## Every traffic kind, the three-wheelers and the box truck, tipper and
@@ -3329,7 +3329,7 @@ func test_traffic_drives_every_kind() -> void:
 		passed[car] = 0
 		went[car] = 0.0
 		starts[car] = car.global_position
-	for f in 1800:
+	for f in 3600:
 		var was := {}
 		for car in cars:
 			was[car] = car.global_position
@@ -3342,12 +3342,12 @@ func test_traffic_drives_every_kind() -> void:
 	# Three junctions, or a fair distance where the blocks are long (Midtown's
 	# are 120 m between avenues); a slow truck (about 8 m/s in traffic) can
 	# pass just one between two long blocks, so 180 m from where it set off
-	# counts too.
+	# counts too. A minute: lights and stop signs hold cars up (0.23).
 	for car in cars:
 		var net: float = car.global_position.distance_to(starts[car])
 		var on: bool = passed[car] >= 3 or (passed[car] >= 2 and went[car] > 200.0) or (passed[car] >= 1 and net > 180.0)
 		_check(on and not car.wrecked,
-			"traffic %s passed %d junctions, %.0f m (%.0f m from the start) in 30 s (wrecked: %s)" % [car.kind, passed[car], went[car], net, car.wrecked])
+			"traffic %s passed %d junctions, %.0f m (%.0f m from the start) in 60 s (wrecked: %s)" % [car.kind, passed[car], went[car], net, car.wrecked])
 	# At junctions offering both, an 18-wheeler's turn is always a street with
 	# 2+ lanes each way (review 2026-10-28: it was routed into 9 m quarter
 	# streets); other cars still take the narrow ones.
@@ -6620,7 +6620,8 @@ func test_road_surfaces_and_roadworks() -> void:
 ## simulated run"): at the three works nearest the start, a car in every open
 ## lane the works way, one the other way and one turning in from a side
 ## street drive for 25 s. None may wreck, burst a barrier or stand still
-## (under 0.5 m/s) for more than 12 s in all; the works-way cars all pass.
+## (under 0.5 m/s) for more than 12 s in all, not counting waits at a
+## junction's light or sign; the works-way cars all pass.
 func test_traffic_flows_past_roadworks() -> void:
 	await _new_game(false)
 	var city = game.city
@@ -6689,7 +6690,9 @@ func test_traffic_flows_past_roadworks() -> void:
 			await _frames(1)
 			for i in cars.size():
 				var car = cars[i]
-				if car.velocity.length() < 0.5:
+				# Waiting its turn at a light or a stop sign (or queued behind
+				# cars that are) is not being stuck at the works.
+				if car.velocity.length() < 0.5 and not (car.is_waiting() and car.global_position.distance_to(city.node_pos(car._next_node)) < 80.0):
 					still[car] += 1
 				if starts[i][3] and ((car.global_position - pa).dot(dir) - xb) * sd > 6.0:
 					went[car] = true
