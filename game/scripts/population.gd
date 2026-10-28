@@ -116,7 +116,8 @@ func _update_parked(center: Vector3) -> void:
 			_parked.erase(idx)
 	var spots: Array = game.city.parked_spots
 	for idx in range(1, spots.size()):
-		if _parked.has(idx):
+		# A country home's spot is closed while its tile is not loaded.
+		if _parked.has(idx) or (spots[idx].size() > 2 and not spots[idx][2]):
 			continue
 		var d: float = spots[idx][0].distance_to(center)
 		if d < PARK_SPAWN and (_first_pass or not _in_view(spots[idx][0])) and not _occupied(spots[idx][0]):

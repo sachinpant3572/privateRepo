@@ -32,6 +32,8 @@ const BARRICADE_IN := 8.0
 const BARRICADE_CUT := 14.0
 
 var tile_size := 100.0
+## Home car spot key ("lot:k") -> its index in the city's parked_spots.
+var _park_slot := {}
 ## [{id, w, speed}] by class index.
 var classes: Array = []
 var zones := PackedStringArray()
@@ -496,13 +498,39 @@ func _add_tile(key: Vector2i, built: Dictionary) -> void:
 				shape.set_meta("brk", c[3])
 			body.add_child(shape)
 	root.set_meta("buildings", built.buildings)
+	root.set_meta("parks", _open_parks(built.get("parks", [])))
 	add_child(root)
 	_loaded[key] = root
+
+
+## Opens a tile's home car spots in the city's parked_spots,
+## where the traffic layer parks cars that can drive off. Each spot keeps its
+## index for good, so a car parked there stays matched to it; a closed spot
+## (its tile unloaded) gets no new car. Returns the spots' indices.
+func _open_parks(parks: Array) -> Array:
+	var city = get_parent()
+	if city == null or not "parked_spots" in city:
+		return []
+	var idx: Array = []
+	for pk in parks:
+		var at: int = _park_slot.get(pk[0], -1)
+		if at < 0:
+			at = city.parked_spots.size()
+			_park_slot[pk[0]] = at
+			city.parked_spots.append([pk[1], pk[2], true])
+		else:
+			city.parked_spots[at][2] = true
+		idx.append(at)
+	return idx
 
 
 func _unload(key: Vector2i) -> void:
 	var root: Node3D = _loaded[key]
 	_loaded.erase(key)
+	var city = get_parent()
+	if city != null and "parked_spots" in city:
+		for at: int in root.get_meta("parks", []):
+			city.parked_spots[at][2] = false
 	root.queue_free()
 
 

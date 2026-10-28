@@ -31,10 +31,14 @@ TIER_RANGE = {
     "garden_apartments": (1, 2), "rowhouse_row": (1, 3), "house": (1, 4), "cape_house": (2, 3),
     "farmhouse_small": (1, 2), "farmhouse": (2, 3), "ranch_house": (2, 3), "adobe_farmhouse": (2, 3),
     "farmhouse_big": (3, 4), "condo_tower": (3, 4), "mansion": (4, 5),
+    # Bellerive expand (BX-5).
+    "cheap_block": (0, 1), "bungalow_barred": (0, 1), "midrise_condo": (3, 4), "res_tower": (4, 5),
+    "exec_house": (4, 5),
 }
 # Households a lot holds, for land per household.
-UNITS = {"garden_apartments": 12, "rowhouse_row": 4, "condo_tower": 36}
-TOWERS = ("condo_tower",)
+UNITS = {"garden_apartments": 12, "rowhouse_row": 4, "condo_tower": 36, "cheap_block": 16, "midrise_condo": 20,
+         "res_tower": 60}
+TOWERS = ("condo_tower", "midrise_condo", "res_tower")
 
 # Pluses and minuses (value, reach in metres; linear to 0 at the reach).
 COAST = (0.18, 400.0)

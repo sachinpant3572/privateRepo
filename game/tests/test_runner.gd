@@ -76,7 +76,7 @@ func _run() -> void:
 		"test_country_kit_builds_every_kind",
 		"test_country_plots_square_to_their_roads", "test_estates_and_clusters", "test_grounds_kit_builds_every_part",
 		"test_bellerive_hills", "test_golden_flats_farmland", "test_every_home_has_a_way_in", "test_homes_by_wealth",
-		"test_new_home_kinds_and_live_cars",
+		"test_new_home_kinds_and_live_cars", "test_people_walk_the_suburbs", "test_suburb_home_cars_are_live",
 	]
 	# ONLY=name1,name2 runs just those (handy while working on one test).
 	var only := OS.get_environment("ONLY")
@@ -3538,6 +3538,45 @@ func test_people_walk_the_suburbs() -> void:
 		if p.global_position.distance_to(at) < 120.0:
 			road = minf(road, c.road_distance(Vector2(p.global_position.x, p.global_position.z), 40.0))
 	_check(road > 0.5, "no one walks in the road (closest %.1f m from the asphalt's middle-line)" % road)
+
+
+## The suburbs' home cars are live (BX-2): an east side tile opens its
+## homes' car spots in the city's parked_spots, real cars park there, and
+## the spots close when the tile unloads.
+func test_suburb_home_cars_are_live() -> void:
+	await _new_game(true)
+	var city = game.city
+	var c = city.country
+	var first: int = city.parked_spots.size()
+	var at := Vector3.INF
+	for w in c.walks:
+		if w[0].x > 1700.0 and w[0].z > 200.0 and w[0].z < 900.0:
+			at = w[0]
+			break
+	_check(at != Vector3.INF, "an east side loop to stand on")
+	if at == Vector3.INF:
+		return
+	_place_player_at(at)
+	game.population.refill()
+	await _frames(400)
+	var spots: Array = city.parked_spots.slice(first)
+	_check(spots.size() >= 10 and spots.all(func(s): return s.size() == 3), "east side homes open car spots, got %d" % spots.size())
+	var parked := 0
+	for idx in game.population._parked:
+		if idx >= first and is_instance_valid(game.population._parked[idx]):
+			var car = game.population._parked[idx]
+			if car.global_position.distance_to(city.parked_spots[idx][0]) < 1.5:
+				parked += 1
+	_check(parked >= 3, "live cars park at the homes, got %d" % parked)
+	var keys: Array = c.loaded_tiles()
+	_place_player_at(city.spawn_point)
+	await _frames(240)
+	var open := 0
+	for idx in range(first, city.parked_spots.size()):
+		var p: Vector3 = city.parked_spots[idx][0]
+		if city.parked_spots[idx][2] and keys.has(c.tile_key(p)) and not c.loaded_tiles().has(c.tile_key(p)):
+			open += 1
+	_check(open == 0, "spots close with their tiles (%d left open)" % open)
 
 
 ## Banks, the coast and the play area's fence are walls: a car driven at

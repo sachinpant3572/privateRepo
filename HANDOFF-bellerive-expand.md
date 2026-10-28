@@ -34,6 +34,8 @@ garden_apartments 7, diner 6, gas_station 3, civic 9.
   `Kit.live_cars` on, the kit records each drive car as a `{"park", "yaw", "tier"}` entry in `out`
   instead of a static mesh; country_tiles turns them into world spots and appends them to
   `city.parked_spots` (stable indices, one set per lot), so population fills them like city spots.
+  As built: zones in country_tiles LIVE_CAR_ZONES; a spot is [pos, yaw, open]; country.gd opens a
+  tile's spots on load and closes them on unload, and population skips closed spots.
 - **BX-3 Suburb places.** Diner, general store, shopfront and strip-mall lots inside the outline
   get place records (diner, corner_store), with the door at the kit building's door. Interiors,
   maps and the phone already iterate `city.places`.
@@ -49,6 +51,18 @@ garden_apartments 7, diner 6, gas_station 3, civic 9.
   side; lots sized by tier inside the house kind (T3-T4 wider). City-side placement (Midtown and
   Gilt towers, cheap blocks in the Wards) is left for later: it changes city_cells, and the
   suburbs are what this request is about.
+- **BX-5 as built (upgrade_lots in tools/build_country.py, before lot_reach).** By land value
+  (wealth.value): the 30 poorest east side house pairs (neighbours on one frontage, 17 m pitch)
+  merge into one lot each, 24 `cheap_block` and every 5th a `liquor_store`; the 35 poorest single
+  east side lots become 20 `bungalow_barred`, 5 `pawn_shop`, 5 `check_cashing`, 5 `burned_lot`;
+  the 12 richest pairs on the east side and 12 in the Heights flats `exec_house`; the dearer half
+  of Brisa Beach's condo towers `res_tower` (7); the best third of the shore/east/fringe garden
+  apartments `midrise_condo` (9) and the worst 4 `cheap_block`; the cheaper third of the hill
+  mansions off estates `exec_house` (5). A refitted lot stays within 0.75-1.27 of its kind's size,
+  keeps its front line and never grows, so no new overlaps (self-check: 0). Each straight-on
+  estate (12 of 19) gets a `gatehouse` lot inside its gate, the drive and tree rows starting
+  behind it. Result: 2054 lots, wealth ladder 0 problems, T0-T5 74/285/707/393/137/19.
+  Not done: "lots sized by tier inside the house kind" (exec houses carry the wide lots instead).
 - **BX-6 Bayou town bars.** 40 of 121 bayou-town lots were bars (the style asks for about 1 in 9).
   Cause: dwellings there go in 48-64 m clusters; a failed cluster moves on 4 m and redraws, and a
   16 m bar fits where a cluster can't, so bars filled the gaps. Fix: in cluster styles a shop or
@@ -71,3 +85,5 @@ of a suburb street with people and parked cars, a place door, and the new kinds;
 - Regenerate: `python3 tools/build_country.py <plan dump>`; plan dump:
   `godot --headless -s res://tests/plan_dump.gd -- out.json`.
 - Lot coordinates in country.json are local (state minus origin [6150, 6650]).
+- test_people_walk_the_suburbs was written for BX-1 but left out of the runner's list, so it
+  never ran until BX-2 added it. A new test must go into `var tests := [` in test_runner.gd.

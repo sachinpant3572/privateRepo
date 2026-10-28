@@ -35,6 +35,14 @@ const VIEWS := [
 	["c22_cypress_bend", -2620.0, 980.0, 120.0, 12.5],
 	["c23_farmyard", -1870.0, -1300.0, 130.0, 12.5],
 	["c24_fields", -1250.0, -2000.0, 170.0, 12.5],
+	# The expanded suburbs (BX-5): the east side's cheap blocks, liquor
+	# store and burned lot, the Heights' exec houses and an estate
+	# gatehouse, Brisa's residential towers and the shore's midrise condos.
+	["c25_eastside_blocks", 1870.0, -200.0, 90.0, 12.5],
+	["c26_exec_houses", -185.0, 256.0, 90.0, 12.5],
+	["c27_gatehouse", -450.0, 455.0, 70.0, 12.5],
+	["c28_res_towers", 1650.0, 1718.0, 110.0, 12.5],
+	["c29_midrise_condos", -131.0, 1930.0, 90.0, 12.5],
 ]
 
 var out_dir := "user://"

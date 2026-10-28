@@ -15,6 +15,9 @@ const Kit = preload("res://scripts/kits/country_kit.gd")
 const Grounds = preload("res://scripts/kits/grounds_kit.gd")
 const Terrain = preload("res://scripts/terrain.gd")
 
+## Zones whose home cars are live parked cars (Kit.live_cars) rather than
+## static models: Bellerive's suburbs (HANDOFF-bellerive-expand.md BX-2).
+const LIVE_CAR_ZONES := ["heights", "eastside", "fringe", "shore", "beach_town", "bayou_town"]
 const GROUND_Y := -0.04
 ## On the hills the ground sits this much lower still, so a road (straight
 ## between its nodes) never dips under a crest of the ground it lies on.
@@ -111,6 +114,8 @@ class Ctx:
 	var out: Array = []
 	var props: Array = []
 	var buildings := 0
+	## Live parking spots of the suburbs' home cars: [key "lot:k", position, yaw].
+	var parks: Array = []
 	var rng := RandomNumberGenerator.new()
 	## Ground triangles of this tile: [a, b, c (Vector2), zone name].
 	var tris: Array = []
@@ -170,7 +175,8 @@ static func build(country, key: Vector2i) -> Dictionary:
 		_trees(ctx)
 		if ctx.hill:
 			_drape(ctx)
-	return {"mesh": ctx.mb, "glow": ctx.glow, "colliders": ctx.out, "props": ctx.props, "buildings": ctx.buildings}
+	return {"mesh": ctx.mb, "glow": ctx.glow, "colliders": ctx.out, "props": ctx.props, "buildings": ctx.buildings,
+			"parks": ctx.parks}
 
 
 # --- Helpers ------------------------------------------------------------------------
@@ -666,8 +672,22 @@ static func _lot(ctx: Ctx, i: int) -> void:
 	Kit.wealth = int(l[10]) if l.size() > 10 else -1
 	Kit.route_step = 1.0 if ctx.hill else 0.0
 	Kit.route_out_verts.clear()
+	Kit.live_cars = str(l[7]) in LIVE_CAR_ZONES
 	Kit.build(kind, ctx.mb, local, Vector2(l[3], l[4]), rng, l.size() > 8 and int(l[8]) >= 0 and c.plot_types[int(c.plots[int(l[8])][5])] == "estate")
+	Kit.live_cars = false
 	Kit.route_step = 0.0
+	# Home cars to park live (Kit.live_cars), on the lot's pad on the hills.
+	var cols: Array = []
+	var y := Terrain.height(float(l[0]), float(l[1])) if ctx.hill else 0.0
+	var k := 0
+	for e in local:
+		if e is Dictionary:
+			var p: Vector3 = ctx.mb.xform * e.park
+			ctx.parks.append(["%d:%d" % [i, k], Vector3(p.x, y, p.z), float(l[2]) + e.yaw])
+			k += 1
+		else:
+			cols.append(e)
+	local = cols
 	_done(ctx, local, ctx.out)
 	ctx.buildings += 1
 	# The letters stand on the slope as it is; everything else on its pad.

@@ -79,6 +79,12 @@ LOT = {
     "farmhouse_big": (26, 20), "farmhouse_small": (14, 12), "ranch_house": (22, 14),
     "adobe_farmhouse": (18, 15),
     "observatory": OBSERVATORY_SIZE, "hill_letters": LETTERS_SIZE, "radio_mast": MAST_SIZE,
+    # Bellerive expand (HANDOFF-bellerive-expand.md BX-5): kits/homes_kit.gd
+    # builds the homes and the gatehouse, kits/shady_kit.gd the rest. Only
+    # upgrade_lots places them, on lots it resizes from these.
+    "res_tower": (34, 34), "midrise_condo": (30, 22), "cheap_block": (34, 18), "exec_house": (24, 22),
+    "gatehouse": (10, 8), "bungalow_barred": (12, 22), "burned_lot": (20, 20), "liquor_store": (22, 20),
+    "pawn_shop": (14, 18), "check_cashing": (16, 16),
 }
 KINDS = list(LOT)
 
@@ -132,6 +138,11 @@ CLUSTER_LOT = {"house": (11, 12), "stilt_house": (10, 10), "shack": (8, 9)}
 # Estate house lot (the mansion kit draws house, forecourt and pool in it).
 ESTATE_HOUSE = 40.0
 TENNIS_BACK = 21.0      # depth behind an estate house for a tennis court across the plot
+# A straight-on estate's gatehouse lot (kits/homes_kit.gd): its front this far
+# inside the wall, its centre this far right of the drive's axis so the
+# kit's lane (the lot's left half) carries the drive. The drive starts behind it.
+GATE_IN = 1.0
+GATE_LANE = 1.5
 # Field cells: 44 m wide on a 50 m pitch (the gaps are the field edges).
 FIELD_CELL = 44.0
 # Golden Flats farmsteads stand at least this far apart (m).
@@ -148,6 +159,15 @@ CLUSTER_HOMES = {"village": ["house", "house", "shack"], "bayou_village": ["stil
 # the frontage redraws every 4 m, so without it bars filled the gaps: 40 of
 # the bayou town's 121 lots (HANDOFF-bellerive-expand BX-6).
 CLUSTER_SHOP_GAP = 220.0
+# Bellerive's suburbs to city grade (upgrade_lots, HANDOFF-bellerive-expand.md
+# BX-5): house pairs merged by land value, poorest first (every 5th a liquor
+# store) and richest last; the poorest single east side lots in this order.
+UP_CHEAP_PAIRS = 30
+UP_EXEC_PAIRS = {"eastside": 12, "heights": 12}
+UP_SINGLES = ["bungalow_barred", "pawn_shop", "bungalow_barred", "burned_lot", "bungalow_barred",
+              "check_cashing", "bungalow_barred"]
+UP_SINGLE_COUNT = 35
+UP_FIT = (0.75, 1.27)  # a refitted lot stays within these of its kind's size
 
 # Suburb zones round the street plan (local metres) and what they hold.
 SUBURB_STYLE = {
@@ -1988,6 +2008,9 @@ class Country:
         k = self.add_plot(c, yaw, W, D, "estate", parts)
         h = frame_point(c, yaw, house[0], house[1])
         self.try_lot(h[0], h[1], yaw + turn, "mansion", ident, zone, (house[2], house[2]), plot=k)
+        if turn == 0.0:
+            g = frame_point(c, yaw, GATE_LANE, -D * 0.5 + GATE_IN + LOT["gatehouse"][1] * 0.5)
+            self.try_lot(g[0], g[1], yaw, "gatehouse", "", zone, plot=k)
         self._drive_to_road(frame_point(c, yaw, gate[0], gate[1]), n, gate[1] + D * 0.5 + 3.5)
         return True
 
@@ -2917,6 +2940,7 @@ class Country:
         self.farm_fields()
         self.ground_zones()
         self.mountain_terrain()
+        self.upgrade_lots()
         self.lot_reach()
         self.wealth = wealth.Wealth(self)
         self.wealth.assign()
@@ -2965,6 +2989,96 @@ class Country:
                 self.walks.append(pts)
         print("walks: %d loops, %d points, %d rings dropped (mostly roads without sidewalks)"
               % (len(self.walks), sum(len(w) // 2 for w in self.walks), dropped))
+
+    def upgrade_lots(self):
+        """Bellerive's suburbs to city grade (HANDOFF-bellerive-expand.md
+        BX-5), by land value: the poorest east side house pairs become
+        walk-ups and liquor stores, its poorest single lots barred
+        bungalows, pawn shops, check cashers and burned-out lots; the
+        richest pairs on the east side and the Heights flats executive
+        houses; the dearer half of Brisa Beach's condo towers residential
+        towers; the best third of the garden apartments mid-rise condos
+        and the worst four walk-ups; the cheaper third of the hill
+        mansions executive houses. A refitted lot keeps its front line and
+        never grows, so it stays clear of its neighbours. Runs before
+        lot_reach; nothing before it holds lot indices."""
+        w = wealth.Wealth(self)
+        vals = {}
+
+        def value(l):
+            if id(l) not in vals:
+                vals[id(l)] = w.value(l)
+            return vals[id(l)]
+
+        def put(l, kind, c, lw, ld):
+            nw, nd = LOT[kind]
+            w2, d2 = min(lw, nw * UP_FIT[1]), min(ld, nd * UP_FIT[1])
+            if w2 < nw * UP_FIT[0] - 0.01 or d2 < nd * UP_FIT[0] - 0.01:
+                return False
+            c = frame_point(c, l["yaw"], 0.0, (d2 - ld) * 0.5)
+            l.update(x=c[0], y=c[1], w=round(w2, 2), d=round(d2, 2), kind=kind)
+            return True
+
+        def pairs(zone):
+            """Side by side house lots along a frontage, paired from each row's first."""
+            homes = [l for l in self.lots if l["kind"] == "house" and l["zone"] == zone and l["plot"] < 0]
+            right = {}
+            for a in homes:
+                cs, sn = math.cos(a["yaw"]), math.sin(a["yaw"])
+                for b in homes:
+                    if b is a or b["d"] != a["d"] or abs((b["yaw"] - a["yaw"] + math.pi) % math.tau - math.pi) > 0.02:
+                        continue
+                    ox, oy = b["x"] - a["x"], b["y"] - a["y"]
+                    lx = ox * cs - oy * sn
+                    if a["w"] < lx < a["w"] + 5.0 and abs(ox * sn + oy * cs) < 1.0:
+                        right[id(a)] = b
+            lefts = {id(b) for b in right.values()}
+            out = []
+            for a in homes:
+                if id(a) in lefts:
+                    continue
+                while a is not None and id(a) in right:
+                    b = right[id(a)]
+                    out.append((a, b))
+                    a = right.get(id(b))
+            return sorted(out, key=lambda p: value(p[0]) + value(p[1]))
+
+        drop = set()
+        made = collections.Counter()
+
+        def merge(a, b, kind):
+            mid = ((a["x"] + b["x"]) * 0.5, (a["y"] + b["y"]) * 0.5)
+            if put(a, kind, mid, dist((a["x"], a["y"]), (b["x"], b["y"])) + a["w"], a["d"]):
+                drop.add(id(b))
+                made[kind] += 1
+
+        ps = pairs("eastside")
+        for i, (a, b) in enumerate(ps[:UP_CHEAP_PAIRS]):
+            merge(a, b, "liquor_store" if i % 5 == 4 else "cheap_block")
+        for zone, n in UP_EXEC_PAIRS.items():
+            for a, b in (ps if zone == "eastside" else pairs(zone))[-n:]:
+                merge(a, b, "exec_house")
+        singles = sorted((l for l in self.lots if l["kind"] == "house" and l["zone"] == "eastside" and l["plot"] < 0
+                          and id(l) not in drop), key=value)
+        for i, l in enumerate(singles[:UP_SINGLE_COUNT]):
+            kind = UP_SINGLES[i % len(UP_SINGLES)]
+            made[kind] += put(l, kind, (l["x"], l["y"]), l["w"], l["d"])
+
+        def swap(ls, kind):
+            for l in ls:
+                made[kind] += put(l, kind, (l["x"], l["y"]), l["w"], l["d"])
+
+        towers = sorted((l for l in self.lots if l["kind"] == "condo_tower" and l["zone"] == "beach_town"), key=value)
+        swap(towers[len(towers) // 2:], "res_tower")
+        gardens = sorted((l for l in self.lots if l["kind"] == "garden_apartments"
+                          and l["zone"] in ("shore", "eastside", "fringe")), key=value)
+        swap(gardens[len(gardens) - len(gardens) // 3:], "midrise_condo")
+        swap(gardens[:4], "cheap_block")
+        hills = sorted((l for l in self.lots if l["kind"] == "mansion" and l["zone"] == "mountain" and l["plot"] < 0),
+                       key=value)
+        swap(hills[:len(hills) // 3], "exec_house")
+        self.lots = [l for l in self.lots if id(l) not in drop]
+        print("upgrade_lots:", dict(sorted(made.items())), "merged away", len(drop))
 
     def lot_reach(self):
         """Each lot's `reach`: metres from its front edge (at x = -w/2, 0,
@@ -3307,9 +3421,12 @@ def estate_layout(W, D, turn, style, rng, grand=False):
             front = min(front, D - m - hs - TENNIS_BACK)
         zf = z0 + front
         parts += _boundary(bound, W, D, 0.0)
-        parts.append(part("drive", 0.0, (z0 + zf) * 0.5, 6.0, front))
-        for s in (-1.0, 1.0):
-            parts.append(seg_part("trees", (s * 6.5, z0 + 5.0), (s * 6.5, zf - 3.0), 9.0, tree))
+        # The gatehouse (estate_at) holds the first metres of the drive.
+        zg = z0 + GATE_IN + LOT["gatehouse"][1]
+        parts.append(part("drive", 0.0, (zg + zf) * 0.5, 6.0, zf - zg))
+        if zf - 3.0 > zg + 6.0:
+            for s in (-1.0, 1.0):
+                parts.append(seg_part("trees", (s * 6.5, zg + 2.0), (s * 6.5, zf - 3.0), 9.0, tree))
         pw, pd = W * 0.5 - 10.0 - m, front - m - 4.0
         if pw >= 10.0 and pd >= 8.0:
             for s in (-1.0, 1.0):
