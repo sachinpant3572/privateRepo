@@ -64,6 +64,7 @@ func _run() -> void:
 		"test_driving_layouts",
 		"test_touch_driving_layouts",
 		"test_scripted_car_gets_unstuck", "test_heavy_vehicle_pushes_harder", "test_spawns_need_room", "test_overlap_resolves", "test_heavy_pushes_parked", "test_pinned_car_holds_still", "test_xray_only_when_hidden", "test_cab_stop_skips_parked_car",
+		"test_vehicle_classes_cover_every_kind", "test_suspension_bounces_and_settles", "test_side_hit_spins_and_dents", "test_hard_crash_throws_panel", "test_crash_throws_rider", "test_car_fire_then_explodes",
 		"test_vehicle_handling_differs",
 		"test_traffic_drives_every_kind",
 		"test_vehicle_models_in_budget_and_grounded", "test_three_wheelers_and_big_trucks",
@@ -7007,3 +7008,192 @@ func test_cab_stop_skips_parked_car() -> void:
 	var second: Array = taxi._curb_stop(curb.a, curb.b, curb.at)
 	_check(second[0].distance_to(first[0]) > 4.0, "the stop moves off the parked car, %.1f m" % second[0].distance_to(first[0]))
 	_check(Vehicle.room_for(get_tree(), second[0], second[1], VehicleKit.size_of("taxi"), 0.2), "and is clear of every car")
+
+
+# --- 0.23 vehicle classes: suspension, crash damage, fire --------------------
+
+## Every kind has a class, every class row has every field, and the water
+## and air classes are reserved for later.
+func test_vehicle_classes_cover_every_kind() -> void:
+	var Classes = preload("res://scripts/kits/vehicle_classes.gd")
+	var missing := []
+	for kind in VehicleKit.KINDS:
+		if not Classes.OF_KIND.has(kind):
+			missing.append(kind)
+	_check(missing.is_empty(), "every vehicle kind has a class (missing: %s)" % [missing])
+	var fields := ["hz", "zeta", "roll_max", "pitch_max", "crumple", "dent_cap", "damage", "throw", "kick"]
+	var short := []
+	for c in Classes.CLASSES:
+		for f in fields:
+			if not Classes.CLASSES[c].has(f):
+				short.append("%s.%s" % [c, f])
+	_check(short.is_empty(), "every class row has all %d fields (missing: %s)" % [fields.size(), short])
+	_check(["boat", "ship", "plane", "heli", "airship"].all(func(c): return Classes.CLASSES.has(c)), "boats, ships, planes, helis and airships have reserved rows")
+	_check(Classes.class_of("compact") == "hatchback" and Classes.class_of("semi") == "truck" and Classes.class_of("luxury") == "performance" and Classes.class_of("scooter") == "two_wheeler" and Classes.class_of("van") == "muv",
+		"kinds map to Sachin's groups (compact hatchback, semi truck, luxury performance, scooter two-wheeler, van MUV)")
+
+
+## A blow to the front dips the nose on the springs; it swings back past
+## level and settles, and the parked car then stops simulating. A light
+## hatchback bounces further than a stiff box truck.
+func test_suspension_bounces_and_settles() -> void:
+	await _free_game()
+	var cars := {}
+	for kind in ["compact", "box_truck"]:
+		var car = _track_car(kind, Vector3(60.0 if kind == "box_truck" else 0.0, 0, 0), 0.0)
+		cars[kind] = car
+	await _frames(2)
+	var low := {}
+	var high := {}
+	for kind in cars:
+		var car = cars[kind]
+		car._jolt(car.global_position + Vector3(0, 0.6, -car._size.z * 0.5), Vector3(0, 0, 6.0)) # shoved back
+		low[kind] = 0.0
+		high[kind] = 0.0
+	var settled_at := -1
+	for f in 240:
+		await _frames(1)
+		for kind in cars:
+			low[kind] = minf(low[kind], cars[kind]._tilt.y)
+			if low[kind] < -0.01:
+				high[kind] = maxf(high[kind], cars[kind]._tilt.y)
+		if settled_at < 0 and cars.compact._settled():
+			settled_at = f
+	_check(low.compact < -0.03, "the hatchback's nose dips on the blow (%.3f rad)" % low.compact)
+	_check(high.compact > 0.002, "and swings back past level on its springs (%.3f rad)" % high.compact)
+	_check(absf(low.box_truck) < absf(low.compact) * 0.6, "the box truck dips less (%.3f vs %.3f)" % [low.box_truck, low.compact])
+	_check(settled_at > 0 and settled_at < 240, "the body settles within 4 s (%.1f s)" % (settled_at / 60.0))
+	var at: Vector3 = cars.compact.global_position
+	await _frames(10)
+	_check(cars.compact._settled() and cars.compact.global_position == at, "settled and parked, it stays put")
+	for kind in cars:
+		cars[kind].queue_free()
+
+
+## A car hit side-on near its tail spins and both are dented where they met,
+## no deeper than the class allows; a car rear-ended in line hardly turns.
+func test_side_hit_spins_and_dents() -> void:
+	await _free_game()
+	var target = _track_car("sedan", Vector3(0, 0, 0), 0.0)
+	var hitter = _track_car("sedan", Vector3(8.0, 0, 1.4), PI / 2.0)
+	hitter.speed = 12.0
+	hitter.velocity = Vector3(-12.0, 0, 0)
+	var line = _track_car("sedan", Vector3(80.0, 0, 0), 0.0)
+	var rammer = _track_car("sedan", Vector3(80.0, 0, 9.0), 0.0)
+	rammer.speed = 12.0
+	rammer.velocity = Vector3(0, 0, -12.0)
+	var cached: Mesh = target._model.mesh
+	for f in 120:
+		await _frames(1)
+	_check(absf(target.rotation.y) > 0.3, "the side-hit car spins (%.2f rad)" % target.rotation.y)
+	_check(absf(line.rotation.y) < 0.05, "the rear-ended car hardly turns (%.3f rad)" % line.rotation.y)
+	_check(target._model.mesh != cached and not target._dent_arrays.is_empty(), "the hit car has its own dented mesh")
+	for car in [target, hitter]:
+		var verts: PackedVector3Array = car._dent_arrays[0][Mesh.ARRAY_VERTEX] if not car._dent_arrays.is_empty() else PackedVector3Array()
+		var deepest := 0.0
+		var deepest_at := Vector3.ZERO
+		for i in verts.size():
+			var d: float = verts[i].distance_to(car._dent_orig[0][i])
+			if d > deepest:
+				deepest = d
+				deepest_at = car._dent_orig[0][i]
+		var side := "right rear" if car == target else "front"
+		var where_ok: bool = (deepest_at.x > 0.3 and deepest_at.z > 0.3) if car == target else deepest_at.z < -1.0
+		_check(deepest > 0.08 and deepest <= car._cls.dent_cap + 0.001 and where_ok, "the %s of the %s car is dented %.2f m (cap %.2f) at %s" % [side, "hit" if car == target else "hitting", deepest, car._cls.dent_cap, deepest_at])
+	var other = _track_car("sedan", Vector3(160.0, 0, 0), 0.0)
+	await _frames(1)
+	_check(other._model.mesh == cached, "an undamaged car of the same paint still shares the cached mesh")
+	var t0 := Time.get_ticks_usec()
+	target._dent_at = -1.0
+	target._crumple(target.global_position + Vector3(-1.0, 0.6, -1.5), Vector3(1, 0, 0), 10.0)
+	var ms := (Time.get_ticks_usec() - t0) / 1000.0
+	_check(ms < 40.0, "one dent costs %.1f ms (%d body vertices)" % [ms, target._dent_orig[0].size()])
+	for car in [target, hitter, line, rammer, other]:
+		car.queue_free()
+
+
+## A hard crash tears a body panel off; it lands and lies on the road.
+func test_hard_crash_throws_panel() -> void:
+	await _free_game()
+	var wall = _track_car("semi", Vector3(0, 0, -12.0), PI / 2.0)
+	var car = _track_car("compact", Vector3(0, 0, 0), 0.0)
+	car.speed = 20.0
+	car.velocity = Vector3(0, 0, -20.0)
+	var CarDebris = preload("res://scripts/car_debris.gd")
+	var pieces := []
+	for f in 150:
+		await _frames(1)
+		for n in get_children():
+			if n.get_script() == CarDebris and not pieces.has(n):
+				pieces.append(n)
+	_check(pieces.size() >= 1, "a 72 km/h crash throws %d panel(s) off" % pieces.size())
+	if not pieces.is_empty():
+		var p = pieces[0]
+		_check(p._resting and absf(p.global_position.y - Terrain.height(p.global_position.x, p.global_position.z)) < 0.1, "the panel comes to rest on the ground")
+	for n in pieces:
+		n.queue_free()
+	car.queue_free()
+	wall.queue_free()
+
+
+## Riding a motorbike into a truck throws the player off; a gentle bump does not.
+func test_crash_throws_rider() -> void:
+	await _new_game(false)
+	var node := _home()
+	var truck = Vehicle.new()
+	truck.kind = "box_truck"
+	truck.city = game.city
+	truck.position = game.city.node_pos(node) + Vector3(0, 0, -10.0)
+	truck.rotation.y = PI / 2.0
+	game.add_child(truck)
+	var bike = Vehicle.new()
+	bike.kind = "motorbike"
+	bike.city = game.city
+	bike.position = game.city.node_pos(node) + Vector3(0, 0, 2.0)
+	game.add_child(bike)
+	await _frames(1)
+	var p = game.player
+	p.enter_vehicle(bike)
+	bike.bump(Vector3(0, 0, 2.0), bike.global_position + Vector3(0, 0.6, 1.0))
+	await _frames(2)
+	_check(p.vehicle == bike, "a gentle bump leaves the rider on")
+	bike.speed = 14.0
+	bike.velocity = Vector3(0, 0, -14.0)
+	for f in 90:
+		await _frames(1)
+		if p.vehicle == null:
+			break
+	_check(p.vehicle == null and p.health < p.max_health, "a 50 km/h crash into a truck throws the rider off, hurt (health %.0f)" % p.health)
+	bike.queue_free()
+	truck.queue_free()
+
+
+## Below 15% health a car burns, the fire eats the rest and it explodes:
+## people near it are knocked down and hurt, a car beside it is shoved.
+func test_car_fire_then_explodes() -> void:
+	await _new_game(false)
+	var node := _home()
+	var car = _spawn_car(node, Vector3(0, 0, 0), 0.0)
+	var near = _spawn_car(node, Vector3(4.0, 0, 0), 0.0)
+	await _frames(1)
+	car._damage(car.max_health * 0.8, true)
+	_check(car._fire == null, "a car at 20% does not burn yet")
+	car._damage(car.max_health * 0.1, true)
+	_check(car._fire != null and not car.wrecked, "below 15% it catches fire")
+	_place_player_at(car.global_position + Vector3(-3.0, 0, 0))
+	var p = game.player
+	var hp: float = p.health
+	var near_at: Vector3 = near.global_position
+	var burned := 0
+	for f in 600:
+		await _frames(1)
+		if car.wrecked:
+			break
+		burned += 1
+	await _frames(2)
+	_check(car.wrecked and car._fire.exploded, "the fire wrecks it and it explodes (%.1f s)" % (burned / 60.0))
+	_check(burned > 60 * 2 and burned < 60 * 8, "burning takes a few seconds, under BURN_TIME (%.1f s)" % (burned / 60.0))
+	_check(p.health < hp and (p.knocked_time > 0.0 or p.dead), "the player 3 m away is knocked down and hurt (%.0f -> %.0f)" % [hp, p.health])
+	_check(near.health < near.max_health and near.global_position.distance_to(near_at) > 0.05, "the car beside it is shoved %.2f m and damaged" % near.global_position.distance_to(near_at))
+	car.queue_free()
+	near.queue_free()

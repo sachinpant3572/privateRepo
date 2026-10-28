@@ -86,6 +86,10 @@ func _run() -> void:
 		await _props(game)
 		get_tree().quit()
 		return
+	if OS.get_environment("SHOTS") == "crash":
+		await _crash(game)
+		get_tree().quit()
+		return
 	if OS.get_environment("SHOTS") == "farm":
 		# Just Golden Flats' farmland (quick look while working on it).
 		await _farm(game)
@@ -440,6 +444,69 @@ func _props(game) -> void:
 		await _shot("%d_%s_after.png" % [n + 1, kind])
 		car.queue_free()
 		n += 2
+	game.camera.fixed_focus = null
+	game.camera.room_size = 0.0
+
+
+## 0.23 crash physics: a sedan driven at 72 km/h into the side of a parked
+## one (before, the impact with panels flying and the nose dipping, the
+## dents once it settles), then the struck car set alight, its blast and
+## the wreck.
+func _crash(game) -> void:
+	var at := Vector2(690, 470)
+	var pos := Vector3(at.x, Terrain.height(at.x, at.y), at.y)
+	game.city.stream_now(pos)
+	game.player.global_position = pos + Vector3(-12, 0, 8)
+	game.camera.fixed_focus = pos
+	game.camera.room_size = 18.0
+	game.camera.snap()
+	var parked = Vehicle.new()
+	parked.kind = "sedan"
+	parked.body_color = Color(0.2, 0.35, 0.7)
+	game.add_child(parked)
+	parked.global_position = pos
+	parked.rotation.y = PI / 2.0
+	var car = Vehicle.new()
+	car.kind = "sedan"
+	car.body_color = Color(0.75, 0.12, 0.1)
+	game.add_child(car)
+	car.global_position = pos + Vector3(0, 0, 14)
+	car.driver = Vehicle.Driver.PLAYER
+	await _frames(20)
+	await _shot("93_crash_before.png")
+	car.speed = 20.0
+	car.velocity = Vector3(0, 0, -20)
+	Controls.override_vector = Vector2(0, -1)
+	var hit := false
+	for i in 90:
+		await _frames(1)
+		if car.global_position.distance_to(parked.global_position) < 4.0 and not hit:
+			hit = true
+			Controls.override_vector = Vector2.ZERO
+			car.driver = Vehicle.Driver.NONE
+			await _frames(4)
+			await _shot("93_crash_impact.png")
+			break
+	print("crash hit=%s parked hp %.0f spin %.2f car hp %.0f" % [hit, parked.health, parked.rotation.y - PI / 2.0, car.health])
+	await _frames(120)
+	game.camera.room_size = 11.0
+	game.camera.snap()
+	await _frames(10)
+	await _shot("93_crash_dents.png")
+	car.global_position += Vector3(0, 0, 12) # out of the blast
+	parked._damage(parked.health - parked.max_health * parked.FIRE_AT * 0.9, true)
+	game.camera.room_size = 16.0
+	game.camera.snap()
+	await _frames(60)
+	await _shot("94_crash_fire.png")
+	for i in 900:
+		if parked._fire == null or parked._fire.exploded:
+			break
+		await _frames(1)
+	await _frames(6)
+	await _shot("94_crash_blast.png")
+	await _frames(150)
+	await _shot("94_crash_wreck.png")
 	game.camera.fixed_focus = null
 	game.camera.room_size = 0.0
 

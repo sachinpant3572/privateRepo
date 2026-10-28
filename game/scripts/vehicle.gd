@@ -9,6 +9,10 @@ const VehicleKit = preload("res://scripts/kits/vehicle_kit.gd")
 const L = preload("res://scripts/layers.gd")
 const Terrain = preload("res://scripts/terrain.gd")
 const Breakables = preload("res://scripts/breakables.gd")
+const GameLog = preload("res://scripts/game_log.gd")
+const VehicleClasses = preload("res://scripts/kits/vehicle_classes.gd")
+const CarDebris = preload("res://scripts/car_debris.gd")
+const CarFire = preload("res://scripts/car_fire.gd")
 
 signal officer_deployed(car)
 ## A SCRIPT driver reached the end of its path.
@@ -56,6 +60,12 @@ const TRAFFIC_LOOKAHEAD := 9.0
 ## Seconds a scripted driver (taxi, getaway) waits behind something that
 ## does not move off before it goes round.
 const SCRIPT_WAIT := 3.0
+## Below this share of max health a car burns, then explodes.
+const FIRE_AT := 0.15
+## Impacts this hard throw a body panel off.
+const PANEL_IMPACT := 12.0
+## Dents reach this far (m) from the contact point.
+const DENT_RADIUS := 1.2
 const POLICE_XRAY := Color(0.3, 0.55, 1.0, 0.6)
 const PLAYER_XRAY := Color(1.0, 0.85, 0.25, 0.6)
 
@@ -162,6 +172,26 @@ var _leaning: Array = []
 ## camera leads by and the speedometer reads. `velocity` is what the car
 ## asks for, which pinned against something flips every frame.
 var motion := Vector3.ZERO
+## This kind's class (VehicleClasses.of): ride, crumple, damage, rider throw.
+var _cls: Dictionary
+## How fast the body rolls and pitches on its springs (rad/s, as _tilt).
+var _tilt_v := Vector2.ZERO
+## The body's rise on its springs (m, up positive) and how fast it moves.
+var _heave := 0.0
+var _heave_v := 0.0
+## The ground's vertical speed under the car last frame (m/s): a change is
+## a bump or a crest the springs take.
+var _ground_vy := 0.0
+var _last_y := INF
+## Yaw spin from an off-centre hit (rad/s), dying away.
+var _spin := 0.0
+## Dented copies of the cached meshes ([body, gloss] arrays and the
+## untouched vertices), made on the first real hit.
+var _dent_arrays: Array = []
+var _dent_orig: Array = []
+var _dent_at := -1.0
+## Burning (CarFire child) below FIRE_AT of max health.
+var _fire: Node3D
 
 
 func _ready() -> void:
@@ -172,6 +202,7 @@ func _ready() -> void:
 	if is_police:
 		kind = "police"
 	_spec = VehicleKit.spec(kind)
+	_cls = VehicleClasses.of(kind)
 	max_speed = _spec.max_speed
 	accel = _spec.accel
 	turn_rate = _spec.turn
@@ -208,7 +239,7 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if driver == Driver.NONE and speed == 0.0 and velocity == Vector3.ZERO and _lights.is_empty():
+	if driver == Driver.NONE and speed == 0.0 and velocity == Vector3.ZERO and _lights.is_empty() and _settled():
 		motion = Vector3.ZERO
 		return # parked: nothing to simulate until something drives or hits it
 	desired_dir = Vector3.ZERO
@@ -461,11 +492,21 @@ func shove(offset: Vector3) -> void:
 
 
 ## Hit by another vehicle: `push` is already scaled by the two masses (see
-## _handle_collisions); a hard shove costs up to 40% of our speed.
-func bump(push: Vector3) -> void:
+## _handle_collisions); a hard shove costs up to 40% of our speed. `at`, the
+## contact point, dents the body there, bounces it on its springs and spins
+## the car when the blow is off-centre; a hard one throws a rider off.
+func bump(push: Vector3, at = null) -> void:
 	velocity += push
 	speed *= lerpf(1.0, 0.6, clampf(push.length() / 6.0, 0.0, 1.0))
 	_damage(push.length())
+	if at != null:
+		_jolt(at, push)
+		# The push is 0.6 of the striker's speed for equal masses: the dent
+		# matches what the striker takes from the same crash.
+		_crumple(at, push.normalized(), push.length() / 0.6)
+	var throw: float = _cls.throw
+	if throw > 0.0 and push.length() >= throw * 0.6:
+		_throw_rider(push)
 
 
 func _player_input() -> void:
@@ -678,6 +719,11 @@ func _drive(delta: float) -> void:
 		rotate_y(yaw)
 	else:
 		_yaw_rate = 0.0
+	if _spin != 0.0:
+		rotate_y(_spin * delta)
+		_spin *= exp(-2.5 * delta)
+		if absf(_spin) < 0.02:
+			_spin = 0.0
 
 	var rate: float = accel * (1.0 - _spec.power_fade * clampf(pace / max_speed, 0.0, 1.0))
 	_hard_brake = false
@@ -713,6 +759,7 @@ func _drive(delta: float) -> void:
 	var before := velocity
 	move_and_slide()
 	global_position.y = Terrain.height(global_position.x, global_position.z)
+	_ground_bumps(delta)
 	_ground_slope(delta)
 	# Tilt follows how the body really moves, so a car pinned against a
 	# wall with the throttle down stays level.
@@ -737,17 +784,149 @@ func _corner_speed() -> float:
 ## Tilts the model: cars roll out of turns and pitch back under power and
 ## forward under braking, tall ones more; two-wheelers lean into turns.
 ## `lateral` is the sideways acceleration (m/s², positive turning left).
+## The body rides on springs (the class's hz and zeta): it lags, overshoots
+## and settles, and bumps and crashes (_jolt) set it bouncing.
 func _body_tilt(delta: float, lateral: float, forward: float) -> void:
-	var roll: float = clampf(-lateral * _spec.roll, -0.09, 0.09)
+	var roll_max: float = _cls.roll_max
+	var pitch_max: float = _cls.pitch_max
+	var want := Vector2(clampf(-lateral * _spec.roll, -roll_max, roll_max), clampf(forward * _spec.pitch, -pitch_max, pitch_max * 0.83))
+	var w: float = TAU * _cls.hz
+	var damp: float = 2.0 * _cls.zeta * w
 	var pivot := Vector3(0, 0.45, 0) # about the axles
 	if _spec.lean > 0.0:
-		roll = clampf(atan(lateral / 9.8) * _spec.lean, -0.5, 0.5)
+		# The rider leans the bike; no spring in that.
+		_tilt.x = lerpf(_tilt.x, clampf(atan(lateral / 9.8) * _spec.lean, -0.5, 0.5), 1.0 - exp(-7.0 * delta))
+		_tilt_v.x = 0.0
 		pivot = Vector3.ZERO # about the tyres' contact line
-	var pitch: float = clampf(forward * _spec.pitch, -0.06, 0.05)
-	_tilt = _tilt.lerp(Vector2(roll, pitch), 1.0 - exp(-7.0 * delta))
+	else:
+		_tilt_v.x += (-w * w * (_tilt.x - want.x) - damp * _tilt_v.x) * delta
+		_tilt.x = clampf(_tilt.x + _tilt_v.x * delta, -roll_max * 1.8, roll_max * 1.8)
+	_tilt_v.y += (-w * w * (_tilt.y - want.y) - damp * _tilt_v.y) * delta
+	_tilt.y = clampf(_tilt.y + _tilt_v.y * delta, -pitch_max * 1.8, pitch_max * 1.8)
+	_heave_v += (-w * w * _heave - damp * _heave_v) * delta
+	_heave = clampf(_heave + _heave_v * delta, -0.12, 0.1)
 	var b := Basis.from_euler(Vector3(_tilt.y, 0.0, _tilt.x))
 	var lie := Basis.from_euler(Vector3(_slope.y, 0.0, _slope.x))
-	_model.transform = Transform3D(lie, Vector3.ZERO) * Transform3D(b, pivot - b * pivot)
+	_model.transform = Transform3D(lie, Vector3(0.0, _heave, 0.0)) * Transform3D(b, pivot - b * pivot)
+
+
+## True once the body has stopped bouncing and spinning (a parked car can
+## stop simulating).
+func _settled() -> bool:
+	return _spin == 0.0 and _tilt.length_squared() + _tilt_v.length_squared() + _heave * _heave + _heave_v * _heave_v < 1e-6
+
+
+## Bumps and crests: when the ground under the car speeds up or slows its
+## climb, the body's weight lags it on the springs.
+func _ground_bumps(delta: float) -> void:
+	var y := global_position.y
+	if is_inf(_last_y) or absf(y - _last_y) > 1.0: # placed or shoved
+		_last_y = y
+		_ground_vy = 0.0
+		return
+	var vy := (y - _last_y) / delta
+	_last_y = y
+	var change := vy - _ground_vy
+	_ground_vy = vy
+	if absf(change) > 0.2:
+		_heave_v -= clampf(change, -4.0, 4.0) * 0.35 * _cls.kick
+
+
+## A blow at `at` (world) changing the car's velocity by `dv` (m/s): the body
+## pitches and rolls on its springs and bounces, and a blow off the line
+## through the car's centre spins it (a side hit at the tail spins it most;
+## a head-on or rear-end hit hardly at all).
+func _jolt(at: Vector3, dv: Vector3) -> void:
+	var k: float = _cls.kick
+	_tilt_v.y += clampf(dv.dot(-global_basis.z) * 0.08 * k, -1.2, 1.2)
+	if _spec.lean == 0.0:
+		_tilt_v.x += clampf(dv.dot(global_basis.x) * 0.08 * k, -1.2, 1.2)
+	_heave_v += clampf(dv.length() * 0.02 * k, 0.0, 0.5)
+	var r := at - global_position
+	var across := dv.normalized().dot(-global_basis.z)
+	var inertia := (_size.x * _size.x + _size.z * _size.z) / 12.0
+	var turn := (r.z * dv.x - r.x * dv.z) / inertia * 0.5 * (1.0 - across * across)
+	_spin = clampf(_spin + turn, -3.0, 3.0)
+	if absf(_spin) < 0.02:
+		_spin = 0.0
+
+
+## Dents the body at `at` (world), pushing it along `dir` by the class's
+## crumple per m/s of `impact`, no deeper than its dent_cap anywhere. The
+## first dent copies the shared cached mesh; later ones edit the copy.
+func _crumple(at: Vector3, dir: Vector3, impact: float) -> void:
+	var crumple: float = _cls.crumple
+	if crumple <= 0.0 or impact < 4.0 or _model == null:
+		return
+	var now := Time.get_ticks_msec() * 0.001
+	if now - _dent_at < 0.1:
+		return # one dent per blow (a crash reports several contacts)
+	_dent_at = now
+	if _dent_arrays.is_empty():
+		for m in [_model.mesh, _gloss.mesh]:
+			var arrays: Array = m.surface_get_arrays(0)
+			_dent_arrays.append(arrays)
+			_dent_orig.append(arrays[Mesh.ARRAY_VERTEX].duplicate())
+	var cap: float = _cls.dent_cap
+	var depth := minf(impact * crumple, cap)
+	var p := to_local(at)
+	var d := global_basis.inverse() * dir
+	d.y = 0.0
+	if d.length_squared() < 1e-6:
+		return
+	d = d.normalized()
+	var meshes: Array[ArrayMesh] = []
+	for k in 2:
+		var verts: PackedVector3Array = _dent_arrays[k][Mesh.ARRAY_VERTEX]
+		var orig: PackedVector3Array = _dent_orig[k]
+		for i in verts.size():
+			var v := verts[i]
+			var dx := v.x - p.x
+			var dz := v.z - p.z
+			if absf(dx) > DENT_RADIUS or absf(dz) > DENT_RADIUS:
+				continue
+			var dist := sqrt(dx * dx + dz * dz + 0.25 * (v.y - p.y) * (v.y - p.y))
+			if dist >= DENT_RADIUS or v.y < 0.25: # the wheels keep their shape
+				continue
+			var fall := 1.0 - dist / DENT_RADIUS
+			var moved := v + d * depth * fall * fall - orig[i]
+			if moved.length() > cap:
+				moved = moved.normalized() * cap
+			verts[i] = orig[i] + moved
+		_dent_arrays[k][Mesh.ARRAY_VERTEX] = verts
+		var mesh := ArrayMesh.new()
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, _dent_arrays[k])
+		meshes.append(mesh)
+	_model.mesh = meshes[0]
+	_gloss.mesh = meshes[1]
+	if impact >= PANEL_IMPACT and get_parent() != null:
+		# A panel tears off and flies.
+		var fly := -dir * rng.randf_range(2.0, 4.0) + Vector3.UP * rng.randf_range(3.0, 5.5) + velocity * 0.5
+		CarDebris.throw(get_parent(), at + Vector3.UP * 0.3, fly, body_color, minf(impact / 20.0, 1.0))
+
+
+## A crash throws the rider off a two-wheeler or cycle: the player gets up
+## hurt beside it, an NPC rider tumbles along the way it was going.
+func _throw_rider(fling: Vector3) -> void:
+	var flat := Vector3(fling.x, 0.0, fling.z)
+	if driver == Driver.PLAYER and occupant != null:
+		var p = occupant
+		p.exit_vehicle(true)
+		p.velocity += flat * 0.5
+	elif rider != null and is_instance_valid(rider):
+		var r = rider
+		r.rotation.z = 0.0
+		r.dismount(global_position + (flat.normalized() * 1.2 if flat.length() > 0.1 else Vector3.ZERO))
+		rider = null
+		r.take_hit(null, flat.length() * 2.0, Vector3.ZERO)
+		if not r.dead:
+			r.knock_down(2.0, flat)
+		r.velocity = flat * 0.5
+		if has_ai_driver():
+			driver = Driver.NONE
+	else:
+		return
+	GameLog.event("rider_thrown", {"car": kind, "kmh": flat.length() * 3.6, "at": global_position})
 
 
 ## The ground's slope along and across the car (it lies on the hill).
@@ -758,7 +937,10 @@ func _ground_slope(delta: float) -> void:
 		var fwd := -global_basis.z
 		var right := global_basis.x
 		want = Vector2(atan(-(n.x * right.x + n.z * right.z) / n.y), atan(-(n.x * fwd.x + n.z * fwd.z) / n.y))
+	var before := _slope
 	_slope = _slope.lerp(want, 1.0 - exp(-10.0 * delta))
+	# Over a crest or into a dip the body's weight lags the change of slope.
+	_tilt_v.y -= clampf((_slope.y - before.y) * 0.3, -0.05, 0.05) * _cls.kick
 	if _slope.length_squared() < 1e-8:
 		_slope = Vector2.ZERO
 
@@ -819,24 +1001,37 @@ func _handle_collisions(before: Vector3) -> void:
 		struck.append(other)
 		var players: bool = driver == Driver.PLAYER or (other != null and other.get("driver") == Driver.PLAYER)
 		Fx.crash(col.get_position(), impact, players)
+		# The share of the crash this car takes (1 against a wall).
+		var share := 1.0
 		if other != null and other.has_method("bump"):
 			# Share by mass (equal masses: half the speed kept, 0.6 of the
 			# impact as damage and push, as for walls): the lighter vehicle
 			# loses more speed, takes more damage and is shoved further.
 			var m: float = other.mass
 			var mine := mass / (mass + m)
+			share = 2.0 * (1.0 - mine)
 			speed *= mine
 			_damage(impact * 1.2 * (1.0 - mine))
-			other.bump(before * 1.2 * mine)
+			other.bump(before * 1.2 * mine, col.get_position())
 		else:
 			_damage(impact * 0.6)
+		var n := col.get_normal()
+		_jolt(col.get_position(), n * impact * minf(share, 1.5))
+		_crumple(col.get_position(), n, impact * share)
+		var throw: float = _cls.throw
+		if throw > 0.0 and impact * share >= throw:
+			_throw_rider(before)
 
 
-func _damage(amount: float) -> void:
+## Takes `amount` of damage, times the class's damage multiplier unless
+## `raw` (fire). Below FIRE_AT the car catches fire (not a bicycle).
+func _damage(amount: float, raw := false) -> void:
 	if wrecked:
 		return
-	health -= amount
+	health -= amount if raw else amount * _cls.damage
 	if health > 0.0:
+		if health < max_health * FIRE_AT and _fire == null and _cls["class"] != "cycle":
+			_fire = CarFire.ignite(self)
 		return
 	wrecked = true
 	unload_all()
