@@ -44,7 +44,7 @@ Docs only; no game code. Files: `ACTIVITY_IDEAS.md`, `STOCK_MARKET_DESIGN.md`,
 - "Canal Street" and other real New Orleans names must not be used as placeholders.
 
 ## Open
-- Done: section 5 rows N15-N23 and decisions 7-10. Pending: N17's cost and the roadmap's
-  stock-market row, from the stock-market agent's doc; then the review gate.
+- Done: section 5 rows N15-N23, decisions 7-10, the stock-market doc and sim (8 checks pass,
+  seed 20261028), N17 costed at 2.5 lite / 6 full. Pending: the review gate.
 - Sachin's decisions: `ACTIVITY_IDEAS.md` section 7 and `STOCK_MARKET_DESIGN.md`'s open
   questions.

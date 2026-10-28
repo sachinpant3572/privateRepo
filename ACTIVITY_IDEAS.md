@@ -409,7 +409,18 @@ arcade (R-11), the tow truck (R-16) and heists (R-23).
 ### 4.12 Stock market
 
 The full design, its anti-exploit rules and a simulation that proves them are in
-`STOCK_MARKET_DESIGN.md` and `tools/stock_market_sim.py`.
+`STOCK_MARKET_DESIGN.md` and `tools/stock_market_sim.py`. In short:
+- the phone app opens in Bellerive in phase 1 and becomes the Concordia Exchange in phase 5;
+- prices move on city events (calendar, random events, faction wars, storms, story beats),
+  never on real-world news;
+- caps on position size and daily buys, a one-day hold, prices that drift back, no shorts or
+  leverage, a regulator that opens a case on suspicious gains, and diminishing returns on the
+  player's own sabotage;
+- nothing rerolls on load, and the market has its own clock that never reads the device clock;
+- the seeded simulation (150 runs of 60 game days, 8 checks, all pass) shows that a passive
+  holder earns about 8% of a day's side-job pay per game day, a skilled trader about 13%, and
+  every tested manipulation loop earns no more than skilled trading;
+- cost: about 2.5 sessions for a lite version, about 6 for the full one.
 
 ### 4.13 GTA III, the Liberty City games, Watch Dogs and Sleeping Dogs: what they add (pass of 2026-10-28)
 
@@ -544,7 +555,7 @@ depends on, including later ones.
 | N14 | Comedy chaos set + RC and drone | Cheap laughs | none | 1.5 | 3 |
 | N15 | Daily variety set (4.11) | Daily wanted-car list, black-market van, payphone jobs, pop-up challenges, buried stash, community service | R-5, R-13, R-16 | 2.5 | 4 |
 | N16 | Bail bonds + race creator + hit-and-run chases (4.11, 4.13) | Bounty work and player-made races | R-5, R-14, R-24 | 2.5 | 3 |
-| N17 | Stock market (4.12) | The Exchange app with city-event prices and the anti-exploit rules | R-13 | see 4.12 | 3 |
+| N17 | Stock market (4.12) | The Exchange app with city-event prices and the anti-exploit rules | R-13 | 2.5 (lite; full 6) | 3 |
 | N18 | Crime set (4.13) | Crimes detected, camera busts, convoy takedowns, hideout takedowns | R-5, R-9, R-17, R-19, R-20, R-22 | 3 | 4 |
 | N19 | Liberty City and venue extras (4.13) | Car salesman, dumpster dash, lowrider bounce-off, air hockey, keepy-uppy, comedy club | N3, N5, R-10, R-11 | 2.5 | 3 |
 | N20 | Money fronts and laundering (4.11) | Dirty and clean cash; waits on decision 8 | R-22, N8 | 1.5 | 3 |
@@ -553,8 +564,8 @@ depends on, including later ones.
 | N23 | Crew and character (4.13, 4.14) | Recruit from the street, crew defence, personality traits, sandlot baseball | R-17, R-22, R-24, N2, N13 (Levee Line engine) | 3 | 3 |
 
 - **All 14**: about **32 sessions**, on top of the roadmap's 57.
-- **N15-N23** (added with 4.11-4.14): about **20.5 sessions** more, plus the stock market (N17,
-  costed in 4.12). The roadmap's new packages 28-32 (yoga, triathlon, flight school, parachute
+- **N15-N23** (added with 4.11-4.14): about **23 sessions** more with the lite stock market (N17;
+  the full market adds 3.5). The roadmap's new packages 28-32 (yoga, triathlon, flight school, parachute
   jumps, fairground) add about 8, and the city activity packs in `ACTIVITY_ATLAS.md` Part D
   about 16 (cheaper: 6), both spread over the world phases.
 - **Not costed yet**: much of sections 2 and 4 sits outside N1-N14 as content for later rounds:
