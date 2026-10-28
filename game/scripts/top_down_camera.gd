@@ -337,14 +337,17 @@ func _update_xray(delta: float, focus: Vector3) -> void:
 			# Inside the open see-through hole the buildings are cut away and
 			# the body shows: only a car in front still hides it.
 			var in_hole: bool = d2 < pow(_cut * 0.6, 2.0)
-			on = covered(space, eye, n, L.VEHICLES if in_hole else L.WORLD | L.VEHICLES)
+			on = covered(space, eye, n, L.VEHICLES if in_hole else L.WORLD | L.VEHICLES, Vector3.ZERO if perspective else global_basis.z)
 		if on != n.xray_shown:
 			n.show_xray(on)
 
 
 ## Whether walls or cars (`mask`) hide all of `n` (a person or a vehicle)
-## from `eye`: a person's legs and chest, a car's nose and tail.
-static func covered(space: PhysicsDirectSpaceState3D, eye: Vector3, n: Node3D, mask := L.WORLD | L.VEHICLES) -> bool:
+## from `eye`: a person's legs and chest, a car's nose and tail. In the
+## classic flat view every ray runs parallel, along `back` (the camera's
+## back axis), as _view_blocked does: aimed at the camera itself, a ray
+## from someone far off-centre crossed buildings that do not hide them.
+static func covered(space: PhysicsDirectSpaceState3D, eye: Vector3, n: Node3D, mask := L.WORLD | L.VEHICLES, back := Vector3.ZERO) -> bool:
 	var skip: Array[RID] = [n.get_rid()]
 	var points: Array[Vector3] = []
 	if "body_mesh" in n:
@@ -358,7 +361,8 @@ static func covered(space: PhysicsDirectSpaceState3D, eye: Vector3, n: Node3D, m
 		for z in [-0.6, 0.6]:
 			points.append(n.global_transform * Vector3(0.0, half.y, half.z * z))
 	for p in points:
-		var ray := PhysicsRayQueryParameters3D.create(p, eye, mask, skip)
+		var to := eye if back == Vector3.ZERO else p + back * DISTANCE
+		var ray := PhysicsRayQueryParameters3D.create(p, to, mask, skip)
 		if space.intersect_ray(ray).is_empty():
 			return false
 	return true

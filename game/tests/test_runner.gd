@@ -6991,6 +6991,27 @@ func test_xray_only_when_hidden() -> void:
 	cam._cut = 0.0
 	cam._update_xray(1.0, p.global_position)
 	_check(not p.xray_shown and p.body_mesh.material_override.stencil_mode == BaseMaterial3D.STENCIL_MODE_DISABLED, "with the wall gone the silhouette is off again")
+	# Classic flat view: the rays run along the view, not to the camera.
+	# A wall on the line to an eye off to one side does not hide the
+	# player; one straight along the view does.
+	var space = cam.get_world_3d().direct_space_state
+	var back := Vector3(0.0, 0.8, 0.6).normalized()
+	var eye: Vector3 = p.global_position + Vector3(120.0, 160.0, 0.0)
+	wall = StaticBody3D.new()
+	wall.collision_layer = L.WORLD
+	shape = CollisionShape3D.new()
+	shape.shape = BoxShape3D.new()
+	shape.shape.size = Vector3(4, 4, 4)
+	wall.add_child(shape)
+	add_child(wall)
+	wall.global_position = p.global_position.lerp(eye, 0.05)
+	await _frames(2)
+	_check(cam.covered(space, eye, p) and not cam.covered(space, eye, p, L.WORLD | L.VEHICLES, back), "flat view: a wall off the line of sight does not count as hiding the player")
+	wall.global_position = p.global_position + back * 8.0
+	await _frames(2)
+	_check(cam.covered(space, eye, p, L.WORLD | L.VEHICLES, back), "flat view: a wall along the line of sight hides the player")
+	wall.queue_free()
+	await _frames(2)
 
 
 ## A car sunk into a semi's trailer is moved out within a few frames, so
