@@ -1,26 +1,36 @@
 extends Node3D
 ## Game feel, shared by everything (autoload "Fx"): hit-stop and screen shake
 ## on punches and crashes, spark and debris bursts, tyre smoke, splashes,
-## skid marks and blood (blood.gd). Bursts come from small pools of one-shot
-## particle emitters; skid marks and blood marks are one MultiMesh ring
-## buffer each, so all of it costs a handful of draw calls.
+## tyre marks, exhaust and tyre smoke (puffs.gd) and blood (blood.gd). Bursts
+## come from small pools of one-shot particle emitters; tyre marks, puffs and
+## blood marks are one MultiMesh each, so all of it costs a handful of draw
+## calls.
 
-const SKID_COUNT := 400
+## Tyre-mark strips kept on the ground (a ring buffer: the oldest goes).
+const SKID_COUNT := 700
+## Puffs alive at once by graphics quality.
+const PUFFS := {"low": 90, "medium": 160, "high": 260, "ultra": 260}
 ## Loud bursts (crashes, knocked props, fights) startle nearby birds.
 const Birds = preload("res://scripts/birds.gd")
 const GameLog = preload("res://scripts/game_log.gd")
 const Blood = preload("res://scripts/blood.gd")
+const Puffs = preload("res://scripts/puffs.gd")
 
 ## Off in headless runs (tests), where slowing time would only slow tests.
 var enabled := true
 var camera: Node
 ## Spurts and marks on the ground (blood.gd; Settings > Game > Blood).
 var bloodwork: Blood
+## Exhaust and tyre smoke (Fx.puff).
+var puffs: Puffs
 
 var _pools := {}
 var _skids: MultiMeshInstance3D
 var _skid_next := 0
 var _skid_total := 0
+## Each strip's darkness, kept here too (the headless renderer keeps no
+## instance colours).
+var _skid_alpha := PackedFloat32Array()
 var _stop_until := 0
 
 
@@ -34,10 +44,14 @@ func _ready() -> void:
 	_pools["leaves"] = _pool(3, _leaf_emitter)
 	_pools["gush"] = _pool(3, _gush_emitter)
 	_skids = _make_skids()
+	_skid_alpha.resize(SKID_COUNT)
 	add_child(_skids)
 	bloodwork = Blood.new()
 	bloodwork.name = "Blood"
 	add_child(bloodwork)
+	puffs = Puffs.new()
+	puffs.name = "Puffs"
+	add_child(puffs)
 
 
 func _process(_delta: float) -> void:
@@ -115,13 +129,49 @@ func splash(pos: Vector3) -> void:
 	_burst("splash", pos, 1.0)
 
 
-## A tyre mark at `pos` (on the ground), stretched along `dir`.
+## A short tyre mark at `pos` (on the ground), stretched along `dir`.
 func skid(pos: Vector3, dir: Vector3) -> void:
-	var basis := Basis.looking_at(Vector3(dir.x, 0.0, dir.z).normalized(), Vector3.UP) if Vector2(dir.x, dir.z).length() > 0.01 else Basis()
-	_skids.multimesh.set_instance_transform(_skid_next, Transform3D(basis, Vector3(pos.x, 0.03, pos.z)))
+	var d := Vector3(dir.x, 0.0, dir.z)
+	d = d.normalized() * 0.375 if d.length() > 0.01 else Vector3(0, 0, 0.375)
+	tyre_mark(pos - d, pos + d, 0.3, 0.5)
+
+
+## A strip of rubber on the ground from `a` to `b`, `width` m wide, `alpha`
+## dark (about 0.5 a locked or sliding tyre, 0.15 an ABS stop's faint mark).
+## Consecutive strips from one wheel meet end to end into one track.
+func tyre_mark(a: Vector3, b: Vector3, width: float, alpha: float) -> void:
+	var d := Vector3(b.x - a.x, 0.0, b.z - a.z)
+	var length := d.length()
+	if length < 0.01:
+		return
+	var along := d / length
+	var side := along.cross(Vector3.UP)
+	# Unit quad (FACE_Y): x across the tread, z along the track; a little
+	# overlap hides the seams between strips.
+	var basis := Basis(side * width, Vector3.UP, along * (length + 0.06))
+	var mid := (a + b) * 0.5
+	mid.y = maxf(a.y, b.y) + 0.03
+	_skids.multimesh.set_instance_transform(_skid_next, Transform3D(basis, mid))
+	_skid_alpha[_skid_next] = clampf(alpha, 0.0, 0.8)
+	_skids.multimesh.set_instance_color(_skid_next, Color(0.04, 0.04, 0.045, _skid_alpha[_skid_next]))
 	_skid_next = (_skid_next + 1) % SKID_COUNT
 	_skid_total += 1
 	_skids.multimesh.visible_instance_count = mini(_skid_total, SKID_COUNT)
+
+
+## How many tyre-mark strips are on the ground.
+func tyre_marks() -> int:
+	return mini(_skid_total, SKID_COUNT)
+
+
+## A puff of exhaust or tyre smoke (see puffs.gd).
+func puff(pos: Vector3, vel: Vector3, size: float, grow: float, life: float, color: Color) -> void:
+	puffs.add(pos, vel, size, grow, life, color)
+
+
+## Graphics quality: fewer puffs alive at once on the lower presets.
+func set_quality(level: String) -> void:
+	puffs.cap = PUFFS.get(level, PUFFS["high"])
 
 
 ## Blood from a wound at `pos` spraying along `dir` (zero: any way), with
@@ -309,13 +359,15 @@ func _gush_emitter() -> CPUParticles3D:
 func _make_skids() -> MultiMeshInstance3D:
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
 	var q := QuadMesh.new()
-	q.size = Vector2(0.3, 0.75)
+	q.size = Vector2.ONE
 	q.orientation = PlaneMesh.FACE_Y
 	var m := StandardMaterial3D.new()
-	m.albedo_color = Color(0.05, 0.05, 0.06, 0.5)
+	m.vertex_color_use_as_albedo = true
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
 	q.material = m
 	mm.mesh = q
 	mm.instance_count = SKID_COUNT

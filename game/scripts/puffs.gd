@@ -5,6 +5,8 @@ extends MultiMeshInstance3D
 ## is full. Owned by Fx (Fx.puff).
 
 const MAX := 260
+## Puffs alive at once (Fx.set_quality lowers it on Low and Medium).
+var cap := MAX
 ## Puffs this far (m) from the camera's focus are not made at all.
 const RANGE := 70.0
 
@@ -50,13 +52,23 @@ func count() -> int:
 	return _pos.size()
 
 
+## The colours of the puffs alive now (tests).
+func colors() -> PackedColorArray:
+	return _col
+
+
+func clear() -> void:
+	for i in range(_pos.size() - 1, -1, -1):
+		_drop(i)
+
+
 ## A puff at `pos` moving at `vel`, `size` m across, growing by `grow` m a
 ## second, gone after `life` s; `color`'s alpha is its starting opacity.
 func add(pos: Vector3, vel: Vector3, size: float, grow: float, life: float, color: Color) -> void:
 	var cam := get_viewport().get_camera_3d() if is_inside_tree() else null
 	if cam != null and cam.global_position.distance_to(pos) > RANGE + cam.global_position.y:
 		return
-	if _pos.size() >= MAX:
+	while _pos.size() >= cap and not _pos.is_empty():
 		_drop(_oldest())
 	_pos.append(pos)
 	_vel.append(vel)

@@ -95,6 +95,7 @@ func _run() -> void:
 		"test_game_log_file_and_rotation", "test_game_log_snapshot_and_events", "test_game_log_report_copy_and_off",
 		"test_screen_shake_setting", "test_settings_sliders_snap_and_apply",
 		"test_blood_melee_spurts_and_spatters", "test_blood_car_hits_smear_and_pool", "test_blood_bleed_toggle_cap_and_fade",
+		"test_exhaust_by_kind_and_norms", "test_tyre_marks_and_smoke",
 	]
 	# ONLY=name1,name2 runs just those (handy while working on one test).
 	var only := OS.get_environment("ONLY")
@@ -7782,3 +7783,193 @@ func test_blood_bleed_toggle_cap_and_fade() -> void:
 	page._back.pressed.emit()
 	await _idle(2)
 	Fx.set_blood(true)
+
+
+# --- Exhaust, tyre smoke and tyre marks (0.23) ----------------------------------
+
+## What comes out of the tailpipe follows US norms by kind (vehicle_emissions.gd):
+## EVs and bicycles nothing, a healthy modern petrol car nothing once warm
+## on a dry day, vapour from a cold start, black smoke from an old diesel
+## pulling away and on each upshift, pops from a sports car lifting off, and
+## old diesels and smokers likelier where money is short.
+func test_exhaust_by_kind_and_norms() -> void:
+	await _free_game()
+	Controls.camera = null
+	Controls.scheme = "arrows"
+	var E = preload("res://scripts/kits/vehicle_emissions.gd")
+	var r := RandomNumberGenerator.new()
+	r.seed = 7
+	_check(E.roll("ev", r, 1.0).fuel == "electric" and E.roll("bicycle", r, 1.0).fuel == "none" and E.roll("semi", r, 0.0).fuel == "diesel",
+			"EVs and bicycles burn nothing, semis burn diesel")
+	var old_rich := 0
+	var old_poor := 0
+	var smoky_rich := 0
+	var smoky_poor := 0
+	for i in 3000:
+		old_rich += int(E.roll("pickup", r, 0.0).old)
+		old_poor += int(E.roll("pickup", r, 1.0).old)
+		smoky_rich += int(E.roll("tuk_tuk", r, 0.0).smoker)
+		smoky_poor += int(E.roll("tuk_tuk", r, 1.0).smoker)
+	_check(old_poor > old_rich * 2 and smoky_poor > smoky_rich * 2,
+			"old diesels and smokers gather where money is short (diesels %d vs %d, smokers %d vs %d of 3000)" % [old_poor, old_rich, smoky_poor, smoky_rich])
+	_check(old_rich < 150, "few pre-filter diesels elsewhere (%d of 3000 pickups)" % old_rich)
+	var stacks: Array = E.outlets("semi", VehicleKit.size_of("semi"))
+	_check(stacks.size() == 2 and stacks[0][0].y > 3.5 and stacks[0][1] == Vector3.UP, "a semi's twin stacks stand tall behind the cab and blow upward")
+	var pipe: Array = E.outlets("sedan", VehicleKit.size_of("sedan"))
+	_check(pipe.size() == 1 and pipe[0][0].z > VehicleKit.size_of("sedan").z * 0.45, "a sedan's tailpipe is at its rear")
+
+	# A cold start steams; warm on a dry day, a modern petrol car shows nothing.
+	Fx.puffs.clear()
+	var car = _player_car("sedan", Vector3(150.0, 0, 150.0), 0.0)
+	await _frames(40)
+	var steam := 0
+	for c in Fx.puffs.colors():
+		steam += int(c.r > 0.93)
+	_check(steam > 2 and car._cold > 0.0, "a cold start puffs white vapour (%d puffs)" % steam)
+	car._emit.smoker = false
+	car._cold = 0.0
+	Fx.puffs.clear()
+	Input.action_press("gas")
+	await _frames(90)
+	Input.action_release("gas")
+	_check(Fx.puffs.count() == 0 and car.speed > 8.0, "a warm modern petrol car pulling away shows nothing (%d puffs)" % Fx.puffs.count())
+	car.queue_free()
+
+	# An EV shows nothing even from cold.
+	Fx.puffs.clear()
+	car = _player_car("ev", Vector3(150.0, 0, 150.0), 0.0)
+	Input.action_press("gas")
+	await _frames(60)
+	Input.action_release("gas")
+	_check(Fx.puffs.count() == 0, "an EV shows nothing (%d puffs)" % Fx.puffs.count())
+	car.queue_free()
+
+	# An old diesel semi pulling away: soot, a burst on each upshift.
+	car = _player_car("semi", Vector3(150.0, 0, 150.0), 0.0)
+	await _frames(2)
+	car._emit.old = true
+	Fx.puffs.clear()
+	Input.action_press("gas")
+	var shifts := 0
+	var gear: int = car._gear
+	for f in 150:
+		await get_tree().physics_frame
+		if car._gear > gear:
+			shifts += 1
+		gear = car._gear
+	Input.action_release("gas")
+	var soot := 0
+	for c in Fx.puffs.colors():
+		soot += int(c.r < 0.2)
+	_check(soot > 10 and shifts >= 1, "an old diesel pulling away smokes black (%d puffs, %d upshifts)" % [soot, shifts])
+	car.queue_free()
+
+	# A sports car lifting off at speed pops.
+	Fx.puffs.clear()
+	car = _player_car("sports", Vector3(150.0, 0, 150.0), 22.0)
+	Input.action_press("gas")
+	await _frames(20)
+	Input.action_release("gas")
+	await _frames(12)
+	var flames := 0
+	for c in Fx.puffs.colors():
+		flames += int(c.r > 0.99 and c.g < 0.6)
+	_check(flames > 0, "a sports car pops on the overrun (%d flashes)" % flames)
+	car.queue_free()
+	Controls.scheme = "stick"
+
+
+## Tyre marks: a drift lays dark marks and tyre smoke; an ABS stop only faint
+## broken marks and no smoke; a motorbike (no ABS) locks up and marks dark;
+## traffic's ordinary stops leave nothing; a wet road takes neither.
+func test_tyre_marks_and_smoke() -> void:
+	await _free_game()
+	Controls.camera = null
+	Controls.scheme = "arrows"
+	Fx.puffs.clear()
+	var before: int = Fx._skid_total
+	var car = _player_car("sedan", Vector3(150.0, 0, 150.0), 20.0)
+	await _drift(car)
+	var marks := _marks_since(before)
+	_check(marks.x > 8 and marks.y > 0.3, "a drift lays dark marks (%d strips, alpha %.2f)" % [marks.x, marks.y])
+	_check(_tyre_puffs() > 4, "and tyre smoke (%d puffs)" % _tyre_puffs())
+	car.queue_free()
+	await _frames(2)
+
+	Fx.puffs.clear()
+	before = Fx._skid_total
+	car = _player_car("sedan", Vector3(150.0, 0, 150.0), 20.0)
+	Input.action_press("brake")
+	await _frames(60)
+	Input.action_release("brake")
+	marks = _marks_since(before)
+	_check(marks.x > 2 and marks.y <= 0.15, "an ABS stop leaves faint marks (%d strips, alpha %.2f)" % [marks.x, marks.y])
+	_check(_tyre_puffs() == 0, "and no smoke (%d puffs)" % _tyre_puffs())
+	car.queue_free()
+	await _frames(2)
+
+	before = Fx._skid_total
+	car = _player_car("motorbike", Vector3(150.0, 0, 150.0), 20.0)
+	Input.action_press("brake")
+	await _frames(60)
+	Input.action_release("brake")
+	marks = _marks_since(before)
+	_check(marks.x > 2 and marks.y > 0.25, "a motorbike without ABS locks up and marks dark (%d strips, alpha %.2f)" % [marks.x, marks.y])
+	car.queue_free()
+	await _frames(2)
+
+	before = Fx._skid_total
+	car = _track_car("sedan", Vector3(150.0, 0, 150.0), 0.0)
+	car.driver = Vehicle.Driver.TRAFFIC
+	car.speed = 13.0
+	car.velocity = -car.global_basis.z * 13.0
+	car.braking = true
+	await _frames(60)
+	_check(Fx._skid_total == before, "traffic stopping as usual leaves no marks")
+	car.queue_free()
+	await _frames(2)
+
+	var atm = preload("res://scripts/atmosphere.gd").new()
+	atm.hour = 12.0
+	atm.wetness = 1.0
+	Fx.puffs.clear()
+	before = Fx._skid_total
+	car = _player_car("sedan", Vector3(150.0, 0, 150.0), 20.0)
+	car._game = {"atmosphere": atm}
+	await _drift(car)
+	_check(Fx._skid_total == before and _tyre_puffs() == 0, "a wet road takes no marks and no tyre smoke (%d strips)" % (Fx._skid_total - before))
+	car.queue_free()
+	await _frames(2)
+	atm.free()
+	Controls.scheme = "stick"
+
+
+## Brake and steer at speed (test_brake_and_steer_drifts), then hold the slide.
+func _drift(car) -> void:
+	Input.action_press("gas")
+	Input.action_press("steer_left")
+	await _frames(12)
+	Input.action_release("gas")
+	Input.action_press("brake")
+	await _frames(12)
+	Input.action_release("brake")
+	await _frames(40)
+	Input.action_release("steer_left")
+
+
+## Tyre-mark strips laid since the count was `before`: (how many, darkest alpha).
+func _marks_since(before: int) -> Vector2:
+	var n := mini(Fx._skid_total - before, Fx.SKID_COUNT)
+	var most := 0.0
+	for k in n:
+		var i := posmod(Fx._skid_next - 1 - k, Fx.SKID_COUNT)
+		most = maxf(most, Fx._skid_alpha[i])
+	return Vector2(n, most)
+
+
+## Tyre-smoke puffs alive now (Emissions.TYRE's grey, not vapour's white).
+func _tyre_puffs() -> int:
+	var n := 0
+	for c in Fx.puffs.colors():
+		n += int(c.r > 0.85 and c.r < 0.93)
+	return n

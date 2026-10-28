@@ -13,6 +13,7 @@ const GameLog = preload("res://scripts/game_log.gd")
 const VehicleClasses = preload("res://scripts/kits/vehicle_classes.gd")
 const CarDebris = preload("res://scripts/car_debris.gd")
 const CarFire = preload("res://scripts/car_fire.gd")
+const Emissions = preload("res://scripts/kits/vehicle_emissions.gd")
 
 signal officer_deployed(car)
 ## A SCRIPT driver reached the end of its path.
@@ -79,6 +80,16 @@ const TRAFFIC_LOOKAHEAD := 9.0
 const SCRIPT_WAIT := 3.0
 ## Below this share of max health a car burns, then explodes.
 const FIRE_AT := 0.15
+## Exhaust and tyres: how long a cold engine steams after starting (s), the
+## gears it shifts through (petrol cars; trucks' diesels), the sideways
+## slide (m/s) at which tyres start to mark, the length of each strip of
+## mark (m), and how poor each district is (older cars gather there).
+const COLD_START := 40.0
+const GEARS := 5.0
+const GEARS_DIESEL := 8.0
+const SLIDE_MARK := 2.5
+const MARK_STEP := 0.45
+const POOR := {"wards": 0.8, "bayou": 0.6, "docks": 0.5, "brownstone": 0.35, "quarter": 0.3, "midtown": 0.15, "downtown": 0.1, "heights": 0.0}
 ## Impacts this hard throw a body panel off.
 const PANEL_IMPACT := 12.0
 ## Dents reach this far (m) from the contact point.
@@ -176,8 +187,28 @@ var _real_light: SpotLight3D
 var _bar_light: OmniLight3D
 var _bar_on := true
 var _size := Vector3.ONE
-var _skid_dist := 0.0
 var _smoke_time := 0.0
+## Exhaust and tyres (kits/vehicle_emissions.gd): this car's engine as rolled
+## when it first ran, its tailpipes, the tracks its tyres leave, and the
+## state the puffs and marks run on.
+var _emit := {}
+var _outlets := []
+var _tracks := {}
+var _engine_on := false
+var _cold := 0.0
+var _prev_pace := 0.0
+## Engine load 0..1, from how hard the car is speeding up.
+var _load := 0.0
+var _gear := 0
+var _puff_time := 0.0
+var _pops := 0
+var _throttle_was := 0.0
+var _pop_time := 0.0
+var _tyre_time := 0.0
+var _abs_dist := 0.0
+## Per marking wheel: where its last strip ended, and whether it is marking.
+var _mark_at := PackedVector3Array()
+var _marking := PackedByteArray()
 var _splash_time := 0.0
 var _hard_brake := false
 var _game
@@ -1125,26 +1156,13 @@ func _flash_lights(delta: float) -> void:
 		_bar_light.light_color = Color(1.0, 0.12, 0.1) if phase else Color(0.15, 0.35, 1.0)
 
 
-## Skid marks and tyre smoke when drifting or braking hard, splashes on wet
+## Exhaust, tyre marks and tyre smoke (_exhaust, _tyres), splashes on wet
 ## roads, smoke from a damaged engine, and headlights after dark.
 func _effects(delta: float) -> void:
 	var v := Vector3(velocity.x, 0.0, velocity.z)
-	var fwd := -global_basis.z
 	var moving := v.length()
-	var slip := 0.0
-	if moving > 6.0:
-		slip = absf(fwd.signed_angle_to(v / moving * signf(speed if speed != 0.0 else 1.0), Vector3.UP))
-	var skidding := not shows_rider and ((handbrake and moving > 6.0) or (_slide > 0.3 and moving > 5.0) or (slip > 0.3 and moving > 8.0) or _hard_brake)
-	if skidding:
-		_skid_dist += moving * delta
-		if _skid_dist > 0.6:
-			_skid_dist = 0.0
-			for x in [-_size.x * 0.42, _size.x * 0.42]:
-				Fx.skid(global_transform * Vector3(x, 0, _size.z * 0.32), v)
-		_smoke_time -= delta
-		if _smoke_time <= 0.0:
-			_smoke_time = 0.12
-			Fx.smoke(global_transform * Vector3(0, 0.3, _size.z * 0.4), 0.8)
+	_exhaust(delta)
+	_tyres(delta, v, moving)
 	if _game != null and _game.atmosphere.wetness > 0.4 and moving > 7.0:
 		_splash_time -= delta
 		if _splash_time <= 0.0:
@@ -1156,6 +1174,185 @@ func _effects(delta: float) -> void:
 			_smoke_time = 0.35 if not wrecked else 0.2
 			Fx.smoke(global_transform * Vector3(0, 1.0, -_size.z * 0.3), 0.9 if not wrecked else 1.4)
 	update_beams()
+
+
+## What this car's tailpipes show (kits/vehicle_emissions.gd has the US
+## norms behind it): water vapour on cool or damp air and from a cold
+## engine; black soot under load and on each upshift from an old diesel;
+## blue-grey oil smoke from a worn engine; pops on the overrun from a sports
+## car. EVs, the e-moped and bicycles show nothing.
+func _exhaust(delta: float) -> void:
+	if _emit.is_empty():
+		_roll_emissions()
+	var on := not wrecked and (driver != Driver.NONE or _deployed)
+	if on and not _engine_on and absf(speed) < 0.5:
+		_cold = COLD_START
+	_engine_on = on
+	var pace := absf(speed)
+	var gain := clampf((pace - _prev_pace) / maxf(delta, 0.001) / maxf(accel, 1.0), 0.0, 1.0)
+	_prev_pace = pace
+	_load = lerpf(_load, gain, clampf(8.0 * delta, 0.0, 1.0))
+	var gear := int(pace / maxf(max_speed / (GEARS_DIESEL if _emit.fuel == "diesel" else GEARS), 1.0))
+	var shift := gear > _gear and _load > 0.3
+	_gear = gear
+	if not on or _outlets.is_empty():
+		return
+	_cold = maxf(_cold - delta, 0.0)
+	var k := clampf(_size.x / 1.9, 0.6, 1.5)
+	var fuel: String = _emit.fuel
+	var air := 0.0
+	if _game != null:
+		air = maxf(_game.atmosphere.night_amount(), _game.atmosphere.wetness)
+	# Overrun pops: lifting off the gas at speed.
+	var lifted := _throttle_was > 0.5 and throttle < 0.1
+	_throttle_was = throttle
+	if _emit.pops and lifted and pace > 14.0 and _pops == 0:
+		_pops = _erng().randi_range(2, 4)
+		_pop_time = 0.0
+	if _pops > 0:
+		_pop_time -= delta
+		if _pop_time <= 0.0:
+			_pop_time = _erng().randf_range(0.06, 0.16)
+			_pops -= 1
+			for o in _outlets:
+				var at: Vector3 = global_transform * o[0]
+				Fx.puff(at, global_basis * o[1] * 2.0, 0.22 * k, 0.6, 0.12, Color(1.0, 0.55, 0.15, 0.9))
+				Fx.puff(at, global_basis * o[1] * 1.5, 0.2 * k, 0.9, 0.7, Color(0.5, 0.5, 0.52, 0.3))
+	var color := Color(0, 0, 0, 0)
+	var size := 0.2
+	var every := 0.0
+	var burst := 1
+	if fuel == "diesel" and _emit.old and (_load > 0.3 or shift):
+		color = Emissions.SOOT
+		color.a *= clampf(0.4 + _load, 0.0, 1.0)
+		size = 0.32
+		every = 0.07
+		if shift:
+			burst = 3
+			color.a = 0.75
+			size = 0.45
+	elif _emit.smoker and (_load > 0.25 or pace < 1.0):
+		color = Emissions.OIL
+		if pace < 1.0 and _load <= 0.25:
+			color.a *= 0.5
+			every = 0.45
+		else:
+			every = 0.1
+		size = 0.26
+	elif fuel == "diesel" and (shift or (_load > 0.6 and pace < 8.0)):
+		color = Emissions.HAZE
+		size = 0.3
+		every = 0.2
+	elif (_cold > 0.0 or air > 0.4) and pace < 10.0:
+		color = Emissions.VAPOUR
+		color.a *= clampf(maxf(_cold / COLD_START, air), 0.4, 1.0)
+		size = 0.18
+		every = 0.12 if _load > 0.3 else 0.22
+	if color.a <= 0.0:
+		return
+	_puff_time -= delta
+	if _puff_time > 0.0 and not shift:
+		return
+	_puff_time = every
+	var r := _erng()
+	for o in _outlets:
+		var at: Vector3 = global_transform * o[0]
+		var out: Vector3 = global_basis * o[1]
+		for i in burst:
+			var jitter := Vector3(r.randf_range(-0.3, 0.3), r.randf_range(0.0, 0.3), r.randf_range(-0.3, 0.3))
+			Fx.puff(at, velocity * 0.15 + out * (1.2 + 2.0 * _load) + jitter, size * k, 0.9 + 0.6 * _load, 1.5 + 0.4 * _load, color)
+
+
+## Rubber on the road. Drifts and sideways slides mark from the rear tyres
+## and smoke in proportion to how fast the tyre slides, how wide it is and
+## how heavy the car is; locked wheels (the handbrake, or a car without ABS
+## braking hard) mark dark and smoke too; an ABS stop leaves only faint,
+## broken marks; a powerful car's burnout lays two black stripes. Wet roads
+## take neither marks nor smoke.
+func _tyres(delta: float, v: Vector3, moving: float) -> void:
+	if _tracks.is_empty():
+		_roll_emissions()
+	var wheels: Array = _tracks.rear + _tracks.front
+	var n_rear: int = _tracks.rear.size()
+	var wet: bool = _game != null and _game.atmosphere.wetness > 0.4
+	var lateral := absf(v.dot(global_basis.x))
+	var pace := absf(speed)
+	var rear := lateral if lateral > SLIDE_MARK else 0.0
+	var front := 0.0
+	var faint := false
+	if handbrake and moving > 3.0:
+		rear = maxf(rear, moving)
+	# A hard stop: the player (or a cop, a chaser) on the brakes at speed.
+	# Traffic's ordinary stops leave nothing.
+	if (_hard_brake or (braking and moving > 12.0 and driver != Driver.TRAFFIC)) and not drifting:
+		if _emit.get("abs", true):
+			faint = true
+		else:
+			rear = maxf(rear, moving)
+			front = moving
+	if _emit.pops and throttle > 0.9 and pace < 7.0 and _load > 0.4 and driver == Driver.PLAYER:
+		rear = maxf(rear, 10.0 - pace)
+	if wet or wrecked:
+		rear = 0.0
+		front = 0.0
+		faint = false
+	var heavy := clampf(0.75 + mass * 0.1, 0.75, 1.2)
+	_abs_dist += moving * delta
+	# An ABS stop pulses: about 1.5 m of mark, then a gap.
+	var pulse := faint and fmod(_abs_dist, 2.4) < 1.5
+	var width: float = _tracks.width
+	var smoke := false
+	if rear > 4.0 or front > 4.0:
+		_tyre_time -= delta
+		if _tyre_time <= 0.0:
+			var amount := maxf(rear, front) * width * 4.0 * heavy
+			_tyre_time = clampf(0.3 / maxf(amount, 0.01), 0.035, 0.25)
+			smoke = true
+	for i in wheels.size():
+		var slide := rear if i < n_rear else front
+		var mark := slide > 0.0 or pulse
+		if not mark:
+			_marking[i] = 0
+			continue
+		var p: Vector3 = global_transform * (wheels[i] as Vector3)
+		if _marking[i] == 0:
+			_marking[i] = 1
+			_mark_at[i] = p
+		elif p.distance_to(_mark_at[i]) >= MARK_STEP:
+			var alpha := 0.13 if slide <= 0.0 else clampf(0.22 + slide * 0.035, 0.0, 0.62) * heavy
+			Fx.tyre_mark(_mark_at[i], p, width, alpha)
+			_mark_at[i] = p
+		if smoke and slide > 4.0 and _emit.fuel != "none":
+			var r := _erng()
+			var c := Emissions.TYRE
+			c.a *= clampf(slide / 12.0, 0.3, 1.0)
+			Fx.puff(p + Vector3(0, 0.25, 0), -v * 0.15 + Vector3(r.randf_range(-0.6, 0.6), 0.4, r.randf_range(-0.6, 0.6)),
+					0.35 + width, 1.4 + slide * 0.06, 2.0, c)
+
+
+## Rolls this car's engine (fuel, an old diesel, a smoker) once, with older
+## cars likelier in the poorer districts, and finds its tailpipes and tracks.
+func _roll_emissions() -> void:
+	var poor := 0.25
+	if _game != null and _game.get("city") != null and _game.city.has_method("district_at"):
+		poor = POOR.get(str(_game.city.district_at(global_position).get("style", "")), 0.25)
+	var r := RandomNumberGenerator.new()
+	r.seed = hash(get_instance_id())
+	_emit = Emissions.roll(kind, r, poor)
+	_outlets = Emissions.outlets(kind, _size)
+	_tracks = Emissions.tracks(kind, _size)
+	var n: int = _tracks.rear.size() + _tracks.front.size()
+	_mark_at.resize(n)
+	_marking.resize(n)
+	_marking.fill(0)
+
+
+static var _fx_rng := RandomNumberGenerator.new()
+
+
+## Jitter for puffs only (keeps `rng`, which traffic draws on, untouched).
+static func _erng() -> RandomNumberGenerator:
+	return _fx_rng
 
 
 ## Headlights on at night while someone drives (or the car is out on a job);

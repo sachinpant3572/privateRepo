@@ -186,6 +186,7 @@ func apply_settings() -> void:
 	Country.UNLOAD_RADIUS = 210.0 * reach
 	graphics.apply(settings)
 	Fx.set_blood(settings.get("blood", true) != false)
+	Fx.set_quality(graphics.quality)
 	var scheme: String = settings.get("controls", "stick")
 	Controls.scheme = scheme if Controls.SCHEMES.has(scheme) else "stick"
 	# Headless runs (tests, tools) go flat out.

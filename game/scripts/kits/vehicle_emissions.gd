@@ -28,7 +28,9 @@
 ## tyre: tread width (m); dual: twin rear tyres (trucks); wheels: tracks
 ##   that mark (2 for cars, 1 for two-wheelers).
 ## smoker: base chance of a worn engine; old: chance of a pre-filter
-##   diesel; pops: overrun pops.
+##   diesel; pops: overrun pops; abs: false where the US does not require
+##   it (motorcycles, three-wheelers, bicycles), so a hard stop locks the
+##   wheels and marks dark.
 
 const KINDS := {
 	"compact": {"fuel": "petrol", "pipes": [[0.45, 0.3, 1]], "tyre": 0.19, "smoker": 0.03},
@@ -54,11 +56,11 @@ const KINDS := {
 	"tipper": {"fuel": "diesel", "at": [[1.08, 2.95, -2.42]], "dir": Vector3.UP, "tyre": 0.3, "dual": true, "old": 0.1},
 	"semi": {"fuel": "diesel", "at": [[-1.17, 4.02, -3.93], [1.17, 4.02, -3.93]], "dir": Vector3.UP, "tyre": 0.3, "dual": true, "old": 0.07},
 	# Single-cylinder three-wheelers: small, often tired engines.
-	"tuk_tuk": {"fuel": "petrol", "pipes": [[-0.45, 0.25, 1]], "tyre": 0.13, "smoker": 0.1},
-	"cargo_trike": {"fuel": "petrol", "pipes": [[-0.5, 0.3, 1]], "tyre": 0.14, "smoker": 0.1},
-	"motorbike": {"fuel": "petrol", "pipes": [[0.18, 0.45, 0.95]], "tyre": 0.18, "wheels": 1, "smoker": 0.02},
+	"tuk_tuk": {"abs": false, "fuel": "petrol", "pipes": [[-0.45, 0.25, 1]], "tyre": 0.13, "smoker": 0.1},
+	"cargo_trike": {"abs": false, "fuel": "petrol", "pipes": [[-0.5, 0.3, 1]], "tyre": 0.14, "smoker": 0.1},
+	"motorbike": {"abs": false, "fuel": "petrol", "pipes": [[0.18, 0.45, 0.95]], "tyre": 0.18, "wheels": 1, "smoker": 0.02},
 	"scooter": {"fuel": "electric", "tyre": 0.11, "wheels": 1},
-	"bicycle": {"fuel": "none", "tyre": 0.04, "wheels": 1},
+	"bicycle": {"abs": false, "fuel": "none", "tyre": 0.04, "wheels": 1},
 }
 
 ## Visible puff colours.
@@ -88,6 +90,7 @@ static func roll(kind: String, rng: RandomNumberGenerator, poor: float) -> Dicti
 		"old": fuel == "diesel" and rng.randf() < float(e.get("old", 0.04)) * lift,
 		"smoker": fuel == "petrol" and rng.randf() < float(e.get("smoker", 0.0)) * lift,
 		"pops": e.get("pops", false),
+		"abs": e.get("abs", true),
 	}
 
 
