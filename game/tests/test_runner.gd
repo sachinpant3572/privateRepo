@@ -2151,10 +2151,11 @@ func test_hit_diner_leaves_the_booth() -> void:
 			other = n
 			break
 	if other != null:
-		var before: int = ii._customers()
 		other.take_hit(game.player, 1000.0, Vector3.ZERO)
 		await _frames(2)
-		_check(ii._customers() == before - 1 and not ii._taken.values().has(other), "a knocked-out diner frees the seat")
+		# Checked on the diner itself: a new customer may walk in meanwhile,
+		# so the head count alone races (it failed once in a full run).
+		_check(not other.is_in_group("patrons") and other.is_in_group("patrons_out") and not ii._taken.values().has(other), "a knocked-out diner frees the seat")
 	Wanted.clear()
 	await _leave()
 
