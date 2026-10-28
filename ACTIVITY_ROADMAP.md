@@ -54,7 +54,7 @@ source; Solvera's status (**have** / **partial** / **missing**) with file refere
 | Cinema, bar, strip club (friend activities) | V5, V [S9] | missing. Strip club: recommend never (tone and age rating) |
 | Fairground rides | V5, V [S9] | missing; package 32 |
 | Hunting / wildlife photography challenge | V5, V [S4] | missing |
-| Stock market | V5, R | missing |
+| Stock market | V5, R | missing; designed in `STOCK_MARKET_DESIGN.md` (lite about 2.5 sessions, full about 6) |
 | Dating, girlfriends, friends | SA, V [S15]; V5 friends, V [S9] | missing |
 | 1v1 races, clan seasons, daily and weekly tasks | MO2, V [M2]; tasks 2 [M3] | missing |
 
