@@ -52,10 +52,13 @@ you mean by Tilt near Towers?"
   hides the page but never frees its rows.
 - **Paused preview stays current** (review fix): the world is paused while the
   page is open, so every 0.25 s the page re-applies the light
-  (`atmosphere._apply(0)`), refits the shadows, builds the city and country
-  cells round the camera's stream point (`city.stream_now`) and refreshes the
-  headlights (`update_beams` on group "vehicles"). Weather picked while paused
-  changes at once. Camera turn and Look down near towers only show once the
+  (`atmosphere._apply(0)`), refits the shadows and refreshes the headlights
+  (`update_beams` on group "vehicles"); every frame it runs the city's and
+  country's own threaded streaming step (`_process(delta)`), so a wider view
+  fills in a cell at a time with no hitch. `stream_now` was tried first and
+  rejected: it builds every missing cell on the main thread in one call, a
+  long freeze on a phone at Distance 130%. Rain particles run while the page
+  is open. Weather changed while paused changes at once (only when it changes). Camera turn and Look down near towers only show once the
   player moves or is among towers; their hints say so.
 - Not fixed, on purpose: closing from "Driving fast" eases the zoom back in
   over about a second (looks like a transition). 75 and 90 FPS can judder on a

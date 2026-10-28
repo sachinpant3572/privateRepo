@@ -347,6 +347,7 @@ func release_player() -> void:
 		occupant.rotation.z = 0.0
 	occupant = null
 	driver = Driver.NONE
+	update_beams()
 	if not wrecked:
 		_skin(MeshBuilder.material(), MeshBuilder.gloss_material())
 

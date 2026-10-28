@@ -129,8 +129,9 @@ func apply_settings() -> void:
 	var w: String = settings.get("weather", "auto")
 	atmosphere.weather_changes = w == "auto"
 	if w != "auto":
-		# Paused (the settings page), it changes at once so the preview shows it.
-		atmosphere.set_weather(w, get_tree().paused)
+		# Changed while paused (the settings page), it changes at once so the
+		# preview shows it.
+		atmosphere.set_weather(w, get_tree().paused and w != atmosphere.weather)
 	var persp: bool = str(settings.get("view", "perspective")) != "classic"
 	camera.perspective = persp
 	atmosphere.set_view(persp)

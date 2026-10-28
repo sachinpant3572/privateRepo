@@ -124,6 +124,9 @@ func show_page(back := "BACK") -> void:
 	if cam != null:
 		_cam_mode = cam.process_mode
 		cam.process_mode = Node.PROCESS_MODE_ALWAYS
+	# Rain keeps falling in the preview.
+	for p in _rain_nodes():
+		p.process_mode = Node.PROCESS_MODE_ALWAYS
 	var screen := get_viewport().get_visible_rect().size
 	_aspect.ratio = screen.x / maxf(screen.y, 1.0)
 	preview.render_target_update_mode = SubViewport.UPDATE_ALWAYS
@@ -143,6 +146,8 @@ func hide_page() -> void:
 	if cam != null:
 		cam.preview_drive = false
 		cam.process_mode = _cam_mode
+	for p in _rain_nodes():
+		p.process_mode = Node.PROCESS_MODE_INHERIT
 	preview.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	get_viewport().disable_3d = false
 
@@ -151,6 +156,13 @@ func _process(delta: float) -> void:
 	if not visible:
 		return
 	_follow()
+	# The city and country stream round the view with their own threaded
+	# step (a cell at a time, no hitch), just as in play.
+	var city = phone.game.city
+	if city != null:
+		city._process(delta)
+		if city.country != null:
+			city.country._process(delta)
 	_world_tick -= delta
 	if _world_tick <= 0.0:
 		_world_tick = 0.25
@@ -158,15 +170,12 @@ func _process(delta: float) -> void:
 
 
 ## The game is paused, so the page keeps up to date what the preview shows:
-## the light after a clock skip, the shadows' reach, the streets a wider view
-## takes in (built at once) and the headlights.
+## the light after a clock skip, the shadows' reach and the headlights.
 func _refresh_world() -> void:
 	var game = phone.game
 	if game.atmosphere != null:
 		game.atmosphere._apply(0.0)
 		game.atmosphere._fit_shadows()
-	if game.city != null and game.camera != null:
-		game.city.stream_now(game.camera.stream_point())
 	get_tree().call_group("vehicles", "update_beams")
 
 
@@ -189,6 +198,12 @@ func _follow() -> void:
 	preview_cam.environment = c.environment
 	preview_cam.attributes = c.attributes
 	preview_cam.global_transform = c.global_transform
+
+
+## The rain and splash particles, which run while the page is open.
+func _rain_nodes() -> Array:
+	var atm = phone.game.atmosphere
+	return [atm._rain, atm._splash] if atm != null and atm._rain != null else []
 
 
 ## "Driving fast" frames the view as the car at full speed would (Drive

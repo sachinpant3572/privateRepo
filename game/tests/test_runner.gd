@@ -1398,17 +1398,22 @@ func test_settings_page_tabs_and_preview() -> void:
 	var wb = _find_button(page._list, "Weather: ")
 	while not wb.text.ends_with("RAIN"):
 		wb.pressed.emit()
-	_check(is_equal_approx(atm.rain, 0.6) and is_equal_approx(atm.clouds, 0.85), "Weather rain shows at once in the paused preview (rain %.2f)" % atm.rain)
+	_check(is_equal_approx(atm.rain, 0.6) and is_equal_approx(atm.clouds, 0.85) and atm._rain.can_process(), "Weather rain shows at once in the paused preview, drops falling (rain %.2f)" % atm.rain)
 	game.settings["weather"] = weather_was
+	atm.set_weather("clear", true)
 	page.show_tab("Camera")
 	game.settings["zoom"] = 1.3
 	game.apply_settings()
 	page._preview_driving(true)
-	await _idle(90)
-	var missing := 0
-	for c in game.city._cells_near(cam.stream_point(), game.city.get_script().LOAD_RADIUS):
-		if not game.city._loaded.has(c):
-			missing += 1
+	var missing := -1
+	for i in 60:
+		await _idle(10)
+		missing = 0
+		for c in game.city._cells_near(cam.stream_point(), game.city.get_script().LOAD_RADIUS):
+			if not game.city._loaded.has(c):
+				missing += 1
+		if missing == 0:
+			break
 	_check(missing == 0, "zoomed out and driving fast, the paused preview builds the streets it frames (%d missing)" % missing)
 	page._preview_driving(false)
 	game.settings["zoom"] = 1.0
@@ -1422,7 +1427,7 @@ func test_settings_page_tabs_and_preview() -> void:
 	phone._on_back()
 	_check(phone.visible and not page.visible and phone._frame.visible and get_tree().paused and not page.get_viewport().disable_3d, "BACK returns to the phone's apps and draws the game again")
 	phone.close()
-	_check(not get_tree().paused and cam.process_mode == Node.PROCESS_MODE_INHERIT and page.preview.render_target_update_mode == SubViewport.UPDATE_DISABLED and not cam.preview_drive, "closing puts the camera back to pausing with the game and stops the preview")
+	_check(not get_tree().paused and cam.process_mode == Node.PROCESS_MODE_INHERIT and atm._rain.process_mode == Node.PROCESS_MODE_INHERIT and page.preview.render_target_update_mode == SubViewport.UPDATE_DISABLED and not cam.preview_drive, "closing puts the camera back to pausing with the game and stops the preview")
 	game.settings["zoom"] = 1.0
 	game.settings["drive_zoom"] = 1.0
 	game.apply_settings()
