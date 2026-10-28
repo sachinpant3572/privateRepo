@@ -997,12 +997,15 @@ class Country:
         east_leg = [g for g in belt if g.distance(Point(east, (north + bottom_e) * 0.5)) < 2.0]
         for g in east_leg:
             self.arterials.append([g, "v"])
-        # Civic grounds: the school on the boulevard, the DMV on an arterial.
+        # Civic grounds: the school on the boulevard, the DMV on an arterial,
+        # both east of the boulevard, so every city street carries on out
+        # to it unbroken.
+        beyond = ez.intersection(box(xs, north - 1000.0, east + 1000.0, by1 + 1000.0))
         if getattr(self, "spine", None) is not None:
-            self._reserve(self.spine, -1.0, SCHOOL_PLOT, ez, "school_e")
+            self._reserve(self.spine, -1.0, SCHOOL_PLOT, beyond, "school_e")
         h_arts = [a for a, o in self.arterials if o == "h" and a is not top]
         if h_arts:
-            self._reserve(h_arts[0], 1.0, DMV_PLOT, ez, "dmv")
+            self._reserve(h_arts[0], 1.0, DMV_PLOT, beyond, "dmv")
         # Tract streets: one from each of the city's streets that reaches the
         # east edge (TRACT_PITCH_MIN or more apart), on to Sunvale Boulevard
         # and the Beltway, so every one runs end to end between major roads.
@@ -1055,7 +1058,8 @@ class Country:
         run alongside another road or meet one at a glancing angle is left."""
         drivable = [s[0] for s in self.sources if CLASSES[s[1]]["graph"]]
         roads = unary_union(drivable)
-        civic = unary_union([r["poly"].buffer(6.0) for r in self.reserved] + [Point(q).buffer(40.0) for q in self.lm_pts])
+        # A landmark takes a lot of its own: the street keeps off its middle.
+        civic = unary_union([r["poly"].buffer(6.0) for r in self.reserved] + [Point(q).buffer(25.0) for q in self.lm_pts])
         linked = {l["plan_node"] for l in self.links}
         tags = {"eastside": "tract", "shore": "stub", "fringe": "rowhouse", "beach_town": "brisa"}
         for side in "wnes":

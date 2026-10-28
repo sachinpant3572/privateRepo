@@ -1563,8 +1563,9 @@ static func _esplanade(ctx: Ctx) -> void:
 	_done(ctx, local, false, ctx.props)
 
 
-## Founders Circle: a round lawn with walks from the middle out to the
-## crossings and the Founders Obelisk at the centre.
+## A traffic circle's lawn: walks from the middle out to the crossings,
+## palms round it, and the Founders Obelisk at the centre of Founders
+## Circle (a statue or a fountain at the others).
 static func _founders_circle(ctx: Ctx) -> void:
 	var mb = ctx.mb
 	var r := minf(ctx.hx, ctx.hz)
@@ -1580,9 +1581,18 @@ static func _founders_circle(ctx: Ctx) -> void:
 		var a := TAU * (k + 0.5) / 8.0
 		Props.palm(mb, local, Vector3(cos(a), 0, sin(a)) * (r - 4.0), ctx.rng)
 	_done(ctx, local, false, ctx.props)
-	var obelisk := _at(ctx, Vector3(0, KERB, 0), PI)
-	Civic.build("founders_obelisk", mb, obelisk, Vector2(minf(28.0, r * 1.4), minf(28.0, r * 1.4)), ctx.rng)
-	_done(ctx, obelisk)
+	# Founders Circle has the obelisk; the other circles a statue (Liberty
+	# Circle) or a fountain.
+	var id: String = ctx.plan.set_piece_id(ctx.face)
+	var middle := _at(ctx, Vector3(0, KERB, 0), PI)
+	var s := minf(28.0, r * 1.4)
+	if id == "founders_circle":
+		Civic.build("founders_obelisk", mb, middle, Vector2(s, s), ctx.rng)
+	elif id == "liberty_circle":
+		Skyline.statue_plinth(mb, middle, minf(22.0, s), minf(22.0, s), ctx.rng)
+	else:
+		Skyline._fountain(mb, middle, Vector3(0, 0.02, 0), Vector3(minf(14.0, r * 0.7), 0, minf(14.0, r * 0.7)))
+	_done(ctx, middle)
 
 
 ## Moreau Square: a lawn with walks corner to corner, a fountain where they

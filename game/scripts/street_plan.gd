@@ -39,10 +39,20 @@ const STEP := 26.0
 ## The River Road and Levee Road run this far out from the water's edge.
 const RIVER_ROAD := 9.0
 const QUAY_SET := 6.0 # the quay's centreline back from the water
-## Founders Circle's ring (centreline radius), the Esplanade's width between
-## its drives, and Moreau Square (middle, half side).
+## Founders Circle's ring (centreline radius), the City Hall grounds (snapped
+## to two rows of the Gilt grid; the Esplanade runs east from them between
+## the same two streets), and Moreau Square (middle, half side).
 const CIRCLE_R := 46.0
-const MALL_WIDTH := 64.0
+## The other traffic circles, where two arterials cross away from the
+## landmarks (Washington's Dupont Circle where Liberty Avenue meets
+## Crescent and Rampart): [road id, where, ring radius].
+const ROUNDABOUTS := [
+	["liberty_circle", Vector2(690, 500), 30.0],
+	["aurum_circle", Vector2(1010, 140), 26.0],
+	["cypress_circle", Vector2(1010, 500), 26.0],
+	["harbor_circle", Vector2(690, 1400), 26.0],
+]
+const CIVIC_GROUNDS := Rect2(27, 203, 98, 117)
 const MOREAU_AT := Vector2(1170, 300)
 const MOREAU_HALF := 40.0
 ## Liberty Green's size (its middle is the park_at given to build()).
@@ -74,8 +84,8 @@ const LANDMARK_LOTS := {
 ## when a side that way holds it as well as any other: the buildings along
 ## the Esplanade face the mall, City Hall faces down it.
 const LANDMARK_FACING := {
-	"city_hall": Vector2(1, 0), "county_courthouse": Vector2(0, 1), "federal_building": Vector2(0, 1),
-	"public_library": Vector2(0, -1), "police_headquarters": Vector2(0, -1), "ferry_building": Vector2(0, -1),
+	"city_hall": Vector2(1, 0), "county_courthouse": Vector2(0, -1), "federal_building": Vector2(0, 1),
+	"public_library": Vector2(0, -1), "police_headquarters": Vector2(0, 1), "ferry_building": Vector2(0, -1),
 	"liberty_square": Vector2(0, 1), "union_station": Vector2(0, -1),
 }
 const DEFAULT_LOT := Vector2(22, 22)
@@ -96,7 +106,8 @@ const ROAD_NAMES := {
 	"levee": "Levee Road", "bridge": "Morrow Bridge", "point_ave": "Point Avenue", "quay": "Ironwharf Quay",
 	"founders": "Founders Circle", "civic": "Capitol Drive", "esplanade": "Esplanade", "moreau": "Moreau Square",
 	"palmetto": "Palmetto Avenue", "cypress": "Cypress Avenue", "aurum": "Aurum Boulevard", "basin": "Basin Street",
-	"harbor": "Harbor Way", "morrow": "Morrow Boulevard",
+	"harbor": "Harbor Way", "morrow": "Morrow Boulevard", "liberty_circle": "Liberty Circle", "aurum_circle": "Aurum Circle",
+	"cypress_circle": "Cypress Circle", "harbor_circle": "Harbor Circle",
 }
 
 ## The citywide arterial grid (California: the boulevards run straight
@@ -269,8 +280,8 @@ func build(win: Rect2, margin: float, seed_v: int, river_line: PackedVector2Arra
 	for sp in set_pieces:
 		var f := face_of(sp.at)
 		sp.face = f if f >= 0 and faces[f].kind == "land" and f != park_face else -1
-	# The grid streets round the parks take their names.
-	for named in [[park_face, "park"], [set_piece_face("moreau_square"), "moreau"]]:
+	# The grid streets round the parks and the civic centre take their names.
+	for named in [[park_face, "park"], [set_piece_face("moreau_square"), "moreau"], [set_piece_face("city_hall_grounds"), "civic"], [set_piece_face("esplanade"), "esplanade"]]:
 		if named[0] >= 0:
 			for e in faces[named[0]].edges:
 				if edge_road[e] == "":
@@ -429,6 +440,16 @@ func set_piece(f: int) -> String:
 	return ""
 
 
+## Id of the set piece block f is, or "".
+func set_piece_id(f: int) -> String:
+	if f < 0:
+		return ""
+	for sp in set_pieces:
+		if sp.face == f:
+			return sp.id
+	return ""
+
+
 ## Block of set piece `id`, or -1.
 func set_piece_face(id: String) -> int:
 	for sp in set_pieces:
@@ -458,8 +479,8 @@ func _layout(src: Array) -> void:
 	var band89 := _band(_river_half + RIVER_ROAD)
 	var road_line := _extend(_chain(band89, box, true), 3.0)
 	var levee := _extend(_chain(band89, box, false), 3.0)
-	# The quay: a concrete apron along the water the docks streets end on,
-	# drivable, so none of them stops dead at the wharf.
+	# The quay: a road along the water the docks streets end on, so none of
+	# them stops dead at the wharf.
 	var bank := _extend(_chain(_band(_river_half + QUAY_SET), box, true), 3.0)
 	var north := _piece(Geometry2D.clip_polygons(box, band80), Vector2(300, 300))
 	var south := _piece(Geometry2D.clip_polygons(box, band89), Vector2(300, bounds.end.y - 20.0))
@@ -477,14 +498,26 @@ func _layout(src: Array) -> void:
 	var crescent := PackedVector2Array([Vector2(west, ART_Y_NORTH[2]), Vector2(east, ART_Y_NORTH[2])])
 	var wharf := PackedVector2Array([Vector2(ART_X[3] - 5.0, ART_Y_NORTH[3]), Vector2(east, ART_Y_NORTH[3])])
 	# Founders Circle sits on Lantern Boulevard where Liberty Avenue sets
-	# off; the Esplanade runs west from it to City Hall.
-	circle_at = Vector2(ART_X[2], 296.0)
+	# off; the Esplanade runs west from it to City Hall, on the grounds'
+	# axis.
+	var grounds := _snap_to_grid(CIVIC_GROUNDS, "gilt_w")
+	circle_at = Vector2(ART_X[2], grounds.get_center().y)
 	# The few diagonals: Liberty Avenue, the old road out to the east (it
 	# meets the grid at Rampart and Crescent), and Magnolia Avenue, out to
-	# the hills in the west from the City Hall grounds.
-	var lib_dir := (Vector2(ART_X[3], ART_Y_NORTH[2]) - circle_at).normalized()
-	var liberty := PackedVector2Array([circle_at, circle_at + lib_dir * ((east - circle_at.x) / lib_dir.x)])
-	var magnolia := PackedVector2Array([Vector2(west, 40.0), Vector2(84.0, 296.0)])
+	# the hills in the west from the City Hall grounds' corner.
+	var lib_at := Vector2(ART_X[3], ART_Y_NORTH[2])
+	var lib_dir := (lib_at - circle_at).normalized()
+	# Past Liberty Circle it turns a degree or so to meet the city's edge
+	# where a cross street does, so the two leave the city as one road
+	# instead of two side by side.
+	var edge_x := bounds.end.x - 4.0
+	var lib_y := lib_at.y + lib_dir.y / lib_dir.x * (edge_x - lib_at.x)
+	var ys: Array = ART_Y_NORTH.duplicate()
+	for sp in _splits(ART_Y_NORTH, 6, -INF, INF, "ynorth"):
+		ys.append(sp[0])
+	var lib_end := Vector2(edge_x, _nearest(ys, lib_y, INF))
+	var liberty := PackedVector2Array([circle_at, lib_at, lib_end + (lib_end - lib_at).normalized() * (east - edge_x)])
+	var magnolia := PackedVector2Array([Vector2(west, 40.0), grounds.position])
 	# River Road: along the bank up to Rampart. Past it the wharves have the
 	# water.
 	var river_road := PackedVector2Array()
@@ -508,7 +541,10 @@ func _layout(src: Array) -> void:
 	_voids = []
 	_park_poly = _rect_poly(_snap_to_grid(Rect2(_park_at - PARK_SIZE * 0.5, PARK_SIZE), "wards_n"))
 	_voids.append(Geometry2D.offset_polygon(_park_poly, -3.0)[0])
-	var cut_out: Array[PackedVector2Array] = _civic_centre(src, magnolia)
+	var cut_out: Array[PackedVector2Array] = _civic_centre(src, grounds)
+	for rb in ROUNDABOUTS:
+		if bounds.grow(-60.0).has_point(rb[1]):
+			cut_out.append(_roundabout(src, rb[0], rb[1], rb[2]))
 	_moreau_square()
 	var roads: Array = [[lantern, "boulevard", "lantern"], [crescent, "boulevard", "crescent"], [rampart, "avenue", "rampart"],
 			[liberty, "avenue", "liberty"], [magnolia, "avenue", "magnolia"], [wharf, "avenue", "wharf"], [river_road, "river", "river_road"],
@@ -560,40 +596,44 @@ func _layout(src: Array) -> void:
 
 
 ## The civic centre (DC's Mall and SF's Civic Center, scaled down): City
-## Hall on its grounds with a drive round them, the Esplanade (a lawn with a
-## reflecting pool between two drives) east to Founders Circle, a traffic
-## circle with the Founders Obelisk in the middle. Magnolia Avenue, like
-## DC's diagonals, stops at the grounds and carries on beyond them.
+## Hall on its grounds, the Esplanade (a lawn with a reflecting pool) east to
+## Founders Circle, a traffic circle with the Founders Obelisk in the middle.
+## The grounds and the mall are cut out of the Gilt grid like the parks, so
+## the streets round them are the grid's own and run on past them; the
+## district streets that would cross them meet them square. Magnolia
+## Avenue, like DC's diagonals, ends at the grounds' corner.
 ## Returns the outlines the named roads stop at.
-func _civic_centre(src: Array, magnolia: PackedVector2Array) -> Array[PackedVector2Array]:
+func _civic_centre(src: Array, grounds: Rect2) -> Array[PackedVector2Array]:
 	var c := circle_at
+	var cut_disk := _roundabout(src, "founders", c, CIRCLE_R)
+	_voids.append(_rect_poly(grounds.grow(-3.0)))
+	set_pieces.append({"id": "city_hall_grounds", "kind": "grounds", "at": grounds.get_center(), "face": -1})
+	var mall := Rect2(grounds.end.x, grounds.position.y, c.x - grounds.end.x, grounds.size.y)
+	_voids.append(_rect_poly(mall.grow(-3.0)))
+	set_pieces.append({"id": "esplanade", "kind": "esplanade", "at": Vector2((mall.position.x + c.x - CIRCLE_R) * 0.5, c.y), "face": -1})
+	# The cross streets west of the grounds would stop short at them: those
+	# blocks run through to the next street instead.
+	_voids.append(_rect_poly(Rect2(bounds.position.x - 60.0, grounds.position.y + 6.0, grounds.position.x - bounds.position.x + 57.0, grounds.size.y - 12.0)))
+	return [cut_disk, _rect_poly(grounds.grow(-3.0))]
+
+
+## A traffic circle: an avenue ring of radius r round a lawn at c (a set
+## piece of kind "circle", id "<road>" or "founders_circle"). District
+## streets keep clear of it; returns the disk the named roads stop in, a
+## few metres inside the ring.
+func _roundabout(src: Array, road: String, c: Vector2, r: float) -> PackedVector2Array:
 	var ring := PackedVector2Array()
 	for k in 21:
 		var a := TAU * k / 20.0
-		ring.append(c + Vector2(cos(a), sin(a)) * CIRCLE_R)
-	src.append({"pts": ring, "cls": "avenue", "road": "founders", "patch": -1, "fam": -1})
-	var disk := ring.slice(0, 20)
-	_holes.append(disk)
-	set_pieces.append({"id": "founders_circle", "kind": "circle", "at": c, "face": -1})
-	# The grounds, and the mall between them and the circle.
-	var grounds := Rect2(c.x - 296.0, c.y - 60.0, 100.0, 120.0)
-	var g := _rect_poly(grounds)
-	g.append(g[0])
-	src.append({"pts": _resample(g, STEP), "cls": "street", "road": "civic", "patch": -1, "fam": -1})
-	_holes.append(_rect_poly(grounds))
-	set_pieces.append({"id": "city_hall_grounds", "kind": "grounds", "at": grounds.get_center(), "face": -1})
-	var half := MALL_WIDTH * 0.5
-	var reach := c.x - sqrt(CIRCLE_R * CIRCLE_R - half * half) + 3.0
-	for y in [c.y - half, c.y + half]:
-		src.append({"pts": _resample(PackedVector2Array([Vector2(grounds.end.x - 2.0, y), Vector2(reach, y)]), STEP), "cls": "street", "road": "esplanade", "patch": -1, "fam": -1})
-	_holes.append(_rect_poly(Rect2(grounds.end.x, c.y - half, reach - grounds.end.x, MALL_WIDTH)))
-	set_pieces.append({"id": "esplanade", "kind": "esplanade", "at": Vector2((grounds.end.x + c.x - CIRCLE_R) * 0.5, c.y), "face": -1})
-	# Named roads stop a few metres inside the rings.
+		ring.append(c + Vector2(cos(a), sin(a)) * r)
+	src.append({"pts": ring, "cls": "avenue", "road": road, "patch": -1, "fam": -1})
+	_holes.append(ring.slice(0, 20))
+	set_pieces.append({"id": "founders_circle" if road == "founders" else road, "kind": "circle", "at": c, "face": -1})
 	var cut_disk := PackedVector2Array()
 	for k in 20:
 		var a := TAU * k / 20.0
-		cut_disk.append(c + Vector2(cos(a), sin(a)) * (CIRCLE_R - 3.0))
-	return [cut_disk, _rect_poly(grounds.grow(-3.0))]
+		cut_disk.append(c + Vector2(cos(a), sin(a)) * (r - 3.0))
+	return cut_disk
 
 
 ## Moreau Square: a park square in the Wards on one block of the grid

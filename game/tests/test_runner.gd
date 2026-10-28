@@ -148,8 +148,8 @@ func test_bellerive_borrows_dc_ny_and_california() -> void:
 	_check(through == 0, "Magnolia Avenue goes round the grounds, not through them")
 	# The buildings on the Esplanade face it, City Hall faces down it and
 	# the Federal Building faces the grounds from the north.
-	for pair in [["county_courthouse", Vector3(0, 0, 1)], ["federal_building", Vector3(0, 0, 1)], ["public_library", Vector3(0, 0, -1)],
-			["police_headquarters", Vector3(0, 0, -1)], ["city_hall", Vector3(1, 0, 0)]]:
+	for pair in [["county_courthouse", Vector3(0, 0, -1)], ["federal_building", Vector3(0, 0, 1)], ["public_library", Vector3(0, 0, -1)],
+			["police_headquarters", Vector3(0, 0, 1)], ["city_hall", Vector3(1, 0, 0)]]:
 		var out: Vector3 = city.landmark_frame(pair[0]).basis.z
 		_check(out.dot(pair[1]) > 0.7, "%s faces the civic centre (front %s)" % [pair[0], out])
 	# Midtown: avenues (district streets of avenue class) with long thin
