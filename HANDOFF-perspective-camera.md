@@ -35,7 +35,7 @@ what is at least 100mtrs ahead which will lead to car crahes or plane crashes."
   so the camera backs out before reaching a tower.
 - D-4 Near fade: surfaces within 0.15 x the base distance of the eye dither out, so a roof just under
   the camera never fills the screen.
-- D-5 View band (the "complete hide"): in the cutaway shader, a building pixel is cut when the ground
+- D-5 View band (the "complete hide"; since E-4 a see-through ghost, not a cut): in the cutaway shader, a building pixel is cut when the ground
   it covers (where the eye's ray through it meets the ground at the player's height) lies in a capsule
   round the player and ahead of them: radius 12 m on foot, 16 m in a vehicle (times Zoom), and ahead
   along the velocity by min(speed x 2.5 s, 90 m). Only pixels that hide more than 4 m of ground
@@ -44,7 +44,7 @@ what is at least 100mtrs ahead which will lead to car crahes or plane crashes."
 - D-6 Cut edges use an ordered 4x4 Bayer dither (screen-door transparency), not alpha: no sorting and
   no extra pass on phones. The old player-to-camera cutaway cylinder stays, now following the real
   eye (a cone that narrows toward it).
-- D-7 Driving lead 0.8 s of velocity (was 0.55), so more of the road ahead is on screen.
+- D-7 Driving lead 0.8 s of velocity (was 0.55). Superseded by E-2 (1.1 s, capped to the screen).
 - D-8 Settings > Zoom: 80, 90, 100, 115, 130%. City and country streaming radii scale with it above
   100% (105/150 m and 130/210 m times the zoom), and crowds with `Population.reach()` (cap 2.1).
 - D-9 Shadows: in perspective the shadow distance is 160 m with tighter splits (`Atmosphere.set_view`).
@@ -57,11 +57,33 @@ what is at least 100mtrs ahead which will lead to car crahes or plane crashes."
 - D-10 Full 3D is parked in TODO.md (Sachin's condition quoted there). No model changes were needed
   for this camera.
 
+## Phase 2: move the camera first, see-through buildings last
+
+Sachin, Oct 28, on the options (steeper tilt near towers, speed zoom-out and look-ahead, see-through
+buildings, flying later, keep north-up and outlines): "Yes lets build this as best as possible."
+
+- E-1 Steeper tilt by sight, not by height: every 0.25 s `best_pitch` tries 65, 70, 75, 80 and 85°
+  and takes the lowest from whose (unbacked) camera spot the player and all but one of up to seven
+  open-ground points (a ring at 0.3 x size and the look-ahead point) are in sight; going lower needs all
+  in sight (no hunting); if none works, the one hiding least, steeper on a tie. Pitch eases (~1 s).
+  Rejected first try: tilting by the tallest roof round the view (25 -> 80 m) left the hero hidden 18%
+  downtown, no better than 65°, because the tower in the way is often not the tallest sampled.
+  Speed does not tip it: at 75° the road ahead north-south fell from about 62 to 57 m.
+- E-2 Speed zoom-out: DRIVE_SIZE 48 -> 62 m, reached at 28 m/s. Lead 1.1 s of velocity, capped per screen
+  axis so the car stays on screen: east-west 0.6 x the half width, north-south 0.75 x the ground from the
+  focus to the trailing edge (from the pitch and lens). Target: about 100 m ahead east-west, 60 m+
+  north-south at top speed.
+- E-3 Streaming follows the screen: the city loads round the camera's focus (TopDownCamera.stream_point)
+  as well as round the player, so the lead never runs past loaded cells.
+- E-4 See-through buildings: the view band and the player cutaway no longer discard to nothing; they
+  thin a building to GHOST (31% of pixels, ordered dither) and pale it, so its shape stays and the street
+  shows through. The near fade (camera inside a roof) still cuts fully. Same cost as before.
+
 ## Rejected
 
 - Pitch 70°: least hidden, but people and shop fronts flatten.
-- Dark caps for cut buildings (back faces drawn dark): cut stubs show the ground inside, but drawing
-  back faces doubles fill on the tallest meshes, a mobile cost. Revisit if the stubs read badly.
+- Dark caps for cut buildings (back faces drawn dark): doubles fill on the tallest meshes, a mobile
+  cost; E-4's see-through ghost replaced the hollow stubs instead.
 - Whole-building fade (Diablo 4 style): fades the far side of a block the player needs to see, and
   needs per-building alpha sorting.
 - Rotating camera (Chinatown Wars): north-up is a design rule (MVP_DESIGN.md), and rotation does not

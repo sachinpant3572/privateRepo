@@ -2,7 +2,7 @@ extends Node
 ## Measures how much of the street the buildings hide, in the classic
 ## (orthographic) view and the perspective view, on a 20:9 phone screen:
 ##   godot --headless res://tests/occlusion_probe.tscn
-## For street junctions across the city it reports how often the hero is
+## For random open ground across the city (half downtown) it reports how often the hero is
 ## hidden, and how much of the open ground on screen a 1 m tall person
 ## standing there would be hidden on, by screen third.
 
@@ -11,8 +11,10 @@ const L = preload("res://scripts/layers.gd")
 const ASPECT := 20.0 / 9.0
 const COLS := 24
 const ROWS := 12
-## Label, perspective, pitch, field of view.
-const MODES := [["ortho60", false, 60.0, 0.0], ["persp60/35", true, 60.0, 35.0], ["persp65/35", true, 65.0, 35.0], ["persp70/35", true, 70.0, 35.0], ["persp60/28", true, 60.0, 28.0]]
+## Label, perspective, pitch, field of view. Pitch -1 is the game's own
+## (TopDownCamera.best_pitch, E-1). The
+## perspective camera backs out of towers as in the game.
+const MODES := [["ortho60", false, 60.0, 0.0], ["persp65", true, 65.0, 35.0], ["persp70", true, 70.0, 35.0], ["persp85", true, 85.0, 35.0], ["dynamic", true, -1.0, 35.0]]
 
 var game
 
@@ -76,8 +78,14 @@ func _run() -> void:
 		var space: PhysicsDirectSpaceState3D = cam.get_world_3d().direct_space_state
 		for mode in MODES:
 			var persp: bool = mode[1]
-			cam.rotation_degrees = Vector3(-mode[2], 0, 0)
-			for sz in [26.0, 48.0]:
+			for sz in [26.0, 62.0]:
+				var pitch: float = mode[2]
+				if pitch < 0.0:
+					cam._ahead = p
+					cam.size = sz
+					pitch = cam.best_pitch(p, p)
+				cam.perspective_pitch = pitch
+				cam.rotation_degrees = Vector3(-pitch, 0, 0)
 				var key := "%s %d %s" % [mode[0], sz, "downtown" if groups[k] in ["gilt_district", "midtown"] else "other"]
 				var s: Dictionary = stats.get(key, {"n": 0, "hero": 0, "seen": [0, 0, 0], "hid": [0, 0, 0]})
 				s.n += 1
@@ -85,7 +93,8 @@ func _run() -> void:
 				var back := 220.0
 				var half := deg_to_rad(mode[3]) * 0.5
 				if persp:
-					back = sz * 0.5 / tan(half)
+					back = cam._clear_back(p, sz * 0.5 / tan(half))
+					half = atan(sz * 0.5 / back)
 				var eye := p + basis.z * back
 				if _hidden(space, p + Vector3(0, 1.0, 0), eye, basis, persp):
 					s.hero += 1

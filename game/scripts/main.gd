@@ -89,6 +89,7 @@ func _ready() -> void:
 	add_child(camera)
 	camera.snap()
 	Controls.camera = camera
+	city.view_source = camera
 	Fx.camera = camera
 
 	police = PoliceManager.new()
@@ -127,7 +128,7 @@ func apply_settings() -> void:
 	atmosphere.weather_changes = w == "auto"
 	if w != "auto":
 		atmosphere.set_weather(w)
-	var persp: bool = settings.get("view", "perspective") != "classic"
+	var persp: bool = str(settings.get("view", "perspective")) != "classic"
 	camera.perspective = persp
 	atmosphere.set_view(persp)
 	# Zoomed out, the city and country load further round the player.

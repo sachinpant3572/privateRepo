@@ -653,6 +653,13 @@ func test_camera_is_classic_top_down() -> void:
 ## framing the same ground as the classic view, never inside a building
 ## downtown, opening the cutaway when a building hides the player, and
 ## switching to the classic view from Settings.
+## A stand-in for a car the camera follows (tests of the driving view).
+class FakeDrive extends Node3D:
+	var body: CharacterBody3D
+	func focus_node() -> Node3D:
+		return body
+
+
 func test_perspective_camera() -> void:
 	var L = preload("res://scripts/layers.gd")
 	var MB = preload("res://scripts/mesh_builder.gd")
@@ -677,6 +684,8 @@ func test_perspective_camera() -> void:
 	var framing_kept := 0
 	var blocked_spot = null
 	var shadows_fit := 0
+	var pitch_sum := 0.0
+	var pitch_true := 0
 	for i in 900:
 		if inside_spots >= 6 and blocked_spot != null:
 			break
@@ -706,15 +715,23 @@ func test_perspective_camera() -> void:
 			framing_kept += 1
 		if game.atmosphere.sun.directional_shadow_max_distance >= cam.view_depth * 1.25:
 			shadows_fit += 1
+		# The pitch is picked every 0.25 s and eases over about a second.
+		await _frames(90)
+		pitch_sum += cam.perspective_pitch
+		if cam.perspective_pitch >= cam.PITCH_TALL - 0.5 or not cam._view_blocked(game.player.global_position):
+			pitch_true += 1
 	_check(inside_spots >= 3, "found downtown spots where the usual camera spot is inside a tower: %d" % inside_spots)
 	_check(outside == inside_spots and framing_kept == inside_spots, "the camera backs out of the tower at all of them (%d of %d) and frames the same ground (%d)" % [outside, inside_spots, framing_kept])
+	_check(pitch_true == inside_spots and pitch_sum / maxf(inside_spots, 1) > 72.0, "among towers the camera tips steeper (%.0f degrees on average) and sees the player, or is at its steepest, at %d of %d spots" % [pitch_sum / maxf(inside_spots, 1), pitch_true, inside_spots])
 	_check(shadows_fit == inside_spots, "the shadows reach past the ground the backed-out camera frames (%d of %d)" % [shadows_fit, inside_spots])
 	_check(blocked_spot != null, "found a downtown spot where a building hides the player")
 	if blocked_spot != null:
 		_place_player_at(blocked_spot)
-		await _frames(30)
+		await _frames(90)
 		var mat: ShaderMaterial = MB.cutaway_material()
-		_check(float(mat.get_shader_parameter("cut_radius")) > cam.CUT_RADIUS * 0.9 and float(mat.get_shader_parameter("cone")) == 1.0, "the cutaway opens round the hidden player, narrowing toward the camera")
+		var still: bool = cam._view_blocked(game.player.global_position)
+		var opened: bool = float(mat.get_shader_parameter("cut_radius")) > cam.CUT_RADIUS * 0.9 and float(mat.get_shader_parameter("cone")) == 1.0
+		_check(opened == still, "where a building hides the player even at the picked pitch (%.0f degrees: %s), the cutaway opens round them, narrowing toward the camera (%s)" % [cam.perspective_pitch, "hidden" if still else "in sight", "open" if opened else "shut"])
 	# The view band runs out ahead of a moving player, widens over a tower,
 	# and is off inside a place.
 	var band: ShaderMaterial = MB.cutaway_material()
@@ -757,24 +774,61 @@ func test_perspective_camera() -> void:
 	game.apply_settings()
 	await _frames(240)
 	_check(absf(cam.size - cam.FOOT_SIZE * 1.3) < 0.5 and game.city.LOAD_RADIUS > 130.0, "Zoom 130%% frames %.1f m on foot and loads cells to %.0f m" % [cam.size, game.city.LOAD_RADIUS])
-	# Nothing on screen lies past the loaded cells: the ground at the screen's
-	# corners and edges, at the far driving zoom with the car standing (at top
-	# speed the 0.8 s lead shifts the frame; the corners then reach about
-	# 115 m, still inside).
-	# On a 20:9 phone, the widest screen the game runs on.
-	var corner_far := 0.0
-	cam.size = cam.DRIVE_SIZE * 1.3
-	cam.snap()
-	var t := tan(deg_to_rad(cam.fov) * 0.5)
-	var b: Basis = cam.global_basis
-	for uv in [Vector2(-1, 1), Vector2(1, 1), Vector2(0, 1), Vector2(-1, -1), Vector2(1, -1)]:
-		var o: Vector3 = cam.global_position
-		var d: Vector3 = (-b.z + b.x * uv.x * t * 20.0 / 9.0 + b.y * uv.y * t).normalized()
-		var g := o + d * (-o.y / d.y)
-		corner_far = maxf(corner_far, Vector2(g.x - game.player.global_position.x, g.z - game.player.global_position.z).length())
-	_check(corner_far < game.city.LOAD_RADIUS, "at the far zoom the screen's corners (%.0f m out) lie inside the loaded radius" % corner_far)
 	game.settings["zoom"] = 1.0
 	game.apply_settings()
+	# Driving flat out, the view zooms out and leads the car, keeping it on
+	# screen, and the city loads round the middle of the screen.
+	_place_player(_home(), Vector3.ZERO)
+	await _frames(30)
+	_check(absf(cam.perspective_pitch - cam.PITCH_LOW) < 0.5, "among low buildings the camera stays at %.0f degrees" % cam.perspective_pitch)
+	var car := CharacterBody3D.new()
+	game.add_child(car)
+	car.global_position = game.player.global_position
+	var drive := FakeDrive.new()
+	drive.body = car
+	game.add_child(drive)
+	cam.target = drive
+	var rect: Rect2 = cam.get_viewport().get_visible_rect()
+	var report := []
+	var all_on := true
+	var all_far := true
+	var all_loaded := true
+	for dir in [Vector3.RIGHT, Vector3.LEFT, Vector3.FORWARD, Vector3.BACK]:
+		car.velocity = dir * 30.0
+		await _frames(300)
+		var at: Vector2 = cam.unproject_position(car.global_position)
+		if not rect.grow(-rect.size.y * 0.04).has_point(at):
+			all_on = false
+		# The ground at the screen's edge straight ahead of the car.
+		var edge := Vector2(rect.end.x - 1.0 if dir.x > 0.0 else 1.0 if dir.x < 0.0 else at.x, 1.0 if dir.z < 0.0 else rect.end.y - 1.0 if dir.z > 0.0 else at.y)
+		var o: Vector3 = cam.project_ray_origin(edge)
+		var n: Vector3 = cam.project_ray_normal(edge)
+		var g: Vector3 = o + n * ((car.global_position.y - o.y) / n.y)
+		var ahead_m: float = (g - car.global_position).dot(dir)
+		var e: Array = cam.ground_extents(cam.size)
+		# What a 20:9 phone shows east-west (the test window is 16:9).
+		var wide: float = cam.size * 0.5 * 20.0 / 9.0
+		var want: float = (wide + minf(33.0, wide * 0.6)) if dir.x != 0.0 else (e[2] + minf(33.0, e[1] * 0.75) if dir.z < 0.0 else e[1] + minf(33.0, e[2] * 0.75))
+		if dir.x != 0.0:
+			ahead_m += wide - e[0] + minf(33.0, wide * 0.6) - minf(33.0, e[0] * 0.6)
+		if ahead_m < want - 3.0 or (dir.x != 0.0 and ahead_m < 95.0) or (dir.x == 0.0 and ahead_m < 55.0):
+			all_far = false
+		for c in [Vector2(0, 0), Vector2(rect.end.x, 0), Vector2(0, rect.end.y), rect.end]:
+			var co: Vector3 = cam.project_ray_origin(c)
+			var cn: Vector3 = cam.project_ray_normal(c)
+			var cg: Vector3 = co + cn * ((car.global_position.y - co.y) / cn.y)
+			var sp: Vector3 = cam.stream_point()
+			if Vector2(cg.x - sp.x, cg.z - sp.z).length() > game.city.LOAD_RADIUS:
+				all_loaded = false
+		report.append("%s %.0f m at %.0f degrees" % [["east", "west", "north", "south"][[Vector3.RIGHT, Vector3.LEFT, Vector3.FORWARD, Vector3.BACK].find(dir)], ahead_m, cam.perspective_pitch])
+	_check(absf(cam.size - cam.DRIVE_SIZE) < 1.0, "flat out the view frames %.0f m" % cam.size)
+	_check(all_on, "the car stays on screen driving each way flat out")
+	_check(all_far, "the road shows far ahead on a 20:9 phone: %s" % ", ".join(report))
+	_check(all_loaded, "the screen's corners lie inside the cells loaded round the middle of the screen")
+	cam.target = game.player
+	drive.queue_free()
+	car.queue_free()
+	await _frames(2)
 
 
 # --- Helpers -----------------------------------------------------------------

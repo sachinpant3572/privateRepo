@@ -483,6 +483,13 @@ func _walk_to_car(game) -> void:
 ## Downtown by the Aurum Tower, Midtown's towers and the low-rise Lantern
 ## Square, on foot and (downtown) at the driving zoom, in the classic view
 ## and in perspective.
+## A stand-in for a car the camera follows (the driving view shots).
+class ViewDrive extends Node3D:
+	var body: CharacterBody3D
+	func focus_node() -> Node3D:
+		return body
+
+
 func _views(game) -> void:
 	var city = game.city
 	var midtown := Vector3.ZERO
@@ -491,8 +498,8 @@ func _views(game) -> void:
 			var c: Vector2 = (d.rect as Rect2).get_center() - city.map_origin
 			midtown = Vector3(c.x, 0, c.y)
 	var spots := [
-		["aurum", city.landmark_front("aurum_tower"), [26.0, 48.0]],
-		["midtown", city.node_pos(city.nearest_node(midtown)), [26.0, 48.0]],
+		["aurum", city.landmark_front("aurum_tower"), [26.0, 62.0]],
+		["midtown", city.node_pos(city.nearest_node(midtown)), [26.0, 62.0]],
 		["lantern", city.landmark_front("lantern_square"), [26.0]],
 	]
 	var cam = game.camera
@@ -547,6 +554,29 @@ func _views(game) -> void:
 		await _frames(30)
 		await _shot("81_%s_perspective.png" % kind)
 	cam.zoom_override = 0.0
+	# Driving flat out (30 m/s) east and north through Midtown and past the
+	# Aurum Tower: the view zooms out, leads the car and ghosts the towers in
+	# the way. The player stands where the car would be.
+	var body := CharacterBody3D.new()
+	game.add_child(body)
+	var drive := ViewDrive.new()
+	drive.body = body
+	game.add_child(drive)
+	cam.target = drive
+	for spot: Array in spots.slice(0, 2):
+		for dir: Array in [["east", Vector3.RIGHT], ["north", Vector3.FORWARD]]:
+			var pos: Vector3 = spot[1]
+			city.stream_now(pos + dir[1] * 35.0)
+			game.player.global_position = pos
+			game.player.reset_physics_interpolation()
+			body.global_position = pos
+			body.velocity = dir[1] * 30.0
+			cam.snap()
+			await _frames(240)
+			await _shot("82_drive_%s_%s.png" % [spot[0], dir[0]])
+	cam.target = game.player
+	drive.queue_free()
+	body.queue_free()
 
 
 func _shot(file: String) -> void:

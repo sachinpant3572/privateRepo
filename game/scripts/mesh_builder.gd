@@ -234,14 +234,18 @@ uniform float near_fade = 0.0;
 // The ground the player needs to see: a band `view_radius` wide round the
 // player (focus, 1 m up) and out along `ahead` (where they are heading).
 // Any part of a building that hides more than HIDE_MIN metres of that ground
-// is cut away, so tall buildings there drop to low stubs that still show
-// their footprints (HANDOFF-perspective-camera.md). 0 turns it off. Ground
+// turns to a see-through ghost (GHOST), so tall buildings there keep their
+// shape while the street shows through (HANDOFF-perspective-camera.md). 0 turns it off. Ground
 // (terrain and roads, marked by UV2.x 1, see mark_ground) is never cut, so a
 // hill ahead stays whole. No cut reaches the shadow pass: buildings keep
 // their whole shadows.
 uniform float view_radius = 0.0;
 uniform vec3 ahead = vec3(0.0);
 const float HIDE_MIN = 4.0;
+// What the band and the player hole leave of a building: a pale see-through
+// ghost of this share of its pixels, so its shape stays and the street
+// shows through (E-4). The near fade still cuts fully.
+const float GHOST = 0.3;
 
 varying vec3 world_pos;
 varying vec3 world_normal;
@@ -287,6 +291,12 @@ void fragment() {
 			float dc = length(pa - ahead.xz * h) / view_radius;
 			keep = min(keep, max(smoothstep(0.9, 1.0, dc), 1.0 - smoothstep(HIDE_MIN, HIDE_MIN + 1.0, hides)));
 		}
+	}
+	float see_through = 1.0 - keep;
+	keep = mix(GHOST, 1.0, keep);
+	if (see_through > 0.0) {
+		ALBEDO = mix(ALBEDO, vec3(0.82, 0.86, 0.92), see_through * 0.45);
+		EMISSION *= 1.0 - see_through * 0.6;
 	}
 	if (near_fade > 0.0) {
 		keep = min(keep, smoothstep(near_fade * 0.35, near_fade, distance(world_pos, eye)));

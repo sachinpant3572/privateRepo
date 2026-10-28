@@ -86,6 +86,9 @@ var cells: Array = []
 var places: Array = []
 ## Node the streaming follows; the spawn point when unset.
 var focus_node: Node3D
+## The camera: cells also load round the middle of the screen
+## (stream_point), which runs ahead of a fast car.
+var view_source: Node
 ## Night light pools are drawn only after dark (see set_glow_visible).
 var glow_visible := false
 
@@ -160,12 +163,18 @@ func _process(delta: float) -> void:
 		return
 	_stream_tick = 0.2
 	var focus := focus_node.global_position if is_instance_valid(focus_node) else spawn_point
+	var view := focus
+	if is_instance_valid(view_source) and view_source.has_method("stream_point"):
+		var s: Vector3 = view_source.stream_point()
+		if Vector2(s.x - focus.x, s.z - focus.z).length() < 150.0:
+			view = s
 	var p := Vector2(focus.x, focus.z)
+	var pv := Vector2(view.x, view.z)
 	for cell in _loaded.keys():
-		if _box_distance(cells[cell].box, p) > UNLOAD_RADIUS:
+		if _box_distance(cells[cell].box, p) > UNLOAD_RADIUS and _box_distance(cells[cell].box, pv) > UNLOAD_RADIUS:
 			_unload(cell)
 	if _task < 0:
-		for cell in _cells_near(focus, LOAD_RADIUS):
+		for cell in _cells_near(view, LOAD_RADIUS) + _cells_near(focus, LOAD_RADIUS * 0.6):
 			if not _loaded.has(cell):
 				_start_task(cell)
 				break

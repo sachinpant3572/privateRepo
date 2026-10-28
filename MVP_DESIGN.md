@@ -32,9 +32,12 @@ Everything not needed to prove that waits for later phases.
 ## Camera decision
 
 **Update (Oct 28, 2026): perspective top-down by default.** Same north-up
-view, but in true perspective (65° pitch, 35° field of view) like GTA
-Chinatown Wars, so towers lean out as you pass; buildings that hide the
-ground round and ahead of the player are cut away. Settings > View keeps the
+view, but in true perspective (35° field of view) like GTA Chinatown Wars,
+so towers lean out as you pass. The camera looks down at 65° among low
+buildings and tips toward 85° among towers; driving, it zooms out and leads
+the car (about 100 m of road ahead east-west, 60 m north-south at top
+speed); buildings that still hide the ground round and ahead of the player
+turn see-through. Settings > View keeps the
 classic flat 60° view below, and Settings > Zoom sets 80-130%. See
 HANDOFF-perspective-camera.md. Full 3D is parked in TODO.md.
 

@@ -17,7 +17,13 @@ const Terrain = preload("res://scripts/terrain.gd")
 ## The view is orthographic, so distance doesn't change the framing.
 const DISTANCE := 220.0
 const FOOT_SIZE := 26.0
-const DRIVE_SIZE := 48.0
+## The driving zoom at top speed (DRIVE_SPEED and up): with the lead, about
+## 100 m of road shows ahead east-west and 60 m or more north-south.
+const DRIVE_SIZE := 62.0
+const DRIVE_SPEED := 28.0
+## Look ahead this many seconds of travel, capped so the car stays on screen
+## (HANDOFF-perspective-camera.md E-2).
+const LEAD_SECONDS := 1.1
 ## Degrees below the horizon. 90 would be straight down with no fronts at all.
 const PITCH := 60.0
 ## The perspective view looks down more steeply: the top of the screen still
@@ -25,8 +31,19 @@ const PITCH := 60.0
 ## bottom lean away from the player instead of over the street beyond them.
 ## Downtown, perspective hid about 18% of the street on screen at 60
 ## degrees, 15% at 65 and 11-12% at 70; the classic view hides 11-13%
-## (tests/occlusion_probe.tscn). 70 foreshortens people, so 65.
-var perspective_pitch := 65.0
+## (tests/occlusion_probe.tscn). 70 foreshortens people, so 65 where the
+## buildings are low; among towers the camera tips toward 85 (5% hidden;
+## E-1 in the handoff).
+const PITCH_LOW := 65.0
+const PITCH_TALL := 85.0
+## The pitches the camera picks from, every PITCH_EVERY seconds: the lowest
+## that keeps the player and the ground round the view in sight.
+const PITCHES := [65.0, 70.0, 75.0, 80.0, 85.0]
+const PITCH_EVERY := 0.25
+var perspective_pitch := PITCH_LOW
+var _pitch_want := PITCH_LOW
+var _pitch_t := 0.0
+var _player := Vector3.ZERO
 const PERSPECTIVE_FOV := 35.0
 ## Size of the see-through hole when a building blocks the view of the player.
 const CUT_RADIUS := 6.0
@@ -92,11 +109,11 @@ func _process(delta: float) -> void:
 	var lead := Vector3.ZERO
 	if node != target:
 		var v: Vector3 = node.velocity
-		# Look ahead 0.8 s of travel (0.55 before the perspective view), so
-		# at top speed the car sits well back from the way it is going.
-		lead = v * 0.8
-		want_size = lerpf(FOOT_SIZE, DRIVE_SIZE, clampf(v.length() / 20.0, 0.0, 1.0)) * zoom
+		var speed := Vector2(v.x, v.z).length()
+		want_size = lerpf(FOOT_SIZE, DRIVE_SIZE, clampf(speed / DRIVE_SPEED, 0.0, 1.0)) * zoom
+		lead = _cap_lead(Vector3(v.x, 0.0, v.z) * LEAD_SECONDS, want_size)
 	var look := pos
+	_player = pos
 	if zoom_override > 0.0:
 		want_size = zoom_override
 	if fixed_focus != null:
@@ -105,6 +122,7 @@ func _process(delta: float) -> void:
 	_focus = _focus.lerp(look + lead, 1.0 - exp(-6.0 * delta))
 	_ahead = look + lead * 2.0
 	size = lerpf(size, want_size, 1.0 - exp(-2.0 * delta))
+	_update_pitch(delta)
 	_frame(delta)
 	_update_cutaway(pos, delta)
 	_update_view_band(node)
@@ -134,7 +152,97 @@ func snap() -> void:
 	_ahead = _focus
 	if fixed_focus != null:
 		size = room_size
+	_player = target.focus_node().global_position
+	_pitch_t = 0.0
+	_update_pitch(0.0)
 	_frame(0.0)
+
+
+## Where the streaming should centre: the ground in the middle of the screen.
+func stream_point() -> Vector3:
+	return _focus
+
+
+## The ground the screen shows from the focus: [east-west half width, to the
+## bottom edge (south), to the top edge (north)], for a framing `frame`.
+func ground_extents(frame: float) -> Array[float]:
+	var screen := get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(20.0, 9.0)
+	var half_w := frame * 0.5 * screen.x / maxf(screen.y, 1.0)
+	if not perspective:
+		var d := frame * 0.5 / sin(deg_to_rad(PITCH))
+		return [half_w, d, d]
+	var p := deg_to_rad(perspective_pitch)
+	var hf := deg_to_rad(PERSPECTIVE_FOV) * 0.5
+	var back := frame * 0.5 / tan(hf)
+	var height := back * sin(p)
+	var behind := back * cos(p)
+	var south := behind - height / tan(p + hf) if p + hf < PI * 0.5 else behind + height * tan(p + hf - PI * 0.5)
+	var north := height / tan(p - hf) - behind
+	return [half_w, south, north]
+
+
+## The lead, capped so the car stays on screen: east-west to 0.6 of the half
+## width, north-south to 0.75 of the ground behind the focus on that side.
+func _cap_lead(lead: Vector3, frame: float) -> Vector3:
+	var e := ground_extents(frame)
+	lead.x = clampf(lead.x, -e[0] * 0.6, e[0] * 0.6)
+	# Heading north (-z) the focus moves north and the car toward the bottom.
+	lead.z = clampf(lead.z, -e[1] * 0.75, e[2] * 0.75)
+	return lead
+
+
+## Perspective: tips the camera from PITCH_LOW toward PITCH_TALL where
+## buildings would hide the player or the ground round them, so towers lean
+## out of the way instead of over the street (E-1). `delta` 0 snaps.
+func _update_pitch(delta: float) -> void:
+	if not perspective:
+		return
+	_pitch_t -= delta
+	if fixed_focus != null:
+		_pitch_want = PITCH_LOW
+	elif _pitch_t <= 0.0 and is_inside_tree():
+		_pitch_t = PITCH_EVERY
+		_pitch_want = best_pitch(_player, _focus, _pitch_want)
+	perspective_pitch = _pitch_want if delta <= 0.0 else lerpf(perspective_pitch, _pitch_want, 1.0 - exp(-2.5 * delta))
+
+
+## The lowest of PITCHES from which the player at `player` is in sight, and
+## all but one of up to seven open-ground points round the view's centre
+## `center` (a ring and the look-ahead point). Dropping below `now` needs
+## all of them in sight, so the camera doesn't hunt between two pitches.
+## Where none does, the one that hides least, the steeper on a tie: right
+## beside a tower the camera spot is inside it at every pitch, and steeper
+## leaves the least tower in the way (the see-through ghost does the rest).
+func best_pitch(player: Vector3, center: Vector3, now := PITCH_LOW) -> float:
+	var space := get_world_3d().direct_space_state
+	var base := size * 0.5 / tan(deg_to_rad(PERSPECTIVE_FOV) * 0.5)
+	var points: Array[Vector3] = [_ahead]
+	for i in 6:
+		var a := TAU * i / 6.0
+		points.append(center + Vector3(cos(a), 0.0, sin(a)) * size * 0.3)
+	var open: Array[Vector3] = []
+	for p in points:
+		var g := Vector3(p.x, Terrain.height(p.x, p.z) + 1.0, p.z)
+		if space.intersect_ray(PhysicsRayQueryParameters3D.create(Vector3(p.x, 400.0, p.z), g, L.WORLD)).is_empty():
+			open.append(g)
+	var best: float = PITCHES[-1]
+	var best_score := 1 << 20
+	for pitch: float in PITCHES:
+		var eye := center + Basis.from_euler(Vector3(deg_to_rad(-pitch), 0.0, 0.0)).z * base
+		var score := 0
+		for h in [0.4, 1.6]:
+			if not space.intersect_ray(PhysicsRayQueryParameters3D.create(player + Vector3(0.0, h, 0.0), eye, L.WORLD)).is_empty():
+				score += 3
+				break
+		for g in open:
+			if not space.intersect_ray(PhysicsRayQueryParameters3D.create(g, eye, L.WORLD)).is_empty():
+				score += 1
+		if score <= (0 if pitch < now - 0.1 else 1):
+			return pitch
+		if score <= best_score:
+			best_score = score
+			best = pitch
+	return best
 
 
 ## Places the camera back from the focus: DISTANCE for the flat view, or far
@@ -183,7 +291,7 @@ func _clear_back(from: Vector3, base: float, slot := -1) -> float:
 	var frame := Engine.get_process_frames()
 	if slot >= 0 and _clear_memo.has(slot):
 		var m: Array = _clear_memo[slot]
-		if m[1] == base and from.distance_squared_to(m[0]) < 2.25 and frame - int(m[3]) < 30:
+		if absf(m[1] - base) < 0.5 and absf(m[4] - perspective_pitch) < 0.5 and from.distance_squared_to(m[0]) < 2.25 and frame - int(m[3]) < 30:
 			return m[2]
 	var query := PhysicsPointQueryParameters3D.new()
 	query.collision_mask = L.WORLD
@@ -199,7 +307,7 @@ func _clear_back(from: Vector3, base: float, slot := -1) -> float:
 	if found and back != base:
 		back += ROOF_AIR
 	if slot >= 0:
-		_clear_memo[slot] = [from, base, back, frame]
+		_clear_memo[slot] = [from, base, back, frame, perspective_pitch]
 	return back
 
 
