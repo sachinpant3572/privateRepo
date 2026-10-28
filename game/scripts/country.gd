@@ -19,8 +19,9 @@ const Terrain = preload("res://scripts/terrain.gd")
 const DATA_PATH := "res://data/country.json"
 ## Tiles load when their square comes this close to the focus (or to where
 ## a fast car will be in LOOKAHEAD seconds) and unload past UNLOAD_RADIUS.
-const LOAD_RADIUS := 130.0
-const UNLOAD_RADIUS := 210.0
+## Static so a far-seeing camera (the camera demo) can widen them.
+static var LOAD_RADIUS := 130.0
+static var UNLOAD_RADIUS := 210.0
 const LOOKAHEAD := 1.2
 const NODE_GRID := 50.0
 ## Barricades stand BARRICADE_IN m inside the play area where a road leaves

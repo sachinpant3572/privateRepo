@@ -24,6 +24,13 @@ var target: Node3D
 ## it; null and 0 on the street.
 var fixed_focus = null
 var room_size := 0.0
+## Prototype (HANDOFF-camera-demo.md): a true perspective view from the same
+## angle, framing the same `size` metres at the focus, so tall things and
+## aircraft loom toward the camera.
+var perspective := false
+const PERSPECTIVE_FOV := 35.0
+## Above 0, the zoom to hold whatever the player is doing (aircraft).
+var zoom_override := 0.0
 var _focus := Vector3.ZERO
 var _cut := 0.0
 var _trauma := 0.0
@@ -51,12 +58,14 @@ func _process(delta: float) -> void:
 		lead = v * 0.55
 		want_size = lerpf(FOOT_SIZE, DRIVE_SIZE, clampf(v.length() / 20.0, 0.0, 1.0))
 	var look := pos
+	if zoom_override > 0.0:
+		want_size = zoom_override
 	if fixed_focus != null:
 		look = fixed_focus
 		want_size = room_size
 	_focus = _focus.lerp(look + lead, 1.0 - exp(-6.0 * delta))
 	size = lerpf(size, want_size, 1.0 - exp(-2.0 * delta))
-	global_position = _focus + global_basis.z * DISTANCE
+	_frame()
 	_update_cutaway(pos, delta)
 	_apply_shake(delta)
 
@@ -83,7 +92,21 @@ func snap() -> void:
 	_focus = fixed_focus if fixed_focus != null else target.focus_node().global_position
 	if fixed_focus != null:
 		size = room_size
-	global_position = _focus + global_basis.z * DISTANCE
+	_frame()
+
+
+## Places the camera back from the focus: DISTANCE for the flat view, or far
+## enough that the perspective view frames `size` metres there.
+func _frame() -> void:
+	var back := DISTANCE
+	if perspective:
+		projection = PROJECTION_PERSPECTIVE
+		fov = PERSPECTIVE_FOV
+		back = size * 0.5 / tan(deg_to_rad(PERSPECTIVE_FOV) * 0.5)
+		far = back + 900.0
+	else:
+		projection = PROJECTION_ORTHOGONAL
+	global_position = _focus + global_basis.z * back
 
 
 ## Opens the city's see-through hole around the player only while a building

@@ -40,9 +40,10 @@ const PARK_FROM_CURB := 1.0
 ## Scenery round the window, in metres.
 const MARGIN := 110.0
 ## Cells load when their bounding box comes this close, and unload past
-## UNLOAD_RADIUS.
-const LOAD_RADIUS := 105.0
-const UNLOAD_RADIUS := 150.0
+## UNLOAD_RADIUS. Static so a far-seeing camera (the camera demo) can widen
+## them.
+static var LOAD_RADIUS := 105.0
+static var UNLOAD_RADIUS := 150.0
 const CELL_GRID := 50.0
 ## Map districts by street plan patch (patch ids start with these).
 ## Country junction ids are offset by this in the road API below, so one
