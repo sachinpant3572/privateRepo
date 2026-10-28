@@ -785,6 +785,12 @@ func _effects(delta: float) -> void:
 		if _smoke_time <= 0.0:
 			_smoke_time = 0.35 if not wrecked else 0.2
 			Fx.smoke(global_transform * Vector3(0, 1.0, -_size.z * 0.3), 0.9 if not wrecked else 1.4)
+	update_beams()
+
+
+## Headlights on at night while someone drives (or the car is out on a job);
+## also called by the settings preview, which runs with the game paused.
+func update_beams() -> void:
 	if _beams != null:
 		_beams.visible = not wrecked and (driver != Driver.NONE or _deployed) and _game != null and _game.atmosphere.night_amount() > 0.05
 

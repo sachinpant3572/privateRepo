@@ -23,6 +23,7 @@ var _tabs := {}
 var _back: Button
 var _drive_b: Button
 var _cam_mode := Node.PROCESS_MODE_INHERIT
+var _world_tick := 0.0
 
 
 func _ready() -> void:
@@ -116,6 +117,8 @@ func _ready() -> void:
 ## BACK (to the phone's apps) or CLOSE (from the gear).
 func show_page(back := "BACK") -> void:
 	_back.text = back
+	if visible:
+		return
 	visible = true
 	var cam = phone.game.camera
 	if cam != null:
@@ -128,6 +131,7 @@ func show_page(back := "BACK") -> void:
 	get_viewport().disable_3d = true
 	_preview_driving(false)
 	_follow()
+	_refresh_world()
 	show_tab(tab)
 
 
@@ -143,9 +147,27 @@ func hide_page() -> void:
 	get_viewport().disable_3d = false
 
 
-func _process(_delta: float) -> void:
-	if visible:
-		_follow()
+func _process(delta: float) -> void:
+	if not visible:
+		return
+	_follow()
+	_world_tick -= delta
+	if _world_tick <= 0.0:
+		_world_tick = 0.25
+		_refresh_world()
+
+
+## The game is paused, so the page keeps up to date what the preview shows:
+## the light after a clock skip, the shadows' reach, the streets a wider view
+## takes in (built at once) and the headlights.
+func _refresh_world() -> void:
+	var game = phone.game
+	if game.atmosphere != null:
+		game.atmosphere._apply(0.0)
+		game.atmosphere._fit_shadows()
+	if game.city != null and game.camera != null:
+		game.city.stream_now(game.camera.stream_point())
+	get_tree().call_group("vehicles", "update_beams")
 
 
 ## The preview camera copies the game camera, so it shows just what the
@@ -231,14 +253,14 @@ func _camera_tab() -> void:
 		s["auto_tilt"] = not cam.auto_tilt
 		game.apply_settings()
 		tilt_b.text = _tilt_label())
-	_row(tilt_b, "Among tall buildings the camera tips further down (up to 85°) so towers don't hide you or the street, then goes back to your Angle. OFF keeps your Angle always.")
+	_row(tilt_b, "Among tall buildings the camera tips further down (up to 85°) so towers don't hide you or the street, then goes back to your Angle. OFF keeps your Angle always. Shows among towers.")
 	var turn_b: Button = phone._button(_turn_label(), Callable())
 	turn_b.pressed.connect(func():
 		# Follow -> 90° turns -> North up -> Follow.
 		s["camera_turn"] = "car" if not cam.turn_view else "north" if cam.turn_steps else "steps"
 		game.apply_settings()
 		turn_b.text = _turn_label())
-	_row(turn_b, "Follow: the view turns with the car and your walk. 90° turns: only when you turn a whole corner. North up: never turns.")
+	_row(turn_b, "Follow: the view turns with the car and your walk. 90° turns: only when you turn a whole corner. North up: never turns. Shows once you move.")
 	var reset_b: Button = phone._button("Reset camera", Callable())
 	reset_b.pressed.connect(func():
 		s["angle"] = cam.PITCH_LOW
@@ -264,7 +286,7 @@ func _graphics_tab() -> void:
 	_row(phone._toggle("Shadows", s.get("shadows", true), func(on): s["shadows"] = on; game.apply_settings()),
 		"Sun shadows. OFF runs faster.")
 	_row(_stepper("FPS limit", "fps_limit", game.FPS_LIMITS, func(): return game.fps_limit(), func(v): return str(v)),
-		"The most frames a second the game draws. Lower saves battery and heat; your screen may hold it lower.")
+		"The most frames a second the game draws. Lower saves battery and heat. 30, 60 and 120 run smoothest on a 120 Hz screen; 75 and 90 can judder there.")
 	_row(phone._toggle("Show FPS", s.get("show_fps", true), func(on): s["show_fps"] = on; game.apply_settings()),
 		"The frame counter in the corner.")
 
@@ -294,7 +316,7 @@ func _game_tab() -> void:
 	tb.pressed.connect(func():
 		game.atmosphere.hour = fmod(game.atmosphere.hour + 3.0, 24.0)
 		tb.text = "Skip 3 hours (now %s)" % game.atmosphere.clock_text())
-	_row(tb, "Moves the clock on. The preview shows the new light.")
+	_row(tb, "Moves the clock on. The preview shows the new light and headlights.")
 	var reset: Button = phone._button("New game (erase progress)", Callable())
 	reset.pressed.connect(func():
 		if reset.text.begins_with("Tap again"):

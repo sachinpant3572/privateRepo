@@ -43,7 +43,7 @@ const PITCH_TALL := 85.0
 ## that keeps the player and the ground round the view in sight. They run
 ## from `base_pitch` (Settings > Angle, PITCH_LOW by default) up to
 ## PITCH_TALL in 5 degree steps, or are `base_pitch` alone with Settings >
-## Tilt near towers off.
+## Look down near towers off.
 const ANGLES := [40.0, 45.0, 50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0]
 var base_pitch := PITCH_LOW
 var auto_tilt := true
@@ -499,7 +499,7 @@ func _cap_lead(lead: Vector3, frame: float, back_out := 0.0) -> Vector3:
 	return axes[0] * across + axes[1] * up
 
 
-## Sets Settings > Angle and Tilt near towers, starting the pitch over from
+## Sets Settings > Angle and Look down near towers, starting the pitch over from
 ## the new angle (it eases there).
 func set_angle(pitch: float, tilt: bool) -> void:
 	if is_equal_approx(pitch, base_pitch) and tilt == auto_tilt:

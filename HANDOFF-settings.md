@@ -50,3 +50,15 @@ you mean by Tilt near Towers?"
 
 - Tests hold stepper and button references across `phone.close()`: closing
   hides the page but never frees its rows.
+- **Paused preview stays current** (review fix): the world is paused while the
+  page is open, so every 0.25 s the page re-applies the light
+  (`atmosphere._apply(0)`), refits the shadows, builds the city and country
+  cells round the camera's stream point (`city.stream_now`) and refreshes the
+  headlights (`update_beams` on group "vehicles"). Weather picked while paused
+  changes at once. Camera turn and Look down near towers only show once the
+  player moves or is among towers; their hints say so.
+- Not fixed, on purpose: closing from "Driving fast" eases the zoom back in
+  over about a second (looks like a transition). 75 and 90 FPS can judder on a
+  120 Hz screen; the hint says so (Sachin asked for those values).
+- Real-device scroll is not testable headless: ScrollContainer drag-scrolls
+  only when a touchscreen is present, so the test emits `scroll_started`.

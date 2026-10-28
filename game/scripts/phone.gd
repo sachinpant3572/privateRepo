@@ -323,7 +323,7 @@ func _text(t: String, size: int, color: Color) -> Label:
 static func touch_scroll(scroll: ScrollContainer) -> void:
 	scroll.scroll_deadzone = 12
 	var bar := scroll.get_v_scroll_bar()
-	bar.custom_minimum_size = Vector2(26, 0)
+	bar.custom_minimum_size = Vector2(36, 0)
 	var track := StyleBoxFlat.new()
 	track.bg_color = Color(1, 1, 1, 0.08)
 	track.set_corner_radius_all(10)

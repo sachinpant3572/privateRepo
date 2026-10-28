@@ -1364,7 +1364,7 @@ func test_settings_page_tabs_and_preview() -> void:
 	for b in page._list.find_children("*", "BaseButton", true, false) + phone._body.find_children("*", "BaseButton", true, false):
 		if b.mouse_filter != Control.MOUSE_FILTER_PASS:
 			stops += 1
-	_check(stops == 0 and page._scroll.get_v_scroll_bar().custom_minimum_size.x >= 26 and page._scroll.scroll_deadzone > 0, "list buttons pass drags to their scroll, which has a wide bar")
+	_check(stops == 0 and page._scroll.get_v_scroll_bar().custom_minimum_size.x >= 36 and page._scroll.scroll_deadzone > 0, "list buttons pass drags to their scroll, which has a wide bar")
 	await _idle(2)
 	var db = _find_button(page._list, "Detail: ")
 	# Window pixels (the headless window is tiny and stretched).
@@ -1374,6 +1374,46 @@ func test_settings_page_tabs_and_preview() -> void:
 	await _tap(at, true)
 	_check(game.settings["detail"] == "low", "a drag that scrolls the list does not")
 	await _tap(at, false)
+	# The game stays paused, so the page keeps the preview's world current:
+	# the light and headlights after a clock skip, the weather at once and
+	# the streets a wider view takes in.
+	var atm = game.atmosphere
+	atm.hour = 12.0
+	await _idle(20)
+	var day_sun: float = atm.sun.light_energy
+	var car = Vehicle.new()
+	car.kind = "sedan"
+	game.add_child(car)
+	car.global_position = game.player.global_position + Vector3(8, 0, 0)
+	car.driver = Vehicle.Driver.PLAYER
+	await _idle(2)
+	var lit: bool = car._beams.visible
+	page.show_tab("Game")
+	for i in 4:
+		_find_button(page._list, "Skip 3 hours").pressed.emit()
+	await _idle(20)
+	_check(get_tree().paused and atm.hour == 0.0 and not is_equal_approx(atm.sun.light_energy, day_sun) and not lit and car._beams.visible, "skipping to midnight while paused relights the preview and turns the headlights on")
+	car.queue_free()
+	var weather_was = game.settings.get("weather", "auto")
+	var wb = _find_button(page._list, "Weather: ")
+	while not wb.text.ends_with("RAIN"):
+		wb.pressed.emit()
+	_check(is_equal_approx(atm.rain, 0.6) and is_equal_approx(atm.clouds, 0.85), "Weather rain shows at once in the paused preview (rain %.2f)" % atm.rain)
+	game.settings["weather"] = weather_was
+	page.show_tab("Camera")
+	game.settings["zoom"] = 1.3
+	game.apply_settings()
+	page._preview_driving(true)
+	await _idle(90)
+	var missing := 0
+	for c in game.city._cells_near(cam.stream_point(), game.city.get_script().LOAD_RADIUS):
+		if not game.city._loaded.has(c):
+			missing += 1
+	_check(missing == 0, "zoomed out and driving fast, the paused preview builds the streets it frames (%d missing)" % missing)
+	page._preview_driving(false)
+	game.settings["zoom"] = 1.0
+	game.apply_settings()
+	atm.hour = 12.0
 	# BACK, from the phone's own Settings app, returns to the apps.
 	phone.close()
 	phone.open()
