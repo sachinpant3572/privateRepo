@@ -143,7 +143,11 @@ func _clip(activity: String, view: String, label: String) -> void:
 		chase.follow(subject, [6.5, 9.5, 22.0][["walking", "driving", "flying"].find(activity)], [2.6, 3.6, 7.0][["walking", "driving", "flying"].find(activity)], [1.4, 1.2, 1.5][["walking", "driving", "flying"].find(activity)])
 		chase.current = true
 		cam.set_process(false)
-		MeshBuilder.cutaway_material().set_shader_parameter("cut_radius", 0.001)
+		# The top-down camera is paused, so clear the cuts it left set.
+		var mat := MeshBuilder.cutaway_material()
+		mat.set_shader_parameter("cut_radius", 0.001)
+		mat.set_shader_parameter("view_radius", 0.0)
+		mat.set_shader_parameter("near_fade", 0.0)
 	else:
 		cam.set_process(true)
 		cam.current = true

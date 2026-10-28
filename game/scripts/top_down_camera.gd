@@ -10,6 +10,7 @@ extends Camera3D
 
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const L = preload("res://scripts/layers.gd")
+const Terrain = preload("res://scripts/terrain.gd")
 
 ## Classic view: far enough back (about 190 m up) that the tallest downtown
 ## towers, 150 m or so, stay in front of the camera instead of clipping open.
@@ -33,7 +34,8 @@ const CUT_RADIUS := 6.0
 ## from the focus dissolve, so a roof the camera skims past doesn't pop.
 const NEAR_FADE := 0.15
 ## Perspective: air the camera keeps along its line above a roof it backed
-## out of, clear of the near fade.
+## out of. On wide framings the near fade reaches past it, so the roof just
+## under the camera thins out, which is wanted.
 const ROOF_AIR := 9.0
 ## The ground kept clear of tall buildings (MeshBuilder's cutaway): a band
 ## this wide round the player on foot and in a car, out ahead of them for
@@ -60,6 +62,10 @@ var _focus := Vector3.ZERO
 ## Perspective: how far back the camera sits, eased so a step past a tower
 ## doesn't jump.
 var _back := 0.0
+## How far the camera is from the ground it frames (Atmosphere fits the
+## shadows to it).
+var view_depth := 0.0
+var _clear_memo := {}
 ## Where the focus is heading (the lead ahead of a moving car), so the
 ## camera starts backing off a tower before it reaches it.
 var _ahead := Vector3.ZERO
@@ -146,8 +152,8 @@ func _frame(delta: float) -> void:
 		rotation_degrees = Vector3(-perspective_pitch, 0.0, 0.0)
 		projection = PROJECTION_PERSPECTIVE
 		var base := size * 0.5 / tan(deg_to_rad(PERSPECTIVE_FOV) * 0.5)
-		var need := _clear_back(_focus, base)
-		var want := maxf(need, _clear_back(_ahead, base))
+		var need := _clear_back(_focus, base, 0)
+		var want := maxf(need, _clear_back(_ahead, base, 1))
 		if delta <= 0.0 or _back <= 0.0:
 			_back = want
 		else:
@@ -156,27 +162,44 @@ func _frame(delta: float) -> void:
 		back = _back
 		fov = rad_to_deg(2.0 * atan(size * 0.5 / back))
 		far = back * 4.0
+		view_depth = back
 	else:
 		rotation_degrees = Vector3(-PITCH, 0.0, 0.0)
 		projection = PROJECTION_ORTHOGONAL
-		far = DISTANCE + 120.0
+		# The ground under a focus high above it (an aircraft) is further.
+		far = DISTANCE + 120.0 + maxf(_focus.y - Terrain.height(_focus.x, _focus.z), 0.0) * 1.2
+		view_depth = DISTANCE
 	global_position = _focus + global_basis.z * back
 
 
 ## The first distance from `base` outward along the camera's line from
 ## `from` that is outside every building, with ROOF_AIR above the roof.
-func _clear_back(from: Vector3, base: float) -> float:
+func _clear_back(from: Vector3, base: float, slot := -1) -> float:
 	if not is_inside_tree():
 		return base
+	# Over a tower the search takes 30-odd steps, so each caller's last
+	# answer is kept while its point stays put (and refreshed now and then,
+	# for buildings streaming in).
+	var frame := Engine.get_process_frames()
+	if slot >= 0 and _clear_memo.has(slot):
+		var m: Array = _clear_memo[slot]
+		if m[1] == base and from.distance_squared_to(m[0]) < 2.25 and frame - int(m[3]) < 30:
+			return m[2]
 	var query := PhysicsPointQueryParameters3D.new()
 	query.collision_mask = L.WORLD
 	var space := get_world_3d().direct_space_state
 	var back := base
+	var found := false
 	for i in 60:
 		query.position = from + global_basis.z * back
 		if space.intersect_point(query, 1).is_empty():
-			return back if back == base else back + ROOF_AIR
+			found = true
+			break
 		back += 4.0
+	if found and back != base:
+		back += ROOF_AIR
+	if slot >= 0:
+		_clear_memo[slot] = [from, base, back, frame]
 	return back
 
 
@@ -190,6 +213,11 @@ func _update_view_band(node: Node3D) -> void:
 	var v = node.get("velocity")
 	var flat := Vector3(v.x, 0.0, v.z) if v is Vector3 else Vector3.ZERO
 	var radius := VIEW_RADIUS_DRIVE if node != target else VIEW_RADIUS_FOOT
+	# Backed out over a tower, the tower fills the screen round the band, so
+	# the band widens with the camera's distance (up to 3 times).
+	if perspective:
+		var base := size * 0.5 / tan(deg_to_rad(PERSPECTIVE_FOV) * 0.5)
+		radius *= clampf(_back / base, 1.0, 3.0)
 	mat.set_shader_parameter("view_radius", radius * zoom)
 	mat.set_shader_parameter("ahead", flat.normalized() * minf(flat.length() * AHEAD_SECONDS, AHEAD_MAX) if flat.length() > 1.0 else Vector3.ZERO)
 

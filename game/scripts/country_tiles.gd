@@ -147,6 +147,7 @@ static func build(country, key: Vector2i) -> Dictionary:
 		for e in t.r:
 			_road(ctx, int(e))
 		_junctions(ctx)
+		ctx.mb.mark_ground(0)
 		for i in t.get("q", []):
 			_plot(ctx, int(i))
 		for i in t.l:
@@ -159,10 +160,12 @@ static func build(country, key: Vector2i) -> Dictionary:
 			_barricade(ctx, country.barricades[int(i)])
 		for pair in t.x:
 			_rail(ctx, int(pair[0]), int(pair[1]))
+		var roads_from: int = ctx.mb.verts.size()
 		for pair in t.f:
 			_far_road(ctx, int(pair[0]), int(pair[1]))
 		for pair in t.t:
 			_trail(ctx, int(pair[0]), int(pair[1]))
+		ctx.mb.mark_ground(roads_from)
 		_ponds(ctx)
 		_trees(ctx)
 		if ctx.hill:

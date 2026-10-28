@@ -131,8 +131,8 @@ func apply_settings() -> void:
 	camera.perspective = persp
 	atmosphere.set_view(persp)
 	# Zoomed out, the city and country load further round the player.
-	var z: float = settings.get("zoom", 1.0)
-	camera.zoom = z if camera.ZOOMS.has(z) else 1.0
+	var z = settings.get("zoom", 1.0)
+	camera.zoom = float(z) if (z is float or z is int) and camera.ZOOMS.has(float(z)) else 1.0
 	var reach := maxf(camera.zoom, 1.0)
 	City.LOAD_RADIUS = 105.0 * reach
 	City.UNLOAD_RADIUS = 150.0 * reach

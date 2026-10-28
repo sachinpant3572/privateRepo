@@ -256,7 +256,7 @@ func _settings() -> void:
 		game.apply_settings()
 		db.text = "Detail: " + s["detail"].to_upper())
 	_body.add_child(db)
-	var vb := _button("View: " + s.get("view", "perspective").to_upper(), Callable())
+	var vb := _button("View: " + ("CLASSIC" if s.get("view") == "classic" else "PERSPECTIVE"), Callable())
 	vb.pressed.connect(func():
 		s["view"] = "classic" if s.get("view", "perspective") == "perspective" else "perspective"
 		game.apply_settings()

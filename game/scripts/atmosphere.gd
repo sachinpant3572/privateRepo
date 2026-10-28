@@ -53,18 +53,21 @@ var _weather_time := 240.0
 var _flash := 0.0
 var _next_flash := 6.0
 var _night_on := false
+var _perspective := true
 var _rain: CPUParticles3D
 var _splash: CPUParticles3D
 var rng := RandomNumberGenerator.new()
 
 
 ## Fits the shadow cascades to the camera (TopDownCamera). In perspective the
-## camera is 40-80 m from the ground it frames, so the cascades step out from
+## camera is about 30-100 m from the ground it frames (more when it backs out
+## over a tower; _fit_shadows then reaches further), so the cascades step out from
 ## the nearest tower tops to the ground at the top of the screen. The classic
 ## camera sits 220 m back (TopDownCamera.DISTANCE), so the ground is 205-235 m
 ## away; the splits put the sharpest cascade that holds all of it there, and
 ## the nearer ones only hold tower tops.
 func set_view(perspective: bool) -> void:
+	_perspective = perspective
 	if perspective:
 		sun.directional_shadow_max_distance = 160.0
 		sun.directional_shadow_split_1 = 0.3
@@ -105,6 +108,23 @@ func _process(delta: float) -> void:
 		if _weather_time <= 0.0:
 			_pick_weather()
 	_apply(delta)
+	_fit_shadows()
+
+
+## In perspective the shadows reach past the ground at the top of the screen,
+## which is about 1.4 times the camera's distance (TopDownCamera.view_depth);
+## changed only in 10% steps, so the cascades don't shimmer.
+func _fit_shadows() -> void:
+	if not _perspective:
+		return
+	var cam := get_viewport().get_camera_3d()
+	var depth = cam.get("view_depth") if cam != null else null
+	if not depth is float or depth <= 0.0:
+		return
+	var want := maxf(160.0, depth * 1.4)
+	var now := sun.directional_shadow_max_distance
+	if absf(want - now) > now * 0.1 or (want == 160.0 and now != 160.0):
+		sun.directional_shadow_max_distance = want
 
 
 ## Changes the weather; `instant` skips the fade (tests and mission starts).

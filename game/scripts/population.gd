@@ -152,7 +152,8 @@ func _in_view(pos: Vector3, margin := 0.1) -> bool:
 	if cam == null or not cam.is_inside_tree():
 		return false
 	var screen: Rect2 = cam.get_viewport().get_visible_rect()
-	return screen.grow(screen.size.x * margin).has_point(cam.unproject_position(pos))
+	# In perspective, points behind the camera project mirrored onto the screen.
+	return not cam.is_position_behind(pos) and screen.grow(screen.size.x * margin).has_point(cam.unproject_position(pos))
 
 
 ## A civilian vehicle with a model from the traffic mix, or from the curb

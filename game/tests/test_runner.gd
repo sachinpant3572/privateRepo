@@ -676,6 +676,7 @@ func test_perspective_camera() -> void:
 	var outside := 0
 	var framing_kept := 0
 	var blocked_spot = null
+	var shadows_fit := 0
 	for i in 900:
 		if inside_spots >= 6 and blocked_spot != null:
 			break
@@ -703,14 +704,45 @@ func test_perspective_camera() -> void:
 		framed = 2.0 * cam.global_position.distance_to(cam._focus) * tan(deg_to_rad(cam.fov) * 0.5)
 		if absf(framed - cam.size) < cam.size * 0.02:
 			framing_kept += 1
+		if game.atmosphere.sun.directional_shadow_max_distance >= cam.view_depth * 1.25:
+			shadows_fit += 1
 	_check(inside_spots >= 3, "found downtown spots where the usual camera spot is inside a tower: %d" % inside_spots)
 	_check(outside == inside_spots and framing_kept == inside_spots, "the camera backs out of the tower at all of them (%d of %d) and frames the same ground (%d)" % [outside, inside_spots, framing_kept])
+	_check(shadows_fit == inside_spots, "the shadows reach past the ground the backed-out camera frames (%d of %d)" % [shadows_fit, inside_spots])
 	_check(blocked_spot != null, "found a downtown spot where a building hides the player")
 	if blocked_spot != null:
 		_place_player_at(blocked_spot)
 		await _frames(30)
 		var mat: ShaderMaterial = MB.cutaway_material()
 		_check(float(mat.get_shader_parameter("cut_radius")) > cam.CUT_RADIUS * 0.9 and float(mat.get_shader_parameter("cone")) == 1.0, "the cutaway opens round the hidden player, narrowing toward the camera")
+	# The view band runs out ahead of a moving player, widens over a tower,
+	# and is off inside a place.
+	var band: ShaderMaterial = MB.cutaway_material()
+	_place_player(_home(), Vector3.ZERO)
+	await _frames(30)
+	game.player.velocity = Vector3(4.0, 0.0, 0.0)
+	cam._update_view_band(game.player)
+	var ahead: Vector3 = band.get_shader_parameter("ahead")
+	_check(ahead.distance_to(Vector3(4.0 * cam.AHEAD_SECONDS, 0, 0)) < 0.01 and float(band.get_shader_parameter("view_radius")) >= cam.VIEW_RADIUS_FOOT, "the view band runs %.0f m ahead of a player walking east, %.0f m wide" % [ahead.length(), float(band.get_shader_parameter("view_radius"))])
+	var back_was: float = cam._back
+	cam._back = base * 2.0
+	cam._update_view_band(game.player)
+	_check(is_equal_approx(float(band.get_shader_parameter("view_radius")), cam.VIEW_RADIUS_FOOT * 2.0), "and widens to %.0f m when the camera has backed out over a tower" % float(band.get_shader_parameter("view_radius")))
+	cam._back = back_was
+	cam.fixed_focus = game.player.global_position
+	cam._update_view_band(game.player)
+	_check(float(band.get_shader_parameter("view_radius")) == 0.0, "inside a place the view band is off")
+	cam.fixed_focus = null
+	game.player.velocity = Vector3.ZERO
+	# Ground (terrain and roads) is marked so the band never cuts a hill.
+	var mb = MB.new()
+	mb.box(Vector3.ZERO, Vector3.ONE, Color.WHITE)
+	mb.mark_ground(0)
+	var start: int = mb.verts.size()
+	mb.box(Vector3(0, 5, 0), Vector3.ONE, Color.WHITE)
+	var arrays: Array = mb.commit().surface_get_arrays(0)
+	var uv2: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV2]
+	_check(uv2[0].x == 1.0 and uv2[start - 1].x == 1.0 and uv2[start].x == 0.0, "ground vertices carry the ground mark, the rest do not")
 	game.settings["view"] = "classic"
 	game.apply_settings()
 	await _frames(2)
@@ -726,7 +758,9 @@ func test_perspective_camera() -> void:
 	await _frames(240)
 	_check(absf(cam.size - cam.FOOT_SIZE * 1.3) < 0.5 and game.city.LOAD_RADIUS > 130.0, "Zoom 130%% frames %.1f m on foot and loads cells to %.0f m" % [cam.size, game.city.LOAD_RADIUS])
 	# Nothing on screen lies past the loaded cells: the ground at the screen's
-	# corners and edges, while driving flat out at the far zoom.
+	# corners and edges, at the far driving zoom with the car standing (at top
+	# speed the 0.8 s lead shifts the frame; the corners then reach about
+	# 115 m, still inside).
 	# On a 20:9 phone, the widest screen the game runs on.
 	var corner_far := 0.0
 	cam.size = cam.DRIVE_SIZE * 1.3

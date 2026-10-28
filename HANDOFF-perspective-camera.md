@@ -29,7 +29,7 @@ what is at least 100mtrs ahead which will lead to car crahes or plane crashes."
   70° hides least but flattens people and fronts (less of the 3/4 look the art is made for), so 65.
   These are before the view-band cut (D-5), which clears the near band anyway.
 - D-3 The distance frames the same `size` at the focus as the classic view. When the base camera spot
-  is inside a tower (towers reach 150 m; the camera sits about 35-90 m up, by size and zoom), `_clear_back` steps it out
+  is inside a tower (towers reach 150 m; the camera sits about 30-90 m up, by size and zoom), `_clear_back` steps it out
   along the view line until it is clear, plus 9 m (`ROOF_AIR`), and narrows the field of view so the
   framing stays the same. It eases out fast and back in slowly; the look-ahead spot is checked too,
   so the camera backs out before reaching a tower.
@@ -48,6 +48,12 @@ what is at least 100mtrs ahead which will lead to car crahes or plane crashes."
 - D-8 Settings > Zoom: 80, 90, 100, 115, 130%. City and country streaming radii scale with it above
   100% (105/150 m and 130/210 m times the zoom), and crowds with `Population.reach()` (cap 2.1).
 - D-9 Shadows: in perspective the shadow distance is 160 m with tighter splits (`Atmosphere.set_view`).
+  It grows to 1.4 x the camera's distance when the camera backs out over a tower (`_fit_shadows`).
+- D-11 Review fixes (Oct 28): no cut reaches the shadow pass (`IN_SHADOW_PASS`), so buildings keep
+  whole shadows; ground (terrain, roads) carries UV2.x 1 (`MeshBuilder.mark_ground`) and the band never
+  cuts it, so hills ahead stay whole; the band widens up to 3x while the camera is backed out over a
+  tower; `_clear_back` keeps each caller's answer while its point stays within 1.5 m (refreshed every
+  30 frames); crowds ignore points behind the camera; classic `far` reaches an aircraft's ground.
 - D-10 Full 3D is parked in TODO.md (Sachin's condition quoted there). No model changes were needed
   for this camera.
 
@@ -73,6 +79,10 @@ what is at least 100mtrs ahead which will lead to car crahes or plane crashes."
 
 ## Open
 
+- From the review, left as is: trees, lamps and signals taller than about 4.4 m inside the band dither
+  out (lamp halos then float); a low building can still hide a strip up to 4 m wide beside the player
+  (`HIDE_MIN`); Zoom 130% loads about 1.7x the city cells (phone memory not measured).
+
 - About 50 m of road shows ahead at top speed to the north (more east and west). 100 m needs about
   1.6x zoom at speed (GTA 2 style speed zoom-out); offer as a Settings option if Sachin wants it.
 - A straight-down 90° "2D" view: about 1-2 hours for the camera, plus 0.5-1 session for roof signs
@@ -86,5 +96,5 @@ what is at least 100mtrs ahead which will lead to car crahes or plane crashes."
 
 ## Gates
 
-- `game/tests/run.sh`: 696 checks passed, 0 failed (61 tests; new `test_perspective_camera`).
+- `game/tests/run.sh`: 701 checks passed, 0 failed (61 tests; new `test_perspective_camera`).
 - Shots: tour (53), place shots (12), `SHOTS=view` (12) rendered with no errors.

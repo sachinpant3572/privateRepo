@@ -235,7 +235,10 @@ uniform float near_fade = 0.0;
 // player (focus, 1 m up) and out along `ahead` (where they are heading).
 // Any part of a building that hides more than HIDE_MIN metres of that ground
 // is cut away, so tall buildings there drop to low stubs that still show
-// their footprints (HANDOFF-perspective-camera.md). 0 turns it off.
+// their footprints (HANDOFF-perspective-camera.md). 0 turns it off. Ground
+// (terrain and roads, marked by UV2.x 1, see mark_ground) is never cut, so a
+// hill ahead stays whole. No cut reaches the shadow pass: buildings keep
+// their whole shadows.
 uniform float view_radius = 0.0;
 uniform vec3 ahead = vec3(0.0);
 const float HIDE_MIN = 4.0;
@@ -272,7 +275,7 @@ void fragment() {
 		float d = length(rel - axis * t) / (cut_radius * shrink);
 		keep = smoothstep(0.7, 1.0, d);
 	}
-	if (view_radius > 0.0 && world_pos.y > focus.y) {
+	if (view_radius > 0.0 && world_pos.y > focus.y && UV2.x < 0.5) {
 		vec3 ray = cone > 0.5 ? normalize(world_pos - eye) : -cam_back;
 		if (ray.y < -0.05) {
 			// Where this point's line of sight meets the player's ground.
@@ -288,7 +291,7 @@ void fragment() {
 	if (near_fade > 0.0) {
 		keep = min(keep, smoothstep(near_fade * 0.35, near_fade, distance(world_pos, eye)));
 	}
-	if (keep < 1.0) {
+	if (keep < 1.0 && !IN_SHADOW_PASS) {
 		// An ordered 4x4 dither: an even screen-door edge, not speckle.
 		ivec2 p = ivec2(FRAGCOORD.xy) % 4;
 		int i = p.x + p.y * 4;
@@ -362,6 +365,9 @@ var colors := PackedColorArray()
 ## paving, joints, seams and siding line up with what they are drawn on.
 var uvs := PackedVector2Array()
 var indices := PackedInt32Array()
+## Vertex ranges [start, end) of ground (terrain, roads): commit marks them
+## with UV2.x 1, so the cutaway's view band leaves them whole.
+var ground_ranges := PackedInt32Array()
 ## Placement applied to everything added; asset kits build in local space and
 ## the caller sets this to position and rotate them (rotation and translation
 ## only, so winding and normals stay valid).
@@ -717,6 +723,12 @@ func primitive(mesh: PrimitiveMesh, xform: Transform3D, color: Color) -> void:
 		indices.append(base + index)
 
 
+## Marks the vertices added since `start` as ground (see ground_ranges).
+func mark_ground(start: int) -> void:
+	ground_ranges.append(start)
+	ground_ranges.append(verts.size())
+
+
 func commit() -> ArrayMesh:
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
@@ -725,6 +737,13 @@ func commit() -> ArrayMesh:
 	arrays[Mesh.ARRAY_COLOR] = colors
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
 	arrays[Mesh.ARRAY_INDEX] = indices
+	if not ground_ranges.is_empty():
+		var uv2 := PackedVector2Array()
+		uv2.resize(verts.size())
+		for k in range(0, ground_ranges.size(), 2):
+			for v in range(ground_ranges[k], mini(ground_ranges[k + 1], verts.size())):
+				uv2[v] = Vector2(1.0, 0.0)
+		arrays[Mesh.ARRAY_TEX_UV2] = uv2
 	if not _bone_marks.is_empty():
 		var bones := PackedInt32Array()
 		var weights := PackedFloat32Array()
