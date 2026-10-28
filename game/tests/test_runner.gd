@@ -2801,10 +2801,12 @@ func test_three_wheelers_and_big_trucks() -> void:
 	_check(not parks_big, "tippers and 18-wheelers never park at a curb or a home")
 	var long: Array = VehicleKit.KINDS.keys().filter(func(k): return VehicleKit.size_of(k).z > VehicleKit.LONG_HAUL)
 	_check(long == ["semi"], "only the 18-wheeler is long haul, got %s" % [long])
-	# The tuk-tuk's headlamp glow sits on its close-set cowl lamps (x ±0.17).
+	# The tuk-tuk's headlamp glow sits on its close-set cowl lamps (x ±0.17;
+	# each glow reaches 0.5 m either side, so the box ends near ±0.67, not
+	# the ±0.96 it had when it sat a third of the width out).
 	var tuk = _track_car("tuk_tuk", Vector3(0, 0, 0), 0.0)
 	var glow_box: AABB = tuk._lamp_glow.get_aabb()
-	_check(glow_box.end.x < 0.5 and glow_box.position.x > -0.5,
+	_check(glow_box.end.x < 0.75 and glow_box.position.x > -0.75,
 		"the tuk-tuk's lamp glow stays on its cowl lamps: x %.2f..%.2f" % [glow_box.position.x, glow_box.end.x])
 	tuk.queue_free()
 	var city = game.city
