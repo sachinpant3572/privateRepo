@@ -31,6 +31,13 @@ const KICK_TIME := 0.45
 ## out, and not at all beyond ANIMATE_RANGE.
 const ANIMATE_NEAR := 22.0
 const ANIMATE_RANGE := 55.0
+## Blood (blood.gd): blows under BLOOD_MIN_DAMAGE draw none, and neither do
+## cars slower than BLOOD_MIN_IMPACT (m/s, about 14 km/h: a nudge only
+## knocks people over). A car hit this hard leaves a pool under the
+## knocked-down too.
+const BLOOD_MIN_DAMAGE := 5.0
+const BLOOD_MIN_IMPACT := 4.0
+const BLOOD_HARD_IMPACT := 7.0
 
 var max_health := 100.0
 var health := 100.0
@@ -111,6 +118,12 @@ var _last_speed := 0.0
 var _accel := 0.0
 var _face_down := false
 var _knock_total := 0.0
+## Blood still to lay: a pool this size once the body lies still (0: none),
+## and a smear behind it for _trail more metres while it slides.
+var _pool_size := 0.0
+var _trail := 0.0
+var _trail_from := Vector3.ZERO
+var _trail_width := 0.0
 
 
 func _ready() -> void:
@@ -148,6 +161,8 @@ func _physics_process(delta: float) -> void:
 	velocity.y = 0.0
 	move_and_slide()
 	global_position.y = Terrain.height(global_position.x, global_position.z)
+	if _pool_size > 0.0 or _trail > 0.0:
+		_bleed_on_ground()
 
 
 ## Behaviour hook for subclasses; called only while standing and alive.
@@ -218,10 +233,17 @@ func _melee_target(reach: float):
 	return best
 
 
-func take_hit(attacker, damage: float, push: Vector3) -> void:
+## `bloody` false: the caller drew the blood itself (a car hit, a gun
+## through bleed()).
+func take_hit(attacker, damage: float, push: Vector3, bloody := true) -> void:
 	if dead:
 		return
 	health -= damage
+	if bloody and damage >= BLOOD_MIN_DAMAGE:
+		var dir := push
+		if dir.length_squared() < 0.0001 and attacker is Node3D and is_instance_valid(attacker):
+			dir = global_position - attacker.global_position
+		bleed(global_position + Vector3(0, 1.25, 0), dir, damage / 30.0)
 	velocity += push * 3.0
 	if push.length_squared() > 0.0001:
 		# Struck from behind, the body goes down on its front.
@@ -245,7 +267,9 @@ func hit_by_vehicle(vehicle, impact_speed: float) -> void:
 	velocity = away.normalized() * impact_speed * 0.6 + vehicle.velocity * 0.4
 	_face_down = away.dot(forward()) > 0.0
 	GameLog.person("hit_by_car", self, {"kmh": impact_speed * 3.6, "car": vehicle.kind, "by_player": vehicle.driver_node() != null and vehicle.driver_node().is_in_group("player")})
-	take_hit(vehicle.driver_node(), impact_speed * 3.5, Vector3.ZERO)
+	take_hit(vehicle.driver_node(), impact_speed * 3.5, Vector3.ZERO, false)
+	if impact_speed >= BLOOD_MIN_IMPACT:
+		_crash_blood(impact_speed)
 	if not dead:
 		knock_down(2.0, away)
 	Senses.emit(get_tree(), "crash", global_position, self, {"loud": clampf(impact_speed / 10.0, 0.4, 1.2)})
@@ -267,6 +291,7 @@ func knock_down(seconds: float, push := Vector3.ZERO) -> void:
 
 func _die() -> void:
 	GameLog.person("death", self, {"killer": GameLog.name_of(killer)})
+	_pool_size = maxf(_pool_size, 1.7)
 	dead = true
 	health = 0.0
 	knocked_time = 0.0
@@ -281,10 +306,80 @@ func revive(at: Vector3) -> void:
 	knocked_time = 0.0
 	killer = null
 	health = max_health
+	_pool_size = 0.0
+	_trail = 0.0
 	velocity = Vector3.ZERO
 	global_position = at
 	reset_physics_interpolation()
 	_set_standing_layers()
+
+
+## Blood from a wound at `pos` (world), spraying along `dir` (flattened;
+## zero picks any way): a spurt and drops on the ground ahead (Fx.blood).
+## `amount`: about 0.3 a pistol round, 0.4 a punch, 1 a heavy blow, 2 the
+## most (a hard crash). Guns: call bleed() where the round hits, then
+## take_hit(shooter, damage, push, false) so the hit adds no second spurt;
+## a kill still leaves a pool. Nothing when Settings > Game > Blood is off.
+func bleed(pos: Vector3, dir: Vector3, amount: float) -> void:
+	if amount > 0.0:
+		Fx.blood(pos, dir, amount)
+
+
+## A car hit hard enough to hurt: a spurt the way the body flies, a smear
+## while it slides, and a pool where it stops (the dead, or a hard hit).
+func _crash_blood(impact_speed: float) -> void:
+	var flat := Vector3(velocity.x, 0.0, velocity.z)
+	var amount := clampf(0.4 + (impact_speed - BLOOD_MIN_IMPACT) / 8.0, 0.4, 2.0)
+	bleed(global_position + Vector3(0, 0.95, 0) + flat.normalized() * 0.3, flat, amount)
+	_trail = clampf(flat.length(), 1.5, 20.0)
+	_trail_from = global_position
+	_trail_width = clampf(0.4 + amount * 0.15, 0.4, 0.7)
+	if dead:
+		_pool_size = maxf(_pool_size, 1.6 + amount * 0.3)
+	elif impact_speed >= BLOOD_HARD_IMPACT:
+		_pool_size = maxf(_pool_size, 0.8)
+
+
+## Lays the smear behind a sliding body, in patches while it skids fast and
+## unbroken as it slows, then its pool once it lies still (dropped if they
+## are up before that).
+func _bleed_on_ground() -> void:
+	var speed := Vector2(velocity.x, velocity.z).length()
+	if _trail > 0.0:
+		var step := global_position - _trail_from
+		step.y = 0.0
+		var d := step.length()
+		if d >= clampf(speed * 0.12, 0.55, 2.5):
+			Fx.blood_smear(_trail_from + step * 0.5, step, _trail_width)
+			_trail_from = global_position
+			_trail -= d
+		if speed < 0.8:
+			_trail = 0.0
+	if _pool_size <= 0.0:
+		return
+	if not dead and knocked_time <= 0.0:
+		_pool_size = 0.0
+		return
+	var down_for := dead_time if dead else _knock_total - knocked_time
+	if down_for >= 3.0 or (down_for >= 0.8 and speed < 0.6):
+		Fx.blood_pool(_torso_ground(), _pool_size, 6.0 if dead else 3.0)
+		_pool_size = 0.0
+
+
+## The middle of the body (between hips and chest) on the ground under it.
+func _torso_ground() -> Vector3:
+	var p := global_position
+	if model != null:
+		p = (model.global_transform * model.get_bone_global_pose(0).origin + model.global_transform * model.get_bone_global_pose(2).origin) * 0.5
+	return Vector3(p.x, global_position.y, p.z)
+
+
+## A body taken away (population recycling, a retired cop) before its pool
+## was laid still leaves it; the pool fades later like any other.
+func _exit_tree() -> void:
+	if dead and _pool_size > 0.0 and is_instance_valid(Fx.bloodwork):
+		Fx.blood_pool(global_position, _pool_size, 1.0)
+		_pool_size = 0.0
 
 
 func _set_standing_layers() -> void:

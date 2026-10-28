@@ -91,6 +91,7 @@ func _run() -> void:
 		"test_new_home_kinds_and_live_cars", "test_people_walk_the_suburbs", "test_suburb_home_cars_are_live",
 		"test_road_surfaces_and_roadworks", "test_traffic_flows_past_roadworks", "test_boundaries_vary_by_household",
 		"test_game_log_file_and_rotation", "test_game_log_snapshot_and_events", "test_game_log_report_copy_and_off",
+		"test_blood_melee_spurts_and_spatters", "test_blood_car_hits_smear_and_pool", "test_blood_bleed_toggle_cap_and_fade",
 	]
 	# ONLY=name1,name2 runs just those (handy while working on one test).
 	var only := OS.get_environment("ONLY")
@@ -1368,7 +1369,7 @@ func test_settings_page_tabs_and_preview() -> void:
 	var want := {"Camera": ["View: ", "Look down near towers: ", "Camera turn: ", "Reset camera", "Distance", "Drive zoom-out", "Angle"],
 		"Graphics": ["Quality", "Bloom: ", "Smooth edges: ", "Vivid colour: ", "Real lights: ", "Detail: ", "Shadows: ", "FPS limit", "Show FPS: "],
 		"Controls": ["Driving: "],
-		"Game": ["Weather: ", "Skip 3 hours", "New game", "Log: ", "BUG button: ", "Report issue", "Export log", "Copy log"]}
+		"Game": ["Weather: ", "Skip 3 hours", "Blood: ", "New game", "Log: ", "BUG button: ", "Report issue", "Export log", "Copy log"]}
 	for t in page.TABS:
 		page.show_tab(t)
 		await _idle(1)
@@ -7007,3 +7008,246 @@ func test_cab_stop_skips_parked_car() -> void:
 	var second: Array = taxi._curb_stop(curb.a, curb.b, curb.at)
 	_check(second[0].distance_to(first[0]) > 4.0, "the stop moves off the parked car, %.1f m" % second[0].distance_to(first[0]))
 	_check(Vehicle.room_for(get_tree(), second[0], second[1], VehicleKit.size_of("taxi"), 0.2), "and is clear of every car")
+
+
+# --- Blood (0.23) --------------------------------------------------------------
+
+## A punch that lands sprays a little blood the way it was thrown and
+## spatters the ground just past the victim; a kick more; a blow too soft to
+## hurt none; and a killing blow leaves a pool spreading under the body.
+func test_blood_melee_spurts_and_spatters() -> void:
+	var Terrain = preload("res://scripts/terrain.gd")
+	await _free_game()
+	var bw = Fx.bloodwork
+	Fx.set_blood(true)
+	bw.clear()
+	var o := Vector3(0, 0, 2300)
+	var city = _fake_street(o)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 23
+	Controls.camera = null
+	var fighter = _street_ped(city, rng, o, 0.0)
+	var victim = _street_ped(city, rng, o + Vector3(0, 0, -1.0), PI)
+	await _frames(2)
+	var spurts: int = bw.spurts
+	fighter.punch()
+	var punch_marks: int = bw.used()
+	_check(victim.health < victim.max_health and bw.spurts == spurts + 1 and punch_marks >= 2,
+		"a punch that lands sprays blood (%d spurt, %d marks)" % [bw.spurts - spurts, punch_marks])
+	var near := true
+	var ahead := 0.0
+	var small := true
+	var ground := true
+	for i in punch_marks:
+		var t: Transform3D = bw.mark_transform(i)
+		var off: Vector3 = t.origin - victim.global_position
+		near = near and Vector2(off.x, off.z).length() < 2.0
+		ahead += -off.z / punch_marks
+		small = small and t.basis.x.length() <= 0.9 and t.basis.z.length() <= 1.3
+		ground = ground and absf(t.origin.y - (Terrain.height(t.origin.x, t.origin.z) + bw.LIFT)) < 0.01 and bw.kind(i) == bw.DROP
+	_check(near and ahead > 0.15 and small and ground,
+		"its spatter lies on the ground just past them, the way the blow went (%.2f m on), every mark under a metre" % ahead)
+	await _frames(30)
+	var shown := 0
+	for i in punch_marks:
+		shown += 1 if bw.alpha(i) > 0.99 else 0
+	_check(shown == punch_marks, "the drops land within half a second, fully dark (%d of %d)" % [shown, punch_marks])
+	# A kick (double damage) throws more.
+	var before: int = bw.used()
+	victim.take_hit(fighter, fighter.punch_damage * 2.0, fighter.forward() * 2.2)
+	_check(bw.used() - before > punch_marks, "a kick leaves more than a punch (%d marks to %d)" % [bw.used() - before, punch_marks])
+	# A shove that does no harm (a mission's nudge) draws none.
+	before = bw.used()
+	spurts = bw.spurts
+	victim.take_hit(null, 0.0, Vector3.RIGHT * 0.5)
+	_check(bw.used() == before and bw.spurts == spurts, "a blow that does no harm draws no blood")
+	# A killing blow: once the body lies still a pool spreads under it.
+	victim.take_hit(fighter, 999.0, fighter.forward())
+	var pool := -1
+	for f in 120:
+		await _frames(1)
+		for i in bw.used():
+			if bw.kind(i) == bw.POOL:
+				pool = i
+		if pool >= 0:
+			break
+	_check(victim.dead and pool >= 0, "a kill leaves a pool")
+	if pool >= 0:
+		var t: Transform3D = bw.mark_transform(pool)
+		var off: Vector3 = t.origin - victim.global_position
+		_check(Vector2(off.x, off.z).length() < 1.2 and t.basis.x.length() > 1.3 and t.basis.x.length() < 2.2 and bw.alpha(pool) > 0.99,
+			"under the body (%.2f m from its feet), about one and a half metres across (%.2f m)" % [Vector2(off.x, off.z).length(), t.basis.x.length()])
+		_check(bw._data[pool].b >= 4.0, "and it spreads over a few seconds (%.0f s)" % bw._data[pool].b)
+	fighter.queue_free()
+	victim.queue_free()
+	await _frames(1)
+
+
+## A car hit hard enough to hurt sprays blood the way the body flies, smears
+## the road behind it while it slides and pools where it stops (a bigger pool
+## for the dead); a nudge at walking pace knocks someone over without a mark;
+## a dead body taken away before it settled still leaves its pool.
+func test_blood_car_hits_smear_and_pool() -> void:
+	await _free_game()
+	var bw = Fx.bloodwork
+	Fx.set_blood(true)
+	bw.clear()
+	var o := Vector3(0, 0, 2600)
+	var city = _fake_street(o)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	Controls.camera = null
+	var nudged = _street_ped(city, rng, o + Vector3(-12, 0, 0), 0.0)
+	var hurt = _street_ped(city, rng, o, 0.0)
+	var killed = _street_ped(city, rng, o + Vector3(12, 0, 0), 0.0)
+	await _frames(2)
+	# 3 m/s (11 km/h).
+	var spurts: int = bw.spurts
+	var car = _track_car("sedan", nudged.global_position + Vector3(0, 0, 3), 0.0)
+	car.velocity = Vector3(0, 0, -3)
+	nudged.hit_by_vehicle(car, 3.0)
+	car.queue_free()
+	_check(nudged.knocked_time > 0.0 and bw.spurts == spurts and bw.used() == 0, "a nudge at 11 km/h knocks someone over and draws no blood")
+	# 9 m/s (32 km/h): hurt, not killed (people have 40 health).
+	car = _track_car("sedan", hurt.global_position + Vector3(0, 0, 3), 0.0)
+	car.velocity = Vector3(0, 0, -9)
+	var start: Vector3 = hurt.global_position
+	hurt.hit_by_vehicle(car, 9.0)
+	car.queue_free()
+	_check(not hurt.dead and hurt.knocked_time > 0.0 and bw.spurts == spurts + 1 and bw.used() >= 2,
+		"hit at 32 km/h they are down and blood sprays (%d marks)" % bw.used())
+	await _frames(100)
+	var smears := 0
+	var along := true
+	var on_path := true
+	var pools := []
+	for i in bw.used():
+		var t: Transform3D = bw.mark_transform(i)
+		if bw.kind(i) == bw.SMEAR:
+			smears += 1
+			along = along and absf(t.basis.z.normalized().z) > 0.95
+			on_path = on_path and absf(t.origin.x - start.x) < 0.3 and t.origin.z < start.z + 0.3 and t.origin.z > hurt.global_position.z - 0.6
+		elif bw.kind(i) == bw.POOL:
+			pools.append(i)
+	_check(smears >= 3 and along and on_path, "the body smears the road along its slide (%d smears over %.1f m)" % [smears, start.z - hurt.global_position.z])
+	_check(pools.size() == 1 and absf(bw.mark_transform(pools[0]).origin.z - hurt.global_position.z) < 1.2,
+		"and a small pool where it stopped, hurt but alive (%d)" % pools.size())
+	var hurt_pool: float = bw.mark_transform(pools[0]).basis.x.length() if pools.size() == 1 else 9.0
+	# 30 m/s (108 km/h): killed.
+	car = _track_car("sedan", killed.global_position + Vector3(0, 0, 3), 0.0)
+	car.velocity = Vector3(0, 0, -30)
+	var used: int = bw.used()
+	killed.hit_by_vehicle(car, 30.0)
+	car.queue_free()
+	await _frames(240)
+	var kill_pool := -1
+	for i in range(used, bw.used()):
+		if bw.kind(i) == bw.POOL:
+			kill_pool = i
+	_check(killed.dead and kill_pool >= 0 and bw.mark_transform(kill_pool).basis.x.length() > hurt_pool,
+		"a kill leaves a bigger pool (%.2f m to %.2f m)" % [bw.mark_transform(kill_pool).basis.x.length() if kill_pool >= 0 else 0.0, hurt_pool])
+	# The hurt get up and walk off; their pool stays and fades.
+	await _frames(90)
+	_check(hurt.knocked_time <= 0.0 and not hurt.dead and hurt._pool_size == 0.0, "the hurt get up and no second pool comes")
+	# A body cleared away (population recycling) before it settled.
+	var gone = _street_ped(city, rng, o + Vector3(24, 0, 0), 0.0)
+	await _frames(2)
+	gone.take_hit(null, 999.0, Vector3.ZERO)
+	used = bw.used()
+	gone.queue_free()
+	await _frames(1)
+	_check(bw.used() == used + 1 and bw.kind(used) == bw.POOL, "a dead body taken away before it settled leaves its pool")
+	bw.clock += bw.POOL_LIFE.y + 1.0
+	await _frames(2)
+	_check(bw.used() == 0 and bw.mm.visible_instance_count == 0, "which fades in time like the rest")
+	for p in [nudged, hurt, killed]:
+		p.queue_free()
+	await _frames(1)
+
+
+## Guns (when they come) call bleed(); a gun's hit then adds no second
+## spurt. The ring buffer never grows past its cap, marks fade out and stop
+## drawing, and Settings > Game > Blood OFF shows none and clears the rest.
+func test_blood_bleed_toggle_cap_and_fade() -> void:
+	await _free_game()
+	var bw = Fx.bloodwork
+	Fx.set_blood(true)
+	bw.clear()
+	var o := Vector3(0, 0, 2900)
+	var city = _fake_street(o)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 9
+	Controls.camera = null
+	var ped = _street_ped(city, rng, o, 0.0)
+	await _frames(2)
+	var spurts: int = bw.spurts
+	var wound: Vector3 = ped.global_position + Vector3(0, 1.3, 0)
+	ped.bleed(wound, Vector3.RIGHT, 0.3)
+	var east := true
+	for i in bw.used() - 1:
+		east = east and bw.mark_transform(i).origin.x > ped.global_position.x
+	_check(bw.spurts == spurts + 1 and bw.used() >= 2 and east and ped.health == ped.max_health,
+		"bleed() sprays a spurt and drops the way the round went, and does no harm itself (%d marks)" % bw.used())
+	var used: int = bw.used()
+	ped.bleed(wound, Vector3.RIGHT, 0.0)
+	ped.take_hit(null, 30.0, Vector3.RIGHT, false)
+	_check(bw.spurts == spurts + 1 and bw.used() == used and ped.health == ped.max_health - 30.0, "a gun's hit after it (bloody false) adds no second spurt")
+	# Many wounds: the buffer stays at its cap.
+	for i in 120:
+		ped.bleed(wound, Vector3(rng.randf_range(-1, 1), 0, rng.randf_range(-1, 1)), 2.0)
+	_check(bw.laid >= 600 and bw.used() == bw.CAP and bw.mm.instance_count == bw.CAP and bw.mm.visible_instance_count == bw.CAP,
+		"after %d marks the ground holds the newest %d, one MultiMesh" % [bw.laid, bw.CAP])
+	# Fading: full while fresh, fading late in life, then gone and not drawn.
+	await _frames(40)
+	var full := 0
+	for i in bw.CAP:
+		full += 1 if bw.alpha(i) > 0.99 else 0
+	bw.clock += 50.0
+	await _frames(1)
+	var mid := 0.0
+	for i in bw.CAP:
+		mid += bw.alpha(i) / bw.CAP
+	bw.clock += 25.0
+	await _frames(1)
+	var late := 0.0
+	for i in bw.CAP:
+		late += bw.alpha(i) / bw.CAP
+	_check(full == bw.CAP and mid < 0.97 and mid > late and late > 0.0, "marks stay dark, then fade (%.2f at 50 s, %.2f at 75 s)" % [mid, late])
+	_check(bw.clock - bw._epoch < bw.REBASE + 1.0, "the shader's clock starts again every minute (%.0f s on)" % (bw.clock - bw._epoch))
+	bw.clock += 20.0
+	await _frames(2)
+	_check(bw.live() == 0 and bw.used() == 0 and bw.mm.visible_instance_count == 0, "after 95 s they are gone and nothing is drawn")
+	# OFF.
+	ped.bleed(wound, Vector3.RIGHT, 1.0)
+	Fx.set_blood(false)
+	_check(bw.used() == 0 and not bw.visible, "turning blood off clears what is there")
+	var laid: int = bw.laid
+	spurts = bw.spurts
+	ped.bleed(wound, Vector3.RIGHT, 1.0)
+	ped.take_hit(null, 20.0, Vector3.RIGHT)
+	ped.take_hit(null, 999.0, Vector3.RIGHT)
+	await _frames(240)
+	_check(ped.dead and bw.laid == laid and bw.spurts == spurts, "and with it off, blows, wounds and deaths draw none")
+	ped.queue_free()
+	Fx.set_blood(true)
+	# The setting: on by default, and the Game tab's Blood button.
+	await _new_game(false)
+	_check(game.settings.get("blood") == true and bw.on, "Blood is on by default")
+	var page = game.hud.phone.settings_page
+	game.hud.settings_button.pressed.emit()
+	await _idle(2)
+	page.show_tab("Game")
+	await _idle(1)
+	game.player.bleed(game.player.global_position + Vector3(0, 1.2, 0), Vector3.RIGHT, 1.0)
+	var button: Button = _find_button(page._list, "Blood: ")
+	var had: int = bw.used()
+	button.pressed.emit()
+	await _idle(1)
+	_check(had > 0 and button.text == "Blood: OFF" and game.settings["blood"] == false and not bw.on and bw.used() == 0,
+		"Settings > Game > Blood OFF turns it off and clears the ground (%d marks before)" % had)
+	button.pressed.emit()
+	await _idle(1)
+	_check(button.text == "Blood: ON" and game.settings["blood"] == true and bw.on, "and ON brings it back")
+	page._back.pressed.emit()
+	await _idle(2)
+	Fx.set_blood(true)

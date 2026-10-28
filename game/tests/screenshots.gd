@@ -5,6 +5,7 @@ extends Node
 const MainScene = preload("res://main.tscn")
 const Terrain = preload("res://scripts/terrain.gd")
 const Vehicle = preload("res://scripts/vehicle.gd")
+const PedScript = preload("res://scripts/pedestrian.gd")
 
 var out_dir := "user://"
 
@@ -52,6 +53,8 @@ func _run() -> void:
 	var game = MainScene.instantiate()
 	game.settings["camera_turn"] = "north"
 	game.missions_enabled = false
+	if OS.get_environment("SHOTS") == "blood":
+		game.population_enabled = false # a quiet street: only the people the shots put there
 	add_child(game)
 	game.atmosphere.hour = 12.5
 	game.atmosphere.minutes_per_second = 0.0
@@ -110,6 +113,11 @@ func _run() -> void:
 	if OS.get_environment("SHOTS") == "roads":
 		# Just the wide roads (quick look while working on them).
 		await _roads(game)
+		get_tree().quit()
+		return
+	if OS.get_environment("SHOTS") == "blood":
+		# A street fight's spatter, car hits' smears and pools (0.23).
+		await _blood(game)
 		get_tree().quit()
 		return
 	await _shot("1_on_foot.png")
@@ -606,6 +614,118 @@ func _roads(game) -> void:
 		await _shot(stop[0] + ".png")
 	game.camera.fixed_focus = null
 	game.camera.room_size = 0.0
+
+
+## Blood (0.23) from the game camera: two people hit by cars on the near
+## lane (one hurt at 32 km/h, one killed at 80 km/h) smear the road and
+## pool; on the sidewalk beside them a fight spatters it, one victim
+## punched, one kicked to death. Shot as the killing kick lands, then once
+## the pools have spread: by day at the on-foot, closest and driving zooms
+## and at low quality, aged 40 s, and at night.
+func _blood(game) -> void:
+	game.player.visible = false
+	game.Graphics.pick(game.settings, "high")
+	game.apply_settings()
+	var at := Vector3(500, 0, 230)
+	game.city.stream_now(at)
+	var near: Array = game.city.nearest_sidewalk(at)
+	var loop: PackedVector3Array = game.city.sidewalk_loops[near[0]]
+	var walk: Vector3 = loop[near[1]]
+	var along: Vector3 = loop[(near[1] + 1) % loop.size()] - walk
+	along.y = 0.0
+	along = along.normalized()
+	# The street is the nearer side off the paving; the lane 2 m into it.
+	var lane := walk
+	var off := INF
+	for side in [Vector3(-along.z, 0, along.x), Vector3(along.z, 0, -along.x)]:
+		for k in 30:
+			var p: Vector3 = walk + side * (0.5 * k)
+			if Fx.bloodwork._paving(Vector2(p.x, p.z)) <= 0.0:
+				if k < off:
+					off = k
+					lane = p + side * 2.0
+				break
+	print("blood: sidewalk %s, lane %s, along %s" % [walk, lane, along])
+	game.player.global_position = walk + along * 16.0 # off to one side, in the open
+	var focus := (walk + lane) * 0.5
+	focus.y = Terrain.height(focus.x, focus.z)
+	game.camera.fixed_focus = focus
+	game.camera.room_size = 16.0
+	game.camera.snap()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 23
+	var yaw := atan2(along.x, along.z)
+	var fighter = _blood_ped(game, rng, near, walk, yaw)
+	var punched = _blood_ped(game, rng, near, walk + along * 1.0, yaw + PI)
+	var kicked = _blood_ped(game, rng, near, walk - along * 1.0, yaw)
+	var hurt = _blood_ped(game, rng, near, lane - along * 12.0, yaw)
+	var killed = _blood_ped(game, rng, near, lane - along * 10.0 + (lane - walk).normalized() * 2.0, yaw)
+	await _frames(30)
+	for hit in [[hurt, 9.0], [killed, 22.0]]:
+		var car = Vehicle.new()
+		car.kind = "sedan"
+		game.add_child(car)
+		car.global_position = hit[0].global_position - along * 3.0
+		car.velocity = along * hit[1]
+		hit[0].hit_by_vehicle(car, hit[1])
+		car.queue_free()
+	await _frames(60)
+	# The player's punch (12) and kick (24); people have 40 health.
+	punched.take_hit(fighter, 12.0, along * 2.0)
+	await _frames(20)
+	punched.take_hit(fighter, 12.0, along * 2.0)
+	kicked.take_hit(fighter, 24.0, -along * 2.2)
+	await _frames(25)
+	kicked.take_hit(fighter, 24.0, -along * 2.2)
+	await _frames(5)
+	await _shot("blood_1_kick_close.png")
+	await _frames(420)
+	print("blood: %d marks, %d spurts; hurt dead=%s, killed dead=%s, kicked dead=%s" % [Fx.bloodwork.live(), Fx.bloodwork.spurts, hurt.dead, killed.dead, kicked.dead])
+	await _shot("blood_2_day_close.png")
+	for zoom in [["3_day_foot", 26.0], ["4_day_drive", 62.0]]:
+		game.camera.room_size = zoom[1]
+		game.camera.snap()
+		await _frames(10)
+		await _shot("blood_%s.png" % zoom[0])
+	game.camera.room_size = 26.0
+	game.camera.snap()
+	game.Graphics.pick(game.settings, "low")
+	game.apply_settings()
+	await _frames(10)
+	await _shot("blood_5_day_foot_low.png")
+	game.Graphics.pick(game.settings, "high")
+	game.apply_settings()
+	Fx.bloodwork.clock += 40.0 # the marks 40 s older: dried darker
+	await _frames(10)
+	await _shot("blood_6_day_aged.png")
+	Fx.bloodwork.clock -= 40.0
+	game.atmosphere.hour = 22.0
+	await _frames(30)
+	await _shot("blood_7_night_foot.png")
+	game.camera.room_size = 16.0
+	game.camera.snap()
+	await _frames(10)
+	await _shot("blood_8_night_close.png")
+	game.Graphics.pick(game.settings, "low")
+	game.apply_settings()
+	await _frames(10)
+	await _shot("blood_9_night_close_low.png")
+	game.camera.fixed_focus = null
+	game.camera.room_size = 0.0
+
+
+## A pedestrian standing still at `pos` facing `yaw`, on sidewalk loop
+## `near` ([loop, point]).
+func _blood_ped(game, rng: RandomNumberGenerator, near: Array, pos: Vector3, yaw: float):
+	var ped = PedScript.new()
+	ped.setup(game.city, rng, near[0], near[1])
+	ped.point_index = near[1]
+	ped.personality = "calm"
+	ped.walk_speed = 0.0
+	ped.position = Vector3(pos.x, Terrain.height(pos.x, pos.z), pos.z)
+	ped.rotation.y = yaw
+	game.add_child(ped)
+	return ped
 
 
 ## Middle of the street of road `road` nearest `near` (local metres), on

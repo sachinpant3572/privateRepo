@@ -1,18 +1,21 @@
 extends Node3D
 ## Game feel, shared by everything (autoload "Fx"): hit-stop and screen shake
-## on punches and crashes, spark and debris bursts, tyre smoke, splashes and
-## skid marks. Bursts come from small pools of one-shot particle emitters;
-## skid marks are one MultiMesh ring buffer, so all of it costs a handful of
-## draw calls.
+## on punches and crashes, spark and debris bursts, tyre smoke, splashes,
+## skid marks and blood (blood.gd). Bursts come from small pools of one-shot
+## particle emitters; skid marks and blood marks are one MultiMesh ring
+## buffer each, so all of it costs a handful of draw calls.
 
 const SKID_COUNT := 400
 ## Loud bursts (crashes, knocked props, fights) startle nearby birds.
 const Birds = preload("res://scripts/birds.gd")
 const GameLog = preload("res://scripts/game_log.gd")
+const Blood = preload("res://scripts/blood.gd")
 
 ## Off in headless runs (tests), where slowing time would only slow tests.
 var enabled := true
 var camera: Node
+## Spurts and marks on the ground (blood.gd; Settings > Game > Blood).
+var bloodwork: Blood
 
 var _pools := {}
 var _skids: MultiMeshInstance3D
@@ -32,6 +35,9 @@ func _ready() -> void:
 	_pools["gush"] = _pool(3, _gush_emitter)
 	_skids = _make_skids()
 	add_child(_skids)
+	bloodwork = Blood.new()
+	bloodwork.name = "Blood"
+	add_child(bloodwork)
 
 
 func _process(_delta: float) -> void:
@@ -116,6 +122,28 @@ func skid(pos: Vector3, dir: Vector3) -> void:
 	_skid_next = (_skid_next + 1) % SKID_COUNT
 	_skid_total += 1
 	_skids.multimesh.visible_instance_count = mini(_skid_total, SKID_COUNT)
+
+
+## Blood from a wound at `pos` spraying along `dir` (zero: any way), with
+## drops on the ground ahead; `amount` about 0.4 a punch .. 2 a hard crash.
+## People call it through Humanoid.bleed(). It adds no hit-stop or shake.
+func blood(pos: Vector3, dir: Vector3, amount: float) -> void:
+	bloodwork.spurt(pos, dir, amount)
+
+
+## A blood smear at `pos` along `dir` (a body sliding), `width` m wide.
+func blood_smear(pos: Vector3, dir: Vector3, width: float) -> void:
+	bloodwork.smear(pos, dir, width)
+
+
+## A pool of blood spreading from `pos` to about `size` m over `grow` s.
+func blood_pool(pos: Vector3, size: float, grow := 5.0) -> void:
+	bloodwork.pool(pos, size, grow)
+
+
+## Settings > Game > Blood: off shows none and clears what is there.
+func set_blood(on: bool) -> void:
+	bloodwork.set_on(on)
 
 
 func shake(amount: float) -> void:

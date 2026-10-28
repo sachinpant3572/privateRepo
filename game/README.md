@@ -79,6 +79,13 @@ phone.
 - **Effects**: hit-stop and screen shake on punches, kicks and crashes,
   sparks, debris, tyre smoke and skid marks when drifting or braking hard,
   smoke from damaged engines, splashes on wet roads (`scripts/fx.gd`).
+- **Blood** (Settings > Game > Blood, on by default): a hit that hurts
+  sprays blood from the chest and spatters the ground past the victim
+  (more for a kick than a punch); a car hit over 14 km/h sprays it, smears
+  the road while the body slides and pools where it stops; every death
+  pools under the body. Marks dry darker and fade after one to two
+  minutes. Guns call `Humanoid.bleed(pos, dir, amount)` for the wound,
+  then `take_hit(shooter, damage, push, false)` (`scripts/blood.gd`).
 - **People** are skeletal now: rounded body parts on a humanoid skeleton
   (standard bone names, so modelled characters can replace them later),
   animated in code: idle, walk, run, punch, kick, guard, flinch, knockdown,
@@ -402,7 +409,7 @@ at the Aurum Tower, Midtown and Lantern Square, on foot and driving (80),
 the perspective camera backed out of a tower and with the view band
 turning buildings round the player see-through (81), and driving flat out
 east and north through Midtown and past the Aurum Tower (82), and Settings > Angle at
-45, 55, 65, 75 and 90° with tilt off at the Aurum Tower and Lantern Square (83), and the camera turning with the car flat out east, south and west (84). `SHOTS=lights` shows a car's headlights at night on the flat and up and down the hills (86); `SHOTS=nightfx` shows real headlights, street lamps and a police light bar at each graphics quality (87) and the Lantern Quarter's gas lamps (88). `SHOTS=lookup` shows Look up through the game's own camera: the city and the hills at night, the hills at dusk and the city by day (89-92). `res://tests/world_shots.tscn` shoots the first roadworks wide and close (`COUNT=n` of them, default 4). `res://tests/occlusion_probe.tscn`
+45, 55, 65, 75 and 90° with tilt off at the Aurum Tower and Lantern Square (83), and the camera turning with the car flat out east, south and west (84). `SHOTS=lights` shows a car's headlights at night on the flat and up and down the hills (86); `SHOTS=nightfx` shows real headlights, street lamps and a police light bar at each graphics quality (87) and the Lantern Quarter's gas lamps (88). `SHOTS=lookup` shows Look up through the game's own camera: the city and the hills at night, the hills at dusk and the city by day (89-92). `SHOTS=blood` shows the blood of 0.23 from the game camera on a quiet street: two people hit by cars (one hurt at 32 km/h, one killed at 80 km/h) smearing the road and pooling, and a street fight's spatter and a kicked-to-death victim's pool on the sidewalk, as the killing kick lands, then by day at the closest, on-foot and driving zooms, at low quality, aged 40 s, and at night (blood_1 to blood_9). `res://tests/world_shots.tscn` shoots the first roadworks wide and close (`COUNT=n` of them, default 4). `res://tests/occlusion_probe.tscn`
 (headless) measures how much of the hero and the street each camera
 setting hides (HANDOFF-perspective-camera.md).
 
@@ -450,6 +457,7 @@ cd game && godot --headless -s res://tests/plan_dump.gd -- /tmp/plan.json \
 | `scripts/missions/` | Mission manager (progress, saving, markers, retry), mission base helpers, missions 1-3, cast looks |
 | `scripts/atmosphere.gd` | Time of day, sun and moon, weather, rain |
 | `scripts/fx.gd` | Hit-stop, shake, sparks, smoke, splashes, skid marks (autoload) |
+| `scripts/blood.gd` | Blood spurts and ground marks (spatter, smears, pools): one MultiMesh ring buffer, a child of Fx |
 | `scripts/minimap.gd`, `full_map.gd`, `map_image.gd`, `state_map.gd` | Minimap, full map, the baked city map and the baked state map |
 | `scripts/phone.gd` | The phone and its apps |
 | `scripts/places.gd` | Which blocks hold a corner store or diner: names, doors, hours |

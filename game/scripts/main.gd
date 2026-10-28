@@ -41,7 +41,7 @@ var game_log
 var inventory = Inventory.new()
 var respawning := false
 var cash := 0
-var settings := {"shadows": true, "show_fps": true, "weather": "auto", "detail": "high", "controls": "stick", "view": "perspective", "zoom": 1.0, "angle": 65.0, "auto_tilt": true, "camera_turn": "car", "drive_zoom": 1.0, "fps_limit": 120, "quality": "high", "bloom": true, "aa": false, "vivid": true, "real_lights": true, "log": true, "log_button": true}
+var settings := {"shadows": true, "show_fps": true, "weather": "auto", "detail": "high", "controls": "stick", "view": "perspective", "zoom": 1.0, "angle": 65.0, "auto_tilt": true, "camera_turn": "car", "drive_zoom": 1.0, "fps_limit": 120, "quality": "high", "bloom": true, "aa": false, "vivid": true, "real_lights": true, "log": true, "log_button": true, "blood": true}
 ## Settings > Graphics > FPS limit.
 const FPS_LIMITS := [30, 60, 75, 90, 120]
 ## Player-set map waypoint (a road node position) or null.
@@ -178,6 +178,7 @@ func apply_settings() -> void:
 	Country.LOAD_RADIUS = 130.0 * reach
 	Country.UNLOAD_RADIUS = 210.0 * reach
 	graphics.apply(settings)
+	Fx.set_blood(settings.get("blood", true) != false)
 	var scheme: String = settings.get("controls", "stick")
 	Controls.scheme = scheme if Controls.SCHEMES.has(scheme) else "stick"
 	# Headless runs (tests, tools) go flat out.
