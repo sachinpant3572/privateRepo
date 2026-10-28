@@ -11,7 +11,9 @@ building this game is to let the players feel like they are in a living breathin
 of different cities, regions, etc."
 
 Same day he asked what it would cost to make Bellerive as big as GTA V's Los Santos (answered: 8-12
-sessions; step 1 to about 10 km² recommended). He has not chosen yet. This plan works at any size.
+sessions). His decision: "Lets keep it the same as it is planned for now, lets not make it bigger, we
+will introduce more things inside so the whole city feels much more lively than GTA V". So the city
+keeps its planned size (the 4.7 km² outline in world_map.json), and every tier fits inside it.
 
 ## Starting state (survey, 2026-10-28)
 
@@ -75,6 +77,5 @@ block, for 2-3 sessions.
 
 ## Open questions
 
-- City size (GTA V scale, about 10 km² first, or the planned 4.7 km²) decides how many districts
-  each tier gets. Phase 1 does not depend on it.
+- Settled 2026-10-28: the city keeps its planned size.
 - Enterable homes (safehouses) are planned in INTERIORS_SERVICES_PLAN.md and not in this scope.
