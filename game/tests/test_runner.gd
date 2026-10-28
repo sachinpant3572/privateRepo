@@ -2255,7 +2255,18 @@ func test_taxi_phone_call_and_skip() -> void:
 	_check(gap < 16.0, "at the curb by the player, %.1f m" % gap)
 	var far: int = _taxi_far_node(500.0)
 	game.waypoint = game.city.node_pos(far)
+	# Another car stopped right where the player stands: the waiting cab
+	# still wins (no carjacking a passer-by).
+	var other = null
+	for v in get_tree().get_nodes_in_group("vehicles"):
+		if v != cab and not v.wrecked:
+			other = v
+			break
+	if other != null:
+		other.global_position = cab.global_position + cab.global_basis.x * 3.6
+		other.reset_physics_interpolation()
 	await _taxi_board(cab)
+	_check(p.vehicle == cab, "boarding takes the waiting cab, not the car beside it")
 	_check(taxi.state == taxi.State.CHOOSING and taxi.trip.get("name") == "Waypoint", "with a waypoint set, that is where it goes")
 	var fare: int = taxi.trip.fare
 	var stop: Vector3 = taxi.trip.stop

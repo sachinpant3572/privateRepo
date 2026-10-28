@@ -80,10 +80,15 @@ func nearest_vehicle():
 
 
 func try_enter_vehicle() -> void:
+	var game = get_tree().get_first_node_in_group("game")
+	# The cab waiting for us wins over any car that happens to be nearer.
+	if game != null and game.taxi != null and is_instance_valid(game.taxi.cab) \
+			and global_position.distance_to(game.taxi.cab.global_position) < ENTER_RANGE \
+			and game.taxi.board(game.taxi.cab):
+		return
 	var car = nearest_vehicle()
 	if car == null:
 		return
-	var game = get_tree().get_first_node_in_group("game")
 	if game != null and game.taxi != null and game.taxi.board(car):
 		return # the cab that pulled over for us: in the back, not a carjacking
 	if car.rider != null:
