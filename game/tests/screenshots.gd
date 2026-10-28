@@ -790,8 +790,9 @@ func _traffic(game) -> void:
 			q.queue_free()
 	traffic._set_phase(e, TM.MAIN_GO)
 	# Rush hour downtown, then a residential street deep in the night, both
-	# framed wide (100 m) so most of the traffic bubble (cars despawn past
-	# 95 m) is in view: the driving view (62 m) shows only a third of it.
+	# framed wide (100 m; the driving view is 62 m). Population's reach is
+	# the same at both sizes (2.1x vs 2.07x), so the frame doesn't change
+	# where cars spawn; the log gives the counts, which the shot alone can't.
 	game.atmosphere.hour = 8.0
 	game.camera.fixed_focus = c
 	game.camera.room_size = 100.0

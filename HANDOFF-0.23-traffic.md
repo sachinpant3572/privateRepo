@@ -109,8 +109,22 @@ there run 100-130 m); lights forced with `_set_phase` and `go_end = 1e9`.
 
 ## Gates
 
-- Shots: `SHOTS=traffic` (96-98 in screenshots.gd), with a rough frame-time
-  probe at the end of the run.
+- Shots: `SHOTS=traffic` (96-98 in screenshots.gd, 7 shots), with a rough
+  frame-time probe at the end of the run. Judged 2026-10-28: red, amber
+  and green lenses read true at 22, 40 and 62 m by night (deep hues: ACES
+  turned the first red orange); a queue of 5-6 held at a red; rush 10-11
+  cars in the bubble (budget 11, density 0.81) vs a brownstone street at
+  2:30 with 3 (budget 2, density 0.10).
+- Probe (xvfb, opengl3, 11 cars): physics 3.0-3.4 ms a frame with the
+  controller running, 2.8-4.1 paused: its cost is below the probe's
+  noise. Lenses: one MultiMesh draw; no lights.
+- Finding, not changed (population's spawn ring, not this design): the
+  car bubble scales with the camera (`reach()` up to 2.1x), so at the
+  driving zoom cars spawn 40-145 m out and despawn past about 200 m. 11
+  cars over that disc leave 0-3 on screen even at the downtown rush, so
+  the shot doesn't read as busy; the counts in the log carry it. Fix:
+  a tighter ring for traffic (spawn just off screen, despawn sooner),
+  about an hour with test retunes.
 
 ## Traps
 
