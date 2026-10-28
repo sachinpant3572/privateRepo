@@ -95,12 +95,12 @@ carry meta `section`); the changed-settings diff compares types first.
   - `_curb_stop` tries spots 6 and 11 m along the street (short of the
     spot first) when a car (`room_for`, skipping the cab) or the player on
     foot is on it.
-  - A called cab stopped on its last leg within `PULL_UP` (9 m) of the
-    player on foot has arrived when it is within `PULL_UP_STOP` (6 m) of
-    its stop or the player stands between it and the stop (it brakes for
-    them). The stop can lie past the player when the near spot is taken,
-    so a stop-distance rule alone missed it. A cab queued further back
-    does not count.
+  - A called cab stopped on its last leg has arrived when its look-ahead
+    ray is braking it for the player on foot, or when it is within
+    `PULL_UP_STOP` (6 m) of its stop and `PULL_UP` (9 m) of the player.
+    The stop can lie past the player when the near spot is taken, so a
+    stop-distance rule alone missed it; a distance-along-the-street rule
+    fired for cabs held by traffic in the lane (second review).
 - Test: `test_cab_stop_skips_parked_car`.
 - Also seeded the suburbs test's spawn probe (20 draws, 80% on suburb
   loops); one unseeded draw failed now and then.
@@ -117,7 +117,17 @@ carry meta `section`); the changed-settings diff compares types first.
   list the 3 nearest vehicles (`near`) and the car's real speed
   (`moving_kmh`); the export event names the file.
 - Not done: pre-warming the vehicle mesh cache at load (the first car of
-  each model still builds its mesh once).
+  each model and paint still builds its mesh once, 2-15 ms).
+
+## Second review (nothing serious)
+
+- Fixed: the cab arrival rule (above).
+- Open, minor: in the classic orthographic view `covered()` aims rays at
+  the camera position, not along the view (`_view_blocked` does it right);
+  only far police/hostile silhouettes are affected. CORNER_GRIP also lets
+  AI take corners about 22% faster (suite green). 18-wheelers keep the
+  old, stiffer grip on purpose. Whether the light count caused the Ultra
+  drop is unverified: the logger's fps rows from the S25 are the check.
 
 ## Traps
 
