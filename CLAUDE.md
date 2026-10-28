@@ -45,11 +45,28 @@ file changes, update this copy too.
 
 - Gates come before "done". For this repo's game (`game/`, Godot 4.7.2):
   - `game/tools/setup_cloud.sh` once per container (Godot, Android templates, signing);
-  - `game/tests/run.sh` (headless tests) after every change to game code; read its pass line and any FAIL rows;
+  - `game/tests/run.sh` (headless tests) after every change to game code; read its pass line and any FAIL rows (the log command is under Token cost);
   - screenshots for any visual change (commands in `game/README.md`), read through contact sheets;
   - `game/tools/build_apk.sh` before handing Sachin a build.
 - Long commands run with `run_in_background: true`; read the result when the completion notice arrives. Never wait in the foreground with sleep or polling loops.
 - Then review: brief a `general-purpose` agent (`model: "opus"`, `run_in_background: true`) as an independent reviewer with Sachin's request quoted word for word, what changed and where, and the gate outputs, and fix what it finds. While it runs, do only steps that neither change what it checks nor depend on its verdict. Call the work done only after its findings are handled. If it lists serious issues, brief it once more after the fixes; two review runs is the cap, and anything still open goes to Sachin in the report with its evidence. Skip review for trivial edits and plain answers.
+
+## Token cost (Sachin's standing rule, 2026-10-28)
+
+The cloud sessions used most of Sachin's weekly limit in the week from 2026-10-27, and this one was the busiest. Every call re-reads the whole context, so what goes into it is what costs.
+
+- Command output: a successful command shows at most 12,000 characters inline (`bashOutputMaxChars` in `.claude/settings.json`); longer output goes to a file with a short preview. A failed command shows only a head-and-tail excerpt, so a long failing log can lose its error. Send gate output to a log in `/tmp` (never the repo), then print only the lines you need:
+
+  ```bash
+  game/tests/run.sh > /tmp/tests.log 2>&1; echo "exit $?"
+  grep -E "^FAIL|FAILED:|checks passed|SCRIPT ERROR|^ERROR|Script errors" /tmp/tests.log
+  ```
+
+  The tests passed only if the exit is 0 and the line reads `N checks passed, 0 failed`. For screenshots, write the shots to a folder in `/tmp`, send the log to `/tmp/shots.log`, print `echo "exit $?"`, and grep it with `-A2` (the two lines after a Godot error give its file and line) for `SCRIPT ERROR|SHADER ERROR|Parse Error|^ERROR`. The shot scripts exit 0 even when they stop early, so the run passed only if that grep finds nothing and `grep -c '^saved ' /tmp/shots.log` equals the number of shots expected. For the APK and other builds: `<command> > /tmp/build.log 2>&1; echo "exit $?"; tail -n 40 /tmp/build.log`. For code, `grep -n` before reading.
+- Reading code: read one function or a range of up to about 150 lines, never a 400-line span to find something, and never use `allow_large`. A file read is capped at 12,000 tokens (`CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS`), which is a backstop, not the target. Find what to read with `grep -n` or `Explore` first.
+- Images: a 1280x720 screenshot costs about 1,200 tokens (width x height / 750) and stays in the context until the next compaction. When the conversation holds too many images, Claude Code drops the oldest in a batch and reprocesses the conversation from there, which costs again. Look at a screenshot only when the check needs eyes; read each image once; crop or use a contact sheet (Working standard) rather than full-size reads; to show Sachin, send the file with `SendUserFile` without reading it first.
+- Waiting: one background command per wait, and act on its completion notice. A background command in a cloud session is stopped after 30 minutes unless you pass `timeout` with it (up to 7200000 ms, 2 hours), so pass one for anything that may run longer. A loop inside that one command is fine, since it costs no tokens while it runs; don't start a second wait for the same thing, and don't read a background task's output before its notice arrives. The main conversation's cache lasts an hour (five minutes once usage credits are being drawn); a notice that arrives later reprocesses the context once, which is expected.
+- No check-in routines: never use `send_later`, `create_trigger`, `update_trigger`, `/loop`, `CronCreate` or `ScheduleWakeup` to re-check a PR, CI or another session, and never re-arm a "safety-net" check-in. A routine tied to this session wakes it and reprocesses its whole context; four such check-ins on PR #2 did that on 10-25 and 10-26. Use `subscribe_pr_activity` for PR events, and stop when there is nothing left to do. A reminder Sachin asks for by date and time is fine: make it a new small session (`create_trigger` with a new session on fire), not a wake-up of this one.
 
 ## Effort
 
@@ -60,7 +77,7 @@ file changes, update this copy too.
 ## Sessions
 
 - On multi-day work, and on any task likely to run long (a multi-step build, an investigation, work likely to pass about 200k of context or to span more than one sitting), keep a decisions note as you go: decisions made, approaches rejected and why, open questions, and traps and constraints (each lesson learned). Use `HANDOFF-<task>.md` at the repo root, one file per task, committed with the work, under 150 lines; move finished history to `HANDOFF-<task>-archive.md`. Important context must not live only in the conversation.
-- The context limit is about 400k tokens: `autoCompactWindow` is 400000 in `.claude/settings.json`. Before a long task nears it, bring the decisions note up to date at a clean break so the compacted session resumes from it. Never compact or hand off with a file half-edited or a check half-run. Carry on in the same session; never ask Sachin to start a new chat.
+- The context limit is about 250k tokens: `autoCompactWindow` is 250000 in `.claude/settings.json`, both at the top level and under `modelSettings` for Opus 5.5 (that one wins for Opus, so change both together). It was lowered from 400k on 2026-10-28 to cut cost, because every call re-reads the whole context. Before a long task nears it, bring the decisions note up to date at a clean break so the compacted session resumes from it. Never compact or hand off with a file half-edited or a check half-run. Carry on in the same session; never ask Sachin to start a new chat.
 - The container is wiped when the session ends: commit and push work worth keeping to the session's branch.
 - To abandon an approach, suggest `/rewind` rather than `/compact`.
 
