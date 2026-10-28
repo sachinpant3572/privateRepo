@@ -431,9 +431,10 @@ func depart(n: int, car) -> void:
 		e.queue.erase(car)
 
 
-## Whether no vehicle but `me` is inside junction n (past its stop line on
-## its own approach). Parked and wrecked cars don't count: traffic goes
-## round those.
+## Whether no vehicle but `me` is inside junction n: its end nearest the
+## middle past the stop line of the leg it is on (a car pulling in front
+## first, one leaving tail last). Parked and wrecked cars don't count:
+## traffic goes round those.
 func box_clear(n: int, me) -> bool:
 	var e := _entry(n)
 	var c: Vector3 = e.pos
@@ -443,12 +444,12 @@ func box_clear(n: int, me) -> bool:
 			continue
 		var p: Vector3 = v.global_position
 		var rel := Vector2(p.x - c.x, p.z - c.z)
-		var d := rel.length()
+		var d := rel.length() - float(v._size.z) * 0.5
 		if d > reach:
 			continue
 		if v.driver == v.Driver.NONE and v.velocity.length() < 0.5:
 			continue
-		if d < 1.0 or d < _line_at(e, rel / d) - 0.5:
+		if d < 1.0 or d < _line_at(e, rel.normalized()) - 0.5:
 			return false
 	return true
 

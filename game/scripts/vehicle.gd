@@ -807,6 +807,8 @@ func _traffic_ai() -> void:
 		gap = _line_d + IDM_S0 - 0.4
 		lead_v = 0.0
 	var acc := _idm(v, cruise, gap, v - lead_v, rain)
+	if _held and v < 0.3 and _line_d < 1.0:
+		acc = minf(acc, 0.0) # at the line: foot on the brake, no creeping over
 	var v_cmd := clampf(v + acc * dt, 0.0, maxf(cruise, v))
 	if _corner_v < INF:
 		# Down to the turn's speed by 8 m short of the junction's middle.

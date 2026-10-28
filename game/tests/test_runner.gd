@@ -94,6 +94,11 @@ func _run() -> void:
 		"test_road_surfaces_and_roadworks", "test_traffic_flows_past_roadworks", "test_boundaries_vary_by_household",
 		"test_game_log_file_and_rotation", "test_game_log_snapshot_and_events", "test_game_log_report_copy_and_off",
 		"test_screen_shake_setting", "test_settings_sliders_snap_and_apply",
+		"test_signal_phases_and_yellow_timing", "test_cars_stop_at_red_and_go_on_green",
+		"test_all_way_stop_first_come_first_served", "test_speed_limits_by_road_class",
+		"test_idm_keeps_gap_behind_stopped_leader", "test_traffic_density_and_mix_by_district_and_hour",
+		"test_traffic_surge_raises_budget", "test_traffic_yields_to_siren", "test_late_night_signals_flash",
+		"test_zebra_styles_match_city_cells",
 	]
 	# ONLY=name1,name2 runs just those (handy while working on one test).
 	var only := OS.get_environment("ONLY")
@@ -7541,3 +7546,707 @@ func _slider_press(at: Vector2, down: bool) -> void:
 func _slide(row, by: int) -> void:
 	var bar: HSlider = row.get_meta("slider")
 	bar.value = bar.value + by
+
+
+
+# --- Traffic (0.23): signals, signs, limits, car following, demand -----------
+
+## The approaches into junction n (plan j) at least `min_len` m long that
+## run straight on through it: [[from, on, dir]] (dir from n toward
+## `from`); `group` -1 for any signal group.
+func _straight_ways(j: Dictionary, n: int, min_len: float, group := -1) -> Array:
+	var city = game.city
+	var out: Array = []
+	for leg in j.legs:
+		if leg.link or float(leg.length) < min_len or (group >= 0 and int(leg.group) != group):
+			continue
+		if not city.next_nodes(leg.to).has(n):
+			continue
+		for o in j.legs:
+			if (o.dir as Vector2).dot(leg.dir) < -0.95 and city.next_nodes(n).has(o.to):
+				out.append([int(leg.to), int(o.to), leg.dir])
+				break
+	return out
+
+
+## City junctions near the spawn point, nearest first.
+func _nodes_by_spawn(reach: float) -> Array:
+	var city = game.city
+	var s: Vector3 = city.spawn_point
+	var ids: Array = city._nodes_near(Vector2(s.x, s.z), reach).filter(func(n): return n < city.COUNTRY_BASE)
+	ids.sort_custom(func(a, b): return city.node_pos(a).distance_squared_to(s) < city.node_pos(b).distance_squared_to(s))
+	return ids
+
+
+## The nearest junction of `kind` (TrafficPlan) that `ok` accepts (given its
+## plan), with an approach at least `min_len` m long running straight on
+## through it: [junction, from, on], or [] if there is none.
+func _traffic_junction(kind: int, min_len: float, ok := Callable(), reach := 900.0, group := -1) -> Array:
+	var TP = preload("res://scripts/traffic_plan.gd")
+	for n in _nodes_by_spawn(reach):
+		var j: Dictionary = TP.junction(game.city, n)
+		if int(j.kind) != kind or (ok.is_valid() and not ok.call(j)):
+			continue
+		var ways := _straight_ways(j, n, min_len, group)
+		if not ways.is_empty():
+			return [n, ways[0][0], ways[0][1]]
+	return []
+
+
+## The nearest street at least `min_len` m long, driven from a to b, that
+## `ok` (a, b, class, plan edge) accepts: [a, b], or [] if there is none.
+func _traffic_street(min_len: float, ok: Callable, reach := 900.0) -> Array:
+	var city = game.city
+	for a in _nodes_by_spawn(reach):
+		for b in city.next_nodes(a):
+			if b >= city.COUNTRY_BASE:
+				continue
+			var e: int = city.plan.edge_between(a, b)
+			if e >= 0 and city.node_pos(a).distance_to(city.node_pos(b)) >= min_len \
+					and ok.call(a, b, city.plan.edge_class(e), e):
+				return [a, b]
+	return []
+
+
+## The unit direction of lane `lane` from junction a to b, on the ground.
+func _lane_dir(a: int, b: int, lane := 0) -> Vector3:
+	var s: Vector3 = game.city.lane_start(a, b, lane)
+	var e: Vector3 = game.city.lane_point(a, b, lane)
+	return Vector3(e.x - s.x, 0.0, e.z - s.z).normalized()
+
+
+## A traffic car of `kind` setting off `along` m down lane `lane` from
+## junction a toward b, going on to `after` there (-1: its own pick).
+func _traffic_car(kind: String, a: int, b: int, after := -1, lane := 0, along := 0.0, seed := 11):
+	var city = game.city
+	var u := _lane_dir(a, b, lane)
+	var car = Vehicle.new()
+	car.kind = kind
+	car.city = city
+	car.position = city.lane_start(a, b, lane) + u * along
+	car.rotation.y = atan2(-u.x, -u.z)
+	car.rng.seed = seed
+	car.start_traffic(city, a, b, lane)
+	car._after_node = after
+	game.add_child(car)
+	return car
+
+
+## The drivable city junction nearest the spawn point in each district
+## style of `styles` that has one: {style: node}.
+func _style_nodes(styles: Array) -> Dictionary:
+	var city = game.city
+	var s: Vector3 = city.spawn_point
+	var best := {}
+	var dist := {}
+	for n in city.plan.node_count():
+		if not city.drive_node(n):
+			continue
+		var p: Vector3 = city.node_pos(n)
+		var st := str(city.district_at(p).get("style", ""))
+		if styles.has(st) and p.distance_squared_to(s) < float(dist.get(st, INF)):
+			best[st] = n
+			dist[st] = p.distance_squared_to(s)
+	return best
+
+
+## Signals: a pretimed signal gives each group green, yellow then all red in
+## turn, never green both ways, its yellow 1 s plus the approach speed over
+## 6.1 m/s² (ITE, at least 3 s), the walk only with its own green; an
+## actuated one rests on the main road's green until a car calls the cross
+## street, then gives it its minimum green and goes back.
+func test_signal_phases_and_yellow_timing() -> void:
+	var TP = preload("res://scripts/traffic_plan.gd")
+	var TM = preload("res://scripts/traffic.gd")
+	await _new_game(false)
+	var city = game.city
+	var traffic = game.population.traffic
+	var found := _traffic_junction(TP.SIGNALS, 0.0, func(j): return j.pretimed)
+	_check(not found.is_empty(), "a pretimed signal near the spawn point")
+	if found.is_empty():
+		return
+	var n: int = found[0]
+	var e: Dictionary = traffic._make_entry(n)
+	var want := [3.0, 3.0]
+	for leg in e.legs:
+		want[int(leg.group)] = maxf(want[int(leg.group)], 1.0 + TP.limit(city, leg.to, n) / 6.1)
+	_check(absf(e.yellow[0] - want[0]) < 0.01 and absf(e.yellow[1] - want[1]) < 0.01 and e.yellow[0] >= 3.0,
+		"yellow by approach speed: %.2f / %.2f s (want %.2f / %.2f)" % [e.yellow[0], e.yellow[1], want[0], want[1]])
+	traffic._set_phase(e, TM.MAIN_GO)
+	var runs: Array = [] # [group 0's light, group 1's light, seconds]
+	var both := 0
+	var bad_walk := 0
+	for i in 2400: # two minutes, 0.05 s steps
+		var l0: int = traffic._group_light(e, 0)
+		var l1: int = traffic._group_light(e, 1)
+		if l0 != TM.RED and l1 != TM.RED:
+			both += 1
+		for g in 2:
+			var ped: int = traffic._ped_state(e, g)
+			var lt: int = l0 if g == 0 else l1
+			if (ped == TM.PED_WALK or ped == TM.PED_FLASH) != (lt == TM.GREEN):
+				bad_walk += 1
+		if runs.is_empty() or runs[-1][0] != l0 or runs[-1][1] != l1:
+			runs.append([l0, l1, 0.0])
+		runs[-1][2] += 0.05
+		traffic._run_signal(e, 0.05, 12.0)
+	var G: int = TM.GREEN
+	var Y: int = TM.YELLOW
+	var R: int = TM.RED
+	var order := [[G, R, TM.MAIN_GREEN], [Y, R, e.yellow[0]], [R, R, TM.ALL_RED], [R, G, TM.CROSS_GREEN],
+		[R, Y, e.yellow[1]], [R, R, TM.ALL_RED]]
+	var bad: Array = []
+	for i in runs.size() - 1: # the last is cut off
+		var o: Array = order[i % 6]
+		if runs[i][0] != o[0] or runs[i][1] != o[1] or absf(runs[i][2] - o[2]) > 0.11:
+			bad.append("#%d %d/%d for %.2f s (want %d/%d for %.2f s)" % [i, runs[i][0], runs[i][1], runs[i][2], o[0], o[1], o[2]])
+	_check(runs.size() >= 13 and bad.is_empty(),
+		"pretimed: green, yellow, all red each way in turn (%d runs) %s" % [runs.size(), "; ".join(bad.slice(0, 3))])
+	_check(both == 0, "never a green or yellow both ways (%d steps)" % both)
+	_check(bad_walk == 0, "the walk (and its flashing clearance) only with its own street's green (%d steps off)" % bad_walk)
+	# Actuated: rests on the main road until called.
+	found = _traffic_junction(TP.SIGNALS, 0.0, func(j): return not j.pretimed, 2500.0)
+	_check(not found.is_empty(), "an actuated signal within 2.5 km")
+	if found.is_empty():
+		return
+	e = traffic._make_entry(found[0])
+	var rest := true
+	for i in 1200:
+		traffic._run_signal(e, 0.05, 12.0)
+		rest = rest and e.phase == TM.MAIN_GO
+	_check(rest, "uncalled, an actuated signal rests on the main road's green for a minute")
+	e.call = true
+	var t := 0.0
+	while e.phase != TM.CROSS_GO and t < 60.0:
+		traffic._run_signal(e, 0.05, 12.0)
+		t += 0.05
+	var to_cross: float = TM.PED_CLEAR + e.yellow[0] + TM.ALL_RED
+	_check(absf(t - to_cross) < 0.25, "a call turns it to the cross street in %.2f s (walk clearance, yellow, all red: %.2f s)" % [t, to_cross])
+	t = 0.0
+	while e.phase == TM.CROSS_GO and t < 60.0:
+		traffic._run_signal(e, 0.05, 12.0)
+		t += 0.05
+	_check(absf(t - TM.CROSS_MIN) < 0.15, "the cross street gets its minimum green, %.2f s (want %.1f)" % [t, TM.CROSS_MIN])
+	t = 0.0
+	while e.phase != TM.MAIN_GO and t < 60.0:
+		traffic._run_signal(e, 0.05, 12.0)
+		t += 0.05
+	var back: float = e.yellow[1] + TM.ALL_RED
+	_check(absf(t - back) < 0.2, "then yellow and all red back to the main road, %.2f s (want %.2f)" % [t, back])
+	rest = true
+	for i in 1200:
+		traffic._run_signal(e, 0.05, 12.0)
+		rest = rest and e.phase == TM.MAIN_GO
+	_check(rest and not e.call, "and rests there again")
+
+
+## A car comes to a stop at a red light's line (not over it) and waits there;
+## on green it drives on through.
+func test_cars_stop_at_red_and_go_on_green() -> void:
+	var TP = preload("res://scripts/traffic_plan.gd")
+	var TM = preload("res://scripts/traffic.gd")
+	await _new_game(false)
+	var city = game.city
+	var traffic = game.population.traffic
+	game.atmosphere.hour = 12.0
+	game.atmosphere.minutes_per_second = 0.0
+	var found := _traffic_junction(TP.SIGNALS, 70.0)
+	_check(not found.is_empty(), "a signal with a 70 m approach near the spawn point")
+	if found.is_empty():
+		return
+	var n: int = found[0]
+	var from: int = found[1]
+	_place_player_at(city.lane_start(from, n) - _lane_dir(from, n) * 12.0)
+	city.stream_now(city.node_pos(n))
+	var e: Dictionary = traffic._entry(n)
+	var g: int = e.legs[e.to_leg[from]].group
+	traffic._set_phase(e, TM.CROSS_GO if g == 0 else TM.MAIN_GO)
+	e.go_end = 1e9
+	_check(traffic.light(n, from) == TM.RED, "the approach shows red")
+	var car = _traffic_car("sedan", from, n, found[2])
+	var held := 0.0
+	var worst := INF
+	var at := Vector3.ZERO
+	for f in 1500:
+		await _frames(1)
+		if car._next_node != n:
+			break
+		worst = minf(worst, car._line_d)
+		if car._held and absf(car.speed) < 0.3 and car._line_d > -0.5 and car._line_d < 4.0:
+			held += 1.0 / 60.0
+			if held <= 1.0:
+				at = car.global_position
+			if held > 5.0:
+				break
+		else:
+			held = 0.0
+	# Stood still from a second after stopping (IDM eases the last bit).
+	var moved: float = car.global_position.distance_to(at)
+	_check(held > 5.0 and worst > -0.5 and car._line_d < 1.5 and moved < 0.15,
+		"stopped at the red light's line for %.1f s (closest %.2f m, front %.2f m from it, then moved %.2f m)" % [held, worst, car._line_d, moved])
+	traffic._set_phase(e, TM.MAIN_GO if g == 0 else TM.CROSS_GO)
+	e.go_end = 1e9
+	var went := -1.0
+	for f in 600:
+		await _frames(1)
+		if car._prev_node == n:
+			went = f / 60.0
+			break
+	_check(went >= 0.0 and not car.wrecked, "on green it drives on through the junction (%.1f s)" % went)
+
+
+## All-way stop: the first car to stop goes first, the next once the
+## junction is clear, each after a full stop.
+func test_all_way_stop_first_come_first_served() -> void:
+	var TP = preload("res://scripts/traffic_plan.gd")
+	await _new_game(false)
+	var city = game.city
+	var traffic = game.population.traffic
+	game.atmosphere.hour = 12.0
+	game.atmosphere.minutes_per_second = 0.0
+	# Two straight-on approaches at right angles into one all-way stop.
+	var n := -1
+	var ways: Array = []
+	for m in _nodes_by_spawn(1500.0):
+		var j: Dictionary = TP.junction(city, m)
+		if j.kind != TP.ALL_STOP:
+			continue
+		var all := _straight_ways(j, m, 60.0)
+		for a in all:
+			for b in all:
+				if ways.is_empty() and absf((a[2] as Vector2).dot(b[2])) < 0.3:
+					ways = [a, b]
+		if not ways.is_empty():
+			n = m
+			break
+	_check(n >= 0, "an all-way stop with two 60 m approaches at right angles")
+	if n < 0:
+		return
+	var p = Vehicle.new()
+	var q = Vehicle.new()
+	for v in [p, q]:
+		v.driver = Vehicle.Driver.TRAFFIC
+		v._next_node = n
+	traffic.arrive(n, q)
+	traffic.arrive(n, p)
+	traffic.arrive(n, q)
+	_check(traffic.may_go(n, q) and not traffic.may_go(n, p), "the first to stop has the junction")
+	traffic.depart(n, q)
+	_check(traffic.may_go(n, p), "then the next in turn")
+	traffic.depart(n, p)
+	p.free()
+	q.free()
+	# Driving: A stops 6 m sooner than B.
+	city.stream_now(city.node_pos(n))
+	var size: Vector3 = VehicleKit.size_of("sedan")
+	var alongs: Array = []
+	for i in 2:
+		var from: int = ways[i][0]
+		var to_centre: float = (city.node_pos(n) - city.lane_start(from, n)).dot(_lane_dir(from, n))
+		alongs.append(to_centre - traffic.stop_back(n, from) - size.z * 0.5 - [24.0, 30.0][i])
+	var shift := maxf(0.0, -minf(alongs[0], alongs[1]))
+	var cars: Array = []
+	for i in 2:
+		cars.append(_traffic_car("sedan", ways[i][0], n, ways[i][1], 0, alongs[i] + shift, 21 + i))
+	_place_player_at(city.lane_start(ways[0][0], n) - _lane_dir(ways[0][0], n) * 10.0)
+	var rel := [-1, -1]
+	var full := [false, false]
+	var a_past := false
+	var b_stood := 0.0
+	for f in 2400:
+		await _frames(1)
+		for i in 2:
+			var c = cars[i]
+			if rel[i] < 0 and c._next_node == n and c._released:
+				rel[i] = f
+				full[i] = c._full_stop
+				if i == 1:
+					a_past = cars[0]._next_node != n or cars[0]._line_d < -0.5
+					b_stood = c._stopped
+		if rel[1] >= 0 and cars[1]._prev_node == n:
+			break
+	_check(full[0] and full[1], "each car made a full stop before going in (%s, %s)" % [full[0], full[1]])
+	_check(rel[0] >= 0 and rel[1] > rel[0] and a_past and b_stood > 1.5,
+		"first come first served: A went at %.1f s, B (stood %.1f s at its line) at %.1f s, after A was in" % [rel[0] / 60.0, b_stood, rel[1] / 60.0])
+	_check(not cars[0].wrecked and not cars[1].wrecked and cars[1]._prev_node == n, "both through, unhurt")
+
+
+## The junction straight on past b coming from a, or -1.
+func _straight_on(a: int, b: int) -> int:
+	var city = game.city
+	var din: Vector3 = city.node_pos(b) - city.node_pos(a)
+	din.y = 0.0
+	for m in city.next_nodes(b):
+		var dout: Vector3 = city.node_pos(m) - city.node_pos(b)
+		dout.y = 0.0
+		if m != a and din.normalized().dot(dout.normalized()) > 0.95:
+			return m
+	return -1
+
+
+## Speed limits by road class (25 mph through roadworks), and traffic drives
+## at them: up to the limit, not over it.
+func test_speed_limits_by_road_class() -> void:
+	var TP = preload("res://scripts/traffic_plan.gd")
+	var TM = preload("res://scripts/traffic.gd")
+	await _new_game(false)
+	var city = game.city
+	var traffic = game.population.traffic
+	game.atmosphere.hour = 12.0
+	game.atmosphere.minutes_per_second = 0.0
+	var L: Dictionary = TP.LIMITS
+	_check(L.lane < L.street and L.street < L.avenue and L.avenue < L.boulevard and TP.COUNTRY_LIMITS.freeway > L.boulevard,
+		"limits rise with the road: lane %.1f, street %.1f, avenue %.1f, boulevard %.1f, freeway %.1f m/s" % [L.lane, L.street, L.avenue, L.boulevard, TP.COUNTRY_LIMITS.freeway])
+	var s: Vector3 = city.spawn_point
+	var bad: Array = []
+	var seen := {}
+	for e in city.plan.edge_count():
+		var a: int = city.plan.edge_a[e]
+		var b: int = city.plan.edge_b[e]
+		if city.node_pos(a).distance_to(s) > 600.0:
+			continue
+		var want: float = L.get(city.plan.edge_class(e), 13.4)
+		if city.roadworks.has(e):
+			want = minf(want, TP.WORKS_LIMIT)
+		for pair in [[a, b], [b, a]]:
+			var got: float = traffic.limit(pair[0], pair[1])
+			seen[snappedf(got, 0.1)] = true
+			if absf(got - want) > 0.01:
+				bad.append("%s %d-%d: %.1f (want %.1f)" % [city.plan.edge_class(e), pair[0], pair[1], got, want])
+	_check(bad.is_empty() and seen.size() >= 3, "each street within 600 m has its class's limit (%d kinds of limit) %s" % [seen.size(), ", ".join(bad.slice(0, 3))])
+	# Streets ending in a light (held green here) or no control at all, so
+	# nothing but the limit holds the car down.
+	var free := func(a: int, b: int) -> bool: return traffic.rule(b, a) == TP.GO or traffic.rule(b, a) == TP.SIGNAL
+	# (Arterial blocks near the spawn run 100 to 130 m between junctions.)
+	var fast := _traffic_street(120.0, func(a, b, cls, e): return cls in ["boulevard", "avenue"] and not city.roadworks.has(e) and free.call(a, b), 1500.0)
+	var slow := _traffic_street(110.0, func(a, b, cls, e): return cls in ["street", "quarter", "lane"] and not city.roadworks.has(e) and free.call(a, b), 1500.0)
+	_check(not fast.is_empty(), "a 120 m arterial within 1.5 km")
+	_check(not slow.is_empty(), "a 110 m side street within 1.5 km")
+	if fast.is_empty() or slow.is_empty():
+		return
+	var tops: Array = []
+	for st in [fast, slow]:
+		var ent: Dictionary = traffic._entry(st[1])
+		if ent.kind == TP.SIGNALS:
+			var g: int = ent.legs[ent.to_leg[st[0]]].group
+			traffic._set_phase(ent, TM.MAIN_GO if g == 0 else TM.CROSS_GO)
+			ent.go_end = 1e9
+		_place_player_at(city.lane_start(st[0], st[1]) - _lane_dir(st[0], st[1]) * 12.0)
+		var car = _traffic_car("sedan", st[0], st[1], _straight_on(st[0], st[1]))
+		city.stream_now(car.position)
+		var top := 0.0
+		for f in 1500:
+			await _frames(1)
+			if car._next_node != st[1]:
+				break
+			top = maxf(top, car.speed)
+		var lim: float = traffic.limit(st[0], st[1])
+		var cruise: float = minf(lim, car.max_speed * 0.8)
+		_check(top > cruise * 0.85 and top < cruise * 1.05,
+			"%s: up to %.1f m/s, limit %.1f (drives at %.1f)" % [city.plan.edge_class(city.plan.edge_between(st[0], st[1])), top, lim, cruise])
+		tops.append(top)
+		car.queue_free()
+		await _frames(2)
+	_check(tops[0] > tops[1] + 1.0, "faster on the arterial than the side street (%.1f vs %.1f m/s)" % [tops[0], tops[1]])
+
+
+## Car following (IDM): traffic closes up on a car standing in its lane and
+## stops a couple of metres behind it, without touching it.
+func test_idm_keeps_gap_behind_stopped_leader() -> void:
+	await _new_game(false)
+	var city = game.city
+	game.atmosphere.hour = 12.0
+	game.atmosphere.minutes_per_second = 0.0
+	# One lane each way, so the follower can't just change lanes.
+	var st := _traffic_street(110.0, func(a, b, cls, e): return city.lane_count(a, b) == 1 and not city.roadworks.has(e))
+	_check(not st.is_empty(), "a 110 m street with one lane each way")
+	if st.is_empty():
+		return
+	var u := _lane_dir(st[0], st[1])
+	_place_player_at(city.lane_start(st[0], st[1]) - u * 12.0)
+	var leader = _traffic_car("sedan", st[0], st[1], -1, 0, 58.0, 31)
+	leader._next_node = -1 # stands where it is
+	var car = _traffic_car("sedan", st[0], st[1], -1, 0, 0.0, 32)
+	city.stream_now(car.position)
+	await _frames(20)
+	var lead_at: Vector3 = leader.global_position
+	var still := 0.0
+	var least := INF
+	var gap := INF
+	var top := 0.0
+	for f in 1200:
+		await _frames(1)
+		var d: float = (leader.global_position - car.global_position).dot(u) - (leader._size.z + car._size.z) * 0.5
+		least = minf(least, d)
+		top = maxf(top, car.speed)
+		still = still + 1.0 / 60.0 if absf(car.speed) < 0.1 else 0.0
+		if still > 1.5:
+			gap = d
+			break
+	_check(top > 6.0 and gap >= 1.0 and gap <= 4.0 and least > 0.5,
+		"stopped %.2f m behind the standing car (closest %.2f m, up to %.1f m/s on the way)" % [gap, least, top])
+	_check(leader.global_position.distance_to(lead_at) < 0.3, "without pushing it (moved %.2f m)" % leader.global_position.distance_to(lead_at))
+
+
+## Demand: downtown is busier than the quiet districts and its rush hour
+## than its night; nightlife peaks late; the budget follows, capped by
+## graphics quality. The mix: trucks at the docks, luxury cars where the
+## money is, three-wheelers in the working districts, more taxis at night.
+func test_traffic_density_and_mix_by_district_and_hour() -> void:
+	await _new_game(false)
+	var city = game.city
+	var traffic = game.population.traffic
+	game.atmosphere.minutes_per_second = 0.0
+	var quiet_styles := ["suburb", "enclave", "hills", "bayou"]
+	var nodes := _style_nodes(["downtown", "quarter", "docks", "industrial"] + quiet_styles)
+	var quiet := ""
+	for st in quiet_styles:
+		if quiet == "" and nodes.has(st):
+			quiet = st
+	_check(nodes.has("downtown") and nodes.has("quarter") and quiet != "" and (nodes.has("docks") or nodes.has("industrial")),
+		"downtown, the quarter, a quiet and a freight district found (%s)" % str(nodes.keys()))
+	if not (nodes.has("downtown") and nodes.has("quarter") and quiet != "" and (nodes.has("docks") or nodes.has("industrial"))):
+		return
+	var down: Vector3 = city.node_pos(nodes.downtown)
+	var calm: Vector3 = city.node_pos(nodes[quiet])
+	var qtr: Vector3 = city.node_pos(nodes.quarter)
+	var port: Vector3 = city.node_pos(nodes.get("docks", nodes.get("industrial", -1)))
+	var d8: float = traffic.density_at(down, 8.0)
+	_check(d8 > traffic.density_at(calm, 8.0) * 1.4, "downtown at 8:00 (%.2f) busier than %s (%.2f)" % [d8, quiet, traffic.density_at(calm, 8.0)])
+	_check(traffic.density_at(down, 3.0) < d8 * 0.35, "downtown at 3:00 (%.2f) far quieter than at 8:00" % traffic.density_at(down, 3.0))
+	_check(traffic.density_at(qtr, 23.0) > traffic.density_at(qtr, 9.0) * 1.2,
+		"the quarter busier at 23:00 (%.2f) than at 9:00 (%.2f)" % [traffic.density_at(qtr, 23.0), traffic.density_at(qtr, 9.0)])
+	_place_player_at(down)
+	game.atmosphere.hour = 3.0
+	traffic._refresh_budget()
+	var night: int = traffic.budget()
+	game.atmosphere.hour = 8.0
+	traffic._refresh_budget()
+	var rush: int = traffic.budget()
+	game.graphics.quality = "low"
+	traffic._refresh_budget()
+	var low: int = traffic.budget()
+	game.graphics.quality = "ultra"
+	traffic._refresh_budget()
+	var ultra: int = traffic.budget()
+	game.graphics.quality = "high"
+	_check(rush >= night + 5 and night >= traffic.MIN_BUDGET, "downtown's budget: %d cars at 8:00, %d at 3:00" % [rush, night])
+	_check(low <= traffic.QUALITY_CAP.low and low < rush and ultra > rush and rush <= traffic.QUALITY_CAP.high,
+		"capped by quality: low %d, high %d, ultra %d" % [low, rush, ultra])
+	var share := func(mix: String, at_night: bool, kinds: Array) -> float:
+		var r := RandomNumberGenerator.new()
+		r.seed = 3
+		var hits := 0
+		for i in 3000:
+			if kinds.has(traffic.mix_pick(mix, at_night, r)):
+				hits += 1
+		return hits / 3000.0
+	var trucks := ["box_truck", "tipper", "semi"]
+	var trikes := ["tuk_tuk", "cargo_trike"]
+	var tf: float = share.call("freight", false, trucks)
+	var tc: float = share.call("cbd", false, trucks)
+	var lw: float = share.call("wealthy", false, ["luxury"])
+	var lk: float = share.call("working", false, ["luxury"])
+	var kw: float = share.call("working", false, trikes)
+	var kr: float = share.call("wealthy", false, trikes)
+	var xn: float = share.call("cbd", true, ["taxi"])
+	var xd: float = share.call("cbd", false, ["taxi"])
+	_check(tf > tc * 3.0, "trucks: %.0f%% of freight district traffic, %.0f%% downtown" % [tf * 100.0, tc * 100.0])
+	_check(lw > lk * 3.0, "luxury cars: %.0f%% in the wealthy districts, %.0f%% in the working ones" % [lw * 100.0, lk * 100.0])
+	_check(kw > kr * 3.0, "three-wheelers: %.0f%% in the working districts, %.0f%% in the wealthy ones" % [kw * 100.0, kr * 100.0])
+	_check(xn > xd * 1.4, "taxis downtown: %.0f%% at night, %.0f%% by day" % [xn * 100.0, xd * 100.0])
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 9
+	game.atmosphere.hour = 12.0
+	var at_port := 0
+	var at_down := 0
+	for i in 2000:
+		if trucks.has(traffic.pick_kind(port, rng)):
+			at_port += 1
+		if trucks.has(traffic.pick_kind(down, rng)):
+			at_down += 1
+	_check(at_port > at_down * 3, "by place: %d trucks in 2000 at the port, %d downtown" % [at_port, at_down])
+
+
+## Events: a surge raises the traffic around it for its time (to the
+## quality cap), a closure lowers it (never below the least), and one far
+## away changes nothing.
+func test_traffic_surge_raises_budget() -> void:
+	await _new_game(false)
+	var city = game.city
+	var traffic = game.population.traffic
+	game.atmosphere.minutes_per_second = 0.0
+	game.graphics.quality = "high"
+	var nodes := _style_nodes(["downtown"])
+	_check(nodes.has("downtown"), "a downtown junction")
+	if not nodes.has("downtown"):
+		return
+	var down: Vector3 = city.node_pos(nodes.downtown)
+	var cap: int = traffic.QUALITY_CAP.high
+	_place_player_at(down)
+	game.atmosphere.hour = 3.0
+	traffic._refresh_budget()
+	var calm: int = traffic.budget()
+	traffic.surge(down, 300.0, 3.0, 20.0)
+	var event: int = traffic.budget()
+	_check(event > calm + 2 and event <= cap, "a game letting out at 3:00 raises the budget from %d to %d (cap %d)" % [calm, event, cap])
+	traffic.clock += 21.0
+	traffic._refresh_budget()
+	_check(traffic.budget() == calm, "and it ends after its time (%d)" % traffic.budget())
+	traffic.surge(down + Vector3(2000.0, 0.0, 0.0), 300.0, 3.0, 20.0)
+	_check(traffic.budget() == calm, "one 2 km away changes nothing (%d)" % traffic.budget())
+	traffic.clock += 21.0
+	game.atmosphere.hour = 8.0
+	traffic._refresh_budget()
+	var rush: int = traffic.budget()
+	traffic.surge(down, 300.0, 3.0, 20.0)
+	_check(traffic.budget() == cap, "at rush hour a big event fills the roads to the cap (%d)" % traffic.budget())
+	traffic.clock += 21.0
+	traffic.surge(down, 300.0, 0.3, 20.0)
+	var shut: int = traffic.budget()
+	traffic.surge(down, 300.0, 0.05, 20.0)
+	_check(shut < rush and shut > traffic.MIN_BUDGET and traffic.budget() == traffic.MIN_BUDGET,
+		"a closure lowers it, %d to %d, and never below %d (%d)" % [rush, shut, traffic.MIN_BUDGET, traffic.budget()])
+
+
+## A police car coming up behind with its siren on: traffic slows to a
+## crawl and pulls over to the right, then carries on once it has gone by.
+func test_traffic_yields_to_siren() -> void:
+	await _new_game(false)
+	var city = game.city
+	game.atmosphere.hour = 12.0
+	game.atmosphere.minutes_per_second = 0.0
+	var st := _traffic_street(150.0, func(a, b, cls, e): return city.lane_count(a, b) >= 2 and not city.roadworks.has(e))
+	_check(not st.is_empty(), "a 150 m street with two lanes each way")
+	if st.is_empty():
+		return
+	var a: int = st[0]
+	var b: int = st[1]
+	var u := _lane_dir(a, b)
+	var right := Vector3(-u.z, 0.0, u.x)
+	var s0: Vector3 = city.lane_start(a, b, 0)
+	var s1: Vector3 = city.lane_start(a, b, 1)
+	_place_player_at(s0 - u * 12.0)
+	var car = _traffic_car("sedan", a, b, -1, 0, 0.0, 41)
+	city.stream_now(car.position)
+	var base := 0.0
+	for f in 180:
+		await _frames(1)
+		if f >= 120:
+			base += (car.global_position - s0).dot(right) / 60.0
+	var v0: float = car.speed
+	var cop = Vehicle.new()
+	cop.kind = "police"
+	cop.is_police = true
+	cop.city = city
+	cop.driver = Vehicle.Driver.POLICE
+	var cop_along: float = (car.global_position - s1).dot(u) - 35.0
+	cop.position = s1 + u * cop_along
+	cop.rotation.y = atan2(-u.x, -u.z)
+	game.add_child(cop)
+	cop.set_physics_process(false)
+	var slowest := INF
+	var shift := 0.0
+	var after := -1
+	var resumed := 0.0
+	for f in 1200:
+		cop_along += 16.0 / 60.0
+		cop.global_position = s1 + u * cop_along + Vector3(0.0, car.global_position.y - s1.y, 0.0)
+		cop.velocity = u * 16.0
+		await _frames(1)
+		var ahead: float = (cop.global_position - car.global_position).dot(u)
+		if after < 0:
+			slowest = minf(slowest, car.speed) if ahead > -40.0 else slowest
+			shift = maxf(shift, (car.global_position - s0).dot(right) - base)
+			if ahead > 40.0:
+				after = f
+		else:
+			resumed = maxf(resumed, car.speed)
+			if f - after > 240:
+				break
+	_check(v0 > 5.0 and slowest <= Vehicle.SIREN_CRAWL + 0.5, "slows from %.1f to %.1f m/s for the siren" % [v0, slowest])
+	_check(shift >= 0.4, "and pulls over to the right, %.2f m" % shift)
+	_check(after >= 0 and resumed > 5.0 and not car.wrecked, "then carries on (%.1f m/s) once it has gone by" % resumed)
+
+
+## Late at night a signal off the arterials flashes: yellow on the main
+## road (carry on with care), red on the cross street (a stop sign); out of
+## it all red, then the main road's green. Arterial crossings keep cycling.
+func test_late_night_signals_flash() -> void:
+	var TP = preload("res://scripts/traffic_plan.gd")
+	var TM = preload("res://scripts/traffic.gd")
+	await _new_game(false)
+	var city = game.city
+	var traffic = game.population.traffic
+	var found := _traffic_junction(TP.SIGNALS, 60.0, func(j): return not j.arterial, 2500.0, 1)
+	_check(not found.is_empty(), "a signal off the arterials with a 60 m cross approach")
+	if found.is_empty():
+		return
+	var e: Dictionary = traffic._make_entry(found[0])
+	var flashing := true
+	for i in 200:
+		traffic._run_signal(e, 0.05, 2.0)
+		flashing = flashing and traffic._group_light(e, 0) == TM.FLASH_YELLOW and traffic._group_light(e, 1) == TM.FLASH_RED
+	_check(flashing, "at 2:00 it flashes yellow on the main road, red on the cross street")
+	traffic._run_signal(e, 0.05, 12.0)
+	_check(e.phase == TM.CROSS_CLEAR and traffic._group_light(e, 0) == TM.RED and traffic._group_light(e, 1) == TM.RED,
+		"out of the flash: all red first")
+	for i in 31:
+		traffic._run_signal(e, 0.05, 12.0)
+	_check(traffic._group_light(e, 0) == TM.GREEN, "then the main road's green")
+	var art := _traffic_junction(TP.SIGNALS, 0.0, func(j): return j.arterial, 2500.0)
+	_check(not art.is_empty(), "an arterial crossing within 2.5 km")
+	if not art.is_empty():
+		var ea: Dictionary = traffic._make_entry(art[0])
+		for i in 100:
+			traffic._run_signal(ea, 0.05, 2.0)
+		_check(not ea.flash and traffic._group_light(ea, 0) != TM.FLASH_YELLOW, "an arterial crossing keeps cycling at 2:00")
+	# Driving it at 2:00: a full stop from the cross street, then on; the
+	# main road straight through.
+	game.atmosphere.hour = 2.0
+	game.atmosphere.minutes_per_second = 0.0
+	var main := _traffic_junction(TP.SIGNALS, 60.0, func(j): return not j.arterial, 2500.0, 0)
+	for k in 2:
+		var way: Array = found if k == 0 else main
+		if way.is_empty():
+			_check(false, "a main road approach to a signal off the arterials")
+			continue
+		var n: int = way[0]
+		_place_player_at(city.lane_start(way[1], n) - _lane_dir(way[1], n) * 12.0)
+		city.stream_now(city.node_pos(n))
+		var car = _traffic_car("sedan", way[1], n, way[2], 0, 0.0, 51 + k)
+		var shown := -1
+		var stopped := false
+		var slowest := INF
+		var through := -1.0
+		var stop_at := -1.0
+		for f in 1500:
+			await _frames(1)
+			if car._next_node == n:
+				shown = traffic.light(n, way[1])
+				if car._full_stop and not stopped:
+					stop_at = f / 60.0
+				stopped = stopped or car._full_stop
+				if car._line_d < 20.0:
+					slowest = minf(slowest, car.speed)
+			elif car._prev_node == n:
+				through = f / 60.0
+				break
+		if k == 0:
+			# An empty junction: once stopped it goes after the stop hold
+			# and the pull-off, not after a red cycle.
+			_check(shown == TM.FLASH_RED and stopped and through >= 0.0 and through - stop_at < 6.0,
+				"cross street: flashing red, a full stop (at %.1f s), then through %.1f s later" % [stop_at, through - stop_at])
+		else:
+			_check(shown == TM.FLASH_YELLOW and not stopped and slowest > 2.5 and through >= 0.0,
+				"main road: flashing yellow, straight through (slowest %.1f m/s, at %.1f s)" % [slowest, through])
+		car.queue_free()
+		await _frames(2)
+
+
+## The traffic plan and the city's markings agree on where crosswalks are
+## painted (the stop line sits behind them).
+func test_zebra_styles_match_city_cells() -> void:
+	var TP = preload("res://scripts/traffic_plan.gd")
+	var CityCells = preload("res://scripts/city_cells.gd")
+	_check(TP.ZEBRA_STYLES == CityCells.ZEBRA_STYLES, "TrafficPlan.ZEBRA_STYLES matches CityCells.ZEBRA_STYLES")
