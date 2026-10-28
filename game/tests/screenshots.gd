@@ -51,8 +51,14 @@ const MOODS := [
 func _run() -> void:
 	var game = MainScene.instantiate()
 	game.settings["camera_turn"] = "north"
-	game.missions_enabled = false
+	game.missions_enabled = OS.get_environment("SHOTS") == "intro"
+	game.save_enabled = false
 	add_child(game)
+	if game.missions_enabled:
+		# Mission 1's opening, as a new game starts it.
+		await _intro(game)
+		get_tree().quit()
+		return
 	game.atmosphere.hour = 12.5
 	game.atmosphere.minutes_per_second = 0.0
 	game.atmosphere.weather_changes = false
@@ -577,6 +583,21 @@ func _lookup(game) -> void:
 		print("lookup %s: amount %.2f, forward y %.2f" % [v[0], cam.look_up_amount(), -cam.global_basis.z.y])
 		await _shot(v[0] + ".png")
 	cam.set_look_up(false)
+
+
+## Mission 1's opening on a new game: the title card, Jules's first line
+## and the snatch (95). The hero must be in plain view throughout.
+func _intro(game) -> void:
+	await _frames(80)
+	await _shot("95_intro_card.png")
+	await _frames(100)
+	await _shot("95_intro_line.png")
+	var p = game.player
+	print("intro: player %s cam yaw %.2f pitch %.1f" % [p.global_position, game.camera.yaw, game.camera.global_rotation_degrees.x])
+	for i in 3:
+		game.hud._advance_dialogue()
+		await _frames(90)
+		await _shot("95_intro_after_%d.png" % i)
 
 
 func _xray(game) -> void:

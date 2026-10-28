@@ -64,7 +64,7 @@ func _run() -> void:
 		"test_driving_layouts",
 		"test_brake_and_steer_drifts",
 		"test_touch_driving_layouts",
-		"test_scripted_car_gets_unstuck", "test_heavy_vehicle_pushes_harder", "test_spawns_need_room", "test_overlap_resolves", "test_heavy_pushes_parked", "test_pinned_car_holds_still", "test_xray_only_when_hidden", "test_cars_prewarmed", "test_cab_stop_skips_parked_car",
+		"test_scripted_car_gets_unstuck", "test_heavy_vehicle_pushes_harder", "test_spawns_need_room", "test_overlap_resolves", "test_heavy_pushes_parked", "test_pinned_car_holds_still", "test_xray_only_when_hidden", "test_cars_prewarmed", "test_hero_seen_under_roofs", "test_cab_stop_skips_parked_car",
 		"test_vehicle_classes_cover_every_kind", "test_suspension_bounces_and_settles", "test_side_hit_spins_and_dents", "test_hard_crash_throws_panel", "test_crash_throws_rider", "test_car_fire_then_explodes",
 		"test_vehicle_handling_differs",
 		"test_traffic_drives_every_kind",
@@ -6956,6 +6956,70 @@ func test_pinned_car_holds_still() -> void:
 
 ## Every traffic, parked, taxi and police model and paint is built while
 ## the game loads, so a car's first appearance never builds a mesh (0.23).
+## Sachin, 2026-10-28: "the Hero is being hidden behind the bus stop, in
+## the very beginning scene of the first mission ... ensure Hero is always
+## visible in such cases". Roofs people stand under are on L.SIGHT, which
+## only the camera's rays test, and the city shader keeps a small hole open
+## over the player whatever the colliders say.
+func test_hero_seen_under_roofs() -> void:
+	var L = preload("res://scripts/layers.gd")
+	var Props = preload("res://scripts/kits/prop_kit.gd")
+	var out: Array = []
+	Props.bus_shelter(MeshBuilder.new(), out, Vector3.ZERO, RandomNumberGenerator.new())
+	var roofs := out.filter(func(c): return L.sight_only(c))
+	_check(roofs.size() == 1 and roofs[0][0].y > 2.2 and roofs[0][1].x > 3.7, "a bus shelter's roof is a sight-only box over head height (%s)" % [roofs])
+	await _new_game(false)
+	var cam = game.camera
+	var p = game.player
+	var probe := Vehicle.new()
+	add_child(probe)
+	_check(p.collision_mask & L.SIGHT == 0 and probe.collision_mask & L.SIGHT == 0, "nothing walks or drives into the sight layer")
+	probe.queue_free()
+	var sight: Array = []
+	for b in game.city.find_children("*", "StaticBody3D", true, false):
+		if b.collision_layer == L.SIGHT:
+			sight.append(b)
+	_check(not sight.is_empty() and sight.all(func(b): return b.collision_mask == 0 and b.get_children().all(func(c): return not c.has_meta("brk"))), "downtown cells have sight-only roofs, colliding with nothing and never breakable (%d)" % sight.size())
+	if sight.is_empty():
+		return
+	var roof: Vector3 = sight[0].get_child(0).global_position
+	var under := Vector3(roof.x, roof.y - 2.45, roof.z)
+	_place_player_at(under)
+	await _frames(10)
+	_check(cam._view_blocked(p.global_position), "standing under a shelter roof opens the see-through hole")
+	_check(cam.covered(cam.get_world_3d().direct_space_state, cam.global_position, p), "and the x-ray counts the roof as cover")
+	var mat = MeshBuilder.cutaway_material()
+	_check(mat.get_shader_parameter("body_radius") == cam.BODY_CUT and cam.BODY_CUT > 0.8, "the small body hole is always open over the player")
+	# Opening of mission 1: the camera comes down in front of the hero.
+	var far_off: float = cam.global_position.distance_to(p.global_position)
+	p.rotation.y = 0.0
+	_check(cam.set_close_up(p), "a clear angle onto the hero's face is found")
+	await _frames(90)
+	var rel: Vector3 = cam.global_position - p.global_position
+	var ahead: Vector3 = -p.global_basis.z
+	_check(cam.close_up_amount() == 1.0 and rel.length() < 7.0 and rel.dot(ahead) > 2.0 and rel.y > 1.0 and rel.y < 3.0, "the close-up is in front of the hero at face height (%s)" % rel)
+	var to_face: Vector3 = (p.global_position + Vector3(0, 1.15, 0) - cam.global_position).normalized()
+	_check(-cam.global_basis.z.dot(to_face) > 0.99, "and looks at him")
+	cam.set_close_up(null)
+	await _frames(90)
+	_check(cam.close_up_amount() == 0.0 and cam.global_position.distance_to(p.global_position) > far_off * 0.8, "then eases back to the usual view")
+	# Boxed in on every side: no close-up, the usual view stays.
+	var box := StaticBody3D.new()
+	box.collision_layer = L.WORLD
+	for a in 12:
+		var sh := CollisionShape3D.new()
+		sh.shape = BoxShape3D.new()
+		sh.shape.size = Vector3(1.0, 4.0, 1.0)
+		sh.position = Vector3(cos(TAU * a / 12.0), 2.0, sin(TAU * a / 12.0)) * 1.4
+		box.add_child(sh)
+	add_child(box)
+	box.global_position = p.global_position
+	await _frames(2)
+	_check(not cam.set_close_up(p) and cam.close_up == null, "with walls all round there is no close-up")
+	box.queue_free()
+	await _frames(2)
+
+
 func test_cars_prewarmed() -> void:
 	await _new_game(false)
 	var missing := []

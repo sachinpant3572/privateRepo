@@ -516,6 +516,7 @@ static func _canopy(mb, out: Array, x0: float, x1: float, z0: float, z1: float, 
 	var c := Vector3((x0 + x1) * 0.5, top - thick * 0.5, (z0 + z1) * 0.5)
 	mb.box(c, Vector3(x1 - x0, thick, z1 - z0), fascia)
 	mb.box(Vector3(c.x, top + 0.02, c.z), Vector3(x1 - x0 - 0.4, 0.02, z1 - z0 - 0.4), deck)
+	out.append([c, Vector3(x1 - x0, thick, z1 - z0), 0.0, {"sight": true}])
 	for p: Vector3 in posts:
 		_post(mb, out, p, top - thick, 0.35, post_color)
 
@@ -1566,6 +1567,7 @@ static func _porch(mb, out: Array, cx: float, zf: float, pw: float, pd: float, t
 	var r1 := Vector3(cx + pw * 0.5 + 0.2, top, zf)
 	mb.quad(r0, r1, r1 + Vector3(0, -0.5, -pd - 0.3), r0 + Vector3(0, -0.5, -pd - 0.3), Vector3(0, pd, -0.5).normalized(), roof)
 	mb.box(Vector3(cx, top - 0.6, zf - pd - 0.25), Vector3(pw + 0.4, 0.2, 0.08), post)
+	out.append([Vector3(cx, top - 0.25, zf - pd * 0.5 - 0.15), Vector3(pw + 0.4, 0.5, pd + 0.3), 0.0, {"sight": true}])
 
 
 ## The big farmhouse of a prosperous spread, by lot size. Small lot: a

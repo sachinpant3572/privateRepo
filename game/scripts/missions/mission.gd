@@ -128,6 +128,15 @@ func say(lines: Array, hold := false) -> bool:
 	return not ended
 
 
+## Turns `who` to face `toward` and brings the camera round to their face
+## (TopDownCamera.set_close_up); close_up(null) goes back to the usual view.
+func close_up(who: Node3D, toward := Vector3.INF) -> void:
+	if who != null and toward != Vector3.INF:
+		var d := toward - who.global_position
+		who.rotation.y = atan2(-d.x, -d.z)
+	game.camera.set_close_up(who)
+
+
 ## One line of dialogue that doesn't hold up the mission.
 func line(speaker: String, text: String) -> void:
 	manager.hud.show_dialogue(speaker, text)
@@ -194,6 +203,8 @@ func car(kind: String, paint: Color, pos: Vector3, yaw: float):
 ## Frees what the mission spawned (except a car the player is sitting in).
 func cleanup() -> void:
 	clear_prompt()
+	if game.camera != null:
+		game.camera.set_close_up(null)
 	for node in spawned:
 		if not is_instance_valid(node):
 			continue

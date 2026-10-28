@@ -1174,7 +1174,10 @@ func _add_cell(cell: int, built: Dictionary) -> void:
 		glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		glow.visible = glow_visible
 		root.add_child(glow)
-	for group in [[built.colliders, L.WORLD], [built.props, L.PROPS]]:
+	var solid := func(c: Array) -> bool: return not L.sight_only(c)
+	var roof := func(c: Array) -> bool: return L.sight_only(c)
+	var sight: Array = built.colliders.filter(roof) + built.props.filter(roof)
+	for group in [[built.colliders.filter(solid), L.WORLD], [built.props.filter(solid), L.PROPS], [sight, L.SIGHT]]:
 		if group[0].is_empty():
 			continue
 		var body := StaticBody3D.new()
@@ -1186,7 +1189,7 @@ func _add_cell(cell: int, built: Dictionary) -> void:
 		root.add_child(body)
 		for c in group[0]:
 			var shape := _add_shape(body, c[0], c[1], c[2] if c.size() > 2 else 0.0)
-			if c.size() > 3:
+			if c.size() > 3 and group[1] != L.SIGHT:
 				shape.set_meta("brk", c[3])
 				if c[3].has("light"):
 					shape.add_to_group("lamps")

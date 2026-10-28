@@ -140,6 +140,8 @@ static func bus_shelter(mb, out: Array, p: Vector3, rng: RandomNumberGenerator) 
 	mb.box(p + Vector3(-2.4, 2.75, -1.45), Vector3(0.5, 0.5, 0.05), Color(0.15, 0.35, 0.75))
 	out.append([p + Vector3(0, 1.2, 0.6), Vector3(3.8, 2.4, 0.6)])
 	out.append([p + Vector3(-2.4, 1.2, -1.45), Vector3(0.2, 2.4, 0.2)])
+	# The roof, for the camera's sight rays only (L.SIGHT).
+	out.append([p + Vector3(0, 2.45, 0.1), Vector3(3.8, 0.12, 1.7), 0.0, {"sight": true}])
 
 
 ## Electric-vehicle charging post with a lit status ring and a holstered

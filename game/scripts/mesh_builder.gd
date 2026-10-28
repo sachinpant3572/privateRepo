@@ -239,6 +239,10 @@ uniform vec3 cam_back = vec3(0.0, 0.0, 1.0);
 uniform vec3 eye = vec3(0.0, 100.0, 60.0);
 uniform float cone = 0.0;
 uniform float cut_radius = 7.0;
+// Always open, whatever the colliders say: anything drawn with this
+// material that stands right in front of the player (an awning, a parasol,
+// a porch roof) turns to a ghost over them, so the hero is never hidden.
+uniform float body_radius = 0.0;
 // Perspective only: anything nearer the camera than this dissolves, so a
 // tower the low camera passes through fades out instead of popping.
 uniform float near_fade = 0.0;
@@ -287,7 +291,7 @@ void fragment() {
 	float keep = 1.0;
 	if (world_pos.y > 0.4 && t > 1.0) {
 		float shrink = mix(1.0, max((reach - t) / reach, 0.05), cone);
-		float d = length(rel - axis * t) / (cut_radius * shrink);
+		float d = length(rel - axis * t) / (max(cut_radius, body_radius) * shrink);
 		keep = smoothstep(0.7, 1.0, d);
 	}
 	if (view_radius > 0.0 && world_pos.y > focus.y && UV2.x < 0.5) {

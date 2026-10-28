@@ -75,6 +75,9 @@ var _player := Vector3.ZERO
 const PERSPECTIVE_FOV := 35.0
 ## Size of the see-through hole when a building blocks the view of the player.
 const CUT_RADIUS := 6.0
+## The small hole always open over the player (the shader's body_radius),
+## so a roof or awning with no collider still never hides them.
+const BODY_CUT := 1.1
 ## Perspective: buildings within this share of the camera's usual distance
 ## from the focus dissolve, so a roof the camera skims past doesn't pop.
 const NEAR_FADE := 0.15
@@ -231,6 +234,24 @@ var look_yaw := 0.0
 var look_pitch := LOOK_UP_PITCH
 var _look_t := 0.0
 
+## Close-up (Sachin, 2026-10-28: the first mission "starts from heros back,
+## why not from another angle ... our Hero should be in focus as this is our
+## very first intro to him"): the camera comes down in front of `close_up`
+## at a three-quarter angle, face height, eases there and back like Look up.
+const CLOSE_UP_TIME := 1.2
+const CLOSE_UP_BACK := 4.6
+const CLOSE_UP_HEIGHT := 1.9
+const CLOSE_UP_AIM := 1.15
+const CLOSE_UP_FOV := 42.0
+## Degrees off the face's own heading, tried in turn until one has a clear
+## line from the camera to the face (three-quarter first).
+const CLOSE_UP_ANGLES := [35.0, -35.0, 55.0, -55.0, 15.0, -15.0, 80.0, -80.0]
+var close_up: Node3D = null
+## Who the close-up was on, while it eases back to the usual view.
+var _close_n: Node3D = null
+var _close_angle := 0.0
+var _close_t := 0.0
+
 
 func _ready() -> void:
 	projection = PROJECTION_ORTHOGONAL
@@ -311,6 +332,7 @@ func _process(delta: float) -> void:
 	_update_view_band(node)
 	_apply_shake(delta)
 	_update_look_up(pos, delta)
+	_update_close_up(delta)
 	_update_xray(delta, pos)
 
 
@@ -337,7 +359,7 @@ func _update_xray(delta: float, focus: Vector3) -> void:
 			# Inside the open see-through hole the buildings are cut away and
 			# the body shows: only a car in front still hides it.
 			var in_hole: bool = d2 < pow(_cut * 0.6, 2.0)
-			on = covered(space, eye, n, L.VEHICLES if in_hole else L.WORLD | L.VEHICLES, Vector3.ZERO if perspective else global_basis.z)
+			on = covered(space, eye, n, L.VEHICLES if in_hole else L.WORLD | L.SIGHT | L.VEHICLES, Vector3.ZERO if perspective or _close_t > 0.0 else global_basis.z)
 		if on != n.xray_shown:
 			n.show_xray(on)
 
@@ -347,7 +369,7 @@ func _update_xray(delta: float, focus: Vector3) -> void:
 ## classic flat view every ray runs parallel, along `back` (the camera's
 ## back axis), as _view_blocked does: aimed at the camera itself, a ray
 ## from someone far off-centre crossed buildings that do not hide them.
-static func covered(space: PhysicsDirectSpaceState3D, eye: Vector3, n: Node3D, mask := L.WORLD | L.VEHICLES, back := Vector3.ZERO) -> bool:
+static func covered(space: PhysicsDirectSpaceState3D, eye: Vector3, n: Node3D, mask := L.WORLD | L.SIGHT | L.VEHICLES, back := Vector3.ZERO) -> bool:
 	var skip: Array[RID] = [n.get_rid()]
 	var points: Array[Vector3] = []
 	if "body_mesh" in n:
@@ -412,6 +434,73 @@ func _update_look_up(pos: Vector3, delta: float) -> void:
 	fov = lerpf(fov, LOOK_UP_FOV, k)
 	near = lerpf(1.0, 0.3, k)
 	far = lerpf(far, 4000.0, k)
+
+
+
+## Frames `n`'s face (null goes back to the usual view). False, and the
+## usual view, when every angle round them is blocked by a wall or a car.
+func set_close_up(n: Node3D) -> bool:
+	if n == null:
+		close_up = null
+		return true
+	var space := get_world_3d().direct_space_state
+	var face := n.global_position + Vector3(0.0, 1.5, 0.0)
+	for a: float in CLOSE_UP_ANGLES:
+		var eye := _close_eye(n, a)
+		var ray := PhysicsRayQueryParameters3D.create(face, eye, L.WORLD | L.SIGHT | L.PROPS | L.VEHICLES, [n.get_rid()])
+		if space.intersect_ray(ray).is_empty():
+			close_up = n
+			_close_angle = a
+			return true
+	close_up = null
+	return false
+
+
+## How far the view is into the close-up (0 the usual view, 1 all the way).
+func close_up_amount() -> float:
+	return _close_t
+
+
+func _close_eye(n: Node3D, angle: float) -> Vector3:
+	var ahead := -n.global_basis.z
+	ahead.y = 0.0
+	ahead = (ahead.normalized() if ahead.length() > 0.01 else Vector3.FORWARD).rotated(Vector3.UP, deg_to_rad(angle))
+	return n.global_position + ahead * CLOSE_UP_BACK + Vector3(0.0, CLOSE_UP_HEIGHT, 0.0)
+
+
+func _update_close_up(delta: float) -> void:
+	if close_up != null and not is_instance_valid(close_up):
+		close_up = null
+	if close_up != null:
+		_close_n = close_up
+	_close_t = move_toward(_close_t, 1.0 if close_up != null else 0.0, delta / CLOSE_UP_TIME)
+	if _close_t <= 0.0 or not is_instance_valid(_close_n):
+		_close_t = 0.0
+		_close_n = null
+		return
+	var n := _close_n
+	# The usual view's field of view, as a perspective one, to blend from.
+	var base := fov if perspective else rad_to_deg(2.0 * atan(size * 0.5 / DISTANCE))
+	var eye := _close_eye(n, _close_angle)
+	var aim := n.global_position + Vector3(0.0, CLOSE_UP_AIM, 0.0)
+	var to := Transform3D.IDENTITY.translated(eye).looking_at(aim, Vector3.UP)
+	var k := smoothstep(0.0, 1.0, _close_t)
+	var from := global_transform
+	global_transform = Transform3D(from.basis.slerp(to.basis, k).orthonormalized(), from.origin.lerp(to.origin, k))
+	projection = PROJECTION_PERSPECTIVE
+	fov = lerpf(base, CLOSE_UP_FOV, k)
+	near = lerpf(1.0, 0.2, k)
+	# The city's see-through hole follows this camera: it narrows toward the
+	# eye (cone) and only the body hole is open, so nothing in front of the
+	# face stays solid and nothing else is ghosted.
+	var mat := MeshBuilder.cutaway_material()
+	mat.set_shader_parameter("eye", global_position)
+	mat.set_shader_parameter("cam_back", global_basis.z)
+	mat.set_shader_parameter("cone", 1.0)
+	mat.set_shader_parameter("focus", n.global_position + Vector3(0, 1.0, 0))
+	mat.set_shader_parameter("near_fade", 0.0)
+	mat.set_shader_parameter("view_radius", 0.0)
+	mat.set_shader_parameter("cut_radius", 0.001)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -895,6 +984,7 @@ func _update_cutaway(player_pos: Vector3, delta: float) -> void:
 	_cut = move_toward(_cut, want, CUT_RADIUS * 4.0 * delta)
 	var mat := MeshBuilder.cutaway_material()
 	mat.set_shader_parameter("cut_radius", maxf(_cut, 0.001))
+	mat.set_shader_parameter("body_radius", BODY_CUT)
 	mat.set_shader_parameter("focus", player_pos + Vector3(0, 1.0, 0))
 	mat.set_shader_parameter("cam_back", global_basis.z)
 	mat.set_shader_parameter("eye", global_position)
@@ -907,7 +997,7 @@ func _view_blocked(player_pos: Vector3) -> bool:
 	for height in [0.4, 1.6]:
 		var from := player_pos + Vector3(0, height, 0)
 		var to := global_position if perspective else from + global_basis.z * DISTANCE
-		var query := PhysicsRayQueryParameters3D.create(from, to, L.WORLD)
+		var query := PhysicsRayQueryParameters3D.create(from, to, L.WORLD | L.SIGHT)
 		if not space.intersect_ray(query).is_empty():
 			return true
 	return false

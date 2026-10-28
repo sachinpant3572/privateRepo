@@ -133,3 +133,14 @@ Each class has:
   stick points well off the nose). Not on bicycles, motorbikes or trucks
   (a bike's lean model and a trailer would look wrong sideways). Test:
   sedan at 72 km/h slips 0.49 rad and keeps 18.6 m/s.
+- Hero under roofs (#86): cause was the bus shelter's roof (y 2.45) having
+  no collider, and the camera's cut/x-ray rays testing L.WORLD only. Fix:
+  new layer L.SIGHT (32), tested only by `_view_blocked` and `covered`,
+  nothing collides with it; roof entries `[c, size, 0, {"sight": true}]`
+  on the shelter, `_canopy` and `_porch`; city/country split them into a
+  SIGHT body. Catch-all for roofs with no entry (awnings, parasols): the
+  shader's `body_radius` (BODY_CUT 1.1 m) is always open over the player.
+- Intro: `TopDownCamera.set_close_up(node)` (three-quarter, 4.6 m out,
+  1.9 m up, first clear angle of 8; none clear keeps the usual view);
+  `mission.close_up(who, toward)`; m01 uses it for card + first line.
+

@@ -28,10 +28,15 @@ func start_hour() -> float:
 
 func run() -> void:
 	game.player.controllable = false
+	# The first look at the hero is his face, not his back (Sachin,
+	# 2026-10-28): he turns to the street and the camera comes round in front
+	# for the card and his first line, then eases back for the snatch.
+	close_up(game.player, curb("union_station"))
 	if not await card("HOMECOMING", "Act 1  ·  Mission 1"):
 		return
 	if not await say([["Jules", "Twelve years. Bellerive still smells like rain and fried dough."]], true):
 		return
+	close_up(null)
 	game.player.controllable = false
 
 	# The snatch.
