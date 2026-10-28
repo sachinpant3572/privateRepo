@@ -67,6 +67,20 @@ Every company also reports earnings every `earnings_every_days` (10) and gets ra
 | M, mid cap | 2.0% | 60 | 0.35% | 0.3% | 9% | The trading names |
 | H, small cap | 3.5% | 20 | 0.30% | 0.5% | 14% | Jumpy, thin, costly to trade |
 
+**Which player actions move prices.** Only two kinds of player action call
+`Market.player_event(ticker, kind)`, and every one of them goes through 6.1-6.2:
+- `sabotage`: wrecking or torching a listed company's property (GWF vans, SVL rail kit, KYS
+  sites, BYB food trucks, an IWP crane), from R-5 street crime;
+- `heist`: an R-23 heist or a side job whose target is a listed company (a BWK client's vault, a
+  GWF hijacked truck, an MRM showroom).
+Everything else in the "Moves on" column is world news. "Burglaries of its clients", "car-theft
+news" and "hijacked trucks" there mean the world's own random company news, drawn at a fixed
+rate. **World event rates never depend on the player's crime**: the wanted level, the heat map
+and a crime spree change nothing about how often a crime wave, a turf war or company news comes,
+so buying BWK or HLB and then going on a spree earns nothing from the spree. Car thefts, muggings,
+police chases and street fights never call the market at all. The player's crimes can only touch a
+price through the two kinds above, each one capped, decayed and watched by the SSC.
+
 ## 3. Where trading lives
 
 - **Phase 1, Bellerive: the phone app "Bourse"** (Bourse de Bellerive). R-13 Phone media already
@@ -104,13 +118,15 @@ z         = rho_market*zm + rho_sector*zs + sqrt(1 - rho_market^2 - rho_sector^2
   never on `atmosphere.hour`, which missions set and which isn't saved (V, `mission_manager.gd`
   138-139). Nothing moves while the app is closed; the device clock is never read. When game time
   jumps (sleep, taxi, a mission start) the skipped ticks run at once, at most 7 game days (84
-  ticks) per jump, and the feed shows a "while you were away" digest.
+  ticks) per jump, and the feed shows a "while you were away" digest. Taxi time counts only up to
+  `taxi_cap_h_per_day` 4 game hours per game day (6.6).
 
 ## 5. Event pipeline
 
 - **Sources**: calendar (R-25: storms every 20 days, Line votes 15, festivals 12, earnings 10;
   the date shows days ahead, the outcome doesn't); world (R-5 and faction wars: crime waves about
-  every 10 days, turf wars 12, ledger leaks 20, random company news); player-caused (sabotage
+  every 10 days, turf wars 12, ledger leaks 20, random company news; fixed rates that the player's
+  crime never changes, section 2); player-caused (sabotage
   `sab_mag` and heists `heist_mag` through R-5 and R-23 hooks, and five story beats, below).
 - **Shape**: each event lists (ticker, weight), a magnitude m (template value times U(0.6, 1.4);
   company news `ev_mag` times U(0.5, 1.5)) and a sign, + or - with even odds.
@@ -136,7 +152,7 @@ z         = rho_market*zm + rho_sector*zs + sqrt(1 - rho_market^2 - rho_sector^2
 | Act 3, Fort Granite break-in | Captain Reyes | HLB down, BWK up |
 | Ending | The ending's ally | Crown: AUR up; Ashes: AUR and SVL crash, KYS up; Light: LTV up, AUR down |
 
-  The tip allows up to `tip_cap_w` (20 W simulated, 17 recommended) in that company, outside the
+  The tip allows up to `tip_cap_w` 17 W in that company, outside the
   normal caps. A retry doesn't reapply the move; untipped story moves stay under 15%.
 
 ## 6. Anti-manipulation
@@ -151,9 +167,9 @@ rival gains only `rival_share` 0.5; a second crime on the same company within `c
 moves nothing; each repeat on it within `repeat_memory_days` 30 halves the move (`repeat_decay`
 0.5) and every crime within `pattern_memory_days` 7 cuts it by `pattern_decay` 0.8; the player's
 lasting impact on a company bottoms out at `player_impact_floor` -15%; and the regulator (6.2).
-*Sim* (W/day): daily loop 0.003 (0.8 flags, 1.91 W seized; 0.225 with counters off); rotating over
-8 targets -0.150 (27 flags); sized just under the case threshold 0.022 (0.047 off), the worst
-exploit: 0.022 + half an index 0.042 = 0.064, under 0.131; sabotage then buy the dip -0.207.
+*Sim* (W/day): daily loop -0.022 (0.8 flags, 3.39 W seized; 0.225 with counters off); rotating
+over 8 targets -0.155 (27 flags); sized just under the case threshold 0.022 (0.047 off), the worst
+exploit: 0.022 + half an index 0.042 = 0.064, under 0.131; sabotage then buy the dip -0.227.
 
 **6.2 Insider trading on your own missions and heists.** *Loop*: take a heist on GWF, buy SVL
 the day before, rob, sell. *Counters*:
@@ -163,15 +179,16 @@ the day before, rob, sell. *Counters*:
   weeks ago is barely suspect; buys within `post_watch_ticks` 24 after your own crime on that
   company or its rival get `post_weight` 0.5.
 - Selling a marked lot is flagged with p = min(`p_max` 0.95, `p_floor` 0.25 + `p_size` 0.6*
-  suspicion*min(1, value/`pos_cap_w`) + `p_repeat` 0.15*past flags). A flag seizes the gain and
-  fines the same again (`fine_mult` 1.0), sent as an SSC letter (fines UI from R-20).
+  suspicion*min(1, value/`pos_cap_w`) + `p_repeat` 0.15*past flags). A flag seizes the gain, dividends
+  received on the lot included, and fines the same again (`fine_mult` 1.0), sent as an SSC letter
+  (fines UI from R-20).
 - **Blackout**: from accepting a heist or job on a listed company until 12 ticks after it, no
   buys in the target or its rival. Not in the sim, so the insider rows are a worst case.
 - **Phone warning** before a crime while holding a position that would gain, so the SSC is never
   a hidden trap. **Fees**: the round trip (about 2% on a mid cap) eats a small edge. Story
   paydays are authored, one-off and capped; repeatable crimes always face the SSC.
-*Sim*: rival bought 1 day before -0.058 W/day (10.2 flags; 0.054 with counters off); 6 days
-before -0.034 (4.6 flags). Fairness: an index holder who also wrecks a paired company every 3
+*Sim*: rival bought 1 day before -0.066 W/day (10.2 flags; 0.054 with counters off); 6 days
+before -0.046 (4.6 flags). Fairness: an index holder who also wrecks a paired company every 3
 days earns 0.082 with 0 flags, thanks to the net-gain rule.
 
 **6.3 Pump and dump.** *Loop*: buy a thin small cap up over two days, dump on the third.
@@ -197,6 +214,9 @@ cash, phone, settings, inventory}` only on a mission pass and on New game, and `
    and after every trade (tests inject a fixed seed), so a copied save never replays the same
    future. An emulator snapshot that restores RAM is just another copy (rows below).
 4. **Autosave on every tick, trade and skip**, atomically (write a temp file, then rename).
+5. **One market per profile.** If the game ever gets several manual save slots, the market, its
+   clock and its RNG state live once per profile, outside the slots; loading another slot keeps
+   the market as it is. Otherwise picking the best of N slots would be save copying from a menu.
 *What's left*: copying the save outside the game (PC, emulator, rooted phone, R-27 cloud restore)
 and keeping the best of N futures. Nobody can stop that on an open platform, so it must pay worse
 than playing. A checksum stops casual cash edits, not copying. Exclude the save from Android Auto
@@ -210,18 +230,23 @@ future scouted three times (only if a bug ever fixed it): 1.059 per kept day, 0.
 (`phone.gd` line 275) is unlimited; missions set `atmosphere.hour` on every start, retries
 included, so fail-and-retry can move time either way; and the hour isn't saved (V). *Counters*:
 `market.clock` is monotonic and saved, and grows only by played time, by sleep at a safehouse
-(8 h per 16 h awake, the sleep rule), by a taxi ride's time, and by a mission's first start (at
-most 12 h); retries and backward hour sets move only the sky. "Skip 3 hours" becomes sky-only.
+(8 h per 16 h awake, the sleep rule), by a taxi ride's time up to `taxi_cap_h_per_day` 4 h per
+game day (longer taxi time moves only the sky), and by a mission's first start (at most 12 h, a
+one-off per mission, so not a loop); retries and backward hour sets move only the sky. "Skip 3 hours" becomes sky-only.
 Catch-up stops at 7 days per jump, and the device clock is never read. The same clock drives
-R-22 business income, so one rule closes both. *Sim* (passive per real hour): normal play
-(or leaving the game running) 0.211, sleep rule 0.317, unlimited 3 h taps 5.070 (twice side jobs).
+R-22 business income, so one rule closes both. *Sim*: a clock bot plays one real hour (1 game hour = 1 real minute) and takes every legal
+jump: sleep as soon as allowed, taxi rides of 2 h with a 15 s fade, and 3 h taps at 7.5 s each
+when taps count; taxi time counts as awake, which earns sleep sooner. Passive income per real
+hour (game days per real hour): normal play 0.211 (2.5), sleep rule 0.293 (3.5), all rules with
+the taxi cap 0.382 (4.5), no taxi cap 2.239 (26.5, close to side jobs' 2.5), taps that move the
+clock 5.492 (65, twice side jobs). Mission first starts add a one-off, not a rate.
 
 **6.7 Infinite compounding.** *Loop*: reinvest every gain. *Counters*: caps in W that rise only
 with the story, stationary prices, cash dividends. *Sim*: a tips trader's profit per day in days
 41-60 against days 1-20 is x0.95 with caps, x1.55 without (0.416 W/day, three times skilled).
 
 **6.8 Shorts, options, leverage and the rest.** *Short then destroy*: a short makes every
-company a target and needs no rival; the sim's short-and-sabotage bot loses (-0.042, 0.8 flags)
+company a target and needs no rival; the sim's short-and-sabotage bot loses (-0.032, 0.8 flags)
 only because of 6.1-6.2, and shorts carry unlimited losses that confuse players. **No shorts at
 launch.** *Leverage* multiplies every exploit and voids the caps (6 W at 5x margin is 30 W):
 **none.** *Options* add the same risk and look like betting (section 9): **none.** Also: player
@@ -241,21 +266,21 @@ Seed 20261028, 150 runs, 60 days, 12 ticks a day; profit per game day in W:
 | Casual random trades | 0.062 | 0.039 | 0.018 | 0.115 | |
 | Skilled: half index + public rumours | 0.131 | 0.054 | 0.065 | 0.204 | |
 | Skilled: half index + rumours + paid tips | 0.177 | 0.058 | 0.111 | 0.261 | |
-| 1 Sabotage loop: hold rival, hit daily | 0.003 | 0.032 | -0.032 | 0.034 | flags 0.8, seized 1.91 W |
+| 1 Sabotage loop: hold rival, hit daily | -0.022 | 0.044 | -0.074 | 0.031 | flags 0.8, seized 3.39 W |
 | 1 ... same, no counters | 0.225 | 0.090 | 0.116 | 0.352 | |
-| 1 Sabotage rotation over 8 targets | -0.150 | 0.034 | -0.191 | -0.106 | flags 27.2, seized 3.67 W |
+| 1 Sabotage rotation over 8 targets | -0.155 | 0.034 | -0.197 | -0.109 | flags 27.2, seized 3.94 W |
 | 1 Sabotage rotation, sized under `case_min_w` | 0.022 | 0.016 | 0.003 | 0.040 | worst exploit |
 | 1 ... same, no counters | 0.047 | 0.020 | 0.025 | 0.071 | |
-| 1 Sabotage then buy the dip | -0.207 | 0.029 | -0.243 | -0.166 | flags 55.2, seized 10.95 W |
-| 2 Insider: rival bought 1 day before heist | -0.058 | 0.025 | -0.087 | -0.029 | flags 10.2, seized 4.84 W |
+| 1 Sabotage then buy the dip | -0.227 | 0.027 | -0.261 | -0.187 | flags 55.2, seized 12.14 W |
+| 2 Insider: rival bought 1 day before heist | -0.066 | 0.026 | -0.097 | -0.036 | flags 10.2, seized 5.35 W |
 | 2 ... same, no counters | 0.054 | 0.032 | 0.011 | 0.098 | |
-| 2 Insider: rival bought 6 days before | -0.034 | 0.053 | -0.100 | 0.032 | flags 4.6, seized 4.04 W |
+| 2 Insider: rival bought 6 days before | -0.046 | 0.056 | -0.114 | 0.026 | flags 4.6, seized 4.78 W |
 | 3 Pump and dump, small caps | -0.030 | 0.052 | -0.105 | 0.031 | |
 | 3 ... no caps or buy limits | -0.143 | 0.148 | -0.297 | 0.078 | |
 | 4 Tick scalper (T+1 on) | -0.104 | 0.040 | -0.154 | -0.050 | |
 | 4 ... no minimum hold | -0.179 | 0.035 | -0.226 | -0.138 | |
 | 5 Oracle: fixed future scouted, per kept day | 1.059 | 0.064 | 0.981 | 1.141 | needs a fixed future |
-| 8 Short + sabotage (if shorts existed) | -0.042 | 0.019 | -0.062 | -0.027 | flags 0.8, seized 0.65 W |
+| 8 Short + sabotage (if shorts existed) | -0.032 | 0.023 | -0.061 | -0.008 | flags 0.8, seized 0.08 W |
 | 7 Compounding, no caps (tips trader) | 0.416 | 0.224 | 0.170 | 0.719 | |
 | 5 Reload, Solvera save (nothing rerolls) | 0.084 | 0.021 | 0.059 | 0.111 | = passive |
 | 5 Reload, naive save (reroll on load) | 2.027 | 0.150 | 1.849 | 2.219 | |
@@ -263,19 +288,21 @@ Seed 20261028, 150 runs, 60 days, 12 ticks a day; profit per game day in W:
 | 5 ... same, per game day of real play | 0.124 | 0.022 | 0.099 | 0.150 | |
 | 5 Save copy hourly, best of 5, W per real hour | 0.756 | 0.041 | 0.707 | 0.809 | side jobs 2.50 |
 | 5 Oracle, per real day (scouting x3) | 0.353 | 0.021 | 0.327 | 0.380 | |
-| Authored payday (one-off total, not per day) | 6.421 | 2.009 | 4.019 | 8.943 | `tip_cap_w` 20 |
+| Authored payday (one-off total, not per day) | 5.475 | 1.709 | 3.431 | 7.621 | `tip_cap_w` 17 |
 
-Time skip, passive per real hour: normal 0.211, sleep rule 0.317, unlimited taps 5.070.
-Compounding, days 41-60 against 1-20: caps on x0.95, no caps x1.55. Runtime 34.8 s, exit 0.
+Time skip (clock bot), passive per real hour: normal 0.211, sleep rule 0.293, all rules with the
+taxi cap 0.382, no taxi cap 2.239, taps moving the clock 5.492. Compounding, days 41-60 against
+1-20: caps on x0.95, no caps x1.55. Runtime 36.2 s, exit 0.
 
 **Which targets held** (all 8 sim checks pass): passive 0.084 W/day (8.4% of W) is inside 5-15%;
 skilled 0.131 (0.177 with tips), or 0.33 (0.44) per real hour, sits far below side jobs' 2.5;
 every in-game exploit with counters, plus half an index, is at most 0.064; the honest index
-holder's crimes are never flagged. **Tail**: the payday's p90 is 8.9 W, above the 8 W aim; with
-`tip_cap_w` 17 the sim's payday gives mean 5.5 and p90 7.6 (checked). **Partly held**: copying
+holder's crimes are never flagged; the payday's p90 is 7.6 W (mean 5.5) at `tip_cap_w` 17, under
+the 8 W cap (20 W would give p90 8.9); the clock bot with all rules earns 0.382 per real hour.
+**Partly held**: copying
 the save outside the game beats skilled trading per real hour (0.756 against 0.33) but stays well
 under side jobs (2.5), the honest limit on an open platform. The "Solvera save" row equals
-passive by construction, and the blackout isn't modelled.
+passive by construction, and the blackout isn't modelled (so the insider rows are a worst case).
 
 ## 8. Player-facing feel
 
@@ -317,7 +344,8 @@ passive by construction, and the blackout isn't modelled.
 - **Headless tests** (`game/tests/run.sh`): save and load mid-market keeps every shown price, lot
   and flag and reseeds the RNG; caps, buy limits and T+1 refuse orders; cooldown and decay cut
   repeats; an index holder's crimes never open a case; a retry never moves `market.clock`, the
-  skip button is sky-only, catch-up stops at 84 ticks; a short GDScript balance run (passive and
+  skip button is sky-only, taxi time past 4 h a game day is sky-only, catch-up stops at 84 ticks;
+  loading another save slot leaves the market as it is; a short GDScript balance run (passive and
   the sabotage loop, 20 seeds) lands near the sim's numbers.
 - **Cost, full: about 6 sessions**: `market.gd` and data 2, Bourse screen 1.5, event hooks with
   SSC and clock rules 1.5, tests and balance port 1. Broker office +0.5-1.

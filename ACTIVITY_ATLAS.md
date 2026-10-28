@@ -374,7 +374,9 @@ Each city, and each countryside region where people live, gets:
 1. **the core set**, in its own style: a gym or fight school, a race, places to eat, a calm
    hobby, a shift job, an indoor venue and a weekly event (E9). The engines (E1-E9) stay the
    same; the place, the rules, the rivals and the rewards change;
-2. **one signature activity** found nowhere else, so each trip has a reason;
+2. **one signature activity** whose home and best version are there, so each trip has a reason
+   (a few have a smaller cousin elsewhere: the R-32 fair's Ferris wheel, the Brisa Beach sprint
+   triathlon, the Aurum Tower jump, the storm-chaser career that starts in Bellerive);
 3. **repeats with a twist**: the same activity in a second place plays differently (a new
    martial art, a new track, a new house rule), and a few rewards exist only there, so the
    player wants both.
@@ -389,27 +391,44 @@ Each city, and each countryside region where people live, gets:
 | **Eating out** (2.11, IS-1) | Creole, Cuban, seafood; crawfish boil | Buffet eating challenges; 24-hour diners | Bistros, food trucks, the Castellane family restaurant | Diners, coney stands, the Market Sheds | Churrasco, juice bars, beach kiosks | Taco trucks, a burger stand with a secret menu | Truck stops (Ridley Crossing), the county-fair pie contest |
 | **Music and nights out** (2.1, R-10) | Blue Lantern jazz, the brass band, karaoke | Resort shows, a lounge singer gig, a DJ residency | Theatre on the Slant; a busking spot on the Mall | Garage-rock bars; warehouse dance nights in Plant Row (fictional acts) | Samba school; carnival parade | A recording studio and film premieres | A barn dance in Golden Flats |
 | **Calm hobbies** (4.1) | Bayou fishing, birdwatching, chess on Moreau Square | Neon photography at the Sign Yard; desert golf | Speed-chess hustlers in Commons Park; museum quiz trails | Ice fishing on the lake in winter; street-art walks on the Polka Dot Block | Kite flying on the beach | Surfing, the pier | Lake fishing (Bluegill, Miravel), stargazing, wildlife photography |
-| **Shift jobs** (E5) | Taxi, delivery, streetcar, crane, lifeguard, paper route | Valet on the Blaze; Doubler bus driver; chapel limo driver | Bike courier in Midtown; tour guide on the Mall; cable-car gripman | Scrap runs; an assembly-line minigame at the Ostrander plant; snow plough in winter | Moto-taxi up the hill; beach vendor | Film extra and stunt double; pizza delivery | Crop dusting; trucking from Ridley Crossing; park ranger at Miravel Pines |
+| **Shift jobs** (E5) | Taxi, delivery, streetcar, crane, lifeguard, paper route | Valet on the Blaze; Doubler bus driver; wedding-hall limo driver | Bike courier in Midtown; tour guide on the Mall; cable-car gripman | Scrap runs; an assembly-line minigame at the Ostrander plant; snow plough in winter | Moto-taxi up the hill; beach vendor | Film extra and stunt double; pizza delivery | Crop dusting; trucking from Ridley Crossing; park ranger at Miravel Pines |
 | **Weekly event** (E9) | Friday car meet; fight night at The Pit; the second-line march | Fight night at the Colosseo; Skyhook night flights | Saturday market on the Wharfline; the chess open | Market Sheds Saturday; the comeback auto show | Carnival week; Sunday football | Studio premiere night; beach volleyball tournament | County fair (Golden Flats); rodeo at Sable Junction (Hollow Mesa) |
+
+The countryside column is a summary. Each countryside region where people live gets its own core
+set, with the signature in D3 (Fort Granite is a base and has no town, so it gets none):
+
+| Region (phase; town) | Fight school | Race | Eating | Calm hobby | Shift job | Indoor venue | Weekly event |
+|---|---|---|---|---|---|---|---|
+| Saltgrass Parish (2; Cypress Bend) | Gloved bayou boxing at Gator Point | Airboat racing | Crawfish shack in Cypress Bend | Bayou fishing; gator spotting from a boat | Airboat tour guide; gator-farm hand (feeding only) | Cypress Bend dance hall (E2 zydeco nights) | Friday zydeco night |
+| Golden Flats (2; Wheaton) | Farmhand boxing in a grain-elevator barn | Crop-duster air race; tractor pull | Ridley Crossing truck stop | Farm-pond fishing; birdwatching | Crop dusting; trucking from Ridley Crossing | Wheaton drive-in cinema | County fair |
+| Verdant Hills (2; Larkspur) | Archery range on the Larkspur estate | Hot-air balloon race; vintage-car run on the Old Post Road | Vineyard bistro (food and grape juice) | Bluegill Lake fishing; landscape painting | Grape picking at harvest | Larkspur murder-mystery dinner (a puzzle night, E1) | Harvest festival grape stomp |
+| Hollow Mesa (3; Sable Junction) | Dust Riders' brawl ring behind the Starlite Motel | Land-sailing; dirt-bike rally on Route 40 | Last Chance Gas diner; chili cook-off | Stargazing and rock hunting at Mesa Arch | Tow-truck runs on Route 40 | Starlite Motel pool hall and jukebox | Sable Junction rodeo |
+| Cinder County (3; Pinecrest) | Kalaripayattu from the hermit master | Cinder Peak hill climb | Pinecrest trout shack | Climbing on Granite Dome; birdwatching | Observatory night guide; mountain rescue | Observatory planetarium show | Pinecrest climbing meet |
+| Miravel Shores (3; Harlow) | Boxing club in Harlow's boathouse | Powerboat and wakeboard runs | Harlow fish fry | Lake fishing; kayak touring | Boat-rental hand; dam tour guide | Harlow small-town bowling lanes | Lake triathlon weekend (R-29) |
+| Red Pine County (3; Dellwood, Fernmoor) | Lumberjack strongman yard at the sawmill | Logging-road rally | Dellwood pancake house | Canoeing; wildlife photography from the fire lookout | Park ranger fire watch; log-truck driver | Dellwood roller rink | Lumberjack games (D3) |
+| The Keys (4; Serena Town) | Silat in Serena Town | Speedboat race along the Causeway; jet-ski course | Conch shack; the Serena Grand buffet | Snorkelling, sea fishing | Dive guide; fuel-dock hand | Serena Grand bowling and arcade lounge | Saturday sunset regatta |
+| Sovereign County (5; Haverly) | Fencing at the Haverly country club | Signal Hill time trial | Country-club brunch | Golf at the Haverly links (A3) | Caddie; chauffeur from Sovereign International | Haverly squash and racquet club | Sunday yacht race on Sovereign Bay |
+| Corran County (6; Camp Corran, the Shore Road) | Boot-camp course at Camp Corran's open days | Ice racing on Lake Corran in winter; Shore Road time trial | Fish-and-chip stand on the Shore Road | The lighthouse trail; storm watching | Lake-ferry deckhand; airport baggage loader | Laser tag and paintball in the old Port Ash cannery | Shore Road car meet |
 
 ### D3. Signature activities: one per place
 
-| Place | Phase | Signature (only here) | Engine |
+| Place | Phase | Signature (its home and best version) | Engine |
 |---|---|---|---|
 | Bellerive core | 1 | The second-line march and the jazz club (already planned) | E2, R-25 |
 | Brisa Beach | 2 | The fun pier: Ferris wheel, coaster and midway games all year (R-32) | E1, R-32 |
 | Saltgrass Parish | 2 | Airboat racing through the Glades (already planned) | E3 |
 | Golden Flats | 2 | Flight school at the crop-duster strip (R-30) and the county fair with a tractor pull | R-30, E9 |
 | Verdant Hills | 2 | Hot-air balloon rides over the vineyards, with a balloon race on festival weekend | E3 |
-| Hollow Mesa | 3 | Land-sailing on the dry lakes; the Sable Junction rodeo (a mechanical bull on E2 timing, and barrel racing) | E3, E2 |
+| Hollow Mesa | 3 | Land-sailing on the dry lakes; the Sable Junction rodeo (a mechanical bull on E2 timing, and dirt-bike barrel racing) | E3, E2 |
 | Cinder County | 3 | Parachute jumps and the climbing crag on Granite Dome (R-31) | R-31 |
 | Miravel Shores | 3 | The lake triathlon (R-29) and wakeboarding behind a rented boat | R-29, E3 |
 | Red Pine County | 3 | Lumberjack games at the sawmill: axe throwing, log rolling, a chainsaw-free sawing race | E1, E2 |
-| The Keys | 4 | Spearfishing (4.14) and sea fishing | E4 |
+| The Keys | 4 | Spearfishing (4.14), snorkelling (4.11) and sea fishing | E4 |
 | Las Brasas | 4 | Desert golf at Ember Heights and the Skyhook airship (already planned) | E4 |
 | Concordia | 5 | Ride the cable cars on the outside; the gripman shift job | E5 |
+| Sovereign County | 5 | Sailing school and yacht racing on Sovereign Bay | E3 |
 | Steelhaven | 6 | Drag racing on the empty avenues; ice hockey in winter | E3, E1 |
-| Corran County | 6 | The lighthouse trail and storm chasing in season (already planned) | 4.3 |
+| Corran County | 6 | The lighthouse trail, and the home base of 4.3's storm-chaser career in season | 4.3 |
 | Porto Brisa | exp. 1 | Hang gliding off Morro Alto onto the beach | flight |
 | California city | exp. 2 | Surfing and stunt work in the film studios | E2, E5 |
 
@@ -433,7 +452,7 @@ rewards.
 | Comedy club (4.13) | Lantern Quarter | Political satire on the Slant; a Las Brasas lounge act |
 | Karaoke (2.1) | Bellerive bars | A Las Brasas karaoke lounge; samba karaoke in Porto Brisa |
 | Ice rink (*new*) | none (too warm) | Commons Park winter rink (Concordia); the Steelhaven hockey rink |
-| Night classes (4.6) | Bellerive community college | Concordia State University extension: economics (deeper charts in the market app), law (cheaper bail), languages |
+| Night classes (4.6) | Bellerive community college | Concordia State University (*new*) extension: economics (deeper charts in the market app), law (cheaper bail), languages |
 | Shooting range (IS-6) | Ironwharf | A desert range with moving targets outside Las Brasas |
 | Cat café and pocket-racer hobby shop (4.14) | Magnolia Heights; Lantern Quarter | A Steelhaven hobby shop with its own mini-car track |
 
@@ -445,13 +464,16 @@ Costs are rough sessions of activity content, on top of the world phase that bui
 
 | Pack | Place | Contents | Cost |
 |---|---|---|---|
-| CP-1 | Bellerive's phase 2 edges and the countryside of phases 2-3 | Brisa Beach, Saltgrass, Golden Flats, Verdant Hills, Hollow Mesa, Cinder, Miravel and Red Pine signatures and styles (the R-28 to R-32 packages are costed separately) | 3.5 |
-| CP-2 | Las Brasas and the Keys | Muay Thai and cage fights, Blaze races, buffet challenges, valet and chapel jobs, glow bowling, escape room, retro arcade, desert range, spearfishing | 2.5 |
-| CP-3 | Concordia | Judo and krav maga, hill climbs, rowing, speed chess, gripman and tour-guide jobs, Slant theatre and comedy, escape room, e-sports arena, ice rink, the university | 2.5 |
-| CP-4 | Steelhaven and Corran | Wrestling and firehouse boxing, drag strip, hockey, ice fishing, assembly line and snow plough, union-league bowling, LAN café, Ostrander laser tag | 2.5 |
+| CP-1 | Bellerive's phase 2 edges and the countryside of phases 2-3 | Brisa Beach styles; the Saltgrass, Golden Flats, Verdant Hills, Hollow Mesa, Cinder, Miravel and Red Pine signatures and their core sets (D2's region table), kalaripayattu included (the R-28 to R-32 packages are costed separately) | 5 |
+| CP-2 | Las Brasas and the Keys | Muay Thai and cage fights, Blaze races, buffet challenges, valet and wedding-hall jobs, glow bowling, escape room, retro arcade, desert range; the Keys' core set with silat, spearfishing and snorkelling | 3 |
+| CP-3 | Concordia and Sovereign County | Judo and krav maga, hill climbs, rowing, speed chess, gripman and tour-guide jobs, Slant theatre and comedy, escape room, e-sports arena, ice rink, the university; Sovereign County's core set and sailing school | 3 |
+| CP-4 | Steelhaven and Corran | Wrestling and firehouse boxing, drag strip, hockey, ice fishing, assembly line and snow plough, union-league bowling, LAN café, Ostrander laser tag; Corran's core set | 3 |
 | CP-5 | Porto Brisa | Capoeira and jiu-jitsu, downhill bike race, footvolley, samba school and carnival, moto-taxi, hang gliding | 2.5 |
 | CP-6 | California city | Stunt school, surfing, freeway and canyon races, film-extra jobs, premieres, beach volleyball | 2.5 |
 
-**Total**: about **16 sessions**, spread over the world phases (each pack ships with its phase).
-**Cheaper option**: the signature activity plus the martial art and one venue per place, about
-**1 session per pack, 6 in all**; the rest of each pack later.
+**Total**: about **19 sessions**, spread over the world phases (each pack ships with its phase).
+The regional martial arts are costed here only: `ACTIVITY_IDEAS.md` N10 builds the masters and
+manuals for the four Bellerive styles, not these styles.
+**Cheaper option**: about **7 sessions**: each city's signature, martial art and one venue (about
+1 session per pack), and in CP-1 only the seven countryside signatures (about 2); the core sets
+come later.

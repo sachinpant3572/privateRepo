@@ -81,7 +81,7 @@ P = {
     "p_max": 0.95,
     "fine_mult": 1.0,
     # Authored payday (story tip)
-    "tip_cap_w": 20.0,
+    "tip_cap_w": 17.0,
     "payday_move": 0.30,
     # Save-scum and time-skip inputs
     "reloads": 10,
@@ -89,6 +89,13 @@ P = {
     "scum_phase_ticks": 24,       # hourly scummer: 2 market days pushing down, then 2 pushing up
     "scum_minutes_per_try": 1.25,  # real minutes per game hour tried (1 played + load)
     "oracle_real_days": 3,
+    # Clock (6.6): 1 game hour = 1 real minute of play
+    "sleep_h": 8.0,
+    "awake_per_sleep_h": 16.0,
+    "taxi_ride_h": 2.0,           # longest ride; the clock gains the ride's own time
+    "taxi_cap_h_per_day": 4.0,    # taxi time beyond this in one game day moves only the sky
+    "load_real_min": 0.25,        # a sleep or taxi fade, in real minutes
+    "tap_real_min": 0.125,        # one "Skip 3 hours" tap
     "counters": True,
     "allow_short": False,
 }
@@ -237,7 +244,7 @@ class Run:
         self.w, self.c, self.rng = world, cfg, rng
         self.cash = self.cash0 = cash
         self.imp = [[] for _ in range(N)]       # (t0, ax, ap) price impulses from the player
-        self.lots = [[] for _ in range(N)]      # [t, shares (<0 short), cost or proceeds, susp, tag]
+        self.lots = [[] for _ in range(N)]      # [t, shares (<0 short), cost or proceeds, susp, tag, dividends]
         self.bought = [0.0] * N
         self.bday = -1
         self.pevents = []                       # (t, i, material)
@@ -308,14 +315,14 @@ class Run:
             fill = m * (1 - k["half_spread"] - imp)
             sh = room / fill
             self.cash += room * (1 - c["broker_fee"] - c["sales_tax"])
-            self.lots[i].append([t, -sh, room * (1 - c["broker_fee"] - c["sales_tax"]), self._post_susp(i, t), tag])
+            self.lots[i].append([t, -sh, room * (1 - c["broker_fee"] - c["sales_tax"]), self._post_susp(i, t), tag, 0.0])
             self.impulse(i, t + 1, -imp, 0.0)
         else:
             fill = m * (1 + k["half_spread"] + imp)
             sh = room / fill
             cost = room * (1 + c["broker_fee"])
             self.cash -= cost
-            self.lots[i].append([t, sh, cost, self._post_susp(i, t), tag])
+            self.lots[i].append([t, sh, cost, self._post_susp(i, t), tag, 0.0])
             self.impulse(i, t + 1, imp, 0.0)
         self.bought[i] += room
         return room
@@ -336,7 +343,7 @@ class Run:
             imp = c["impact_k"] * math.sqrt(sh * m / k["volume_w"])
             px = m * (1 - k["half_spread"] - imp) * (1 - c["broker_fee"] - c["sales_tax"])
             for l in longs:
-                g = l[1] * px - l[2]
+                g = l[1] * px - l[2] + l[5]   # dividends on a flagged lot are seized too
                 total += l[1] * px
                 if l[3] > 0:
                     pnl_sus += g
@@ -349,7 +356,7 @@ class Run:
             imp = c["impact_k"] * math.sqrt(sh * m / k["volume_w"])
             px = m * (1 + k["half_spread"] + imp) * (1 + c["broker_fee"])
             for l in shorts:
-                g = l[2] - (-l[1]) * px
+                g = l[2] - (-l[1]) * px + l[5]
                 if l[3] > 0:
                     pnl_sus += g
                     susp = max(susp, l[3])
@@ -372,7 +379,11 @@ class Run:
             return
         for i in range(N):
             if self.lots[i]:
-                self.cash += self.shares(i) * self.mid(i, t) * CLS[i]["div_day"]
+                m = self.mid(i, t)
+                for l in self.lots[i]:
+                    d = l[1] * m * CLS[i]["div_day"]
+                    l[5] += d
+                    self.cash += d
         self.equity.append(self.cash + sum(self.shares(i) * self.mid(i, t) for i in range(N) if self.lots[i]))
 
     def liquidate(self):
@@ -803,6 +814,38 @@ def reload_naive(world, rng, cfg):
     return pnl / DAYS
 
 
+def clock_bot(cfg, taxi_cap, taps_count):
+    """Greedy time skipper for one real hour; returns game days the market clock advances.
+
+    Each step takes the cheapest legal jump: sleep once 16 h awake, a 3 h tap if taps move the
+    clock, a taxi ride while the day's taxi allowance lasts, else 6 game minutes of play. Taxi and
+    tap time count as awake, which earns sleep sooner (the worst case for the rules)."""
+    real = clock = awake = taxi_day = 0.0
+    day = 0
+    while real < 60.0:
+        if int(clock // 24) != day:
+            day, taxi_day = int(clock // 24), 0.0
+        if awake >= cfg["awake_per_sleep_h"]:
+            clock += cfg["sleep_h"]
+            awake = 0.0
+            real += cfg["load_real_min"]
+        elif taps_count:
+            clock += 3.0
+            awake += 3.0
+            real += cfg["tap_real_min"]
+        elif taxi_day < taxi_cap:
+            h = min(cfg["taxi_ride_h"], taxi_cap - taxi_day)
+            clock += h
+            awake += h
+            taxi_day += h
+            real += cfg["load_real_min"]
+        else:
+            clock += 0.1
+            awake += 0.1
+            real += 0.1
+    return clock / 24
+
+
 def payday(world, rng, cfg):
     """An authored story tip: buy up to tip_cap_w, the mission lands the next day."""
     c = dict(cfg, buy_limit_w=cfg["tip_cap_w"], pos_cap_w=cfg["tip_cap_w"],
@@ -892,7 +935,7 @@ def main():
     add("5 Reload, naive save (reroll on load)", other("reload", reload_naive))
     cs = other("copy", copy_scum)
     add("5 Save copy daily, best of %d, per kept day" % P["copy_attempts"], cs)
-    add("5 ... same, per real day played", [v / P["copy_attempts"] for v in cs])
+    add("5 ... same, per game day of real play", [v / P["copy_attempts"] for v in cs])
     hs = other("hourly", copy_scum_hourly)
     add("5 Save copy hourly, best of %d: W per REAL hour" % P["copy_attempts"], hs, "side jobs 2.50")
     add("5 Oracle, per real day (scouting x%d)" % P["oracle_real_days"],
@@ -917,9 +960,16 @@ def main():
         pr("%-46s %7.3f %6.3f %7.3f %7.3f  %s" % (label, mn, sd, p10, p90, extra))
     pas = statistics.fmean(res["passive"][0])
     days_per_hour = 60 / 24
-    pr("6 Time skip (passive income per REAL hour; side jobs = %.2fW):" % days_per_hour)
-    pr("    normal play %.3f | sleep rule (8h per 16h awake) %.3f | unlimited 3h-skip taps (~60 days/h) %.3f" %
-       (pas * days_per_hour, pas * days_per_hour * 1.5, pas * 60))
+    big = 1e9
+    clk = {"sleep": clock_bot(P, 0.0, False), "rules": clock_bot(P, P["taxi_cap_h_per_day"], False),
+           "taxi_off": clock_bot(P, big, False), "taps": clock_bot(P, big, True)}
+    pr("6 Time skip, clock bot (passive income per REAL hour, game days/h in brackets; side jobs = %.2fW):"
+       % days_per_hour)
+    pr("    normal play %.3f (%.2f) | sleep rule %.3f (%.2f) | sleep + taxi cap %.0fh/day (all rules) %.3f (%.2f)" %
+       (pas * days_per_hour, days_per_hour, pas * clk["sleep"], clk["sleep"], P["taxi_cap_h_per_day"],
+        pas * clk["rules"], clk["rules"]))
+    pr("    no taxi cap %.3f (%.2f) | 3h-skip taps move the clock %.3f (%.2f)" %
+       (pas * clk["taxi_off"], clk["taxi_off"], pas * clk["taps"], clk["taps"]))
     pr("7 Compounding: P&L/day in days 41-60 vs days 1-20:  caps on x%.2f | no caps x%.2f" %
        (growth(eq_tips), growth(eq_off)))
 
@@ -942,9 +992,11 @@ def main():
         ("hourly save copying < side jobs per real hour (2.5 W)", hs_m < days_per_hour, "%.3f" % hs_m),
         ("save copy and oracle per real day < side jobs (1 W)", max(cs_real, or_real) < 1.0,
          "%.3f / %.3f" % (cs_real, or_real)),
-        ("authored payday <= 8 W, one-off", pd_m <= 8.0, "%.2f" % pd_m),
-        ("time skip with sleep rule < side jobs per real hour", pas * days_per_hour * 1.5 < days_per_hour,
-         "%.3f" % (pas * days_per_hour * 1.5)),
+        ("authored payday p90 <= 8 W, one-off", stats(pd)[3] <= 8.0,
+         "mean %.2f, p90 %.2f" % (pd_m, stats(pd)[3])),
+        ("clock bot, all rules, < side jobs per real hour (and the taxi cap binds)",
+         pas * clk["rules"] < days_per_hour and clk["rules"] < clk["taxi_off"],
+         "%.3f (no cap %.3f)" % (pas * clk["rules"], pas * clk["taxi_off"])),
     ]
     for name, ok, val in checks:
         pr("  [%s] %s: %s" % ("PASS" if ok else "FAIL", name, val))
