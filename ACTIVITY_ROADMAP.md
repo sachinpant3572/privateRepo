@@ -40,20 +40,20 @@ source; Solvera's status (**have** / **partial** / **missing**) with file refere
 
 | Item | Who / label / source | Solvera |
 |---|---|---|
-| Golf, tennis, darts | V5, V [S9][S5] | missing. A tennis court exists as estate scenery only (`kits/grounds_kit.gd:101`) |
+| Golf, tennis, darts | V5, V [S9][S5] | missing. A tennis court exists as estate scenery only (`kits/grounds_kit.gd:101`). Planned: tennis and darts in package 21, mini-golf and the driving range in `ACTIVITY_IDEAS.md` N2; a real course is not costed (2.3: Ember Heights later) |
 | Yoga, triathlon | V5, 2 [S10] | missing; packages 28 and 29 |
 | Flight school, parachute jumps (13) | V5, V [S5]; SA pilot and boat schools, R | missing; packages 30 and 31 |
 | Shooting range | V5, V [S5] | missing (planned: interiors phase 6) |
 | Street basketball | SA, V [S15] | partial: the Wharfside Courts exterior (`city_cells.gd:789`); no game |
 | Boxing / gym fights | SA, R | partial: The Pit exterior (`city_cells.gd:1389`); one hard-coded combo (`humanoid.gd:124`) |
-| Pool ($50-1000 bets) | SA, V [S15] | missing |
-| Dancing (rhythm), lowrider bounce challenge | SA, V [S15] | missing |
-| Arcade cabinets (4 games, free, high scores, in 24-7 stores) | SA, 2 [S16] | missing (TODO.md "arcades") |
+| Pool ($50-1000 bets) | SA, V [S15] | missing; package 21 |
+| Dancing (rhythm), lowrider bounce challenge | SA, V [S15] | missing; dancing in package 10, lowrider bounce-off in `ACTIVITY_IDEAS.md` N19 |
+| Arcade cabinets (4 games, free, high scores, in 24-7 stores) | SA, 2 [S16] | missing (TODO.md "arcades"); packages 11, 12 and 18 |
 | Casino: blackjack, roulette, video poker, slots, wheel | SA, V [S11]; V5 casino is Online only, U | missing. **Conflict**: `GANGSTAR_CONCEPT.md:101` says avoid simulated gambling |
 | Horse betting (Inside Track) | SA, V [S11] | missing (same conflict) |
 | Cinema, bar, strip club (friend activities) | V5, V [S9] | missing. Strip club: recommend never (tone and age rating) |
 | Fairground rides | V5, V [S9] | missing; package 32 |
-| Hunting / wildlife photography challenge | V5, V [S4] | missing |
+| Hunting / wildlife photography challenge | V5, V [S4] | missing. Hunting: never (no killing animals); it becomes wildlife photography with the phone camera (package 7), the bayou wildlife rescue (`ACTIVITY_IDEAS.md` N25) and Red Pine's photo spots (`ACTIVITY_ATLAS.md` D2, CP-1) |
 | Stock market | V5, R | missing; designed in `STOCK_MARKET_DESIGN.md` (lite about 2.5 sessions, full about 6) |
 | Dating, girlfriends, friends | SA, V [S15]; V5 friends, V [S9] | missing |
 | 1v1 races, clan seasons, daily and weekly tasks | MO2, V [M2]; tasks 2 [M3] | missing |
@@ -240,7 +240,7 @@ sessions. "IS-n" = `INTERIORS_SERVICES_PLAN.md` phase n (already costed there).
 | 25 | Seasons and weather v2 | Calendar, seasons, fog, wind, heat, festivals such as a Mardi-Gras-style parade (TODO.md weather) | `atmosphere.gd` | 3.5 | 3 |
 | 26 | Bicycles and drivable boats | Bikes and BMX, speedboat and airboat on the Morrow and bayou | `vehicle.gd` | 2 | 2 |
 | 27 | Light online | Leaderboards for arcade games and races, weekly challenges, cloud save | 12, 14 | 1.5 | 1 |
-| 28 | Yoga and wellness | A breathe-and-hold pose minigame (E2) in a Gilt studio, then at sunrise on Brisa Beach and in Concordia's Commons Park; a short calm buff (steadier aim, faster stamina refill) | 10 (rhythm engine) | 0.8 | 2 |
+| 28 | Yoga and wellness | A breathe-and-hold pose minigame (E2) in a Gilt studio, then at sunrise on Brisa Beach and in Concordia's Commons Park; a short calm buff (steadier aim, faster stamina refill) | 10 (dance game); E2 rhythm engine (`ACTIVITY_IDEAS.md` N3) | 0.8 | 2 |
 | 29 | Triathlon | Swim, bike and run legs on one checkpoint chain; a levee duathlon (run and bike) first, then the Brisa Beach sprint and the Miravel Shores lake triathlon; the stamina stat sets the pace | 14, 17, 26; swimming (`ACTIVITY_IDEAS.md` 4.10) | 1.5 | 2 |
 | 30 | Flight school | Lessons in the light plane, seaplane and helicopter: take-off, landing, rings, crosswind, an engine-out landing, with bronze, silver and gold; the licence unlocks rentals and owning aircraft. At the Golden Flats crop-duster strip and the Ironwharf Seaplane Base | World v3 phase 3 aircraft | 2 | 2 |
 | 31 | Parachute jumps | A parachute (open, steer, flare) for jumps from Cinder Peak, the Aurum Tower and the Solvera Line bridges, then from planes and helicopters; target landings and ring courses | World v3 phase 3; 30 for jumps from aircraft | 1.5 | 2 |
@@ -249,7 +249,7 @@ sessions. "IS-n" = `INTERIORS_SERVICES_PLAN.md` phase n (already costed there).
 **Totals**:
 - all 27: about **57 sessions**, of which about 10 are the interiors plan already costed;
 - packages 28-32 (added 2026-10-28; Sachin: "We will build packages for these too"): about
-  **8 sessions** more. They close the last section 1.1 gaps. Phase 1 can take the Gilt yoga
+  **8 sessions** more. They close the remaining section 1.1 gaps that had no package; hunting becomes wildlife photography (row above). Phase 1 can take the Gilt yoga
   studio, the levee duathlon and the Liberty Green fair; the rest waits for the world phases
   they name. `ACTIVITY_ATLAS.md` Part D places them on the map;
 - **first wave**, packages 1-11: about **17 sessions**. It covers food, civic, animals, street

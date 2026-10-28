@@ -167,8 +167,11 @@ R-17 covers learned styles, as SA's gyms do. New here, the Sleeping Dogs lesson:
 - **lost fight manuals** found while exploring each unlock one move.
 - Styles to offer (real art names are generic, not brands). Already planned in IS-4 and the
   roadmap: boxing (The Pit), kickboxing, karate (Lantern Quarter dojo) and kung fu (Wards school).
-  **New here, the 6 in N10**: Muay Thai, judo, Brazilian jiu-jitsu, capoeira (taught by a Porto
-  Brisa émigré), wrestling and kalaripayattu. Later: silat and krav maga.
+  **New here, by region** (`ACTIVITY_ATLAS.md` D2; each is built with its place's city pack, so
+  a new art means a trip): Muay Thai (Las Brasas), judo and krav maga (Concordia), wrestling
+  (Steelhaven), capoeira and Brazilian jiu-jitsu (Porto Brisa), kalaripayattu (Cinder County),
+  silat (the Keys) and a stunt-fighting school (the California city). N10 builds the hidden
+  masters and the manuals for the four Bellerive styles, and the hooks the packs reuse.
 - Each style changes the combo, gives one special move, and adds a defence trait (parry,
   throw, dodge).
 
@@ -359,7 +362,7 @@ Without this, 80 activities feel like a list. With it, every activity counts tow
 
 Sachin asked to check the GTA V and GTA VI activity lists for more ideas. The roadmap's section 1
 already covers GTA V's story mode (91 items; golf, tennis, darts, yoga, triathlon, flight school,
-hunting, the stock market and so on). This pass looks at the two places it didn't: **GTA Online**
+hunting, the stock market and so on; GTA V's hobbies list, 2 [A14]). This pass looks at the two places it didn't: **GTA Online**
 (GTA V's online mode, updated until 2025 and beyond) and **GTA VI**. It lists only what is not
 already in the roadmap or in sections 2-4 above.
 
@@ -419,7 +422,10 @@ The full design, its anti-exploit rules and a simulation that proves them are in
 - nothing rerolls on load, and the market has its own clock that never reads the device clock;
 - the seeded simulation (150 runs of 60 game days, 8 checks, all pass) shows that a passive
   holder earns about 8% of a day's side-job pay per game day, a skilled trader about 13%, and
-  every tested manipulation loop earns no more than skilled trading;
+  every tested in-game manipulation loop (sabotage, insider buys, pump and dump, scalping, time
+  skips) earns no more than skilled trading; copying the save file outside the game does beat
+  skilled trading per real hour (0.76 W against 0.33) but stays well under side jobs (2.5 W),
+  which is the honest limit on an open platform;
 - cost: about 2.5 sessions for a lite version, about 6 for the full one.
 
 ### 4.13 GTA III, the Liberty City games, Watch Dogs and Sleeping Dogs: what they add (pass of 2026-10-28)
@@ -548,36 +554,41 @@ depends on, including later ones.
 | N7 | Getaway driver for hire + pickpocketing + armoured van | Cheap crime variety on existing driving and wanted systems | R-5, R-20 | 1.5 | 4 |
 | N8 | E6 business sim + food truck + Buy back the Wards | The long loop, tied to the story | R-22 | 3.5 | 4 |
 | N9 | Studio + music app + record shop + 5 more stations | The AI-music promise in full | R-6, N3 | 2.5 | 3 |
-| N10 | Martial-arts masters + fight manuals + 6 new styles (2.9) | On top of R-17 | R-17, N1 | 2 | 3 |
+| N10 | Martial-arts masters + fight manuals (2.9) | Hidden masters and manuals for the four Bellerive styles, on top of R-17; the regional styles come with the city packs (`ACTIVITY_ATLAS.md` D5) | R-17, N1 | 1 | 3 |
 | N11 | Night classes (driving, coding, languages, first aid) | Learning as play | R-9 (first aid) | 2 | 2 |
 | N12 | Hurricane-season event + election | Signature systemic events | R-25, R-9, R-26 (boats) | 3 | 5 |
 | N13 | Arcade games G-L | Six small games | R-11 | 4.5 | 2 |
 | N14 | Comedy chaos set + RC and drone | Cheap laughs | none | 1.5 | 3 |
-| N15 | Daily variety set (4.11) | Daily wanted-car list, black-market van, payphone jobs, pop-up challenges, buried stash, community service | R-5, R-13, R-16 | 2.5 | 4 |
+| N15 | Daily variety set (4.11) | Daily wanted-car list, black-market van, payphone jobs, pop-up challenges, buried stash, community service | R-5, R-13, R-16, N1 (E7), N5 (E5) | 2.5 | 4 |
 | N16 | Bail bonds + race creator + hit-and-run chases (4.11, 4.13) | Bounty work and player-made races | R-5, R-14, R-24 | 2.5 | 3 |
 | N17 | Stock market (4.12) | The Exchange app with city-event prices and the anti-exploit rules | R-13 | 2.5 (lite; full 6) | 3 |
 | N18 | Crime set (4.13) | Crimes detected, camera busts, convoy takedowns, hideout takedowns | R-5, R-9, R-17, R-19, R-20, R-22 | 3 | 4 |
-| N19 | Liberty City and venue extras (4.13) | Car salesman, dumpster dash, lowrider bounce-off, air hockey, keepy-uppy, comedy club | N3, N5, R-10, R-11 | 2.5 | 3 |
+| N19 | Liberty City and venue extras (4.13) | Car salesman, dumpster dash, lowrider bounce-off, air hockey, keepy-uppy, comedy club | N3, N5, N8 (E6, the car lot), R-10, R-11, R-13 | 2.5 | 3 |
 | N20 | Money fronts and laundering (4.11) | Dirty and clean cash; waits on decision 8 | R-22, N8 | 1.5 | 3 |
 | N21 | Neighbourhood jobs (4.14) | Paper route, yard jobs, can run, neighbour errands | N5, R-5, R-26 | 1.5 | 3 |
-| N22 | Bully, Saints Row and Yakuza extras (4.14) | Sludge Avenger, wrecking crew, bodyguard gigs, reality cop show, paint-trail quad, pocket racers, the Shakedown, cat café, water-balloon fight, oddball snaps | R-5, R-9, R-17, R-22, N1, N8 | 4 | 3 |
+| N22 | Bully, Saints Row and Yakuza extras (4.14) | Sludge Avenger, wrecking crew, bodyguard gigs, reality cop show, paint-trail quad, pocket racers, the Shakedown, cat café, water-balloon fight, oddball snaps | R-3, R-5, R-9, R-13, R-17, R-22, N1, N8 | 4 | 3 |
 | N23 | Crew and character (4.13, 4.14) | Recruit from the street, crew defence, personality traits, sandlot baseball | R-17, R-22, R-24, N2, N13 (Levee Line engine) | 3 | 3 |
+| N24 | Street and car extras (4.11, 4.13) | Car meet with rep and a test track, transform races, arena car-combat show, arm wrestling, backyard wrestling league, TV at the safehouse, street-art pasting, the soda dare at darts | R-11, R-13, R-14, R-15, R-17, R-21, R-26, N1 | 2.5 | 3 |
+| N25 | Outdoors and phone extras (4.11, 4.13) | Kayaking, base jumping, bayou wildlife rescue, studio gauntlet show, camera-mast puzzles, AR phone games | R-3, R-11, R-13, R-14, R-17, R-19, R-24, R-26, R-31 (parachute) | 2.5 | 3 |
 
-- **All 14**: about **32 sessions**, on top of the roadmap's 57.
-- **N15-N23** (added with 4.11-4.14): about **23 sessions** more with the lite stock market (N17;
+- **All 14**: about **31 sessions**, on top of the roadmap's 57.
+- **N15-N25** (added with 4.11-4.14): about **28 sessions** more with the lite stock market (N17;
   the full market adds 3.5). The roadmap's new packages 28-32 (yoga, triathlon, flight school, parachute
   jumps, fairground) add about 8, and the city activity packs in `ACTIVITY_ATLAS.md` Part D
-  about 16 (cheaper: 6), both spread over the world phases.
-- **Not costed yet**: much of sections 2 and 4 sits outside N1-N14 as content for later rounds:
+  about 19 (cheaper: 7), both spread over the world phases. Every item in 4.11-4.14 now sits in
+  N15-N25, in a city pack (snorkelling and spearfishing in CP-2) or in the list below.
+- **Not costed yet** (in no N row, roadmap package or city pack): much of sections 2 and 4 sits
+  outside N1-N14 as content for later rounds:
   - the racing extras (2.8);
   - the boxing, gym, shopping and eating-out extras;
   - real golf;
   - the gallery and storm heists;
-  - photography, diving, pets, escape rooms, laser tag and paintball;
+  - photography (wildlife photography, roadmap 1.1's stand-in for hunting, included), diving,
+    pets, and the first Bellerive homes of escape rooms, laser tag and paintball (their repeats
+    in other cities are in the city packs);
   - 7 of the 11 careers;
   - water fun (4.10); the meta layer (4.9) is costed there (about 1 session) but not yet scheduled;
-  - the items that wait on later world phases: spearfishing (the Keys) and the chopper spotter
-    (helicopters).
+  - the chopper spotter, which waits for helicopters.
 
   On the engines, most of these are 0.3-1 session each. A rough guess for all of them is another
   15-20 sessions.
@@ -589,7 +600,8 @@ depends on, including later ones.
   - a little shopping (capsule toys).
 
   Gym, boxing, table tennis, racing, martial arts and eating out come from the roadmap's own
-  packages (R-1, R-14, R-17, R-18, R-21) and from N10.
+  packages (R-1, R-14, R-17, R-18, R-21) and from N10 (the regional martial arts come with the
+  city packs).
 - **Recommendation**: the cheaper option first, then N15 and N21 (cheap daily variety). Re-score after players (or Sachin) have played the
   first wave, and order the rest by what they actually return to.
 
@@ -626,9 +638,10 @@ depends on, including later ones.
 9. **Alcohol in minigames**: Solvera keeps alcohol as bar scenery and swaps drinking games for a
    lucky soda or a hot-sauce dare (4.13). Keep the swap, or allow cartoon drinking without
    drunk driving?
-10. **City activity packs** (`ACTIVITY_ATLAS.md` Part D): build the full packs (about 16
-    sessions over the world phases) or the cheaper version (about 6: each place's signature,
-    martial art and one venue)?
+10. **City activity packs** (`ACTIVITY_ATLAS.md` Part D): build the full packs (about 19
+    sessions over the world phases, with every countryside region's core set) or the cheaper
+    version (about 7: each city's signature, martial art and one venue, plus the countryside
+    signatures)?
 
 ## 8. Sources
 
