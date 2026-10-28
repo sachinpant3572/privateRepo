@@ -103,7 +103,7 @@ func move_vector() -> Vector2:
 
 ## Inverse of world_move(): the stick vector that moves along `dir`.
 func screen_from_world(dir: Vector3) -> Vector2:
-	var axes: Array[Vector3] = camera.ground_axes()
+	var axes: Array[Vector3] = camera.input_axes()
 	return Vector2(dir.dot(axes[0]), -dir.dot(axes[1])).limit_length(1.0)
 
 
@@ -139,7 +139,9 @@ func stick_wheel() -> Array[float]:
 		return [0.0, 0.0, 0.0]
 	var angle := atan2(v.x, -v.y)
 	if absf(angle) <= deg_to_rad(STICK_BACK):
-		return [clampf(angle / deg_to_rad(STICK_FULL), -1.0, 1.0), amount, 0.0]
+		# Gas eases off as the stick leans over: full lock lifts off, as
+		# steering without the gas did on a d-pad.
+		return [clampf(angle / deg_to_rad(STICK_FULL), -1.0, 1.0), amount * clampf(cos(angle) + 0.3, 0.0, 1.0), 0.0]
 	# Backing up, leaning the stick swings the tail that way.
 	var back := signf(angle) * (PI - absf(angle))
 	return [clampf(back / deg_to_rad(STICK_FULL), -1.0, 1.0), 0.0, amount]

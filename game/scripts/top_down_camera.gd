@@ -123,10 +123,14 @@ var _yaw_chasing := false
 ## Re-centre: chase the goal at once, past the dead zone and holds.
 var _yaw_forced := false
 var _still := 0.0
-## The heading the stick reads its directions in; on foot it only catches
-## up with the view while the stick is let go, so walking never circles as
-## the view turns.
+## The heading the stick reads its directions in; on foot, while the stick
+## is held and the view turns, it holds, so walking never circles. Once the
+## view has landed it eases round to it (INPUT_CATCH_UP).
 var _input_yaw := 0.0
+const INPUT_CATCH_UP := 1.5
+## What the view followed last frame: a new car turns the view behind it at
+## once, before it moves (the stick already steers it car-relative).
+var _yaw_node: Node3D = null
 ## Below this speed the view keeps its heading (parked, turning on the spot).
 const YAW_MIN_SPEED := 3.0
 ## Swings smaller than this (lane changes, wobbles) don't turn the view.
@@ -274,7 +278,11 @@ func _update_yaw(node: Node3D, delta: float) -> void:
 		var flat := Vector3(v.x, 0.0, v.z)
 		var speed := flat.length()
 		var fwd := -node.global_basis.z
-		if speed > YAW_MIN_SPEED and not _yaw_forced:
+		if node != _yaw_node:
+			_yaw_goal = _heading(fwd)
+			_yaw_chasing = true
+			_yaw_forced = false
+		elif speed > YAW_MIN_SPEED and not _yaw_forced:
 			var face := _heading(fwd)
 			var slip := wrapf(_heading(flat) - face, -PI, PI)
 			if absf(slip) < PI * 0.5:
@@ -316,8 +324,11 @@ func _update_yaw(node: Node3D, delta: float) -> void:
 	yaw = wrapf(yaw + _yaw_rate * delta, -PI, PI)
 	# The stick's frame follows the view while it is let go or the player
 	# drives, so getting out with the stick held walks the way the view faces.
+	_yaw_node = node
 	if node != target or Controls.move_vector().length() < 0.2:
 		_input_yaw = yaw
+	elif not _yaw_chasing:
+		_input_yaw = rotate_toward(_input_yaw, yaw, INPUT_CATCH_UP * delta)
 
 
 func snap() -> void:
@@ -533,7 +544,7 @@ func _clear_back(from: Vector3, base: float, slot := -1) -> float:
 	var frame := Engine.get_process_frames()
 	if slot >= 0 and _clear_memo.has(slot):
 		var m: Array = _clear_memo[slot]
-		if absf(m[1] - base) < 0.5 and absf(m[4] - perspective_pitch) < 2.0 and from.distance_squared_to(m[0]) < 2.25 and frame - int(m[3]) < 30:
+		if absf(m[1] - base) < 0.5 and absf(m[4] - perspective_pitch) < 2.0 and absf(wrapf(yaw - m[5], -PI, PI)) < 0.05 and from.distance_squared_to(m[0]) < 2.25 and frame - int(m[3]) < 30:
 			return m[2]
 	var query := PhysicsPointQueryParameters3D.new()
 	query.collision_mask = L.WORLD
@@ -549,7 +560,7 @@ func _clear_back(from: Vector3, base: float, slot := -1) -> float:
 	if found and back != base:
 		back += ROOF_AIR
 	if slot >= 0:
-		_clear_memo[slot] = [from, base, back, frame, perspective_pitch]
+		_clear_memo[slot] = [from, base, back, frame, perspective_pitch, yaw]
 	return back
 
 

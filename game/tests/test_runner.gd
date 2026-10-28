@@ -1021,6 +1021,23 @@ func test_camera_turns_with_car() -> void:
 	Controls.override_vector = null
 	await _frames(150)
 	_check(absf(cam.yaw) < 0.02, "standing still, the view squares up with the streets (%.1f degrees)" % rad_to_deg(cam.yaw))
+	# A frame left behind (a compass tap while walking) eases round to the
+	# view once it has landed, the stick still held.
+	cam._input_yaw = deg_to_rad(60.0)
+	Controls.override_vector = Vector2(1, 0)
+	await _frames(30)
+	var mid: float = rad_to_deg(cam._input_yaw)
+	await _frames(45)
+	_check(mid > 5.0 and mid < 55.0 and absf(cam._input_yaw) < 0.01, "with the stick held, the stick's frame eases round to a landed view (60 -> %.0f -> %.1f degrees)" % [mid, rad_to_deg(cam._input_yaw)])
+	Controls.override_vector = null
+	# Getting into a car facing the other way: the view swings behind it
+	# before it moves, so stick up drives up the screen from the start.
+	var south = _player_car("sedan", Vector3(0, 0, 500.0), 0.0, PI)
+	p.vehicle = south
+	await _frames(240)
+	_check(absf(wrapf(cam.yaw - PI, -PI, PI)) < 0.02 and south.velocity.length() < 0.5, "getting into a parked car facing south, the view swings behind it (%.1f degrees)" % rad_to_deg(cam.yaw))
+	p.vehicle = null
+	south.queue_free()
 	p.queue_free()
 	cam.queue_free()
 	Controls.camera = null

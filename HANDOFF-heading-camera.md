@@ -38,11 +38,13 @@ Builds on HANDOFF-perspective-camera.md (pitch, tower tilt, see-through ghost, l
   overrides. The 100 m target was dropped: it needs about 1.6x the loaded area and the car at the
   screen edge; this middle option loads about 1.5x (screen corners reach 111 m vs 90 m).
 - H-4 Stick layout in a car, With car: steer by stick (x = wheel, push up = gas, down = brake and
-  reverse). Point-to-go under a turning camera ties the turn rate to how fast the camera catches up;
+  reverse; gas eases off as the stick leans over, so full lock lifts off as a
+  d-pad did). Point-to-go under a turning camera ties the turn rate to how fast the camera catches up;
   steer-by-stick ties it to the thumb only. Arrows and tilt layouts unchanged; North up keeps
   point-to-go.
 - H-5 On foot the camera stops turning, so the screen-relative stick never circles. Standing still,
-  it eases to the nearest street direction (90-degree steps). The stick's frame is frozen while held.
+  it eases to the nearest compass direction (90-degree steps; the city grid is north-south almost
+  everywhere). The stick's frame is frozen while held.
 - H-6 Compass: tap the minimap's N to re-centre (behind the car; north-up on foot).
 - H-7 Minimap turns with the camera, N rides the rim; the full map stays north-up.
 - H-8 Inside places the camera is north-up (rooms were built for it).
@@ -51,7 +53,9 @@ Builds on HANDOFF-perspective-camera.md (pitch, tower tilt, see-through ghost, l
   tail ends, capped at 90 deg/s and 180 deg/s^2; it lands exactly on the goal (north stays square
   to the pixels). A 90-degree car turn: the view settles about 1 s after the car, peak lag ~28 deg.
 - H-10 The stick's frame follows the view while driving (steer-by-stick does not need it frozen);
-  on foot it is frozen while the stick is held. Fixes a stale frame when getting out with it held.
+  on foot it is frozen while the stick is held and the view turns, then eases round to the landed
+  view at 86 deg/s (a compass tap or getting out mid-swing no longer leaves it off).
+- H-12 Getting into a car turns the view behind it at once, parked or not (review finding 1).
 - H-11 Settings > Reset camera leaves Camera turn alone (a mode, not a tuning value).
 
 ## Rejected
@@ -67,6 +71,8 @@ Builds on HANDOFF-perspective-camera.md (pitch, tower tilt, see-through ghost, l
   re-centre, North up back to 0, look-ahead (sedan >= 3.3 s, super >= 70 m), on foot no turn, minimap
   N tap, route drive with every screen corner loaded (0 of 219 outside). Older tests run north-up.
 - Shots 84_turn_* (SHOTS=view).
+- Review (one run): no hard bug; fixed: entering a car, the on-foot stick frame, the back-off memo
+  ignoring yaw, full-lock gas, `screen_from_world` frame. Suite timeout 180 -> 300 s (188 s now).
 
 ## Open
 
@@ -74,3 +80,9 @@ Builds on HANDOFF-perspective-camera.md (pitch, tower tilt, see-through ghost, l
 - A ~100 m look-ahead option (1.6x area) if 72 m feels short at speed.
 - Lazy camera as a third setting (Rejected above) if constant turning makes anyone dizzy.
 - Chinatown Wars' own numbers are unverified (see Research).
+- The wider streaming reach applies whenever With car is on, on foot too (about 1.5x the area);
+  scaling it with speed would save load, but measure on a phone first.
+- In the Lantern Quarter's 30-degree grid, squaring on foot settles 30 degrees off the streets.
+- No mission, chase or taxi test runs in With car mode (they all start north-up).
+- test_taxi_phone_call_and_skip failed once in a full run (the cab never arrived) and passed alone
+  and on the next runs: intermittent, not traced.
