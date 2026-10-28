@@ -110,6 +110,10 @@ func _ready() -> void:
 	police.game = self
 	add_child(police)
 
+	# Every traffic model and paint, built now rather than mid-drive.
+	var t0 := Time.get_ticks_msec()
+	Vehicle.prewarm()
+	GameLog.event("prewarm_cars", {"ms": Time.get_ticks_msec() - t0})
 	population = Population.new()
 	population.game = self
 	population.enabled = population_enabled

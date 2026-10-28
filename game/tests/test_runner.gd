@@ -64,7 +64,7 @@ func _run() -> void:
 		"test_driving_layouts",
 		"test_brake_and_steer_drifts",
 		"test_touch_driving_layouts",
-		"test_scripted_car_gets_unstuck", "test_heavy_vehicle_pushes_harder", "test_spawns_need_room", "test_overlap_resolves", "test_heavy_pushes_parked", "test_pinned_car_holds_still", "test_xray_only_when_hidden", "test_cab_stop_skips_parked_car",
+		"test_scripted_car_gets_unstuck", "test_heavy_vehicle_pushes_harder", "test_spawns_need_room", "test_overlap_resolves", "test_heavy_pushes_parked", "test_pinned_car_holds_still", "test_xray_only_when_hidden", "test_cars_prewarmed", "test_cab_stop_skips_parked_car",
 		"test_vehicle_classes_cover_every_kind", "test_suspension_bounces_and_settles", "test_side_hit_spins_and_dents", "test_hard_crash_throws_panel", "test_crash_throws_rider", "test_car_fire_then_explodes",
 		"test_vehicle_handling_differs",
 		"test_traffic_drives_every_kind",
@@ -6952,6 +6952,25 @@ func test_pinned_car_holds_still() -> void:
 	semi.queue_free()
 	wall.queue_free()
 	await _frames(1)
+
+
+## Every traffic, parked, taxi and police model and paint is built while
+## the game loads, so a car's first appearance never builds a mesh (0.23).
+func test_cars_prewarmed() -> void:
+	await _new_game(false)
+	var missing := []
+	for i in 300:
+		var car = game.population._new_car(i % 2 == 0, i % 7 - 1)
+		var key := "%s|%s" % [car.kind, car.body_color.to_html()]
+		if not Vehicle._meshes.has(key) and not missing.has(key):
+			missing.append(key)
+		car.free()
+	var cop = Vehicle.new()
+	cop.is_police = true
+	if not Vehicle._meshes.has("police|%s" % cop.body_color.to_html()):
+		missing.append("police")
+	cop.free()
+	_check(missing.is_empty(), "every traffic and parked car's mesh is built at load (missing %s)" % [missing])
 
 
 ## The see-through silhouette shows only while a wall or a car hides the

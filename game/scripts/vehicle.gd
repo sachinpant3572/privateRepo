@@ -90,7 +90,9 @@ var driver := Driver.NONE
 var is_police := false
 ## Body style from VehicleKit.KINDS; sets the model and the handling.
 var kind := "sedan"
-var body_color := Color(0.8, 0.15, 0.15)
+## Police cars keep this (their model has its own livery).
+const DEFAULT_PAINT := Color(0.8, 0.15, 0.15)
+var body_color := DEFAULT_PAINT
 var city
 var occupant = null
 var health := 100.0
@@ -1212,6 +1214,34 @@ func set_real_light(on: bool, energy := 0.0, shadow := false, bar := true) -> vo
 ## one takes 2 to 15 ms, so building each new car in traffic afresh made
 ## the game stutter (0.21 on Ultra, Sachin, 2026-10-29).
 static var _meshes := {}
+
+
+## Builds every traffic, parked, taxi and police model in each of its
+## paints into _meshes while the game loads, so no car's first appearance
+## stalls a frame (0.23, Sachin: "Building them all during loading ... Lets
+## do this"). 134 meshes, about 0.35 s on a desktop. Mission cars with
+## their own paint still build when they first appear.
+static func prewarm() -> void:
+	var kinds := {"taxi": true}
+	for k in VehicleKit.CIVILIAN + VehicleKit.PARKED:
+		kinds[k] = true
+	for row in VehicleKit.PARKED_BY_TIER:
+		for k in row:
+			kinds[k] = true
+	for k in kinds:
+		_prewarm_one(k, VehicleKit.PALETTES.get(k, VehicleKit.PAINTS))
+	_prewarm_one("police", [DEFAULT_PAINT])
+
+
+static func _prewarm_one(k: String, paints: Array) -> void:
+	for paint in paints:
+		var key := "%s|%s" % [k, paint.to_html()]
+		if _meshes.has(key):
+			continue
+		var mb := MeshBuilder.new()
+		var gloss := MeshBuilder.new()
+		VehicleKit.build(mb, k, paint, gloss)
+		_meshes[key] = [mb.commit(), gloss.commit()]
 
 
 func _build_model() -> void:
