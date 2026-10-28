@@ -14,6 +14,9 @@ parity* list: what other activity-heavy games do that those three don't, plus or
 that fit Solvera's world. Where an idea is already a roadmap package, it says "R-n" (roadmap
 package n) and only adds what is new.
 
+**Where each activity happens**: `ACTIVITY_ATLAS.md` lists every planned activity from both
+files by region, place and terrain.
+
 ## 0. Method and labels
 
 - Sources: WebSearch result summaries only. The roadmap found that WebFetch can't reach the wikis
