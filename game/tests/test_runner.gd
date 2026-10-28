@@ -7,6 +7,7 @@ const Vehicle = preload("res://scripts/vehicle.gd")
 const Npc = preload("res://scripts/npc.gd")
 const VehicleKit = preload("res://scripts/kits/vehicle_kit.gd")
 const Terrain = preload("res://scripts/terrain.gd")
+const SkyDome = preload("res://scripts/sky.gd")
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const Population = preload("res://scripts/population.gd")
 const StreetPlan = preload("res://scripts/street_plan.gd")
@@ -42,7 +43,7 @@ func _run() -> void:
 		"test_punch_combo_ends_in_knockdown_kick",
 		"test_minimap_routes_to_waypoint", "test_state_map_shows_the_whole_state",
 		"test_night_lights_the_city", "test_headlights_follow_the_ground",
-		"test_graphics_quality_presets", "test_real_lights_at_night",
+		"test_graphics_quality_presets", "test_real_lights_at_night", "test_look_up_at_the_sky",
 		"test_sky_follows_the_sun_and_moon", "test_stars_by_light_pollution", "test_birds_by_day_not_at_night", "test_birds_startle_and_budget",
 		"test_homecoming_runs_start_to_finish",
 		"test_failed_mission_can_be_retried",
@@ -1558,6 +1559,40 @@ func test_night_lights_the_city() -> void:
 
 ## Settings > Graphics > Quality sets every effect; a toggle changed by hand
 ## marks the preset with a *; old saves without the new keys get High.
+func test_look_up_at_the_sky() -> void:
+	await _new_game(false)
+	var cam = game.camera
+	var env: Environment = game.atmosphere.env
+	_check(game.hud.sky_button.visible and cam.can_look_up(), "on foot outdoors the SKY button shows")
+	_check(not SkyDome.looks_at_sky(cam), "the usual view looks down, no sky in it")
+	game.hud.sky_button.pressed.emit()
+	for i in 600:
+		if cam.look_up_amount() >= 1.0:
+			break
+		await _idle(1)
+	var fwd: Vector3 = -cam.global_basis.z
+	_check(cam.looking_up and cam.look_up_amount() >= 1.0, "SKY rises into Look up")
+	_check(fwd.y > 0.45 and SkyDome.looks_at_sky(cam) and env.fog_enabled, "Look up faces the sky 35 degrees up, with the horizon haze on (forward y %.2f)" % fwd.y)
+	_check(cam.global_position.distance_to(game.player.global_position + Vector3.UP * 1.7) < 3.0, "the eye sits over the player's shoulder")
+	var yaw_before: float = cam.look_yaw
+	var drag := InputEventScreenDrag.new()
+	drag.relative = Vector2(40, 30)
+	cam._unhandled_input(drag)
+	_check(not is_equal_approx(cam.look_yaw, yaw_before) and cam.look_pitch > cam.LOOK_UP_PITCH, "dragging looks round and higher")
+	# Getting in a car ends it and the view comes back down.
+	var car = _track_car("sedan", game.player.global_position + Vector3(3, 0, 0), 0.0)
+	await _frames(2)
+	game.player.enter_vehicle(car)
+	for i in 600:
+		if cam.look_up_amount() <= 0.0:
+			break
+		await _idle(1)
+	_check(not cam.looking_up and cam.look_up_amount() == 0.0 and not env.fog_enabled and not game.hud.sky_button.visible, "in a car Look up ends, the haze goes and the button hides")
+	_check(not SkyDome.looks_at_sky(cam), "the view is back down on the street")
+	game.player.exit_vehicle()
+	car.queue_free()
+
+
 func test_graphics_quality_presets() -> void:
 	await _new_game(false)
 	var G = game.Graphics

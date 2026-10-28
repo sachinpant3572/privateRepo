@@ -317,6 +317,7 @@ phone.
 | Re-centre the turning camera | Tap the minimap's N | | |
 | Phone | PHONE | P | |
 | Settings | Gear button | | |
+| Look up at the sky (on foot outdoors; drag to look round, walk to end) | SKY | L | |
 | Hail a cab (one passing within 15 m) | TAXI | T | B |
 | Skip a line of dialogue | Tap it | Enter | |
 
@@ -396,7 +397,7 @@ at the Aurum Tower, Midtown and Lantern Square, on foot and driving (80),
 the perspective camera backed out of a tower and with the view band
 turning buildings round the player see-through (81), and driving flat out
 east and north through Midtown and past the Aurum Tower (82), and Settings > Angle at
-45, 55, 65, 75 and 90° with tilt off at the Aurum Tower and Lantern Square (83), and the camera turning with the car flat out east, south and west (84). `SHOTS=lights` shows a car's headlights at night on the flat and up and down the hills (86); `SHOTS=nightfx` shows real headlights, street lamps and a police light bar at each graphics quality (87) and the Lantern Quarter's gas lamps (88). `res://tests/occlusion_probe.tscn`
+45, 55, 65, 75 and 90° with tilt off at the Aurum Tower and Lantern Square (83), and the camera turning with the car flat out east, south and west (84). `SHOTS=lights` shows a car's headlights at night on the flat and up and down the hills (86); `SHOTS=nightfx` shows real headlights, street lamps and a police light bar at each graphics quality (87) and the Lantern Quarter's gas lamps (88). `SHOTS=lookup` shows Look up through the game's own camera: the city and the hills at night, the hills at dusk and the city by day (89-92). `res://tests/occlusion_probe.tscn`
 (headless) measures how much of the hero and the street each camera
 setting hides (HANDOFF-perspective-camera.md).
 

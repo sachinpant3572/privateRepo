@@ -14,6 +14,7 @@ extends Camera3D
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const L = preload("res://scripts/layers.gd")
 const Terrain = preload("res://scripts/terrain.gd")
+const SkyDome = preload("res://scripts/sky.gd")
 
 ## Classic view: far enough back (about 190 m up) that the tallest downtown
 ## towers, 150 m or so, stay in front of the camera instead of clipping open.
@@ -210,6 +211,19 @@ const TURN_DRIVE_SIZE := 68.0
 const TURN_FLATTEN := 10.0
 const TURN_FULL_SPEED := 22.0
 var _flatten := 0.0
+## Look up (the HUD's SKY button, or L): on foot the view rises from over
+## the player's shoulder to the sky (SkyDome.look_up_transform), for the
+## sun, the stars out of town and the birds. Drag to look round; walking,
+## getting in a car or going indoors brings the usual view back.
+const LOOK_UP_TIME := 0.9
+const LOOK_UP_FOV := 70.0
+const LOOK_UP_PITCH := 35.0
+const LOOK_UP_BACK := 2.5
+var looking_up := false
+## Bearing (0 north, 90 east) and degrees up from the horizon.
+var look_yaw := 0.0
+var look_pitch := LOOK_UP_PITCH
+var _look_t := 0.0
 
 
 func _ready() -> void:
@@ -266,6 +280,66 @@ func _process(delta: float) -> void:
 	_update_cutaway(pos, delta)
 	_update_view_band(node)
 	_apply_shake(delta)
+	_update_look_up(pos, delta)
+
+
+## Starts or ends Look up; it starts facing the way the screen's top faces.
+func set_look_up(on: bool) -> void:
+	if on == looking_up or (on and not can_look_up()):
+		return
+	looking_up = on
+	if on:
+		look_yaw = -rad_to_deg(yaw)
+		look_pitch = LOOK_UP_PITCH
+
+
+## On foot and outdoors (the player's own node in focus, no room framed).
+func can_look_up() -> bool:
+	return target != null and target.focus_node() == target and fixed_focus == null and not preview_drive
+
+
+## How far the view is into Look up (0 the usual view, 1 all the way).
+func look_up_amount() -> float:
+	return _look_t
+
+
+func _update_look_up(pos: Vector3, delta: float) -> void:
+	if looking_up and (not can_look_up() or Vector2(target.velocity.x, target.velocity.z).length() > 0.8):
+		looking_up = false
+	var was := _look_t
+	_look_t = move_toward(_look_t, 1.0 if looking_up else 0.0, delta / LOOK_UP_TIME)
+	var env: Environment = get_world_3d().environment if get_world_3d() != null else null
+	if _look_t <= 0.0:
+		if was > 0.0:
+			near = 1.0
+			if env != null:
+				SkyDome.horizon_haze(env, false)
+		return
+	if was <= 0.0 and env != null:
+		SkyDome.horizon_haze(env, true)
+	var bearing := deg_to_rad(look_yaw)
+	var behind := Vector3(-sin(bearing), 0.0, cos(bearing)) * LOOK_UP_BACK
+	var to := SkyDome.look_up_transform(pos + behind, look_yaw, look_pitch)
+	var k := smoothstep(0.0, 1.0, _look_t)
+	var from := global_transform
+	global_transform = Transform3D(from.basis.slerp(to.basis, k).orthonormalized(), from.origin.lerp(to.origin, k))
+	projection = PROJECTION_PERSPECTIVE
+	fov = lerpf(fov, LOOK_UP_FOV, k)
+	near = lerpf(1.0, 0.3, k)
+	far = lerpf(far, 4000.0, k)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not looking_up:
+		return
+	var rel := Vector2.ZERO
+	if event is InputEventScreenDrag:
+		rel = event.relative
+	elif event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_LEFT:
+		rel = event.relative
+	if rel != Vector2.ZERO:
+		look_yaw = wrapf(look_yaw - rel.x * 0.25, 0.0, 360.0)
+		look_pitch = clampf(look_pitch + rel.y * 0.2, 5.0, 85.0)
 
 
 ## Adds screen shake (0..1); it eases off by itself.

@@ -52,6 +52,7 @@ var _retry: PanelContainer
 var _phone_button: Button
 ## Opens the phone straight to Settings; always shown, unlike PHONE.
 var settings_button: Button
+var sky_button: Button
 var _phone_pulse := false
 var _snack: Button
 ## The vehicle the player last sat in (instance id) and how long its model
@@ -112,6 +113,15 @@ func _ready() -> void:
 	settings_button.focus_mode = Control.FOCUS_NONE
 	settings_button.draw.connect(_draw_gear)
 	root.add_child(settings_button)
+	# Look up at the sky (L), under the gear.
+	sky_button = Button.new()
+	sky_button.text = "SKY"
+	sky_button.tooltip_text = "Look up at the sky (L)"
+	sky_button.add_theme_font_size_override("font_size", 16)
+	_anchor(sky_button, Vector2(1, 0), Rect2(-196, 192, 56, 56))
+	sky_button.focus_mode = Control.FOCUS_NONE
+	sky_button.pressed.connect(_toggle_look_up)
+	root.add_child(sky_button)
 
 	# Eat a snack from the bag (H).
 	_snack = Button.new()
@@ -192,6 +202,10 @@ func _process(delta: float) -> void:
 	# The gear takes PHONE's slot until the story unlocks the phone.
 	settings_button.offset_left = -196.0 if _phone_button.visible else -76.0
 	settings_button.offset_right = settings_button.offset_left + 56.0
+	sky_button.offset_left = settings_button.offset_left
+	sky_button.offset_right = settings_button.offset_right
+	sky_button.visible = not indoors and game.camera.can_look_up()
+	sky_button.modulate = Color(1.0, 0.85, 0.3) if game.camera.looking_up else Color.WHITE
 	_phone_button.modulate = Color(1.0, 0.85, 0.3) if _phone_pulse and int(_blink * 3.0) % 2 == 0 else Color.WHITE
 	_update_dialogue(delta)
 	touch.set_mode(player.vehicle != null and not player.passenger, Controls.scheme, player.passenger)
@@ -230,6 +244,10 @@ func _process(delta: float) -> void:
 		touch.set_label("sprint", "RUN")
 
 
+func _toggle_look_up() -> void:
+	game.camera.set_look_up(not game.camera.looking_up)
+
+
 ## A cog on the settings button (the default font has no gear glyph).
 func _draw_gear() -> void:
 	var c := settings_button.size * 0.5
@@ -254,6 +272,8 @@ func _unhandled_input(event: InputEvent) -> void:
 					phone.open()
 			KEY_H:
 				game.eat_snack()
+			KEY_L:
+				_toggle_look_up()
 			KEY_ENTER, KEY_KP_ENTER:
 				if _dialogue.visible:
 					_advance_dialogue()

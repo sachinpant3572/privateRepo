@@ -72,6 +72,11 @@ func _run() -> void:
 		await _nightfx(game)
 		get_tree().quit()
 		return
+	if OS.get_environment("SHOTS") == "lookup":
+		# Look up through the game's own camera (the HUD's SKY button).
+		await _lookup(game)
+		get_tree().quit()
+		return
 	if OS.get_environment("SHOTS") == "props":
 		await _props(game)
 		get_tree().quit()
@@ -477,6 +482,30 @@ func _lights(game) -> void:
 ## Night at each graphics quality: a car's real headlight on the road with
 ## a parked car in its beam, the street lamps round it, and a police car's
 ## light bar (87); then the Lantern Quarter's gas lamps at High (88).
+func _lookup(game) -> void:
+	var cam = game.camera
+	for v in [["89_lookup_city_night", 300.0, 250.0, 22.5, 0.5], ["90_lookup_hills_night", 1200.0, -1300.0, 22.5, 1.0],
+			["91_lookup_hills_dusk", 1200.0, -1300.0, 18.2, 1.0], ["92_lookup_city_day", 300.0, 250.0, 11.0, 1.0]]:
+		var pos := Vector3(v[1], 0.0, v[2])
+		pos.y = Terrain.height(pos.x, pos.z)
+		game.atmosphere.hour = v[3]
+		game.player.global_position = pos + Vector3(0, 0.5, 0)
+		game.city.stream_now(pos)
+		cam.set_look_up(false)
+		cam._look_t = 0.0
+		cam.snap()
+		await _frames(10)
+		cam.set_look_up(true)
+		for i in 600:
+			if cam.look_up_amount() >= v[4]:
+				break
+			await get_tree().process_frame
+		await _frames(20)
+		print("lookup %s: amount %.2f, forward y %.2f" % [v[0], cam.look_up_amount(), -cam.global_basis.z.y])
+		await _shot(v[0] + ".png")
+	cam.set_look_up(false)
+
+
 func _nightfx(game) -> void:
 	game.atmosphere.hour = 22.0
 	game.player.visible = false

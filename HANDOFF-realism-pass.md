@@ -67,6 +67,10 @@ of them); everything in the main session (each call re-reads a context that woul
 - No explosions exist in the game yet, so no explosion flash. Windows and shop signs stay
   emission only (bloom makes them glow).
 - Haze/fog rejected: a uniform wash at top-down distances.
+- Merged: VEH (24ae7f9), SKY (e8c352e). Tuk-tuk headlamp glow: per-kind `lamp_x` in KINDS.
+- Look up: HUD SKY button / L, on foot outdoors only. Eye 2.5 m behind the player, 35° up, fov
+  70, blends in 0.9 s; drag to look round; walking, a car or a room ends it. Horizon haze
+  (SkyDome.horizon_haze) only while it is up, so the top-down view keeps no fog.
 
 ## Open questions
 
@@ -78,5 +82,6 @@ of them); everything in the main session (each call re-reads a context that woul
   `var tests := [` in test_runner.gd.
 - Contact sheets: `tools/contactsheet.sh` at the repo root.
 - `SHOTS=nightfx` shoots night at each quality (87) and the Lantern Quarter lamps (88).
+- `SHOTS=lookup` shoots Look up through the real camera (89-92).
 - Tests that check "headlights on" use `headlights_on()`, not `_beams.visible` (beams hide
   when the car has a real light).
