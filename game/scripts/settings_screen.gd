@@ -372,7 +372,9 @@ func _log_section() -> void:
 	head.set_meta("section", true)
 	_list.add_child(head)
 	var status: Label = phone._text(lg.last_status if lg.last_status != "" else "Nothing exported yet.", 16, Color(1.0, 0.85, 0.4))
-	var say := func(): status.text = lg.last_status
+	var say := func():
+		if is_instance_valid(status): # the Save dialog can outlive the list
+			status.text = lg.last_status
 	_row(phone._toggle("Log", s.get("log", true), func(on): s["log"] = on; game.apply_settings()),
 		"Notes down every second (FPS, frame times, cars and people round you, where you are, weather, camera) and everything that happens, with every error, to share when something goes wrong.")
 	_row(phone._toggle("BUG button", s.get("log_button", true), func(on): s["log_button"] = on; game.apply_settings()),

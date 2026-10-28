@@ -354,7 +354,9 @@ func _process(_delta: float) -> void:
 		if dt > 50000:
 			_f50 += 1
 			_hitches += 1
-			if started and now - _last_hitch_us > 500_000:
+			# At a low frame rate every frame is long: only a frame well over
+			# the last second's average is a hitch worth a snapshot.
+			if started and now - _last_hitch_us > 500_000 and dt * 2 > _prev_avg_us * 3:
 				_last_hitch_us = now
 				_hitch(dt)
 	if now >= _next_tick_us:
@@ -433,6 +435,8 @@ func snapshot() -> Dictionary:
 	var near30 := 0
 	var near60 := 0
 	var moving := 0
+	# The three nearest other vehicles within 30 m: [d2, vehicle], nearest first.
+	var nearest := []
 	for v in tree.get_nodes_in_group("vehicles"):
 		cars += 1
 		var d2: float = v.global_position.distance_squared_to(at)
@@ -440,12 +444,22 @@ func snapshot() -> Dictionary:
 			near60 += 1
 			if d2 < 900.0:
 				near30 += 1
+				if v != car and (nearest.size() < 3 or d2 < nearest[nearest.size() - 1][0]):
+					nearest.append([d2, v])
+					nearest.sort_custom(func(x, y): return x[0] < y[0])
+					if nearest.size() > 3:
+						nearest.pop_back()
 		if absf(v.speed) > 0.5:
 			moving += 1
 	s["cars"] = cars
 	s["cars30"] = near30
 	s["cars60"] = near60
 	s["moving"] = moving
+	if not nearest.is_empty():
+		var parts := PackedStringArray()
+		for e in nearest:
+			parts.append("%s@%.0fm%s" % [e[1].kind, sqrt(e[0]), "" if absf(e[1].speed) > 0.5 else ":still"])
+		s["near"] = ",".join(parts)
 	var people := 0
 	var near_people := 0
 	for h in tree.get_nodes_in_group("humanoids"):
@@ -494,6 +508,8 @@ func snapshot() -> Dictionary:
 	if car != null:
 		s["mode"] = ("passenger:" if player.passenger else "drive:") + str(car.kind)
 		s["speed"] = absf(car.speed) * 3.6
+		# How it really moves: the 0.21 truck read 22 km/h while it sat still.
+		s["moving_kmh"] = car.motion.length() * 3.6
 		s["car_hp"] = car.health
 	else:
 		s["mode"] = "foot"
@@ -853,7 +869,7 @@ func _saved(ok: bool, where: String, text: String, done: Callable) -> void:
 			f.close()
 	last_export = where
 	last_status = ("Saved %d KB: %s" % [text.length() / 1024, where.get_file().uri_decode()]) if ok else "Export cancelled or failed"
-	log_event("export", {"ok": ok, "to": where, "bytes": text.length()})
+	log_event("export", {"ok": ok, "to": where.get_file().uri_decode(), "bytes": text.length()})
 	flush()
 	if done.is_valid():
 		done.call(ok, where)

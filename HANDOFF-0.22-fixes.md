@@ -65,8 +65,8 @@ The video shows the Gorran Longhaul 18 at night with 1 star. The HUD reads
   light came on (cars: 3), and Ultra also had the headlight shadow. The
   Compatibility renderer draws everything a light reaches once more per
   light.
-  - Fix: Ultra now keeps High's 2 car lights, no headlight shadow, and adds
-    4x MSAA (cheap on tiled phone GPUs).
+  - Fix: Ultra now keeps High's 2 car lights and no headlight shadow (its
+    4x MSAA was already on in 0.21).
 - Cheaper or bigger options not taken: MSAA 2x; a per-light range cut.
   Revisit with the logger's FPS rows.
 
@@ -96,10 +96,28 @@ carry meta `section`); the changed-settings diff compares types first.
     spot first) when a car (`room_for`, skipping the cab) or the player on
     foot is on it.
   - A called cab stopped on its last leg within `PULL_UP` (9 m) of the
-    player has arrived.
+    player on foot has arrived when it is within `PULL_UP_STOP` (6 m) of
+    its stop or the player stands between it and the stop (it brakes for
+    them). The stop can lie past the player when the near spot is taken,
+    so a stop-distance rule alone missed it. A cab queued further back
+    does not count.
 - Test: `test_cab_stop_skips_parked_car`.
 - Also seeded the suburbs test's spawn probe (20 draws, 80% on suburb
   loops); one unseeded draw failed now and then.
+
+## Review fixes (first review)
+
+- `shove()` re-grounds the car on the terrain after `move_and_collide`.
+- 18-wheelers keep their old corner grip (`_grip()`): a quicker yaw
+  swung the trailer into walls.
+- Wrecked cars leave the `xray` group.
+- X-ray: inside the cutaway hole only vehicles count as cover (walls are
+  already cut away there); the silhouette materials are pre-warmed at load.
+- Logger: hitches need 1.5x the running average and 0.5 s apart; snapshots
+  list the 3 nearest vehicles (`near`) and the car's real speed
+  (`moving_kmh`); the export event names the file.
+- Not done: pre-warming the vehicle mesh cache at load (the first car of
+  each model still builds its mesh once).
 
 ## Traps
 

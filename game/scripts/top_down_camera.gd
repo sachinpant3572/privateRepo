@@ -15,6 +15,7 @@ const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const L = preload("res://scripts/layers.gd")
 const Terrain = preload("res://scripts/terrain.gd")
 const SkyDome = preload("res://scripts/sky.gd")
+const Vehicle = preload("res://scripts/vehicle.gd")
 
 ## Classic view: far enough back (about 190 m up) that the tallest downtown
 ## towers, 150 m or so, stay in front of the camera instead of clipping open.
@@ -238,6 +239,23 @@ func _ready() -> void:
 	far = DISTANCE + 120.0
 	rotation_degrees = Vector3(-PITCH, 0.0, 0.0)
 	current = true
+	_prewarm_xray()
+
+
+## Draws both x-ray materials (plain and glossy) for a moment, a speck in
+## front of the camera, so their shaders compile while the game loads, not
+## mid-game the first time someone is hidden (a hitch on Android).
+func _prewarm_xray() -> void:
+	for mat in [MeshBuilder.xray_material(Vehicle.PLAYER_XRAY), Vehicle._gloss_xray(Vehicle.PLAYER_XRAY)]:
+		var speck := MeshInstance3D.new()
+		var box := BoxMesh.new()
+		box.size = Vector3.ONE * 0.02
+		speck.mesh = box
+		speck.material_override = mat
+		speck.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		speck.position = Vector3(0.0, 0.0, -(near + 0.5))
+		add_child(speck)
+		get_tree().create_timer(0.5).timeout.connect(speck.queue_free)
 
 
 ## How a vehicle really moves (smoothed), not the velocity it asks for: a car
@@ -314,15 +332,19 @@ func _update_xray(delta: float, focus: Vector3) -> void:
 		if not n.is_inside_tree():
 			continue
 		var on := false
-		if n.is_visible_in_tree() and n.global_position.distance_squared_to(focus) < XRAY_REACH * XRAY_REACH:
-			on = covered(space, eye, n)
+		var d2: float = n.global_position.distance_squared_to(focus)
+		if n.is_visible_in_tree() and d2 < XRAY_REACH * XRAY_REACH:
+			# Inside the open see-through hole the buildings are cut away and
+			# the body shows: only a car in front still hides it.
+			var in_hole: bool = d2 < pow(_cut * 0.6, 2.0)
+			on = covered(space, eye, n, L.VEHICLES if in_hole else L.WORLD | L.VEHICLES)
 		if on != n.xray_shown:
 			n.show_xray(on)
 
 
-## Whether walls or cars hide all of `n` (a person or a vehicle) from `eye`:
-## a person's legs and chest, a car's nose and tail.
-static func covered(space: PhysicsDirectSpaceState3D, eye: Vector3, n: Node3D) -> bool:
+## Whether walls or cars (`mask`) hide all of `n` (a person or a vehicle)
+## from `eye`: a person's legs and chest, a car's nose and tail.
+static func covered(space: PhysicsDirectSpaceState3D, eye: Vector3, n: Node3D, mask := L.WORLD | L.VEHICLES) -> bool:
 	var skip: Array[RID] = [n.get_rid()]
 	var points: Array[Vector3] = []
 	if "body_mesh" in n:
@@ -336,7 +358,7 @@ static func covered(space: PhysicsDirectSpaceState3D, eye: Vector3, n: Node3D) -
 		for z in [-0.6, 0.6]:
 			points.append(n.global_transform * Vector3(0.0, half.y, half.z * z))
 	for p in points:
-		var ray := PhysicsRayQueryParameters3D.create(p, eye, L.WORLD | L.VEHICLES, skip)
+		var ray := PhysicsRayQueryParameters3D.create(p, eye, mask, skip)
 		if space.intersect_ray(ray).is_empty():
 			return false
 	return true

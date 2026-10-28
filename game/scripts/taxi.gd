@@ -49,9 +49,11 @@ const TURN_ZONE := 18.0
 const STOP_ZONE := 22.0
 ## The curb lane: this much further out than the lane line.
 const CURB_SHIFT := 1.25
-## A called cab stopped on its last leg this close (m) to the player has
-## arrived, even short of its stop.
+## A called cab stopped on its last leg this close (m) to the player, and
+## PULL_UP_STOP to its stop or held up by the player in its way, has
+## arrived (_pulled_up_by).
 const PULL_UP := 9.0
+const PULL_UP_STOP := 6.0
 ## Destinations closer than this (m) are left out of the list.
 const NEAR_DEST := 120.0
 const FADE_TIME := 0.35
@@ -459,12 +461,22 @@ func _stopped() -> bool:
 	return absf(cab.speed) < 0.5 and cab.get_real_velocity().length() < 0.5
 
 
-## On its last leg and stopped beside the player on foot (held up by them
-## standing in the road, or by a car on the curb): that is the pickup.
+## On its last leg, stopped beside the player on foot and either near its
+## stop (a car on the curb held it) or with the player standing between it
+## and the stop (it brakes for them): that is the pickup. Not when queued
+## further back in the lane.
 func _pulled_up_by(player) -> bool:
-	if player.vehicle != null or cab.path_index < cab.path.size() - 1:
+	if player.vehicle != null or cab.path.is_empty() or cab.path_index < cab.path.size() - 1:
 		return false
-	return cab.global_position.distance_to(player.global_position) < PULL_UP
+	if cab.global_position.distance_to(player.global_position) >= PULL_UP:
+		return false
+	var stop: Vector3 = cab.path[cab.path.size() - 1]
+	var to_stop := Vector3(stop.x - cab.global_position.x, 0.0, stop.z - cab.global_position.z)
+	if to_stop.length() < PULL_UP_STOP:
+		return true
+	var to_player := Vector3(player.global_position.x - cab.global_position.x, 0.0, player.global_position.z - cab.global_position.z)
+	var ahead: float = to_player.dot(to_stop.normalized())
+	return ahead > 0.0 and ahead <= to_stop.length() + 1.0
 
 
 func _riding_now() -> bool:

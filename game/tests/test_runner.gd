@@ -6914,7 +6914,7 @@ func test_xray_only_when_hidden() -> void:
 	await _frames(20)
 	cam._update_xray(1.0, p.global_position)
 	var open_hidden: bool = cam.covered(cam.get_world_3d().direct_space_state, cam.global_position, p)
-	_check(p.is_in_group("xray") and p.xray_shown == open_hidden, "the player has a silhouette, drawn only when covered (covered on this spot: %s)" % open_hidden)
+	_check(p.is_in_group("xray") and not open_hidden and not p.xray_shown, "on an open junction the player is not covered and has no silhouette")
 	# A wall right between the player and the camera.
 	var wall := StaticBody3D.new()
 	wall.collision_layer = L.WORLD
@@ -6926,10 +6926,17 @@ func test_xray_only_when_hidden() -> void:
 	var mid: Vector3 = p.global_position.lerp(cam.global_position, 0.25)
 	wall.global_position = mid
 	await _frames(2)
+	# The test wall is not a cutaway mesh: keep the see-through hole shut.
+	cam._cut = 0.0
 	cam._update_xray(1.0, p.global_position)
 	_check(p.xray_shown and p.body_mesh.material_override.stencil_mode == BaseMaterial3D.STENCIL_MODE_XRAY, "behind a wall the player shows through it")
+	# A building's hole open round the player shows them plainly: no tint.
+	cam._cut = cam.CUT_RADIUS
+	cam._update_xray(1.0, p.global_position)
+	_check(not p.xray_shown, "inside the open see-through hole the player has no silhouette")
 	wall.queue_free()
 	await _frames(2)
+	cam._cut = 0.0
 	cam._update_xray(1.0, p.global_position)
 	_check(not p.xray_shown and p.body_mesh.material_override.stencil_mode == BaseMaterial3D.STENCIL_MODE_DISABLED, "with the wall gone the silhouette is off again")
 

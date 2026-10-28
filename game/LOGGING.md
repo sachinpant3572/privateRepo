@@ -44,7 +44,7 @@ becomes `'`). Keys named `t` or `kind` in the data are written `x_t`/`x_kind`.
 |---|---|
 | `session` `device` `display` `render` `memory` `settings` `camera` `save` | header: version, engine, device model, OS, CPU, screen and scale, renderer and GPU, RAM, every setting (plus `gfx_*`, the graphics tier in use), camera, save slot |
 | `snap` | once a second (fields below) |
-| `hitch` | a frame over 50 ms (at most one line per 0.5 s): `ms` plus a full snapshot |
+| `hitch` | a frame over 50 ms and over 1.5x the last second's average frame (at most one line per 0.5 s): `ms` plus a full snapshot |
 | `enter_car` `exit_car` | `car` kind, `model`, `stolen` / `passenger`, `thrown`, `speed`, `car_hp`, `at` |
 | `crash` `prop_down` | a crash involving the player or over 9 m/s; a prop knocked down |
 | `hit_by_car` `knockdown` `death` | a person (`who`, distance `d` from the player, `at`) |
@@ -73,12 +73,14 @@ becomes `'`). Keys named `t` or `kind` in the data are written `x_t`/`x_kind`.
 | `nodes` `orphans` `bodies` `pairs` | node count, orphan nodes, active physics bodies, collision pairs |
 | `paused` | game paused (menus) |
 | `cars` `cars30` `cars60` `moving` | vehicles in the world, within 30 m and 60 m, moving |
+| `near` | the three nearest other vehicles within 30 m: `kind@distance`, `:still` when stopped |
 | `people` `people30` | people (not the player), within 30 m |
 | `peds` `traffic` `cops` `copcars` | population and police counts |
 | `lit_cars` `lit_lamps` | cars and street lamps with real lights now |
 | `cells` `cell_job` `tiles` | city cells loaded, a cell build running, country tiles loaded |
 | `game_time` `hour` `weather` `rain` `wet` `clouds` `night` | in-game clock and weather (0-1 amounts) |
 | `pos` `head` `speed` | position (m), heading (0 = north, 90 = east), km/h |
+| `moving_kmh` | driving: how fast the car really moves (km/h); `speed` is what the wheels are driven at |
 | `mode` `car_hp` | `foot`, `drive:<kind>` or `passenger:<kind>`; car health |
 | `area` `area_kind` `region` `in_city` | district, region or town name; the state region; inside the city plan |
 | `road` `road_cls` `surface` `road_d` | nearest road, its class and surface, metres from its centreline (looked up again after moving 3 m) |

@@ -36,12 +36,14 @@ const YAW_IN := 0.12
 ## Game grip: each model's corner_g (its real tyres) times this. Real road
 ## grip on these short city blocks felt stiff (0.21, Sachin: "the handling
 ## is very stiff now, especially on corners"); the models keep their order.
+## 18-wheelers keep their own grip: a quicker yaw swings the trailer's tail
+## into walls (_grip).
 const CORNER_GRIP := 1.5
-## Time constant (s) of the smoothed real motion (`motion`).
 ## How deep (m) another car must sink in before it is moved out
 ## (_handle_collisions), and the most it moves out each frame.
 const OVERLAP := 0.08
 const OVERLAP_STEP := 0.25
+## Time constant (s) of the smoothed real motion (`motion`).
 const MOTION_EASE := 0.12
 const TRAFFIC_THROTTLE := 0.6
 ## Traffic never cruises faster than this (m/s), whatever the model.
@@ -425,8 +427,6 @@ func join_traffic_here() -> void:
 				lane = k
 
 
-## Hit by another vehicle: `push` is already scaled by the two masses (see
-## _handle_collisions); a hard shove costs up to 40% of our speed.
 ## Whether a vehicle `size` long and wide at `pos`, facing `yaw`, would sit
 ## clear of every vehicle by `margin` (their footprints on the ground, so an
 ## 18-wheeler's trailer counts all the way to its tail, not just near its
@@ -456,8 +456,12 @@ static func footprints_meet(a: Vector3, a_yaw: float, a_size: Vector3, b: Vector
 ## sunk into it moves it out).
 func shove(offset: Vector3) -> void:
 	move_and_collide(offset)
+	# A parked car skips its physics step: put it back on the ground here.
+	global_position.y = Terrain.height(global_position.x, global_position.z)
 
 
+## Hit by another vehicle: `push` is already scaled by the two masses (see
+## _handle_collisions); a hard shove costs up to 40% of our speed.
 func bump(push: Vector3) -> void:
 	velocity += push
 	speed *= lerpf(1.0, 0.6, clampf(push.length() / 6.0, 0.0, 1.0))
@@ -521,6 +525,11 @@ func _pedal_brake(amount: float, steer: float) -> void:
 ## An 18-wheeler: routed along streets with room for its trailer.
 func _long_haul() -> bool:
 	return _size.z > VehicleKit.LONG_HAUL
+
+
+## The game's grip multiplier on corner_g (CORNER_GRIP; none for 18-wheelers).
+func _grip() -> float:
+	return 1.0 if _long_haul() else CORNER_GRIP
 
 
 func _traffic_ai() -> void:
@@ -659,7 +668,7 @@ func _drive(delta: float) -> void:
 		# The tyres hold only so much sideways pull (corner_g = v * yaw rate)
 		# and the wheels turn only so far: at speed the arc widens. The
 		# handbrake lets the tail come round past grip (a drift).
-		var cap: float = minf(_spec.corner_g * CORNER_GRIP / maxf(pace, 0.1), pace / MIN_RADIUS + 0.3)
+		var cap: float = minf(_spec.corner_g * _grip() / maxf(pace, 0.1), pace / MIN_RADIUS + 0.3)
 		rate_want = clampf(rate_want, -cap * (1.8 if handbrake else 1.0), cap * (1.8 if handbrake else 1.0))
 		if driver == Driver.PLAYER:
 			_yaw_rate = lerpf(_yaw_rate, rate_want, 1.0 - exp(-delta / YAW_IN))
@@ -722,7 +731,7 @@ func _drive(delta: float) -> void:
 ## lags the heading by the model's grip.
 func _corner_speed() -> float:
 	var k: float = CORNER_RADIUS * turn_rate
-	return minf(k / (1.0 + k * _spec.steer_fade / max_speed), sqrt(_spec.corner_g * CORNER_GRIP * CORNER_RADIUS))
+	return minf(k / (1.0 + k * _spec.steer_fade / max_speed), sqrt(_spec.corner_g * _grip() * CORNER_RADIUS))
 
 
 ## Tilts the model: cars roll out of turns and pitch back under power and
@@ -831,6 +840,8 @@ func _damage(amount: float) -> void:
 		return
 	wrecked = true
 	unload_all()
+	if is_in_group("xray"):
+		remove_from_group("xray") # nothing to show through walls any more
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(0.12, 0.11, 0.1)
 	_skin(mat, mat)
