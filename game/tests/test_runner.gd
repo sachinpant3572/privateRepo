@@ -1188,18 +1188,20 @@ func test_camera_ninety_turns() -> void:
 	cam._yaw_chasing = false
 	cam._yaw_forced = false
 	await _frames(30)
+	# Two of them, a second apart: short swings never add up to a turn.
 	max_yaw = 0.0
-	Controls.override_vector = Vector2(1, 0)
-	p.velocity = Vector3(4.2, 0, 0)
-	for f in 15:
-		await _frames(1)
-		max_yaw = maxf(max_yaw, absf(cam.yaw))
-	Controls.override_vector = null
-	p.velocity = Vector3.ZERO
-	for f in 90:
-		await _frames(1)
-		max_yaw = maxf(max_yaw, absf(cam.yaw))
-	_check(max_yaw < 0.01, "on foot a quarter-second sidestep leaves the view where it is (moved %.2f degrees)" % rad_to_deg(max_yaw))
+	for i in 2:
+		Controls.override_vector = Vector2(1, 0)
+		p.velocity = Vector3(4.2, 0, 0)
+		for f in 15:
+			await _frames(1)
+			max_yaw = maxf(max_yaw, absf(cam.yaw))
+		Controls.override_vector = null
+		p.velocity = Vector3.ZERO
+		for f in 60:
+			await _frames(1)
+			max_yaw = maxf(max_yaw, absf(cam.yaw))
+	_check(max_yaw < 0.01, "on foot two quarter-second sidesteps a second apart leave the view where it is (moved %.2f degrees)" % rad_to_deg(max_yaw))
 	Controls.override_vector = Vector2(1, 0)
 	p.velocity = Vector3(4.2, 0, 0)
 	await _frames(2)

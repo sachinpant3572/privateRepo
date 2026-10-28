@@ -101,6 +101,11 @@ Builds on HANDOFF-perspective-camera.md (pitch, tower tilt, see-through ghost, l
 - Review (one run): no hard bug; fixed: entering a car, the on-foot stick frame, the back-off memo
   ignoring yaw, full-lock gas, `screen_from_world` frame. Suite timeout 180 -> 300 s (188 s now).
 - test_camera_ninety_turns (H-15 in Follow, H-17, H-18, the gear): see the PR for counts.
+- Review 2 (cap reached): fixed the 90° hold timer carrying over between short swings (now reset
+  on any frame the heading isn't weighed, and by the compass), and the let-go stop firing while the
+  stick is still held (wall bump). Not changed, for Sachin: on foot, walking down the screen for
+  0.4 s turns the view 180 deg (Follow does too); the look-ahead still slides the picture on a lane
+  change in 90° turns (only the rotation is held).
 - Store test flake: the window for a second shopper was too short (stays run 20-55 s); now waits
   up to 150 s for two shoppers (8 of 8 runs pass).
 - Phone FPS: Sachin reports 120 FPS on his phone with 0.17 (2026-10-28), so the 1.5x area holds.

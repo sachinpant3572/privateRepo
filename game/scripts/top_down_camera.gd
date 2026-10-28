@@ -282,6 +282,7 @@ func turns() -> bool:
 func recenter() -> void:
 	var node: Node3D = target.focus_node() if target != null else null
 	_yaw_goal = _square(_heading(-node.global_basis.z)) if turns() and node != null and node != target else 0.0
+	_step_time = 0.0
 	_yaw_forced = true
 	_yaw_chasing = true
 
@@ -317,6 +318,9 @@ func _step_goal(heading: float, delta: float) -> float:
 func _update_yaw(node: Node3D, delta: float) -> void:
 	# Following a walk: the calmer dead zone, half-life and cap.
 	var walking := false
+	# Whether 90° turns weighed a heading this frame; if not, its hold
+	# starts over, so short swings never add up to a turn.
+	var stepped := false
 	if not turns():
 		_yaw_goal = 0.0
 		if absf(wrapf(yaw, -PI, PI)) > YAW_SETTLE:
@@ -341,6 +345,7 @@ func _update_yaw(node: Node3D, delta: float) -> void:
 			var slip := wrapf(_heading(flat) - face, -PI, PI)
 			if absf(slip) < PI * 0.5:
 				var goal := face + slip * 0.6 * smoothstep(deg_to_rad(15.0), deg_to_rad(60.0), absf(slip))
+				stepped = turn_steps
 				_yaw_goal = _step_goal(goal, delta) if turn_steps else goal
 	else:
 		var speed := Vector2(node.velocity.x, node.velocity.z).length()
@@ -353,11 +358,12 @@ func _update_yaw(node: Node3D, delta: float) -> void:
 		if _yaw_forced:
 			pass
 		elif walking and turn_steps:
+			stepped = true
 			_yaw_goal = _step_goal(_heading(walk), delta)
 		elif walking and (node != _yaw_node or _yaw_chasing or absf(wrapf(_heading(walk) - yaw, -PI, PI)) > WALK_DEAD):
 			_yaw_goal = _heading(walk)
 			_yaw_chasing = true
-		elif _walked and not turn_steps:
+		elif _walked and not held and not turn_steps:
 			# Let go mid-turn: the view eases to a stop where it is (just past,
 			# at YAW_ACCEL_MAX), rather than chasing the old walk at car rates.
 			_yaw_goal = yaw + _yaw_rate * absf(_yaw_rate) / (2.0 * YAW_ACCEL_MAX)
@@ -365,6 +371,8 @@ func _update_yaw(node: Node3D, delta: float) -> void:
 			_yaw_goal = snappedf(yaw, PI * 0.5)
 			_yaw_chasing = true
 	_walked = walking
+	if not stepped:
+		_step_time = 0.0
 	var gap := wrapf(_yaw_goal - yaw, -PI, PI)
 	if absf(gap) > (WALK_DEAD if walking else YAW_DEAD):
 		_yaw_chasing = true
