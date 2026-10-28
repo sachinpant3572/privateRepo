@@ -376,7 +376,7 @@ own names and story, and should avoid copying any Leonida set piece.
 **Already in our plans, so not repeated here**: from GTA VI (2 [A20]), the gym and bench press
 (2.2), fishing (4.1), basketball, pool, mini-golf (N2), jet skis (4.10), scuba diving (4.1 storm
 wrecks), shooting range, clubbing (4.4), kickboxing and martial arts (2.9), street and off-road
-racing (2.8), skydiving (roadmap 1.1), hunting (roadmap 1.1), and short social clips of the
+racing (2.8), skydiving (roadmap 1.1), wildlife photography (roadmap 1.1; hunting is out), and short social clips of the
 player's chaos (R-13's short-video app). From GTA Online, the nightclub (4.4 Blue Lantern), the
 arcade (R-11), the tow truck (R-16) and heists (R-23).
 
@@ -397,7 +397,7 @@ arcade (R-11), the tow truck (R-16) and heists (R-23).
 | **Community service** | GTA VI: litter picking seen in trailer 2 (2 [A20]) | After Busted, choose a fee **or** a cleanup shift in the Floodline Wards. Clearing storm debris raises High Water reputation and ties to the Wards rebuild (4.4) | E5 |
 | **TV at the safehouse** | GTA VI: watching TV (2 [A20]) | Channels with the city news reacting to your deeds (R-13), cartoons, a cooking show, and your own film shorts (4.2). Reuses content that already exists | R-13 |
 | **Kayaking** | GTA VI: kayaking at Mount Kalaga (2 [A20][A22]) | Paddle trails through the bayou, a calm photo tour, and a slalom course on the Morrow | E3, R-26 |
-| **Base jumping** | GTA VI Extended Look (2 [A20]) | Jump from the Aurum Tower and Solvera Line bridges. An illegal jump from Aurum property earns a wanted star | parachute (roadmap 1.1) |
+| **Base jumping** | GTA VI Extended Look (2 [A20]) | Jump from the Aurum Tower and Solvera Line bridges. An illegal jump from Aurum property earns a wanted star. The jumps are R-31's; N25 adds only the illegal version | parachute (roadmap 1.1) |
 | **Backyard wrestling league** | GTA VI Extended Look (2 [A20]) | A Floodline Wards league with folding chairs, paddling pools and a ring announcer; cartoon slams on the R-17 fight system | R-17 |
 | **Bayou wildlife rescue** | GTA VI: zoos (2 [A20]); the city size is fixed, so no zoo | Not a zoo but a rescue centre in Blackwater Bayou: rescue injured animals during events, feed and release them, and photograph them | R-3 animals, E8 |
 | **Snorkelling** | GTA VI: Leonida Keys (2 [A20][A22]) | Later, for the Keys and Isla Serena in world v3. Bellerive's river is too murky | v3 |
@@ -467,7 +467,7 @@ is not already planned. All facts come from guide and wiki search summaries (2 [
 | **Comedy club and cabaret** | GTA IV friend shows: a comedy club and a cabaret (2 [A25]) | A Lantern Quarter comedy club and a cabaret night with **fictional acts** whose jokes react to your deeds and the city news. Take a friend; it raises friendship (R-24) | R-10 venue, R-13 news |
 | **Recruit from the street** | Watch Dogs Legion: recruit anyone in the city (2 [A27]) | Not playable as anyone (Jules stays the hero). Some NPCs you help become **crew** you can call: a mechanic, a hacker, a driver, a lookout. Each one has a perk for heists and turf | R-22, R-23, E8 |
 | **Street-art pasting** | Watch Dogs Legion: 47 paste-up spots (2 [A27]) | Paste posters satirising Aurum at marked spots; each one cuts Aurum's grip on that block slightly and joins the graffiti editor (4.8) | E7, 4.8 |
-| **Drink before darts** | Watch Dogs Legion: a pint before darts pays more (2 [A27]); GTA IV drinking with friends (2 [A25]) | Swapped for a non-alcohol version: a **lucky soda** or a hot-sauce dare before darts adds wobble and doubles the stake. See "keep out" for alcohol | E4 |
+| **Drink before darts** | Watch Dogs Legion: a pint before darts pays more (2 [A27]); GTA IV drinking with friends (2 [A25]) | Both versions (Sachin, 2026-10-28: "Both"): a cartoon drink or a **lucky soda** or hot-sauce dare before darts adds wobble and doubles the stake. No drunk driving, and no reward for drinking more than one | E4 |
 
 **Keep out**, from the same games:
 - Watch Dogs 1's privacy invasions (peeking into homes through cameras): voyeurism, so cameras
@@ -477,8 +477,9 @@ is not already planned. All facts come from guide and wiki search summaries (2 [
 - Sleeping Dogs' health shrines (a religious site) and cockfighting (animal cruelty);
 - LCS's Slash TV chainsaw gore (kept only as the non-lethal studio show above);
 - GTA IV's friend shows with real comedians (Solvera uses fictional acts);
-- drinking games and drunk-driving effects: alcohol is kept as bar scenery, with a soda swap for
-  minigames, unless Sachin says otherwise.
+- drunk-driving effects and drink-more-to-win games. Sachin's answer (2026-10-28, "Both"):
+  bar minigames may use a cartoon drink (one, with a short wobble) or the soda and hot-sauce
+  dares; driving is never affected.
 
 ### 4.14 Bully, Saints Row and Yakuza: what they add (pass of 2026-10-28)
 
@@ -521,7 +522,7 @@ summaries (2 [A29]-[A31]); details remembered but not confirmed by a search are 
 | **The Shakedown** | Yakuza 0 "Mr. Shakedown": a strong roaming enemy who takes your cash if he wins; beat him to win it back with extra (2 [A31]) | A huge debt collector roams at night. Lose and he takes 10% of your **pocket cash** (never bank or stock holdings); beat him for that cash back plus a bonus. A soft money sink that makes carrying cash a choice | combat (R-17) |
 | **Crew defence** | Yakuza Kiwami 2 "Clan Creator": top-down battles defending sites with a crew (2 [A31]) | Defend a Wards building site or your club with the crew you recruited (4.13), each with a skill. Runs on the Levee Line tower-defence engine (2.10) | 2.10 Levee Line, 4.13 crew |
 | **Cat café** | Yakuza 6: a cat café you help run; you find cats around town (U) | A cat café in Magnolia Heights that takes shelter cats. Find strays, bring them in, and the café earns more; regulars can adopt them. Ties to the pet shelter (4.1) | E6, animals (R-3) |
-| **Spearfishing** | Yakuza 6: spearfishing with a fisherman (2 [A31]) | An old fisherman takes you out off the Keys (phase 4): aim and fire at fish swimming past in waves; rare fish go in the collection log | E4, diving, E7 |
+| **Fish-tagging dive** | Yakuza 6: spearfishing with a fisherman (2 [A31]) | An old fisherman takes you out off the Keys (phase 4): aim a tag dart at fish swimming past in waves, for the marine station's survey (no killing, like hunting becoming photography); rare fish go in the collection log | E4, diving, E7 |
 | **Water-balloon fight** | Yakuza 5: a snowball-fight arena (U) | A summer water-balloon fight in Liberty Green for teams; a snowball version in Steelhaven later | E1, light combat |
 | **Can run** | Like a Dragon "Can Quest": collect cans on a bike against the clock (2 [A31]) | Collect recyclables around the Wards with a bike cart before rival collectors take them; trade them in at the recycling yard. Pairs with the dumpster dash (4.13) | E3, E5 |
 | **Oddball snaps** | Infinite Wealth "Sicko Snap": photograph strange people around town (2 [A31]) | A list of odd sights to photograph (a man walking a gator on a leash, a dog in the brass band); each one goes in the photo log (E7) with a gag caption | phone camera, E7 |
@@ -564,30 +565,36 @@ depends on, including later ones.
 | N17 | Stock market (4.12) | The Exchange app with city-event prices and the anti-exploit rules | R-13 | 2.5 (lite; full 6) | 3 |
 | N18 | Crime set (4.13) | Crimes detected, camera busts, convoy takedowns, hideout takedowns | R-5, R-9, R-17, R-19, R-20, R-22 | 3 | 4 |
 | N19 | Liberty City and venue extras (4.13) | Car salesman, dumpster dash, lowrider bounce-off, air hockey, keepy-uppy, comedy club | N3, N5, N8 (E6, the car lot), R-10, R-11, R-13 | 2.5 | 3 |
-| N20 | Money fronts and laundering (4.11) | Dirty and clean cash; waits on decision 8 | R-22, N8 | 1.5 | 3 |
+| N20 | Money fronts and laundering (4.11) | Dirty and clean cash with laundering routes through people, gangs and companies that open with the story (`PROGRESSION_UNLOCKS.md` section 4) | R-22, N8, N26; the game-day clock (N17 or R-22) | 2.5 | 3 |
 | N21 | Neighbourhood jobs (4.14) | Paper route, yard jobs, can run, neighbour errands | N5, R-5, R-26 | 1.5 | 3 |
 | N22 | Bully, Saints Row and Yakuza extras (4.14) | Sludge Avenger, wrecking crew, bodyguard gigs, reality cop show, paint-trail quad, pocket racers, the Shakedown, cat café, water-balloon fight, oddball snaps | R-3, R-5, R-9, R-13, R-17, R-22, N1, N8 | 4 | 3 |
 | N23 | Crew and character (4.13, 4.14) | Recruit from the street, crew defence, personality traits, sandlot baseball | R-17, R-22, R-24, N2, N13 (Levee Line engine) | 3 | 3 |
 | N24 | Street and car extras (4.11, 4.13) | Car meet with rep and a test track, transform races, arena car-combat show, arm wrestling, backyard wrestling league, TV at the safehouse, street-art pasting, the soda dare at darts | R-11, R-13, R-14, R-15, R-17, R-21, R-26, N1 | 2.5 | 3 |
-| N25 | Outdoors and phone extras (4.11, 4.13) | Kayaking, base jumping, bayou wildlife rescue, studio gauntlet show, camera-mast puzzles, AR phone games | R-3, R-11, R-13, R-14, R-17, R-19, R-24, R-26, R-31 (parachute) | 2.5 | 3 |
+| N25 | Outdoors and phone extras (4.11, 4.13) | Kayaking, the illegal base jump (wanted star; the jumps are R-31's), wildlife photography challenge (the bayou, the Glades, Red Pine), bayou wildlife rescue, studio gauntlet show, camera-mast puzzles, AR phone games | R-3, R-11, R-13, R-14, R-17, R-19, R-24, R-26, R-31 (parachute) | 2.5 | 3 |
+| N26 | Story unlock framework (`PROGRESSION_UNLOCKS.md`) | Unlock registry and save key, "Opening soon" hoardings that turn into venues, opening-day events, the phone's "New in town" page, first-visit discovery | none | 2 | 4 |
+| N27 | Franchise branches and showrooms (`PROGRESSION_UNLOCKS.md` section 3.3) | "For lease" lots in every place; gym, garage-and-showroom, café and club-front branches that open the place's activity, add local rep and a daily wash allowance (never income above the business cap); six showroom catalogues (used, luxury, boats, aircraft, exotic, muscle) with buy and test drive | N8, N20, N26; packages 15 and 26, phase 3 aircraft | 2 | 4 |
 
 - **All 14**: about **31 sessions**, on top of the roadmap's 57.
-- **N15-N25** (added with 4.11-4.14): about **28 sessions** more with the lite stock market (N17;
+- **N15-N27** (added with 4.11-4.14 and the story unlocks): about **33 sessions** more with the lite stock market (N17;
   the full market adds 3.5). The roadmap's new packages 28-32 (yoga, triathlon, flight school, parachute
   jumps, fairground) add about 8, and the city activity packs in `ACTIVITY_ATLAS.md` Part D
   about 19 (cheaper: 7), both spread over the world phases. Every item in 4.11-4.14 now sits in
-  N15-N25, in a city pack (snorkelling and spearfishing in CP-2) or in the list below.
+  N15-N25, in roadmap package 32 (the travelling fair), in a city pack (snorkelling and fish
+  tagging in CP-2) or in the list below.
 - **Not costed yet** (in no N row, roadmap package or city pack): much of sections 2 and 4 sits
   outside N1-N14 as content for later rounds:
   - the racing extras (2.8);
   - the boxing, gym, shopping and eating-out extras;
-  - real golf;
+  - the Haverly links (real golf in Sovereign County, CP-3's core set; Ember Heights' 9 desert
+    holes are the Las Brasas signature in CP-2, on N2's engine);
   - the gallery and storm heists;
-  - photography (wildlife photography, roadmap 1.1's stand-in for hunting, included), diving,
-    pets, and the first Bellerive homes of escape rooms, laser tag and paintball (their repeats
-    in other cities are in the city packs);
+  - photography beyond package 7 and N25, diving (needed by CP-2's snorkelling and fish
+    tagging), pets, and the first Bellerive homes of escape rooms, laser tag, paintball, the
+    trampoline park, the climbing wall and the batting cage (`ACTIVITY_ATLAS.md` D4);
+  - the D4 repeats outside the packs' contents: Bottle Flats paintball, the Bayview climbing gym,
+    the Steelhaven ballpark derby and hobby shop, and the Foggy Row pub;
   - 7 of the 11 careers;
-  - water fun (4.10); the meta layer (4.9) is costed there (about 1 session) but not yet scheduled;
+  - water fun (4.10), including the swimming that R-29's swim legs need; the meta layer (4.9) is costed there (about 1 session) but not yet scheduled;
   - the chopper spotter, which waits for helicopters.
 
   On the engines, most of these are 0.3-1 session each. A rough guess for all of them is another
@@ -630,18 +637,19 @@ depends on, including later ones.
 4. **Fender-bender fraud**: keep it (cartoon comedy), or cut it for tone?
 5. **Krewe Cards**: should it become a stand-alone mobile game later (marketing for Solvera)?
 6. The roadmap's open points still stand: gambling, audio timing, first-wave order, and "sucu".
-7. **Stock market**: approve the design in `STOCK_MARKET_DESIGN.md` (4.12) and answer its open
-   questions.
-8. **Money laundering** (4.11): split cash into dirty and clean, so big purchases need laundered
-   money? It is a strong money sink, but one more thing for mobile players to track. The
-   simpler option is one cash pool with heat only.
-9. **Alcohol in minigames**: Solvera keeps alcohol as bar scenery and swaps drinking games for a
-   lucky soda or a hot-sauce dare (4.13). Keep the swap, or allow cartoon drinking without
-   drunk driving?
-10. **City activity packs** (`ACTIVITY_ATLAS.md` Part D): build the full packs (about 19
-    sessions over the world phases, with every countryside region's core set) or the cheaper
-    version (about 7: each city's signature, martial art and one venue, plus the countryside
-    signatures)?
+Answered by Sachin on 2026-10-28:
+
+7. **Stock market**: approved ("Sure"); the ten recommended answers in `STOCK_MARKET_DESIGN.md`
+   section 11 are the defaults until he changes one.
+8. **Money laundering**: dirty and clean cash, with several laundering routes (people, gangs,
+   companies) that open as the story goes on (`PROGRESSION_UNLOCKS.md` section 4; N20).
+9. **Alcohol in minigames**: both: a cartoon drink (one, short wobble) or the soda and hot-sauce
+   dares; never drunk driving.
+10. **City activity packs**: the cheaper version first (about 7 sessions; `ACTIVITY_ATLAS.md` D5
+    lists exactly what it buys); the full packs (about 19) stay costed for later.
+11. **Story unlocks** (new, 2026-10-28): activities, showrooms and regions open with the story
+    and with exploration (`PROGRESSION_UNLOCKS.md`; N26, with franchise branches and showrooms in N27). Its open
+    points are in that doc.
 
 ## 8. Sources
 

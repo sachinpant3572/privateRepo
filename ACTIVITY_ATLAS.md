@@ -238,7 +238,7 @@ styles, signature activities and city activity packs.
 - Speedboat runs and the smuggling war (WORLD_V3 2.4).
 - Secrets: Smugglers' Cove and the Sunken Casino dive (WORLD_V3 section 3).
 - *suggested*: sea fishing from a boat (4.1).
-- Spearfishing with an old fisherman (4.14).
+- Fish-tagging dives with an old fisherman (4.14; tag darts, no killing).
 
 ### A3. The countryside
 
@@ -400,14 +400,14 @@ set, with the signature in D3 (Fort Granite is a base and has no town, so it get
 | Region (phase; town) | Fight school | Race | Eating | Calm hobby | Shift job | Indoor venue | Weekly event |
 |---|---|---|---|---|---|---|---|
 | Saltgrass Parish (2; Cypress Bend) | Gloved bayou boxing at Gator Point | Airboat racing | Crawfish shack in Cypress Bend | Bayou fishing; gator spotting from a boat | Airboat tour guide; gator-farm hand (feeding only) | Cypress Bend dance hall (E2 zydeco nights) | Friday zydeco night |
-| Golden Flats (2; Wheaton) | Farmhand boxing in a grain-elevator barn | Crop-duster air race; tractor pull | Ridley Crossing truck stop | Farm-pond fishing; birdwatching | Crop dusting; trucking from Ridley Crossing | Wheaton drive-in cinema | County fair |
+| Golden Flats (2; Wheaton) | Farmhand boxing in a grain-elevator barn | Crop-duster air race; tractor pull | Ridley Crossing truck stop | Farm-pond fishing; birdwatching | Crop dusting; trucking from Ridley Crossing | Wheaton drive-in cinema | County fair (R-32's rides; the tractor pull and pie contest are this pack's) |
 | Verdant Hills (2; Larkspur) | Archery range on the Larkspur estate | Hot-air balloon race; vintage-car run on the Old Post Road | Vineyard bistro (food and grape juice) | Bluegill Lake fishing; landscape painting | Grape picking at harvest | Larkspur murder-mystery dinner (a puzzle night, E1) | Harvest festival grape stomp |
 | Hollow Mesa (3; Sable Junction) | Dust Riders' brawl ring behind the Starlite Motel | Land-sailing; dirt-bike rally on Route 40 | Last Chance Gas diner; chili cook-off | Stargazing and rock hunting at Mesa Arch | Tow-truck runs on Route 40 | Starlite Motel pool hall and jukebox | Sable Junction rodeo |
 | Cinder County (3; Pinecrest) | Kalaripayattu from the hermit master | Cinder Peak hill climb | Pinecrest trout shack | Climbing on Granite Dome; birdwatching | Observatory night guide; mountain rescue | Observatory planetarium show | Pinecrest climbing meet |
 | Miravel Shores (3; Harlow) | Boxing club in Harlow's boathouse | Powerboat and wakeboard runs | Harlow fish fry | Lake fishing; kayak touring | Boat-rental hand; dam tour guide | Harlow small-town bowling lanes | Lake triathlon weekend (R-29) |
-| Red Pine County (3; Dellwood, Fernmoor) | Lumberjack strongman yard at the sawmill | Logging-road rally | Dellwood pancake house | Canoeing; wildlife photography from the fire lookout | Park ranger fire watch; log-truck driver | Dellwood roller rink | Lumberjack games (D3) |
+| Red Pine County (3; Dellwood, Fernmoor) | Lumberjack strongman yard at the sawmill | Logging-road rally | Dellwood pancake house | Canoeing; wildlife photography from the fire lookout (`ACTIVITY_IDEAS.md` N25) | Park ranger fire watch; log-truck driver | Dellwood roller rink | Lumberjack games (D3) |
 | The Keys (4; Serena Town) | Silat in Serena Town | Speedboat race along the Causeway; jet-ski course | Conch shack; the Serena Grand buffet | Snorkelling, sea fishing | Dive guide; fuel-dock hand | Serena Grand bowling and arcade lounge | Saturday sunset regatta |
-| Sovereign County (5; Haverly) | Fencing at the Haverly country club | Signal Hill time trial | Country-club brunch | Golf at the Haverly links (A3) | Caddie; chauffeur from Sovereign International | Haverly squash and racquet club | Sunday yacht race on Sovereign Bay |
+| Sovereign County (5; Haverly) | Fencing at the Haverly country club | Signal Hill time trial | Country-club brunch | Golf at the Haverly links (A3; full CP-3 only) | Caddie; chauffeur from Sovereign International | Haverly squash and racquet club | Sunday yacht race on Sovereign Bay |
 | Corran County (6; Camp Corran, the Shore Road) | Boot-camp course at Camp Corran's open days | Ice racing on Lake Corran in winter; Shore Road time trial | Fish-and-chip stand on the Shore Road | The lighthouse trail; storm watching | Lake-ferry deckhand; airport baggage loader | Laser tag and paintball in the old Port Ash cannery | Shore Road car meet |
 
 ### D3. Signature activities: one per place
@@ -417,14 +417,14 @@ set, with the signature in D3 (Fort Granite is a base and has no town, so it get
 | Bellerive core | 1 | The second-line march and the jazz club (already planned) | E2, R-25 |
 | Brisa Beach | 2 | The fun pier: Ferris wheel, coaster and midway games all year (R-32) | E1, R-32 |
 | Saltgrass Parish | 2 | Airboat racing through the Glades (already planned) | E3 |
-| Golden Flats | 2 | Flight school at the crop-duster strip (R-30) and the county fair with a tractor pull | R-30, E9 |
+| Golden Flats | 2 | Flight school at the crop-duster strip (R-30); the tractor pull and pie contest at R-32's county fair | R-30, R-32, E9 |
 | Verdant Hills | 2 | Hot-air balloon rides over the vineyards, with a balloon race on festival weekend | E3 |
 | Hollow Mesa | 3 | Land-sailing on the dry lakes; the Sable Junction rodeo (a mechanical bull on E2 timing, and dirt-bike barrel racing) | E3, E2 |
 | Cinder County | 3 | Parachute jumps and the climbing crag on Granite Dome (R-31) | R-31 |
 | Miravel Shores | 3 | The lake triathlon (R-29) and wakeboarding behind a rented boat | R-29, E3 |
 | Red Pine County | 3 | Lumberjack games at the sawmill: axe throwing, log rolling, a chainsaw-free sawing race | E1, E2 |
-| The Keys | 4 | Spearfishing (4.14), snorkelling (4.11) and sea fishing | E4 |
-| Las Brasas | 4 | Desert golf at Ember Heights and the Skyhook airship (already planned) | E4 |
+| The Keys | 4 | Fish-tagging dives (4.14), snorkelling (4.11) and sea fishing | E4, diving |
+| Las Brasas | 4 | Desert golf at Ember Heights (9 holes on N2's engine, the only real golf in the cheaper option) and the Skyhook airship (already planned) | E4 |
 | Concordia | 5 | Ride the cable cars on the outside; the gripman shift job | E5 |
 | Sovereign County | 5 | Sailing school and yacht racing on Sovereign Bay | E3 |
 | Steelhaven | 6 | Drag racing on the empty avenues; ice hockey in winter | E3, E1 |
@@ -444,7 +444,7 @@ rewards.
 | Bowling alley (4.2) | Gilt: neon lanes | Steelhaven Market Sheds: retro union-league lanes with a Friday league; Las Brasas Blaze: glow bowling in a resort |
 | Pool hall and darts (R-21) | Lantern Quarter | Steelhaven union-hall bar; a Foggy Row pub in Concordia with a quiz night |
 | Escape rooms (4.2) | Gilt: a storm-themed set | Concordia, the Slant: a museum-vault theme; Las Brasas Old Town: a count-room theme |
-| Laser tag and paintball (4.2) | Laser tag in the Wards; paintball in Ironwharf's container maze | Laser tag in the Old Ostrander Plant (Steelhaven, the biggest arena); outdoor paintball in the Bottle Flats ghost town |
+| Laser tag and paintball (4.2) | Laser tag in the Wards; paintball in Ironwharf's container maze | Laser tag in the Old Ostrander Plant (Steelhaven, the biggest arena); outdoor paintball in the Bottle Flats ghost town; both in the old Port Ash cannery (Corran) |
 | Trampoline park and climbing wall (4.2) | Ironwharf | A climbing gym in Bayview Heights (Concordia); real rock on Granite Dome (R-31) |
 | Batting cage (4.2) | Wards, beside sandlot baseball (4.14) | A Steelhaven ballpark with a home-run derby |
 | Cinema (R-10) | Lantern Quarter | Stage plays on the Slant (Concordia); a drive-in at Wheaton (Golden Flats); premieres in the California city |
@@ -465,7 +465,7 @@ Costs are rough sessions of activity content, on top of the world phase that bui
 | Pack | Place | Contents | Cost |
 |---|---|---|---|
 | CP-1 | Bellerive's phase 2 edges and the countryside of phases 2-3 | Brisa Beach styles; the Saltgrass, Golden Flats, Verdant Hills, Hollow Mesa, Cinder, Miravel and Red Pine signatures and their core sets (D2's region table), kalaripayattu included (the R-28 to R-32 packages are costed separately) | 5 |
-| CP-2 | Las Brasas and the Keys | Muay Thai and cage fights, Blaze races, buffet challenges, valet and wedding-hall jobs, glow bowling, escape room, retro arcade, desert range; the Keys' core set with silat, spearfishing and snorkelling | 3 |
+| CP-2 | Las Brasas and the Keys | Muay Thai and cage fights, Blaze races, buffet challenges, valet and wedding-hall jobs, glow bowling, escape room, retro arcade, desert range; the Keys' core set with silat, fish tagging and snorkelling | 3 |
 | CP-3 | Concordia and Sovereign County | Judo and krav maga, hill climbs, rowing, speed chess, gripman and tour-guide jobs, Slant theatre and comedy, escape room, e-sports arena, ice rink, the university; Sovereign County's core set and sailing school | 3 |
 | CP-4 | Steelhaven and Corran | Wrestling and firehouse boxing, drag strip, hockey, ice fishing, assembly line and snow plough, union-league bowling, LAN café, Ostrander laser tag; Corran's core set | 3 |
 | CP-5 | Porto Brisa | Capoeira and jiu-jitsu, downhill bike race, footvolley, samba school and carnival, moto-taxi, hang gliding | 2.5 |
@@ -474,6 +474,18 @@ Costs are rough sessions of activity content, on top of the world phase that bui
 **Total**: about **19 sessions**, spread over the world phases (each pack ships with its phase).
 The regional martial arts are costed here only: `ACTIVITY_IDEAS.md` N10 builds the masters and
 manuals for the four Bellerive styles, not these styles.
-**Cheaper option**: about **7 sessions**: each city's signature, martial art and one venue (about
-1 session per pack), and in CP-1 only the seven countryside signatures (about 2); the core sets
-come later.
+**Cheaper option, chosen by Sachin on 2026-10-28**: about **7 sessions**. Each opens with the
+story (`PROGRESSION_UNLOCKS.md`); signatures already built elsewhere (airboat racing, R-29 to
+R-32, the Skyhook) are not counted again:
+- CP-1 (2): balloon rides (Verdant Hills), land-sailing and the Sable Junction rodeo (Hollow
+  Mesa), wakeboarding (Miravel), lumberjack games (Red Pine), the tractor pull and pie contest
+  (Golden Flats), and kalaripayattu;
+- CP-2 (1): Muay Thai, desert golf, glow bowling; the Keys' snorkelling and fish tagging;
+- CP-3 (1): judo, the cable-car ride and gripman job, the e-sports arena; Sovereign County's
+  sailing school;
+- CP-4 (1): wrestling, drag racing and hockey, the LAN café; Corran's lighthouse trail;
+- CP-5 (1): capoeira, hang gliding, the samba school;
+- CP-6 (1): the stunt school, surfing, premieres.
+
+Everything else in the table (silat, krav maga, the countryside core sets, the other venues)
+waits for the full packs.
