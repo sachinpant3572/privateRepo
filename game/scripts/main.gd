@@ -36,7 +36,7 @@ var taxi
 var inventory = Inventory.new()
 var respawning := false
 var cash := 0
-var settings := {"shadows": true, "show_fps": true, "weather": "auto", "detail": "high", "controls": "stick", "view": "perspective", "zoom": 1.0, "angle": 65.0, "auto_tilt": true, "camera_turn": "car"}
+var settings := {"shadows": true, "show_fps": true, "weather": "auto", "detail": "high", "controls": "stick", "view": "perspective", "zoom": 1.0, "angle": 65.0, "auto_tilt": true, "camera_turn": "car", "drive_zoom": 1.0}
 ## Player-set map waypoint (a road node position) or null.
 var waypoint = null
 
@@ -135,13 +135,16 @@ func apply_settings() -> void:
 	# the player.
 	var z = settings.get("zoom", 1.0)
 	camera.zoom = float(z) if (z is float or z is int) and camera.ZOOMS.has(float(z)) else 1.0
+	var dz = settings.get("drive_zoom", 1.0)
+	camera.drive_zoom = float(dz) if (dz is float or dz is int) and camera.DRIVE_ZOOMS.has(float(dz)) else 1.0
 	var a = settings.get("angle", 65.0)
 	var t = settings.get("auto_tilt", true)
 	camera.set_angle(float(a) if (a is float or a is int) and camera.ANGLES.has(float(a)) else camera.PITCH_LOW, t if t is bool else true)
-	# Camera turn: with the car (Chinatown Wars) or north up. A change eases round.
+	# Camera turn: follow (behind the car, Chinatown Wars; along the walk) or
+	# north up. A change eases round.
 	var turn := str(settings.get("camera_turn", "car")) != "north"
-	if turn != camera.turn_with_car:
-		camera.turn_with_car = turn
+	if turn != camera.turn_view:
+		camera.turn_view = turn
 		camera.recenter()
 	var reach := maxf(camera.zoom, 1.0)
 	# A camera flatter than 65 degrees sees further up the screen. Turning

@@ -38,7 +38,7 @@ buildings and tips toward 85° among towers; driving, it zooms out and leads
 the car (about 100 m of road ahead east-west, 60 m north-south at top
 speed); buildings that still hide the ground round and ahead of the player
 turn see-through. Settings > View keeps the
-classic flat 60° view below, Settings > Zoom sets 80-130%, and
+classic flat 60° view below, Settings > Distance (was Zoom) sets 60-130%, and
 Settings > Angle (40-90°), Tilt near towers and Reset camera are there for
 trying angles out. See
 HANDOFF-perspective-camera.md. Full 3D is parked in TODO.md.
@@ -49,9 +49,16 @@ capped at 90°/s, held while reversing or spinning), sits lower on screen at
 speed and flattens a little, showing about 72 m of road ahead in a sedan.
 The stick steers in a car (left/right = wheel, up = gas, down = brake and
 reverse), the minimap turns with the view, and tapping its N re-centres.
-On foot the view stops turning and squares to the streets when standing
-still. Settings > Camera turn: With car (default) or North up (the view
-above). See HANDOFF-heading-camera.md.
+Settings > Camera turn: Follow (default) or North up (the view above).
+See HANDOFF-heading-camera.md.
+
+**Update (Oct 28, 2026, 0.18): camera settings and on-foot follow.** On foot
+the view now follows the way the player walks too (calmer than in a car:
+20° dead zone, 60°/s cap), the stick's directions held steady while the
+thumb is, and it squares to the streets when standing still. Settings >
+Drive zoom-out (Off to 100%, default 100%) sets how far the view widens
+with speed; Distance and Angle have - and + buttons; a gear button on the
+HUD opens Settings at any time.
 
 **Decision (Oct 26, 2026): classic top-down view only.** North is up, and the
 camera looks down at 60° below the horizon, a 3/4 view that shows the fronts

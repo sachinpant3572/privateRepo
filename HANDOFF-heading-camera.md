@@ -57,6 +57,22 @@ Builds on HANDOFF-perspective-camera.md (pitch, tower tilt, see-through ghost, l
   view at 86 deg/s (a compass tap or getting out mid-swing no longer leaves it off).
 - H-12 Getting into a car turns the view behind it at once, parked or not (review finding 1).
 - H-11 Settings > Reset camera leaves Camera turn alone (a mode, not a tuning value).
+- H-13 (0.18, Sachin: "camera should follow the player not the car") On foot with Camera turn
+  on, the view follows the walking heading too: moving over 1 m/s, the goal is the walk direction,
+  with a wider dead zone (20 deg), a slower half-life (0.6 s) and a 60 deg/s cap, so short dodges
+  and fights don't swing it. Standing still still squares it up after 1.2 s. Setting relabelled
+  "Camera turn: Follow" (saved value stays "car"); the variable is now `turn_view`.
+- H-14 The stick's frame on foot replaces H-10's catch-up: captured from the view when the stick
+  is pressed, held while it is held steady (so a sideways push never circles as the view follows),
+  and re-captured from the view when the thumb swings more than 25 degrees from where the frame was
+  taken, so a deliberate change of direction always reads in the screen as it is now. The catch-up
+  was dropped: with the view following the walk, it would spiral.
+- H-15 Settings > Drive zoom-out (Off, 25..100%, default 100% = 0.17's framing): scales how far the
+  view widens with speed in a car, and the flatten with it, so Off keeps the on-foot framing
+  while driving. The look-ahead is capped to the frame, so the car stays on screen. Distance (was
+  Zoom) gains 60% and 70%; Angle unchanged. All three are - / + steppers under a Camera heading.
+- H-16 A gear button on the HUD, always shown (the PHONE button only shows once the phone is
+  unlocked), opens the phone straight to Settings.
 
 ## Rejected
 
@@ -73,10 +89,10 @@ Builds on HANDOFF-perspective-camera.md (pitch, tower tilt, see-through ghost, l
 - Shots 84_turn_* (SHOTS=view).
 - Review (one run): no hard bug; fixed: entering a car, the on-foot stick frame, the back-off memo
   ignoring yaw, full-lock gas, `screen_from_world` frame. Suite timeout 180 -> 300 s (188 s now).
+- Phone FPS: Sachin reports 120 FPS on his phone with 0.17 (2026-10-28), so the 1.5x area holds.
 
 ## Open
 
-- Phone FPS with the ~1.5x streamed area is unverified (Zoom 130% already loaded 1.69x).
 - A ~100 m look-ahead option (1.6x area) if 72 m feels short at speed.
 - Lazy camera as a third setting (Rejected above) if constant turning makes anyone dizzy.
 - Chinatown Wars' own numbers are unverified (see Research).

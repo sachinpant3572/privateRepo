@@ -42,8 +42,12 @@ phone.
 - **Phone** (unlocked in Empty Rooms; PHONE button or P): Messages and
   Contacts that fill in with the story, the Map, Places (nearest first,
   open or closed, GO sets a waypoint), Missions (progress and
-  replays) and Settings (detail high/low, shadows, FPS counter, weather,
-  skip time, new game).
+  replays) and Settings. The gear button under the clock (always shown, even
+  before the phone is unlocked) opens Settings straight away: Camera (view,
+  Distance 60-130%, Drive zoom-out Off-100%, Angle 40-90° with - and +
+  buttons, tilt near towers, camera turn, reset) and Game (detail
+  high/low, shadows, FPS counter, weather, driving layout, skip time, new
+  game).
 - **Minimap and full map**: round north-up minimap with landmark icons,
   mission blips (on the rim when off the map), police while wanted and the
   GPS route; tap it (or M) for the full map: pan, pinch or scroll to zoom,
@@ -276,8 +280,9 @@ phone.
 - **Classic top-down camera**: north up, tilted to a 3/4 view (60°) so the
   fronts of buildings and people show, like Stardew Valley and the Java-era
   Gangstar games. Leads ahead of
-  cars and zooms out with speed. Driving, the view turns with the car like
-  GTA Chinatown Wars (Settings > Camera turn: With car or North up); tap the
+  cars and zooms out with speed (Settings > Drive zoom-out sets how far).
+  The view turns with the car like GTA Chinatown Wars, and on foot follows
+  the way you walk (Settings > Camera turn: Follow or North up); tap the
   minimap's N to swing it back behind the car.
 - **HUD**: minimap, health, wanted stars (flashing while police can't see
   you), cash, clock, phone, objective, speed, prompts, FPS and draw-call
@@ -300,6 +305,7 @@ phone.
 | Map | Tap the minimap | M | Back |
 | Re-centre the turning camera | Tap the minimap's N | | |
 | Phone | PHONE | P | |
+| Settings | Gear button | | |
 | Hail a cab (one passing within 15 m) | TAXI | T | B |
 | Skip a line of dialogue | Tap it | Enter | |
 

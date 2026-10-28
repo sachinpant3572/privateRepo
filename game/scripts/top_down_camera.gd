@@ -6,9 +6,10 @@ extends Camera3D
 ## Stardew Valley, Crashlands and the Java-era Gangstar games
 ## (HANDOFF-perspective-camera.md).
 ## Leads ahead of a moving car, zooms out with speed, and points the city's
-## cutaway at the player each frame. In a vehicle it swings round behind the
-## car the way Chinatown Wars' camera does (Settings > Camera turn; North up
-## keeps the map's north at the top; HANDOFF-heading-camera.md).
+## cutaway at the player each frame. It swings round behind the car the
+## way Chinatown Wars' camera does, and follows the player's walk on foot
+## (Settings > Camera turn; North up keeps the map's north at the top;
+## HANDOFF-heading-camera.md).
 
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const L = preload("res://scripts/layers.gd")
@@ -81,9 +82,14 @@ const VIEW_RADIUS_FOOT := 12.0
 const VIEW_RADIUS_DRIVE := 16.0
 const AHEAD_SECONDS := 2.5
 const AHEAD_MAX := 90.0
-## Phone > Settings > Zoom: scales the on-foot and driving zooms.
-const ZOOMS := [0.8, 0.9, 1.0, 1.15, 1.3]
+## Phone > Settings > Distance: scales the on-foot and driving zooms.
+const ZOOMS := [0.6, 0.7, 0.8, 0.9, 1.0, 1.15, 1.3]
 var zoom := 1.0
+## Phone > Settings > Drive zoom-out: how much of the widening (and, with
+## the view turning, the flattening) speed brings in a car; 0 keeps the
+## on-foot framing while driving (H-15).
+const DRIVE_ZOOMS := [0.0, 0.25, 0.5, 0.75, 1.0]
+var drive_zoom := 1.0
 
 var target: Node3D
 ## Inside a place: the room's centre (a Vector3) and the zoom that frames
@@ -110,8 +116,9 @@ var _cut := 0.0
 var _trauma := 0.0
 var _shake_t := 0.0
 
-## Settings > Camera turn: With car (true) or North up (false).
-var turn_with_car := true
+## Settings > Camera turn: Follow (true: behind the car, along the walk)
+## or North up (false).
+var turn_view := true
 ## The view's heading in radians: 0 is north up, positive turns the view
 ## anticlockwise as seen from above (Godot's yaw), so a car heading west
 ## points up the screen at PI / 2.
@@ -123,11 +130,13 @@ var _yaw_chasing := false
 ## Re-centre: chase the goal at once, past the dead zone and holds.
 var _yaw_forced := false
 var _still := 0.0
-## The heading the stick reads its directions in; on foot, while the stick
-## is held and the view turns, it holds, so walking never circles. Once the
-## view has landed it eases round to it (INPUT_CATCH_UP).
+## The heading the stick reads its directions in. On foot it is taken from
+## the view when the stick is pressed and held while the thumb stays put, so
+## a view following the walk never bends it into a circle; swinging the
+## thumb more than INPUT_RECAPTURE takes it from the view again (H-14).
 var _input_yaw := 0.0
-const INPUT_CATCH_UP := 1.5
+var _input_dir := Vector2.ZERO
+const INPUT_RECAPTURE := deg_to_rad(25.0)
 ## What the view followed last frame: a new car turns the view behind it at
 ## once, before it moves (the stick already steers it car-relative).
 var _yaw_node: Node3D = null
@@ -150,6 +159,13 @@ const YAW_ACCEL_MAX := PI
 const YAW_RATE_MIN := 0.14
 ## On foot, standing still this long squares the view up with the streets.
 const SQUARE_AFTER := 1.2
+## On foot the view follows the walk (H-13), calmer than in a car: above
+## WALK_MIN_SPEED, turns under WALK_DEAD are ignored (dodges, fights), and
+## it closes half the gap in WALK_HALF at up to WALK_RATE_MAX.
+const WALK_MIN_SPEED := 1.0
+const WALK_DEAD := deg_to_rad(20.0)
+const WALK_HALF := 0.6
+const WALK_RATE_MAX := PI / 3.0
 ## In a car with the view turning the road ahead runs up the phone's short
 ## side, so at speed the car sits lower (8 m or more off the bottom edge),
 ## the view widens and flattens by up to 10 degrees, all by TURN_FULL_SPEED:
@@ -183,14 +199,14 @@ func _process(delta: float) -> void:
 	if node != target:
 		var v: Vector3 = node.velocity
 		var speed := Vector2(v.x, v.z).length()
-		var fast := clampf(speed / (TURN_FULL_SPEED if turns() else DRIVE_SPEED), 0.0, 1.0)
+		var fast := clampf(speed / (TURN_FULL_SPEED if turns() else DRIVE_SPEED), 0.0, 1.0) * drive_zoom
 		want_size = lerpf(FOOT_SIZE, TURN_DRIVE_SIZE if turns() else DRIVE_SIZE, fast) * zoom
 		# The smaller framing while the zoom eases, and the camera as backed out
 		# now, so the car stays on screen on the way there too.
 		lead = _cap_lead(Vector3(v.x, 0.0, v.z) * (TURN_LEAD_SECONDS if turns() else LEAD_SECONDS), minf(size, want_size), _back)
 		if turns():
 			# In 5-degree steps, so the pitch picker isn't chasing it.
-			flatten = snappedf(TURN_FLATTEN * clampf((speed - 8.0) / (TURN_FULL_SPEED - 8.0), 0.0, 1.0), 5.0)
+			flatten = snappedf(TURN_FLATTEN * clampf((speed - 8.0) / (TURN_FULL_SPEED - 8.0), 0.0, 1.0) * drive_zoom, 5.0)
 	if flatten != _flatten:
 		_flatten = flatten
 		_pitch_t = 0.0
@@ -241,11 +257,11 @@ func input_axes() -> Array[Vector3]:
 ## Whether the view swings round with the car now (Settings > Camera turn,
 ## and not inside a place, whose rooms are framed north up).
 func turns() -> bool:
-	return turn_with_car and fixed_focus == null
+	return turn_view and fixed_focus == null
 
 
 ## The compass (the minimap's N): swings the view behind the car, or north
-## up on foot.
+## up on foot (it then follows the walk again once the player moves off).
 func recenter() -> void:
 	var node: Node3D = target.focus_node() if target != null else null
 	_yaw_goal = _heading(-node.global_basis.z) if turns() and node != null and node != target else 0.0
@@ -261,9 +277,11 @@ static func _heading(dir: Vector3) -> float:
 ## Turns the view (H-2, H-5 and H-8 in the handoff). In a vehicle the goal is
 ## the car's facing, leaning toward where it is actually going as it slides;
 ## past 90 degrees of slip (a spin, or backing up) and below YAW_MIN_SPEED
-## it holds. On foot the view only moves while the player stands still,
-## squaring up with the street grid. `delta` 0 snaps.
+## it holds. On foot it follows the walk, calmer (H-13), and standing still
+## squares up with the street grid. `delta` 0 snaps.
 func _update_yaw(node: Node3D, delta: float) -> void:
+	# Following a walk: the calmer dead zone, half-life and cap.
+	var walking := false
 	if not turns():
 		_yaw_goal = 0.0
 		if absf(wrapf(yaw, -PI, PI)) > YAW_SETTLE:
@@ -288,15 +306,23 @@ func _update_yaw(node: Node3D, delta: float) -> void:
 			if absf(slip) < PI * 0.5:
 				_yaw_goal = face + slip * 0.6 * smoothstep(deg_to_rad(15.0), deg_to_rad(60.0), absf(slip))
 	else:
-		var moving := Controls.move_vector().length() > 0.2 or Vector2(node.velocity.x, node.velocity.z).length() > 0.5
-		_still = 0.0 if moving else _still + delta
-		# Walking, the view takes no new heading (a swing already under way,
-		# from the car, eases to its end; the stick's frame is held meanwhile).
-		if _still >= SQUARE_AFTER and not _yaw_forced:
+		var speed := Vector2(node.velocity.x, node.velocity.z).length()
+		var held := Controls.move_vector().length() > 0.2
+		_still = 0.0 if held or speed > 0.5 else _still + delta
+		# The way the stick sends the player, not the velocity, so a shove or
+		# a wall slide doesn't swing the view.
+		var walk := Controls.world_move()
+		walking = held and speed > WALK_MIN_SPEED and not _yaw_forced
+		if _yaw_forced:
+			pass
+		elif walking and (node != _yaw_node or _yaw_chasing or absf(wrapf(_heading(walk) - yaw, -PI, PI)) > WALK_DEAD):
+			_yaw_goal = _heading(walk)
+			_yaw_chasing = true
+		elif _still >= SQUARE_AFTER:
 			_yaw_goal = snappedf(yaw, PI * 0.5)
 			_yaw_chasing = true
 	var gap := wrapf(_yaw_goal - yaw, -PI, PI)
-	if absf(gap) > YAW_DEAD:
+	if absf(gap) > (WALK_DEAD if walking else YAW_DEAD):
 		_yaw_chasing = true
 	if delta <= 0.0:
 		yaw = wrapf(_yaw_goal, -PI, PI)
@@ -310,10 +336,13 @@ func _update_yaw(node: Node3D, delta: float) -> void:
 		var v = node.get("velocity")
 		var speed := Vector2(v.x, v.z).length() if v is Vector3 else 0.0
 		var half := YAW_HALF_FAST if _yaw_forced else lerpf(YAW_HALF_SLOW, YAW_HALF_FAST, clampf(speed / TURN_FULL_SPEED, 0.0, 1.0))
+		if walking:
+			half = WALK_HALF
 		var want := gap * log(2.0) / half
 		if absf(want) < YAW_RATE_MIN:
 			want = signf(gap) * minf(YAW_RATE_MIN, absf(gap) / delta)
-		want = clampf(want, -YAW_RATE_MAX, YAW_RATE_MAX)
+		var cap := WALK_RATE_MAX if walking else YAW_RATE_MAX
+		want = clampf(want, -cap, cap)
 		_yaw_rate = move_toward(_yaw_rate, want, YAW_ACCEL_MAX * delta)
 		if absf(gap) < YAW_SETTLE and absf(_yaw_rate) < 0.05:
 			# Landed: exactly on the goal, so north up is square to the pixels.
@@ -325,10 +354,13 @@ func _update_yaw(node: Node3D, delta: float) -> void:
 	# The stick's frame follows the view while it is let go or the player
 	# drives, so getting out with the stick held walks the way the view faces.
 	_yaw_node = node
-	if node != target or Controls.move_vector().length() < 0.2:
+	var stick := Controls.move_vector()
+	if node != target or stick.length() < 0.2:
 		_input_yaw = yaw
-	elif not _yaw_chasing:
-		_input_yaw = rotate_toward(_input_yaw, yaw, INPUT_CATCH_UP * delta)
+		_input_dir = Vector2.ZERO
+	elif _input_dir == Vector2.ZERO or absf(stick.angle_to(_input_dir)) > INPUT_RECAPTURE:
+		_input_yaw = yaw
+		_input_dir = stick
 
 
 func snap() -> void:
@@ -350,6 +382,7 @@ func snap() -> void:
 		_yaw_goal = yaw
 	_update_yaw(node, 0.0)
 	_input_yaw = yaw
+	_input_dir = Vector2.ZERO
 	_update_pitch(0.0)
 	_frame(0.0)
 

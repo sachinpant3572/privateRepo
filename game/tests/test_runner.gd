@@ -778,50 +778,54 @@ func test_perspective_camera() -> void:
 	game.settings["zoom"] = 1.0
 	game.apply_settings()
 	# Settings > Angle and Tilt near towers, driven from the phone, and Reset
-	# camera putting angle, tilt and zoom back.
+	# camera putting angle, tilt, distance and drive zoom-out back.
 	var phone = game.hud.phone
 	phone.open()
 	phone._settings()
-	var angle_b = _find_button(phone._body, "Angle: ")
+	var angle_s = phone.steppers.get("Angle")
+	var zoom_s = phone.steppers.get("Distance")
+	var drive_s = phone.steppers.get("Drive zoom-out")
 	var tilt_b = _find_button(phone._body, "Tilt near towers: ")
-	var zoom_b = _find_button(phone._body, "Zoom: ")
 	var reset_b = _find_button(phone._body, "Reset camera")
-	_check(angle_b != null and tilt_b != null and zoom_b != null and reset_b != null and angle_b.text == "Angle: 65°", "Settings has Angle (65°), Tilt near towers and Reset camera")
-	if angle_b != null and tilt_b != null and zoom_b != null and reset_b != null:
-		for n in cam.ANGLES.size():
-			if cam.base_pitch == 45.0:
-				break
-			angle_b.pressed.emit()
+	_check(angle_s != null and zoom_s != null and drive_s != null and tilt_b != null and reset_b != null and angle_s.get_meta("value").text == "65°" and zoom_s.get_meta("value").text == "100%" and drive_s.get_meta("value").text == "100%", "Settings has Distance (100%), Drive zoom-out (100%), Angle (65°), Tilt near towers and Reset camera")
+	if angle_s != null and zoom_s != null and drive_s != null and tilt_b != null and reset_b != null:
+		for n in 4:
+			angle_s.get_meta("less").pressed.emit()
 		tilt_b.pressed.emit()
-		zoom_b.pressed.emit()
+		zoom_s.get_meta("more").pressed.emit()
+		drive_s.get_meta("less").pressed.emit()
 		phone.close()  # the open phone pauses the game
 		await _frames(240)
-		_check(angle_b.text == "Angle: 45°" and tilt_b.text.ends_with("OFF") and cam.pitches() == [45.0] and absf(cam.perspective_pitch - 45.0) < 0.5 and game.settings["angle"] == 45.0, "Angle 45° with tilt off holds the camera at %.1f degrees" % cam.perspective_pitch)
-		_check(game.city.LOAD_RADIUS > 105.0 * 1.15 * 1.25, "at 45° and Zoom 115%% the city loads to %.0f m" % game.city.LOAD_RADIUS)
+		_check(angle_s.get_meta("value").text == "45°" and tilt_b.text.ends_with("OFF") and cam.pitches() == [45.0] and absf(cam.perspective_pitch - 45.0) < 0.5 and game.settings["angle"] == 45.0, "Angle - four times: 45° with tilt off holds the camera at %.1f degrees" % cam.perspective_pitch)
+		_check(cam.zoom == 1.15 and game.settings["zoom"] == 1.15 and cam.drive_zoom == 0.75 and drive_s.get_meta("value").text == "75%", "Distance + gives 115%, Drive zoom-out - gives 75%")
+		_check(game.city.LOAD_RADIUS > 105.0 * 1.15 * 1.25, "at 45° and Distance 115%% the city loads to %.0f m" % game.city.LOAD_RADIUS)
 		tilt_b.pressed.emit()
 		_check(cam.pitches() == [45.0, 50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0], "with tilt on it picks from 45° up to 85°")
 		phone.close()  # the open phone pauses the game
 		await _frames(240)
 		_check(cam.perspective_pitch < 52.0, "and among low buildings it stays near 45° (%.1f)" % cam.perspective_pitch)
-		for n in cam.ANGLES.size():
-			if cam.base_pitch == 90.0:
-				break
-			angle_b.pressed.emit()
+		for n in cam.ANGLES.size() + 2:
+			angle_s.get_meta("more").pressed.emit()
 		phone.close()  # the open phone pauses the game
 		await _frames(240)
 		var below: Vector3 = cam.project_ray_normal(cam.get_viewport().get_visible_rect().get_center())
-		_check(absf(cam.perspective_pitch - 90.0) < 0.5 and below.y < -0.99, "Angle 90° looks straight down")
+		_check(absf(cam.perspective_pitch - 90.0) < 0.5 and below.y < -0.99 and angle_s.get_meta("more").disabled and not angle_s.get_meta("less").disabled, "Angle 90° looks straight down, and + stops there rather than wrapping")
+		for n in cam.DRIVE_ZOOMS.size() + 1:
+			drive_s.get_meta("less").pressed.emit()
+		_check(cam.drive_zoom == 0.0 and drive_s.get_meta("value").text == "Off" and drive_s.get_meta("less").disabled, "Drive zoom-out goes down to Off")
 		reset_b.pressed.emit()
 		phone.close()  # the open phone pauses the game
 		await _frames(240)
-		_check(angle_b.text == "Angle: 65°" and tilt_b.text.ends_with("ON") and zoom_b.text == "Zoom: 100%" and cam.base_pitch == cam.PITCH_LOW and cam.auto_tilt and cam.zoom == 1.0 and absf(cam.perspective_pitch - 65.0) < 0.5, "Reset camera puts back 65°, tilt on and 100%% zoom (pitch %.1f)" % cam.perspective_pitch)
+		_check(angle_s.get_meta("value").text == "65°" and tilt_b.text.ends_with("ON") and zoom_s.get_meta("value").text == "100%" and drive_s.get_meta("value").text == "100%" and cam.base_pitch == cam.PITCH_LOW and cam.auto_tilt and cam.zoom == 1.0 and cam.drive_zoom == 1.0 and absf(cam.perspective_pitch - 65.0) < 0.5, "Reset camera puts back 65°, tilt on, 100%% distance and drive zoom-out (pitch %.1f)" % cam.perspective_pitch)
 	phone.close()
 	game.settings["angle"] = 42
 	game.settings["auto_tilt"] = "yes"
+	game.settings["drive_zoom"] = 0.3
 	game.apply_settings()
-	_check(cam.base_pitch == cam.PITCH_LOW and cam.auto_tilt and game.city.LOAD_RADIUS == 105.0, "a bad saved angle or tilt falls back to 65° with tilt on")
+	_check(cam.base_pitch == cam.PITCH_LOW and cam.auto_tilt and cam.drive_zoom == 1.0 and game.city.LOAD_RADIUS == 105.0, "a bad saved angle, tilt or drive zoom-out falls back to 65°, tilt on and 100%")
 	game.settings["angle"] = 65.0
 	game.settings["auto_tilt"] = true
+	game.settings["drive_zoom"] = 1.0
 	# Driving flat out, the view zooms out and leads the car, keeping it on
 	# screen, and the city loads round the middle of the screen.
 	_place_player(_home(), Vector3.ZERO)
@@ -871,6 +875,20 @@ func test_perspective_camera() -> void:
 	_check(all_on, "the car stays on screen driving each way flat out")
 	_check(all_far, "the road shows far ahead on a 20:9 phone: %s" % ", ".join(report))
 	_check(all_loaded, "the screen's corners lie inside the cells loaded round the middle of the screen")
+	# Settings > Drive zoom-out: half widens half as far, Off keeps the
+	# on-foot framing, and the car stays on screen either way.
+	var dz_sizes := []
+	var still_on := true
+	for dz in [0.5, 0.0]:
+		game.settings["drive_zoom"] = dz
+		game.apply_settings()
+		await _frames(300)
+		dz_sizes.append(cam.size)
+		if not rect.grow(-rect.size.y * 0.04).has_point(cam.unproject_position(car.global_position)):
+			still_on = false
+	game.settings["drive_zoom"] = 1.0
+	game.apply_settings()
+	_check(absf(dz_sizes[0] - lerpf(cam.FOOT_SIZE, cam.DRIVE_SIZE, 0.5)) < 1.0 and absf(dz_sizes[1] - cam.FOOT_SIZE) < 1.0 and still_on, "Drive zoom-out 50%% frames %.0f m flat out and Off %.0f m (on foot %.0f), the car on screen" % [dz_sizes[0], dz_sizes[1], cam.FOOT_SIZE])
 	# Real drives along city routes, the player riding along. Downtown at
 	# 30 m/s the tilt settles instead of hunting (the first picker turned back
 	# 19.5 times a minute on this drive); in the low-rise districts it stays
@@ -897,9 +915,10 @@ func test_perspective_camera() -> void:
 
 # --- Helpers -----------------------------------------------------------------
 
-## Settings > Camera turn "With car" (HANDOFF-heading-camera.md): the view
+## Settings > Camera turn "Follow" (HANDOFF-heading-camera.md): the view
 ## swings round behind the car the way Chinatown Wars' does, within comfort
-## limits, and the stick steers the car rather than pointing it.
+## limits, and the stick steers the car rather than pointing it; on foot it
+## follows the walk.
 func test_camera_turns_with_car() -> void:
 	await _free_game()
 	var TopDownCamera = preload("res://scripts/top_down_camera.gd")
@@ -913,7 +932,7 @@ func test_camera_turns_with_car() -> void:
 	var car = _player_car("sedan", Vector3(0, 0, 400.0), 0.0)
 	p.vehicle = car
 	cam.snap()
-	_check(cam.turns() and Controls.stick_steers() and absf(cam.yaw) < 0.01, "With car is the default: the view starts behind the car and the stick steers")
+	_check(cam.turns() and Controls.stick_steers() and absf(cam.yaw) < 0.01, "Follow is the default: the view starts behind the car and the stick steers")
 	# Up is gas.
 	Controls.override_vector = Vector2(0, -1)
 	await _frames(120)
@@ -972,10 +991,10 @@ func test_camera_turns_with_car() -> void:
 	await _frames(150)
 	_check(absf(wrapf(cam.yaw - face, -PI, PI)) < 0.02, "the compass swings the view behind the car (%.1f to %.1f degrees)" % [rad_to_deg(cam.yaw), rad_to_deg(face)])
 	# North up: the view eases back and the stick points the car again.
-	cam.turn_with_car = false
+	cam.turn_view = false
 	await _frames(180)
 	_check(absf(cam.yaw) < 0.02 and not Controls.stick_steers(), "North up turns the view back and the stick points the way to go (%.1f degrees)" % rad_to_deg(cam.yaw))
-	cam.turn_with_car = true
+	cam.turn_view = true
 	# Inside a place the view is north up at once.
 	cam.fixed_focus = car.global_position
 	await _frames(2)
@@ -1000,7 +1019,10 @@ func test_camera_turns_with_car() -> void:
 		_check(ahead > want, "%s flat out at %.1f m/s: the screen shows %.0f m ahead, %.1f s (%.0f m framed, %.0f degrees)" % [kind, fast.speed, ahead, ahead / fast.speed, cam.size, cam.perspective_pitch])
 		Controls.override_vector = null
 		fast.queue_free()
-	# On foot: walking never turns the view; standing still squares it up.
+	# On foot (H-13, H-14): the view follows the walk, calmer than in a car,
+	# while the stick's frame holds so a sideways push walks straight instead
+	# of circling. The test player doesn't run its physics, so its velocity
+	# is set by hand; the camera reads the walk's direction off the stick.
 	p.vehicle = null
 	p.global_position = Vector3(0, 0, 300.0)
 	cam.yaw = deg_to_rad(37.0)
@@ -1009,27 +1031,39 @@ func test_camera_turns_with_car() -> void:
 	cam._yaw_chasing = false
 	cam._yaw_forced = false
 	Controls.override_vector = Vector2(1, 0)
-	await _frames(120)
-	_check(absf(cam.yaw - deg_to_rad(37.0)) < 0.01, "on foot, walking leaves the view where it is")
-	Controls.override_vector = null
-	await _frames(80)
+	p.velocity = Vector3(4.2, 0, 0)
+	await _frames(2)
 	var frame: Vector3 = cam.input_axes()[0]
+	var walk_rate := 0.0
+	last = cam.yaw
+	for f in 300:
+		await _frames(1)
+		walk_rate = maxf(walk_rate, rad_to_deg(absf(wrapf(cam.yaw - last, -PI, PI))) * 60.0)
+		last = cam.yaw
+	_check(absf(wrapf(cam.yaw - deg_to_rad(-53.0), -PI, PI)) < 0.02 and cam.input_axes()[0].dot(frame) > 0.9999, "on foot the view follows the walk (37 -> %.1f degrees) while the stick's frame holds, so the walk runs straight" % rad_to_deg(cam.yaw))
+	_check(walk_rate <= 60.5, "on foot the view turns at most 60 degrees a second (%.0f)" % walk_rate)
+	# A thumb wobble (15 degrees) keeps the frame, and the view ignores it.
+	held = cam.yaw
+	Controls.override_vector = Vector2(cos(deg_to_rad(15.0)), sin(deg_to_rad(15.0)))
+	await _frames(90)
+	_check(absf(wrapf(cam.yaw - held, -PI, PI)) < 0.01 and cam.input_axes()[0].dot(frame) > 0.9999, "a 15-degree wobble of the thumb neither turns the view nor the stick's frame")
+	# Swinging the thumb up takes the frame from the view again: up walks up
+	# the screen as it now is, and the view stays.
+	Controls.override_vector = Vector2(0, -1)
+	await _frames(90)
+	_check(cam.input_axes()[1].dot(cam.ground_axes()[1]) > 0.9999 and absf(wrapf(cam.yaw - held, -PI, PI)) < 0.01, "swinging the thumb up re-reads the stick in the view: up walks up the screen")
+	# Standing still squares the view up with the streets.
+	Controls.override_vector = null
+	p.velocity = Vector3.ZERO
+	await _frames(80)
+	frame = cam.input_axes()[0]
 	Controls.override_vector = Vector2(1, 0)
 	var turning: float = cam.yaw
 	await _frames(20)
 	_check(absf(cam.yaw - turning) > 0.05 and cam.input_axes()[0].dot(frame) > 0.9999, "squaring up while the stick is held, the stick's frame holds (view %.0f -> %.0f degrees)" % [rad_to_deg(turning), rad_to_deg(cam.yaw)])
 	Controls.override_vector = null
 	await _frames(150)
-	_check(absf(cam.yaw) < 0.02, "standing still, the view squares up with the streets (%.1f degrees)" % rad_to_deg(cam.yaw))
-	# A frame left behind (a compass tap while walking) eases round to the
-	# view once it has landed, the stick still held.
-	cam._input_yaw = deg_to_rad(60.0)
-	Controls.override_vector = Vector2(1, 0)
-	await _frames(30)
-	var mid: float = rad_to_deg(cam._input_yaw)
-	await _frames(45)
-	_check(mid > 5.0 and mid < 55.0 and absf(cam._input_yaw) < 0.01, "with the stick held, the stick's frame eases round to a landed view (60 -> %.0f -> %.1f degrees)" % [mid, rad_to_deg(cam._input_yaw)])
-	Controls.override_vector = null
+	_check(absf(wrapf(cam.yaw + PI * 0.5, -PI, PI)) < 0.02, "standing still, the view squares up with the streets (%.1f degrees)" % rad_to_deg(cam.yaw))
 	# Getting into a car facing the other way: the view swings behind it
 	# before it moves, so stick up drives up the screen from the start.
 	var south = _player_car("sedan", Vector3(0, 0, 500.0), 0.0, PI)
@@ -1044,10 +1078,10 @@ func test_camera_turns_with_car() -> void:
 	# In the game: the setting, the bad-value fallback and the minimap.
 	await _new_game(false)
 	cam = game.camera
-	_check(not cam.turn_with_car, "the test games start north up")
+	_check(not cam.turn_view, "the test games start north up")
 	game.settings["camera_turn"] = 42
 	game.apply_settings()
-	_check(cam.turn_with_car, "a bad saved Camera turn falls back to With car")
+	_check(cam.turn_view, "a bad saved Camera turn falls back to With car")
 	var car2 = _spawn_car(_home(), Vector3(0, 0, -3), -PI * 0.5)
 	_place_player(_home(), Vector3.ZERO)
 	await _frames(2)

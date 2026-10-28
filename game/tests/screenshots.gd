@@ -575,9 +575,9 @@ func _views(game) -> void:
 			cam.snap()
 			await _frames(240)
 			await _shot("82_drive_%s_%s.png" % [spot[0], dir[0]])
-	# Settings > Camera turn: With car. The view turns so the car drives up
+	# Settings > Camera turn: Follow. The view turns so the car drives up
 	# the screen, sits lower at speed, and the minimap turns with it.
-	cam.turn_with_car = true
+	cam.turn_view = true
 	for shot: Array in [[spots[0], "east", Vector3.RIGHT], [spots[1], "south", Vector3.BACK], [spots[1], "west", Vector3.LEFT]]:
 		var pos: Vector3 = shot[0][1]
 		var dir: Vector3 = shot[2]
@@ -590,7 +590,14 @@ func _views(game) -> void:
 		cam.snap()
 		await _frames(240)
 		await _shot("84_turn_%s_%s.png" % [shot[0][0], shot[1]])
-	cam.turn_with_car = false
+	# Settings > Drive zoom-out Off: flat out, the on-foot framing (the last
+	# shot above at 100%).
+	cam.drive_zoom = 0.0
+	cam.snap()
+	await _frames(240)
+	await _shot("85_drive_zoom_off_%s_west.png" % spots[1][0])
+	cam.drive_zoom = 1.0
+	cam.turn_view = false
 	cam.snap()
 	cam.target = game.player
 	drive.queue_free()

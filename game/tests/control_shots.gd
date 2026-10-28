@@ -55,9 +55,8 @@ func _run() -> void:
 		tap.pressed = false
 		touch._input(tap)
 		Controls.tilt_override = null
-	game.hud.phone.open()
-	await _ui_frames(4)
-	game.hud.phone._settings()
+	# The HUD's gear opens Settings straight away.
+	game.hud.settings_button.pressed.emit()
 	await _ui_frames(4)
 	await _shot("controls_settings.png")
 	get_tree().quit()

@@ -50,6 +50,8 @@ var _card_sub: Label
 var _card_tween: Tween
 var _retry: PanelContainer
 var _phone_button: Button
+## Opens the phone straight to Settings; always shown, unlike PHONE.
+var settings_button: Button
 var _phone_pulse := false
 var _snack: Button
 ## The vehicle the player last sat in (instance id) and how long its model
@@ -104,6 +106,12 @@ func _ready() -> void:
 	_anchor(_phone_button, Vector2(1, 0), Rect2(-130, 130, 110, 56))
 	_phone_button.focus_mode = Control.FOCUS_NONE
 	root.add_child(_phone_button)
+	settings_button = Button.new()
+	settings_button.tooltip_text = "Settings"
+	_anchor(settings_button, Vector2(1, 0), Rect2(-196, 130, 56, 56))
+	settings_button.focus_mode = Control.FOCUS_NONE
+	settings_button.draw.connect(_draw_gear)
+	root.add_child(settings_button)
 
 	# Eat a snack from the bag (H).
 	_snack = Button.new()
@@ -139,7 +147,7 @@ func _ready() -> void:
 	_build_retry()
 
 	touch = TouchControls.new()
-	touch.exclusions = [minimap, _dialogue, _phone_button, _retry, _snack]
+	touch.exclusions = [minimap, _dialogue, _phone_button, settings_button, _retry, _snack]
 	if game.interiors:
 		touch.exclusions.append(game.interiors.menu.frame)
 	root.add_child(touch)
@@ -159,6 +167,7 @@ func _ready() -> void:
 	phone.game = game
 	add_child(phone)
 	_phone_button.pressed.connect(phone.open)
+	settings_button.pressed.connect(phone.open_settings)
 	_shown_cash = game.cash
 
 
@@ -216,6 +225,20 @@ func _process(delta: float) -> void:
 		_prompt.text = "" if near == null else ("Steal it: E / ENTER" if near.has_ai_driver() else verb + ": E / ENTER")
 		touch.set_label("interact", "ENTER")
 		touch.set_label("sprint", "RUN")
+
+
+## A cog on the settings button (the default font has no gear glyph).
+func _draw_gear() -> void:
+	var c := settings_button.size * 0.5
+	var points := PackedVector2Array()
+	for i in 48:
+		var a := TAU * i / 48.0
+		# Eight teeth: the outline steps out for 3 points in every 6.
+		var r := 19.0 if i % 6 < 3 else 14.0
+		points.append(c + Vector2(cos(a), sin(a)) * r)
+	var ink := Color(0.92, 0.92, 0.92)
+	settings_button.draw_colored_polygon(points, ink)
+	settings_button.draw_circle(c, 6.0, Color(0.16, 0.17, 0.2))
 
 
 func _unhandled_input(event: InputEvent) -> void:
