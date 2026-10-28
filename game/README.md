@@ -89,10 +89,14 @@ phone.
   Crossing, farms and grain elevators; irrigated farmland laid out by
   `tools/farmland.py`: centre-pivot circles with sprinkler arms, strip fields
   in rows, canals with pump houses, a 600 m section grid of paved roads and
-  dirt tracks with dirt shortcuts, and the 6-lane Golden Flats Expressway off
-  the Beltway; farmsteads with a big, plain, adobe or ranch farmhouse, some
-  with a hired hand's cottage, and homesteads between them with a small
-  cottage, ranch house, farmhouse or adobe), Saltgrass (bayou, the Gator Farm,
+  dirt tracks with curving shortcuts, paved and dirt, and the 6-lane Golden
+  Flats Expressway off the Beltway; farmsteads with a big, plain, adobe or
+  ranch farmhouse, some with a hired hand's cottage, and homesteads between
+  them with a small cottage, ranch house, farmhouse or adobe. Each farm home
+  draws one of three plans by its lot's size (`country_kit._tier`): e.g. the
+  small cottage is a log cabin on a small lot and gains a lean-to, hen house
+  and shed on a big one; the adobe is a pueblo, a farmhouse or a hacienda.
+  Yards that differ from the land round them are fenced or walled), Saltgrass (bayou, the Gator Farm,
   airboats) and Verdant Hills (Larkspur, the vineyard). Suburb streets run
   straight on from the city's: nearly every city street that reaches the
   edge carries on out to the Beltway, Sunvale Boulevard, Seabreeze Drive or

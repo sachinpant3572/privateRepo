@@ -1,6 +1,7 @@
 extends RefCounted
 ## Roadside props a car knocks down: lamp posts, traffic signals, small
-## street trees, hydrants, bins, benches, signs, crates. The prop kit tags
+## street trees (the country's too), hydrants, water-filled roadworks
+## barriers, bins, benches, signs, crates. The prop kit tags
 ## their colliders with their slice of the cell's (or country tile's) one
 ## mesh (Props._breaks). A hit turns the colliders off, collapses that slice
 ## so the prop is gone, throws debris (a hydrant gushes water) and lays a
@@ -14,7 +15,7 @@ const MIN_SPEED := 2.5
 ## Share of its speed a car keeps knocking down each kind (the rest 0.92).
 const KEEP := {
 	"street_light": 0.86, "traffic_light": 0.82, "gas_lamp": 0.88, "street_tree": 0.86, "crepe_myrtle": 0.86,
-	"hydrant": 0.88, "bench": 0.9, "ev_charger": 0.88, "bins": 0.9,
+	"hydrant": 0.88, "bench": 0.9, "ev_charger": 0.88, "bins": 0.9, "roadworks": 0.85,
 }
 ## How tall the fallen copy of each tall kind is (the colliders are cut
 ## short), and its colour.

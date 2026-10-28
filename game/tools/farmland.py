@@ -25,7 +25,7 @@ GRID_X0 = -1550.0
 GRID_Y0 = -1750.0
 BRIDGE_Y = GRID_Y0 - GRID  # County Road 10, over the Cinder Lower
 HALF_TRACK_ODDS = 0.4  # a half-section line's 600 m stretch is a dirt track
-SHORTCUT_ODDS = 0.12  # a section gets a curving dirt shortcut across it
+SHORTCUT_ODDS = 0.35  # a section gets a curving shortcut across it
 MIN_PIECE = 120.0
 # A grid road skips where it would run alongside an existing road this close.
 PARALLEL_GAP = 40.0
@@ -165,8 +165,9 @@ def grid_roads(area, existing, bridges=None, seed=77):
         for x in _grid_values(x0 - GRID, x1, GRID_X0, GRID):
             if rng.random() < HALF_TRACK_ODDS:
                 put([(x, y), (x + GRID, y)], "track", "", "farm_track", ew)
-    # Shortcuts: a dirt track curving across a section from one side to the
-    # other, the way a farmer cuts the corner.
+    # Shortcuts: a road curving across a section from one side to the other,
+    # the way a farmer cuts the corner; every other one is paved (an old
+    # asphalt lane), the rest dirt.
     for sx in _grid_values(x0 - GRID, x1, GRID_X0, GRID):
         for sy in _grid_values(y0 - GRID, y1, GRID_Y0, GRID):
             if rng.random() >= SHORTCUT_ODDS:
@@ -180,6 +181,13 @@ def grid_roads(area, existing, bridges=None, seed=77):
                 p0, p1 = (sx + a, sy), (sx + GRID - b, sy + GRID)
                 c0, c1 = (p0[0], sy + 260.0), (p1[0], sy + GRID - 260.0)
             put(_bezier(p0, c0, c1, p1), "track", "", "farm_cut", LineString())
+    # Paved and dirt in turn among the pieces that made it into the area.
+    k = 0
+    for i, (pts, cls, name, tag) in enumerate(out):
+        if tag == "farm_cut":
+            if k % 2:
+                out[i] = (pts, "lane", name, tag)
+            k += 1
     return out
 
 

@@ -1500,8 +1500,8 @@ func test_vehicle_handling_differs() -> void:
 		cars[kind].queue_free()
 
 
-## Every traffic kind, the box truck included, drives junction to junction
-## through the streets around the spawn without getting stuck or wrecked.
+## Props a car hits (lamps, street trees, hydrants, signals) fall and the
+## car keeps most of its speed.
 func test_cars_knock_down_roadside_props() -> void:
 	# Sachin: "make the side props [destroyable] by car and car wont stop
 	# after [destroying] them, right now [the] car stops after hitting the
@@ -1640,6 +1640,8 @@ func test_roads_have_two_lanes_each_way() -> void:
 		"two cars abreast on %s drive on (%.0f m and %.0f m in 2.5 s), %.1f m apart at the closest" % [city.plan.edge_class(edge), went[0], went[1], gap_min])
 
 
+## Every traffic kind, the box truck included, drives junction to junction
+## through the streets around the spawn without getting stuck or wrecked.
 func test_traffic_drives_every_kind() -> void:
 	await _new_game(false)
 	var city = game.city
@@ -2706,22 +2708,30 @@ func test_country_kit_builds_every_kind() -> void:
 	var Kit = preload("res://scripts/kits/country_kit.gd")
 	var MB = preload("res://scripts/mesh_builder.gd")
 	_check(Kit.KINDS.size() >= 41, "country kit lists its kinds, got %d" % Kit.KINDS.size())
+	# Each kind at its footprint, 0.7x and 1.3x, and at every lot size the
+	# country data gives it.
+	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/country.json"))
+	var lot_sizes := {}
+	for lot: Array in data.lots:
+		var sizes: Array = lot_sizes.get_or_add(data.kinds[int(lot[5])], [])
+		var ls := Vector2(lot[3], lot[4])
+		if not sizes.has(ls):
+			sizes.append(ls)
 	var problems: Array[String] = []
 	for kind: String in Kit.KINDS:
 		var f: Vector2 = Kit.footprint(kind)
 		if not (f.x > 0.0 and f.y > 0.0):
 			problems.append("%s: footprint %s" % [kind, f])
 			continue
-		for scale: float in [1.0, 0.7, 1.3]:
-			var size := f * scale
+		for size: Vector2 in [f, f * 0.7, f * 1.3] + lot_sizes.get(kind, []):
 			var mb = MB.new()
 			var out: Array = []
 			var rng := RandomNumberGenerator.new()
 			rng.seed = 99
 			Kit.build(kind, mb, out, size, rng)
 			var tris: int = mb.triangle_count()
-			var tag := "%s x%.1f" % [kind, scale]
-			if tris <= 0 or tris > 5000:
+			var tag := "%s %.1fx%.1f" % [kind, size.x, size.y]
+			if tris <= 0 or tris > (5000 if f.x * f.y < 5000.0 else 8000):
 				problems.append("%s: %d triangles" % [tag, tris])
 			var hx := size.x * 0.5 + 1.0
 			var hz := size.y * 0.5 + 1.0
@@ -2742,6 +2752,56 @@ func test_country_kit_builds_every_kind() -> void:
 	for p in problems.slice(0, 10):
 		print("  " + p)
 	_check(problems.is_empty(), "every country kind builds on its lot (%d problems)" % problems.size())
+	# Lawn and yard lots are fenced: a run along the back edge of each, and
+	# no house, tree trunk or car stands in a fence, over sizes and seeds;
+	# on the farm homes no two solid parts overlap.
+	var fenced := ["farmhouse", "farmhouse_big", "farmhouse_small", "ranch_house", "adobe_farmhouse",
+		"trailer_home", "house", "mansion", "town_hall", "garden_apartments", "police_station",
+		"county_hospital", "airstrip_hangar", "hollis_farm", "larkspur_vineyard", "bellerive_general"]
+	var clashes: Array[String] = []
+	for kind: String in fenced:
+		var f: Vector2 = Kit.footprint(kind)
+		for size: Vector2 in [f, f * 0.7, f * 1.3] + lot_sizes.get(kind, []):
+			for seed in 6:
+				var out: Array = []
+				var rng := RandomNumberGenerator.new()
+				rng.seed = seed
+				Kit.build(kind, MB.new(), out, size, rng)
+				var runs: Array[Rect2] = []
+				var solids: Array[Rect2] = []
+				var back := false
+				for col in out:
+					var c: Vector3 = col[0]
+					var s: Vector3 = col[1]
+					var yaw: float = col[2] if col.size() > 2 else 0.0
+					var e := Vector2(absf(cos(yaw)) * s.x + absf(sin(yaw)) * s.z, absf(sin(yaw)) * s.x + absf(cos(yaw)) * s.z) * 0.5
+					var r := Rect2(Vector2(c.x, c.z) - e, e * 2.0)
+					var thin := minf(e.x, e.y) * 2.0
+					var along_x := e.x > e.y
+					var at_edge := absf(c.z) > size.y * 0.5 - 1.6 if along_x else absf(c.x) > size.x * 0.5 - 1.0
+					if thin <= 0.9 and maxf(e.x, e.y) * 2.0 >= 1.5 and s.y <= 2.0 and at_edge:
+						runs.append(r)
+						if along_x and c.z > size.y * 0.5 - 1.0 and e.x * 2.0 > size.x * 0.6:
+							back = true
+					elif thin >= 0.6:
+						solids.append(r)
+				var tag := "%s %.1fx%.1f seed %d" % [kind, size.x, size.y, seed]
+				if not back:
+					clashes.append("%s: no fence along the back" % tag)
+				for a in runs:
+					for b in solids:
+						if a.grow(-0.02).intersects(b.grow(-0.02)):
+							clashes.append("%s: fence %s through %s" % [tag, a, b])
+				# On the farm homes nothing solid stands inside anything else
+				# either (a tree trunk in the kitchen, a car in the porch).
+				if kind.contains("farmhouse") or kind == "ranch_house":
+					for i in solids.size():
+						for j in range(i + 1, solids.size()):
+							if solids[i].grow(-0.05).intersects(solids[j].grow(-0.05)):
+								clashes.append("%s: %s inside %s" % [tag, solids[i], solids[j]])
+	for p in clashes.slice(0, 10):
+		print("  " + p)
+	_check(clashes.is_empty(), "lawn lots are fenced and nothing solid stands in a fence (%d problems)" % clashes.size())
 	var rng := RandomNumberGenerator.new()
 	var a = MB.new()
 	var b = MB.new()
@@ -2967,9 +3027,6 @@ func test_grounds_kit_builds_every_part() -> void:
 	_check(problems.is_empty(), "every grounds part builds soundly: %s" % ", ".join(problems.slice(0, 6)))
 
 
-## The Bellerive Hills: the height grid loads, the observatory stands on its
-## pad up the hill, its tile is raised to the ground, someone on foot stands
-## on the slope, and a car driven up Crest Drive keeps its wheels on the road.
 ## Golden Flats (Sachin, 2026-10-28: "sprawling irrigation fields ... with
 ## major highways or expressways going through them, with shortcuts in
 ## between, on paved and unpaved roads leading to farmhouses"): the
@@ -3004,6 +3061,22 @@ func test_golden_flats_farmland() -> void:
 				dirt += 1
 	_check(not expressway.is_empty() and six_lanes, "the Golden Flats Expressway runs through the farmland, 6 lanes")
 	_check(paved >= 10 and dirt >= 10, "a section grid: %d paved section roads, %d dirt tracks" % [paved, dirt])
+	# Shortcuts: unnamed roads curving across a section (the grid lines run
+	# straight; a crossing cuts a shortcut into pieces, so each piece turns
+	# a little), some paved and some dirt.
+	var cuts := {}
+	for road in c.roads:
+		if road.name != "" or not Geometry2D.is_point_in_polygon(c.pos(road.nodes[road.nodes.size() / 2]), flats):
+			continue
+		var turn := 0.0
+		for i in range(1, road.nodes.size() - 1):
+			var a: Vector2 = c.pos(road.nodes[i]) - c.pos(road.nodes[i - 1])
+			var b: Vector2 = c.pos(road.nodes[i + 1]) - c.pos(road.nodes[i])
+			turn += absf(a.angle_to(b))
+		if turn > 0.2:
+			var cls: String = c.classes[road.cls].id
+			cuts[cls] = cuts.get(cls, 0) + 1
+	_check(cuts.get("lane", 0) >= 3 and cuts.get("track", 0) >= 3, "curving shortcuts across the sections, paved and dirt: %s" % cuts)
 	# It leaves the Beltway: an expressway node is a Beltway node too.
 	var belt := {}
 	for road in c.roads:
@@ -3048,6 +3121,20 @@ func test_golden_flats_farmland() -> void:
 	_check(pumps >= 1 and farms >= 6, "pump houses at the canals (%d), farmsteads (%d)" % [pumps, farms])
 	_check(homes.size() >= 4 and homes.get("farmhouse_big", 0) >= 3 and homes.get("farmhouse_small", 0) >= 3,
 			"the flats' homes come in kinds, big and small among them (%s)" % [homes])
+	# Sachin: "As the farmhouse sizes get bigger ... different variations as
+	# size progresses": each farm-home kind is built on lots of all three
+	# size tiers somewhere in the country, so its three plans all show.
+	var tiers := {}
+	for l: Array in c.lots:
+		var kind: String = c.kinds[int(l[5])]
+		if kind in ["farmhouse", "farmhouse_big", "farmhouse_small", "ranch_house", "adobe_farmhouse"]:
+			if not tiers.has(kind):
+				tiers[kind] = [0, 0, 0]
+			tiers[kind][preload("res://scripts/kits/country_kit.gd")._tier(kind, float(l[3]), float(l[4]))] += 1
+	var all_tiers := tiers.size() == 5
+	for k: String in tiers:
+		all_tiers = all_tiers and not (0 in tiers[k])
+	_check(all_tiers, "every farm-home kind stands on small, usual and big lots: %s" % [tiers])
 	# A pivot's tile streams in with its tower solid.
 	var big: Array = c.pivots[0]
 	var at := Vector3(big[0], 0.0, big[1])
@@ -3077,6 +3164,9 @@ func _bridged(c, name: String) -> bool:
 	return false
 
 
+## The Bellerive Hills: the height grid loads, the observatory stands on its
+## pad up the hill, its tile is raised to the ground, someone on foot stands
+## on the slope, and a car driven up Crest Drive keeps its wheels on the road.
 func test_bellerive_hills() -> void:
 	await _new_game(false)
 	var city = game.city

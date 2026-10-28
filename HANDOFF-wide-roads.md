@@ -16,15 +16,6 @@ Task (Sachin, 2026-10-28):
 Order: wide roads (city, then country), then breakable props, then the fields. Follows
 `HANDOFF-roads-mountain.md`.
 
-## Starting state (measured)
-
-- City classes (`street_plan.gd CLASSES`): boulevard 24 (median 6.4), bridge 16, avenue 15, river 14,
-  street 11, quarter 9, lane 7 (walk only), quay 10. Traffic drives one lane per direction at
-  `lane_offset(w) = max(2.4, w*0.22)`; avenues are painted as 2+2 but parked cars sit in the outer
-  lane, so in play every road is one lane each way.
-- Country classes (`build_country.py CLASSES`): highway 16, avenue 14, road 10, street 10, lane 7,
-  track 6, trail 3.5. Every class is drawn and driven as one lane each way.
-
 ## Decisions
 
 - W-1 **Lane counts by class** (lane 3.3-3.6 m; cars are 1.75-2.05 m wide, the box truck 2.5 m).
@@ -126,18 +117,31 @@ neon). Shots 65-72 (`SHOTS=farm`).
   in all; 21 pivots; 6586 nodes, 0 unreached; country.json 3.8 MB. Gallery page `country_8_farmhouses.png`,
   shots 69a-69e.
 
-## Measured after the change
-
-- Country: 5106 nodes, 633 roads, lots 2335 -> 2056 (fronting 1511 -> 1333), worst lot turn 2.75 deg,
-  the same 74 unreached nodes as before. Mountain grades: freeway 10.7% steepest, Crest 18.8%.
-- City plan: river roads shifted (RIVER_ROAD 10); minor streets lost to bigger blocks, accepted:
-  x922 y987-1043, x1339 y935-987, quarter streets (229..330, 786) and (342,614)-(330,635); (125,500-578)
-  avenue became a lane; (649..690, 789..805) quarter became a lane.
-- Tests: two cars abreast on a street 3.3 m apart; parked cars 0 of 117 in a traffic lane; lamp,
-  street tree, signal and hydrant knocked down at 16 m/s, car keeps 15.9-20.5 m/s. Suite 635/0.
-
 ## Traps
 
 - (from the last task) Any change to the generator's RNG use shifts lots in every zone.
 - A GDScript parse error makes a headless test run hang with no output: run
   `godot --headless --check-only --script res://<file>` on changed scripts first.
+
+## Fences and size tiers (Sachin, 2026-10-28)
+
+Asks: "place proper fencing or walls" round yards that differ from the land about them; "As the
+farmhouse sizes get bigger, I see only minor changed in layour and structure ... different variations
+as size progresses".
+- L-1 `country_kit._lot_fence` (styles rail, split, picket, chain, wire, board, wall, low, hedge):
+  farm homes, trailer, house (sides/back, suburb front lawns stay open), mansion (hedge, not in
+  estate grounds), town hall, garden apartments, police, hospital, hangar, Hollis, Larkspur,
+  Bellerive General. Paved and gravel commercial lots, moonshine, gator, condo and beach lots: open.
+- T-1 `_tier(kind, w, d)`: lot area / usual area < 0.8 small plan, > 1.25 big plan. Plans:
+  farmhouse cottage+dormer / two-storey / cross gable+ell+screened porch+garage+garden;
+  big: flush one-storey wing / stepped wing+wrap porch / turret+ell+carriage house+gazebo;
+  small: log cabin+outhouse+woodpile / cottage / +lean-to, hen house, shed;
+  ranch: gable box+pad / hip+carport / L with forward wing, garage, patio; adobe: pueblo / L / hacienda.
+  FOOTPRINTS farmhouse is now the in-game 16x14 (was 24x26) so gallery and tests sweep game sizes.
+- T-2 Generator: farm-home lots cycle x0.85 / x1 / x1.3 per kind (`HOME_SCALES`, a Counter, not the
+  rng, so no other zone shifts), x centre and front edge fixed, capped to each template's room; the
+  flats gravel yard starts at the drive (x -12.5) so the big house fits. Every tier occurs in game
+  (test_golden_flats_farmland checks it).
+- T-3 Shortcuts: SHORTCUT_ODDS 0.12 -> 0.35 (7 shortcuts, 3 survived the area clip); paved/dirt
+  alternate over the surviving pieces. Now 7 dirt + 5 paved curving pieces; 6703 nodes, 0 unreached.
+- Test caps: kit test triangle cap 8000 for lots over 5000 m2 (Hollis with its wire fence).

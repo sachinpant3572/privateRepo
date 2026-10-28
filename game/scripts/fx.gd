@@ -67,14 +67,27 @@ func knock(pos: Vector3, kind: String, involves_player: bool) -> void:
 		"street_light", "gas_lamp", "traffic_light", "ev_charger":
 			_burst("spark", pos + Vector3(0, 0.8, 0), 1.4)
 		"hydrant":
-			var p: CPUParticles3D = _pools["gush"].pop_front()
-			_pools["gush"].push_back(p)
-			p.global_position = pos
-			p.one_shot = false
-			p.emitting = true
-			get_tree().create_timer(6.0, false).timeout.connect(func(): p.emitting = false)
+			_gush(pos, 6.0)
+		"roadworks":
+			_gush(pos, 0.8) # the water barriers burst
 	if involves_player:
 		shake(0.12)
+
+
+## Water from the pool of gush emitters for `secs`. An emitter reused while
+## an earlier gush runs keeps going for its new time: the earlier timer
+## only stops it if it was not taken again since.
+func _gush(pos: Vector3, secs: float) -> void:
+	var p: CPUParticles3D = _pools["gush"].pop_front()
+	_pools["gush"].push_back(p)
+	var turn: int = p.get_meta("turn", 0) + 1
+	p.set_meta("turn", turn)
+	p.global_position = pos
+	p.one_shot = false
+	p.emitting = true
+	get_tree().create_timer(secs, false).timeout.connect(func():
+		if p.get_meta("turn", 0) == turn:
+			p.emitting = false)
 
 
 func smoke(pos: Vector3, scale := 1.0) -> void:

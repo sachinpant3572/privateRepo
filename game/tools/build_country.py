@@ -18,6 +18,7 @@ All output is in local metres: world-map metres minus Bellerive's
 demo_window origin (game x = local x, game z = local y), like the city.
 """
 
+import collections
 import json
 import math
 import random
@@ -463,6 +464,7 @@ class Country:
         self.city_rect = box(r[0] - self.origin[0], r[1] - self.origin[1], r[0] + r[2] - self.origin[0], r[1] + r[3] - self.origin[1])
         self.rng = random.Random(1234)
         self.house_decks = {}
+        self.home_sizes = collections.Counter()  # farm homes built per kind (their sizes cycle)
         self.sources = []  # [LineString, cls, name, kind] drivable or trail
         self.render_only = []  # roads beyond the play area: [LineString, cls]
         self.rails = []  # [LineString, kind]
@@ -2013,7 +2015,9 @@ class Country:
         if not deck:
             deck.extend(k for k, cards in FARM_HOUSES[template] for _ in range(cards))
             self.rng.shuffle(deck)
-        lots, parts, (W, D) = farmyard_layout(template, self.rng, deck[-1])
+        # Homes take the sizes in turn per kind (not from the rng, so no
+        # other zone's lots shift and every plan turns up).
+        lots, parts, (W, D) = farmyard_layout(template, self.rng, deck[-1], self.home_sizes)
         spot = self._front_spot(q, W, D, 6.0)
         if spot is None:
             return False
@@ -2034,9 +2038,9 @@ class Country:
             if score > 0.3:
                 parts.append(seg_part("trees", a, b, 8.0, TREE_KINDS.index("oak")))
         k = self.add_plot(c, yaw, W, D, "farmyard", parts)
-        for kind, x, z in lots:
+        for kind, x, z, size in lots:
             h = frame_point(c, yaw, x, z)
-            self.try_lot(h[0], h[1], yaw, kind, "", zone, plot=k)
+            self.try_lot(h[0], h[1], yaw, kind, "", zone, size=size, plot=k)
         gate = next(p for p in parts if p[0] == "drive")
         self._drive_to_road(frame_point(c, yaw, gate[1], -D * 0.5), n, 6.0)
         return True
@@ -3278,30 +3282,52 @@ FARM_HOUSES = {
 }
 
 
-def farmyard_layout(template, rng, house="farmhouse"):
-    """A farmstead square to its road: ([(kind, x, z)], parts, (W, D)).
-    House nearest the road beside the drive, the yard and its sheds behind;
-    farmyard_at adds the windbreak."""
+# How much bigger or smaller than its usual lot a farm home is built: the
+# kit draws a different plan on a small (x0.85) and a big (x1.3) lot.
+HOME_SCALES = (0.85, 1.0, 1.3)
+
+
+def _home(kind, cx, front, max_w, max_d, sizes):
+    """A farm home's lot (kind, x, z, (w, d)): its usual size scaled by
+    the next of HOME_SCALES for its kind (`sizes` counts the homes of each
+    kind built so far), capped to the room it has (max_w x max_d), its x
+    centre and front edge (z) fixed."""
+    s = 1.0
+    if sizes is not None:
+        s = HOME_SCALES[(sizes[kind] + len(kind)) % len(HOME_SCALES)]
+        sizes[kind] += 1
+    w = round(min(LOT[kind][0] * s, max_w), 2)
+    d = round(min(LOT[kind][1] * s, max_d), 2)
+    return (kind, cx, front + d * 0.5, (w, d))
+
+
+def farmyard_layout(template, rng, house="farmhouse", sizes=None):
+    """A farmstead square to its road: ([(kind, x, z, size)], parts, (W, D)),
+    size None for a kind's usual lot. House nearest the road beside the
+    drive, the yard and its sheds behind; farmyard_at adds the windbreak.
+    `sizes` (a Counter per kind) varies the homes' lot sizes."""
     if template == "flats":
         W, D = 90.0, 76.0
-        lots = [(house, -28.0, -25.0), ("barn", 4.0, 8.0), ("silos", 28.0, 4.0)]
+        # The house between the left fence and the drive (x -10 +- 2.5).
+        lots = [_home(house, -27.75, -35.0, 28.5, 30.0, sizes), ("barn", 4.0, 8.0, None), ("silos", 28.0, 4.0, None)]
         if rng.random() < 0.6:
-            lots.append(("machine_shed", -24.0, 22.0))
+            lots.append(("machine_shed", -24.0, 22.0, None))
         if rng.random() < 0.45:
-            lots.append(("farmhouse_small", 34.0, -27.0))  # the hired hand's cottage
-        dx, yard = -10.0, (10.0, 6.0, 52.0, 44.0)
+            # The hired hand's cottage, in front of the gravel yard.
+            lots.append(_home("farmhouse_small", 31.0, -35.0, 22.0, 18.5, sizes))
+        dx, yard = -10.0, (11.75, 6.0, 48.5, 44.0)
     elif template == "homestead":
         W, D = 44.0, 38.0
-        lots = [(house, -6.0, -9.0)]
+        lots = [_home(house, -4.75, -16.5, 24.5, 20.0, sizes)]
         extra = rng.random()
         if extra < 0.4:
-            lots.append(("windpump", 15.0, 9.0))
+            lots.append(("windpump", 15.0, 9.0, None))
         elif extra < 0.7:
-            lots.append(("water_tower", 13.0, 8.0))
+            lots.append(("water_tower", 13.0, 8.0, None))
         dx, yard = 13.0, (13.0, 0.0, 10.0, 14.0)
     else:
         W, D = 64.0, 56.0
-        lots = [(house, -14.0, -12.0), ("machine_shed", 16.0, 12.0)]
+        lots = [_home(house, -15.75, -20.0, 22.5, 24.0, sizes), ("machine_shed", 16.0, 12.0, None)]
         dx, yard = 0.0, (13.0, 9.0, 34.0, 30.0)
     z0 = -D * 0.5
     yf = yard[1] - yard[3] * 0.5
@@ -3312,7 +3338,7 @@ def farmyard_layout(template, rng, house="farmhouse"):
               seg_part("fence", (-W * 0.5 + e, z0 + e), (-W * 0.5 + e, D * 0.5 - e), 0.2, 1),
               seg_part("fence", (W * 0.5 - e, z0 + e), (W * 0.5 - e, D * 0.5 - e), 0.2, 1)]
     if rng.random() < 0.5:
-        lots = [(k, -x, z) for k, x, z in lots]
+        lots = [(k, -x, z, size) for k, x, z, size in lots]
         parts = _mirror(parts)
     return lots, parts, (W, D)
 

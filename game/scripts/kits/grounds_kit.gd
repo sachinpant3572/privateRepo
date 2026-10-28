@@ -229,14 +229,17 @@ static func _tree(mb, out: Array, p: Vector3, kind: String, rng: RandomNumberGen
 		"cypress":
 			Kit._cypress(mb, out, p, rng.randf_range(7.0, 10.0), rng)
 		"fruit":
+			var from := Props._start(mb, null)
 			var leaf := MeshBuilder.glow(Color(0.3, 0.48, 0.22).lerp(Color(0.4, 0.55, 0.26), rng.randf()), MeshBuilder.GRASS)
 			mb.limb(p, p + Vector3(0, 1.2, 0), 0.14, 0.11, Props.BARK, 5, false)
 			mb.clump(p + Vector3(0, 2.2, 0), Vector3(1.7, 1.3, 1.7), leaf, rng.randi(), 7, 3, 0.22)
 			out.append([p + Vector3(0, 1.0, 0), Vector3(0.4, 2.0, 0.4)])
+			Props._breaks(mb, out, from, "street_tree", null)
 		"crepe_myrtle":
 			Props.crepe_myrtle(mb, out, p, rng)
 		# Street trees of the outskirts: cheap round crowns (a trunk and two
-		# clumps), so a street of them stays light.
+		# clumps), so a street of them stays light; a car knocks them down
+		# like the city's street trees.
 		"magnolia":
 			_round_tree(mb, out, p, rng, Color(0.17, 0.32, 0.15), 1.5, Vector3(2.2, 2.6, 2.2))
 		"jacaranda":
@@ -443,6 +446,7 @@ static func _paint(mb, a: Vector2, b: Vector2, width: float, color: Color, y := 
 
 
 static func _round_tree(mb, out: Array, p: Vector3, rng: RandomNumberGenerator, leaf_color: Color, trunk: float, crown: Vector3) -> void:
+	var from := Props._start(mb, null)
 	var s := rng.randf_range(0.85, 1.15)
 	var leaf := MeshBuilder.glow(leaf_color.lerp(leaf_color.lightened(0.15), rng.randf()), MeshBuilder.GRASS)
 	mb.limb(p, p + Vector3(0, trunk * s, 0), 0.18, 0.12, Props.BARK, 5, false)
@@ -450,6 +454,7 @@ static func _round_tree(mb, out: Array, p: Vector3, rng: RandomNumberGenerator, 
 	mb.clump(top, crown * s, leaf, rng.randi(), 7, 3, 0.22)
 	mb.clump(top + Vector3(0.5, crown.y * 0.6, -0.3) * s, crown * 0.6 * s, leaf.lightened(0.06), rng.randi(), 6, 3, 0.22)
 	out.append([p + Vector3(0, 1.0, 0), Vector3(0.4, 2.0, 0.4)])
+	Props._breaks(mb, out, from, "street_tree", null)
 
 
 ## An asphalt lot with painted stalls 2.7 m wide, rows along x (variant 0)
