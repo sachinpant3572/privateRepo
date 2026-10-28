@@ -2903,8 +2903,9 @@ class Country:
         """Each lot's `reach`: metres from its front edge (at x = -w/2, 0,
         w/2) straight out to the road surface, plus REACH_TUCK under it,
         where a road lies within REACH_MAX ahead with nothing between (its
-        own farmyard or parcel aside). The kit runs its drives and walks
-        out that far (HANDOFF-routes R-1, R-2)."""
+        own farmyard or parcel aside); -1 at a side whose way out crosses a
+        lot, plot, water or rails. The kit runs its drives and walks out
+        that far (HANDOFF-routes R-1, R-2)."""
         lot_tree = STRtree([lot_poly(l["x"], l["y"], l["yaw"], l["w"], l["d"]) for l in self.lots])
         plot_polys = [lot_poly(q["x"], q["y"], q["yaw"], q["w"], q["d"]) for q in self.plots]
         plot_tree = STRtree(plot_polys)
@@ -2940,10 +2941,13 @@ class Country:
                     or any(int(j) != own and self.plots[int(j)]["type"] not in ("verge", "block")
                            and ahead.intersects(plot_polys[int(j)]) for j in plot_tree.query(ahead))
                     or ahead.intersects(water))
-                got.append(None if blocked else r)
-            if got[1] is None:
+                got.append(-1.0 if blocked else r)
+            if got[1] is None or got[1] < 0.0:
                 continue
-            l["reach"] = [round((g if g is not None else got[1]) + REACH_TUCK, 2) for g in got]
+            # A side with no road ahead takes the middle's reach; a blocked
+            # side stays -1 (the kit draws no route there).
+            l["reach"] = [-1.0 if g is not None and g < 0.0 else round((g if g is not None else got[1]) + REACH_TUCK, 2)
+                          for g in got]
 
     def routed(self, l):
         """How a home lot is reached from the road: "reach", "cluster",
@@ -2986,6 +2990,21 @@ class Country:
                 if not how:
                     lost.append((l["kind"], round(l["x"]), round(l["y"])))
         print("home routes:", dict(ways), "homes with no way in:", len(lost), lost[:8])
+        # Cluster footpaths keep off the homes (their aprons only touch
+        # their own home's front).
+        under = []
+        for k, q in enumerate(self.plots):
+            if q["type"] != "cluster":
+                continue
+            homes = [lot_poly(l["x"], l["y"], l["yaw"], l["w"], l["d"]).buffer(-0.3)
+                     for l in self.lots if l["plot"] == k]
+            for pt in q["parts"]:
+                if pt[0] == "footpath":
+                    c = frame_point((q["x"], q["y"]), q["yaw"], pt[1], pt[2])
+                    poly = lot_poly(c[0], c[1], q["yaw"] + pt[5], pt[3], pt[4])
+                    if any(poly.intersects(h) for h in homes):
+                        under.append((round(c[0]), round(c[1])))
+        print("cluster footpaths under a home:", len(under), under[:5])
         self.self_check()
         self.mountain_check()
 
@@ -3308,7 +3327,7 @@ def cluster_layout(W, D, kinds, style, rng):
             while z < D * 0.5 - 6.0:
                 if rng.random() < 0.85:
                     homes.append(("trailer_home", side * (13.0 + rng.uniform(-1.0, 1.0)), z + rng.uniform(-0.8, 0.8),
-                                  -side * math.pi * 0.5 + rng.uniform(-jit, jit)))
+                                  side * math.pi * 0.5 + rng.uniform(-jit, jit)))
                     taken.append(lot_poly(homes[-1][1], homes[-1][2], homes[-1][3], *LOT["trailer_home"]))
                 z += 12.0
     else:
@@ -3339,12 +3358,19 @@ def cluster_layout(W, D, kinds, style, rng):
             homes.append((kind, x, z, rot))
     track = LineString([(gx, -D * 0.5), (gx, D * 0.5 if style == "trailers" else -D * 0.5 + tl)])
     footprints = taken[1:1 + len(homes)]
+    del taken[1:1 + len(homes)]
+    # A home with no clear way to the track is left out (no rng is drawn).
+    kept = []
     for i, (kind, x, z, rot) in enumerate(homes):
         variant = 2 if wet and kind == "stilt_house" else (1 if kind == "trailer_home" else 0)
         own = cluster_path(kind, x, z, rot, track, 2.5 if style == "trailers" else 1.75,
                            [t for j, t in enumerate(footprints) if j != i], variant)
+        if own is None:
+            continue
+        kept.append(homes[i])
         parts += own
-        taken += [rect_part_poly(q) for q in own]
+        taken += [footprints[i]] + [rect_part_poly(q) for q in own]
+    homes = kept
     if style != "camp" or rng.random() < 0.5:
         parts += _boundary("fence", W, D, gx, 6.0)
     # Trees, boats, woodpiles and garden patches in the spaces left.
@@ -3376,7 +3402,8 @@ def cluster_path(kind, x, z, rot, track, track_half, others, variant):
     """A cluster home's way to the yard's track: an apron along its front
     and a footpath from the apron's middle to the nearest point of the
     track, out of the front first when the straight way would cross a home
-    (`others`: footprints to keep off). Parts in the plot frame."""
+    (`others`: footprints to keep off). Parts in the plot frame, or None
+    when every way crosses a home."""
     w, d = CLUSTER_LOT.get(kind, LOT[kind])
     width = 3.0 if kind == "trailer_home" else 1.6
 
@@ -3402,8 +3429,7 @@ def cluster_path(kind, x, z, rot, track, track_half, others, variant):
             best = legs
             break
     if best is None:
-        p = at(0.0, -d * 0.5 - 1.6)
-        best = [(p, track.interpolate(track.project(Point(p))).coords[0])]
+        return None
     for a, b in best:
         if dist(a, b) > 0.3:
             # Run a little into the track and the apron so the joins close.

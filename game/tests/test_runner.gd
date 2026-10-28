@@ -3373,10 +3373,104 @@ func test_every_home_has_a_way_in() -> void:
 		if paths < dwellers:
 			short.append("cluster at (%d, %d): %d homes, %d paths" % [q[0], q[1], dwellers, paths])
 	_check(short.is_empty(), "every cluster home has an apron at least (%s)" % [short.slice(0, 3)])
+	# ... and no footpath runs under a home (points along each path's middle
+	# line, against every home lot of its plot shrunk by 0.3 m).
+	var fp := func(o: Vector2, yaw: float, lx: float, lz: float) -> Vector2:
+		return o + Vector2(lx * cos(yaw) + lz * sin(yaw), -lx * sin(yaw) + lz * cos(yaw))
+	var under: Array[String] = []
+	for k in c.plots.size():
+		var q: Array = c.plots[k]
+		if c.plot_types[int(q[5])] != "cluster":
+			continue
+		var o := Vector2(q[0], q[1])
+		var lots_here: Array = []
+		for l: Array in c.lots:
+			if int(l[8]) == k:
+				lots_here.append(l)
+		for part: Array in q[6]:
+			if c.part_kinds[int(part[0])] != "footpath":
+				continue
+			for t in [-0.5, -0.25, 0.0, 0.25, 0.5]:
+				var local: Vector2 = fp.call(Vector2(part[1], part[2]), float(part[5]), float(part[3]) * t, 0.0)
+				var p: Vector2 = fp.call(o, float(q[2]), local.x, local.y)
+				for l: Array in lots_here:
+					var dv := p - Vector2(l[0], l[1])
+					var yaw := float(l[2])
+					var lx := dv.x * cos(yaw) - dv.y * sin(yaw)
+					var lz := dv.x * sin(yaw) + dv.y * cos(yaw)
+					if absf(lx) < float(l[3]) * 0.5 - 0.3 and absf(lz) < float(l[4]) * 0.5 - 0.3:
+						under.append("path at (%d, %d) under a %s" % [p.x, p.y, c.kinds[int(l[5])]])
+	_check(under.is_empty(), "no cluster footpath runs under a home (%d: %s)" % [under.size(), under.slice(0, 3)])
 	# The kits: with a road 4 m ahead, each home draws a route out past its
 	# front edge, and no route crosses a front fence run.
 	var Kit = preload("res://scripts/kits/country_kit.gd")
 	var MB = preload("res://scripts/mesh_builder.gd")
+	# The kit's statics are shared with the tile worker: let it finish first.
+	c._finish_task()
+	Kit.record_routes = true
+	# A tile build hands each lot its reach: a street house's drive runs out.
+	var house := -1
+	for i in c.lots.size():
+		var l: Array = c.lots[i]
+		if c.kinds[int(l[5])] == "house" and minf(minf(l[9][0], l[9][1]), l[9][2]) > 3.0:
+			house = i
+			break
+	var tile_key := Vector2i(-99999, -99999)
+	for key: Vector2i in c.tiles:
+		for i in c.tiles[key].l:
+			if int(i) == house:
+				tile_key = key
+	Kit.routes_drawn.clear()
+	preload("res://scripts/country_tiles.gd").build(c, tile_key)
+	var longest := 0.0
+	for r: Vector3 in Kit.routes_drawn:
+		longest = maxf(longest, r.z)
+	_check(house >= 0 and longest > 3.0, "a tile build runs a street house's drive out to its road (house %d, longest route out %.1f m)" % [house, longest])
+	# On the hills the route bends from the lot's pad down (or up) to the
+	# road: on the house whose road edge lies furthest off its pad, route
+	# tops (0.05 up) at the road edge sit on the ground there, none on the pad.
+	var Terrain = preload("res://scripts/terrain.gd")
+	var hill := -1
+	var off := 0.0
+	for i in c.lots.size():
+		var l: Array = c.lots[i]
+		if c.kinds[int(l[5])] != "house" or l[9][1] < 2.0 or Terrain.height(l[0], l[1]) <= 0.0:
+			continue
+		var yaw := float(l[2])
+		for k in 3:
+			var lx := (k - 1) * (float(l[3]) * 0.5 - 0.3)
+			var lz := -float(l[4]) * 0.5 - (float(l[9][k]) - 0.6)
+			var e := Vector2(l[0], l[1]) + Vector2(lx * cos(yaw) + lz * sin(yaw), -lx * sin(yaw) + lz * cos(yaw))
+			var gap := absf(Terrain.height(e.x, e.y) - Terrain.height(l[0], l[1]))
+			if gap > off:
+				hill = i
+				off = gap
+	var on_ground := 0
+	var on_pad := 0
+	if hill >= 0:
+		var l: Array = c.lots[hill]
+		for key: Vector2i in c.tiles:
+			for i in c.tiles[key].l:
+				if int(i) == hill:
+					tile_key = key
+		var built: Dictionary = preload("res://scripts/country_tiles.gd").build(c, tile_key)
+		var pad := Terrain.height(l[0], l[1])
+		var to_local := Transform3D(Basis(Vector3.UP, float(l[2])), Vector3(l[0], 0.0, l[1])).affine_inverse()
+		Kit.reach = l[9]
+		for v: Vector3 in built.mesh.verts:
+			var lv := to_local * Vector3(v.x, 0.0, v.z)
+			if absf(lv.x) > float(l[3]) * 0.5:
+				continue
+			var z_edge := -float(l[4]) * 0.5 - (Kit._reach_at(lv.x, float(l[3])) - 0.6)
+			if absf(lv.z - z_edge) > 0.05:
+				continue
+			if absf(v.y - (Terrain.height(v.x, v.z) + 0.05)) < 0.01:
+				on_ground += 1
+			elif absf(v.y - (pad + 0.05)) < 0.01:
+				on_pad += 1
+		Kit.reach = [0.0, 0.0, 0.0]
+	_check(hill >= 0 and off > 0.15 and on_ground > 0 and on_pad == 0,
+		"a hill house's drive meets its road (road edge %.2f m off the pad; route tops there on the ground %d, on the pad %d)" % [off, on_ground, on_pad])
 	var problems: Array[String] = []
 	for kind: String in homes:
 		var f: Vector2 = Kit.footprint(kind)
@@ -3402,10 +3496,11 @@ func test_every_home_has_a_way_in() -> void:
 					var cs: Vector3 = col[1]
 					# Front fence runs: long, thin, low, near the front edge.
 					if cs.x > 1.0 and cs.z < 0.9 and cs.y <= 2.0 and cc.z < -size.y * 0.5 + 1.6:
-						for r: Vector2 in Kit.routes_drawn:
+						for r: Vector3 in Kit.routes_drawn:
 							if minf(r.y, cc.x + cs.x * 0.5) - maxf(r.x, cc.x - cs.x * 0.5) > 0.05:
 								problems.append("%s: route %s through the fence at x %.1f" % [tag, r, cc.x])
 	Kit.routes_drawn.clear()
+	Kit.record_routes = false
 	for p in problems.slice(0, 8):
 		print("  " + p)
 	_check(problems.is_empty(), "every home kit runs a route out through a gate (%d problems)" % problems.size())

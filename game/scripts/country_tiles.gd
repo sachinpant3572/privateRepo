@@ -120,6 +120,9 @@ class Ctx:
 	## Lots and plots on the hills' flat pads, lifted as one piece:
 	## [first vertex, end vertex, first collider, end collider, height].
 	var rigid: Array = []
+	## Route pieces past a hill lot's front, already set to their height:
+	## [first vertex, end vertex] (the rigid lift skips them).
+	var fixed: Array = []
 	## Lots and plots (index) and wall/rail segments ([a, b]) near the
 	## tile, for keeping scenery off them.
 	var lots_near: Array = []
@@ -351,10 +354,14 @@ static func _drape(ctx: Ctx) -> void:
 	lifted.resize(mb.verts.size())
 	var out_lifted := PackedByteArray()
 	out_lifted.resize(ctx.out.size())
+	for r: Array in ctx.fixed:
+		for i in range(r[0], r[1]):
+			lifted[i] = 1
 	for r: Array in ctx.rigid:
 		var h: float = r[4]
 		for i in range(r[0], r[1]):
-			mb.verts[i] += Vector3(0.0, h, 0.0)
+			if lifted[i] == 0:
+				mb.verts[i] += Vector3(0.0, h, 0.0)
 			lifted[i] = 1
 		for i in range(r[2], r[3]):
 			var p: Vector3 = ctx.out[i][0]
@@ -653,13 +660,37 @@ static func _lot(ctx: Ctx, i: int) -> void:
 	var v0: int = ctx.mb.verts.size()
 	var o0 := ctx.out.size()
 	Kit.reach = l[9] if l.size() > 9 else [0.0, 0.0, 0.0]
+	Kit.route_step = 1.0 if ctx.hill else 0.0
+	Kit.route_out_verts.clear()
 	Kit.build(kind, ctx.mb, local, Vector2(l[3], l[4]), rng, l.size() > 8 and int(l[8]) >= 0 and c.plot_types[int(c.plots[int(l[8])][5])] == "estate")
-	Kit.reach = [0.0, 0.0, 0.0]
+	Kit.route_step = 0.0
 	_done(ctx, local, ctx.out)
 	ctx.buildings += 1
 	# The letters stand on the slope as it is; everything else on its pad.
 	if ctx.hill and kind != "hill_letters":
 		_rigid(ctx, v0, o0, Vector2(l[0], l[1]))
+		_bend_routes(ctx, l)
+	Kit.route_out_verts.clear()
+	Kit.reach = [0.0, 0.0, 0.0]
+
+
+## A hill lot's routes past its front: from the pad's height at the front
+## to the ground's (the draped road's) at the road edge, the reach there
+## less the tuck out (Kit.reach still holds the lot's).
+static func _bend_routes(ctx: Ctx, l: Array) -> void:
+	if Kit.route_out_verts.is_empty():
+		return
+	var pad := Terrain.height(float(l[0]), float(l[1]))
+	var to_local: Transform3D = Transform3D(Basis(Vector3.UP, float(l[2])), Vector3(l[0], 0.0, l[1])).affine_inverse()
+	var front := -float(l[4]) * 0.5
+	for r: Vector2i in Kit.route_out_verts:
+		for i in range(r.x, r.y):
+			var v: Vector3 = ctx.mb.verts[i]
+			var lv := to_local * v
+			var run := maxf(Kit._reach_at(lv.x, float(l[3])) - Kit.ROUTE_TUCK, 0.5)
+			var t := clampf((front - lv.z) / run, 0.0, 1.0)
+			ctx.mb.verts[i] = v + Vector3(0.0, lerpf(pad, Terrain.height(v.x, v.z), t), 0.0)
+		ctx.fixed.append([r.x, r.y])
 
 
 ## The grounds of a plot: estate gardens, a cluster's yard, a farmyard or

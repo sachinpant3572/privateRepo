@@ -213,6 +213,11 @@ static func _reach_at(x: float, w: float) -> float:
 	var r0: float = reach[0]
 	var r1: float = reach[1]
 	var r2: float = reach[2]
+	# A side the generator found blocked (-1): no route out on that third.
+	if (t < -0.34 and r0 < 0.0) or (t > 0.34 and r2 < 0.0) or r1 <= 0.0:
+		return 0.0
+	r0 = r1 if r0 < 0.0 else r0
+	r2 = r1 if r2 < 0.0 else r2
 	return maxf(0.0, r1 + (r2 - r0) * 0.5 * t + (r0 + r2 - 2.0 * r1) * 0.5 * t * t)
 
 
@@ -221,7 +226,8 @@ static func _reach_at(x: float, w: float) -> float:
 ## `ruts` it is a dirt two-track: two wheel ruts and grass between.
 static func _route_out(mb, x0: float, x1: float, d: float, color: Color, z_in := NAN, ruts := false) -> void:
 	var r := maxf(_reach_at(x0, _lot_w), _reach_at(x1, _lot_w))
-	routes_drawn.append(Vector2(x0, x1))
+	if record_routes:
+		routes_drawn.append(Vector3(x0, x1, r))
 	var z0 := -d * 0.5 - r
 	var z1 := -d * 0.5 if is_nan(z_in) else z_in
 	if z1 - z0 < 0.1:
@@ -233,15 +239,33 @@ static func _route_out(mb, x0: float, x1: float, d: float, color: Color, z_in :=
 		var m := (x0 + x1) * 0.5
 		var half := (x1 - x0) * 0.5
 		spans = [[m - half * 0.55 - 0.35, m - half * 0.55 + 0.35], [m + half * 0.55 - 0.35, m + half * 0.55 + 0.35]]
+	var zf := maxf(ze, minf(z1, -d * 0.5))
 	for s: Array in spans:
+		var v0: int = mb.verts.size()
 		if r > 0.0:
 			_pad(mb, s[0], s[1], z0, ze, color, ROUTE_OUT_Y)
-		if z1 > ze:
-			_pad(mb, s[0], s[1], ze, z1, color, 0.04)
+		# Past the front in steps when the tile is on the hills, so the
+		# tile can bend it down to the road (route_out_verts).
+		var steps := maxi(1, ceili((zf - ze) / route_step)) if route_step > 0.0 else 1
+		for k in steps:
+			var a := lerpf(ze, zf, float(k) / steps)
+			var b := lerpf(ze, zf, float(k + 1) / steps)
+			if b - a > 0.001:
+				_pad(mb, s[0], s[1], a, b, color, 0.04)
+		if route_step > 0.0 and r > 0.0:
+			route_out_verts.append(Vector2i(v0, mb.verts.size()))
+		if z1 > zf:
+			_pad(mb, s[0], s[1], zf, z1, color, 0.04)
 
 
-## The x spans of the routes the last builds drew (tests clear and read it).
-static var routes_drawn: Array[Vector2] = []
+## On the hills (set by country_tiles): the step routes past the lot's
+## front are cut into, and the vertex ranges of those pieces.
+static var route_step := 0.0
+static var route_out_verts: Array[Vector2i] = []
+## The routes builds drew while record_routes is on (tests only, on the
+## main thread with no tile building): (x0, x1, reach) each.
+static var record_routes := false
+static var routes_drawn: Array[Vector3] = []
 ## The width of the lot being built (for _reach_at); set by build().
 static var _lot_w := 10.0
 
@@ -1614,7 +1638,7 @@ static func adobe_farmhouse(mb, out: Array, w: float, d: float, rng: RandomNumbe
 	var span := absf(fx - ex)
 	var gates := [[cx, 2.6, pz]]
 	if span > 2.5:
-		gates.append([cxw, 2.2])
+		gates.append([cxw, 2.2, fz + 0.3])
 		_solid(mb, out, Vector3(cxw, 0.7, zf + bd), Vector3(span + 0.4, 1.4, 0.35), wall)
 		_solid(mb, out, Vector3(ex, 0.7, (fz + zf) * 0.5), Vector3(0.35, 1.4, zf - fz - 0.35), wall)
 		for x: float in [cxw - 1.1, cxw + 1.1]:

@@ -45,6 +45,25 @@ Each home lot's front, measured straight ahead to the nearest road surface (`roa
 - Note: SHORTCUT_ODDS reshuffles the rng for later zones (Saltgrass shacks, Verdant Hills mansions
   moved); HOME_SCALES alone does not.
 
+## Routes review fixes (review of 5ec5ca4)
+
+- Trailer parks: trailers faced away from the track, so every spur fell back to a straight strip
+  under the trailer and through its fence. Trailers now face the track; `cluster_path` returns None
+  when every way crosses a home and that home is left out (no rng drawn). The generator prints
+  "cluster footpaths under a home" (must be 0), and the test checks the same per path.
+  The changed yard spots move the rng for later zones (estates 21 to 19, farmyards 42 to 47).
+- Hills: route pieces past a hill lot's front are cut into 1 m steps (`Kit.route_step`) and bent
+  from the pad's height to the ground's at the road edge (`country_tiles._bend_routes`); the rigid
+  lift skips them (`ctx.fixed`). The test finds the hill house whose road edge is furthest off its
+  pad and checks route tops there sit on the ground.
+- `Kit.routes_drawn` records only while `Kit.record_routes` is on (tests); the test lets the tile
+  worker finish first (`country._finish_task`).
+- A side ray that is blocked (lot, plot, water, rails) exports -1; `_reach_at` draws no route on
+  that third of the front (1 house today).
+- The test builds a real tile and checks a street house's drive runs out (catches the tile no longer
+  passing `Kit.reach`; mutation-checked, as is the hill bend).
+- Adobe side-courtyard gate: its route runs on to the gate piers.
+
 ## Open questions / traps
 
 - Parcel and block lawns sit at y 0.005, above a route drawn at -0.016: a route under its own plot's
