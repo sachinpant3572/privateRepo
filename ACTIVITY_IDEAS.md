@@ -352,6 +352,62 @@ Without this, 80 activities feel like a list. With it, every activity counts tow
   catalogue.
 - **Pier diving** off the levee piers, scored on spin and splash.
 
+### 4.11 GTA V, GTA Online and GTA VI: what they add (pass of 2026-10-28)
+
+Sachin asked to check the GTA V and GTA VI activity lists for more ideas. The roadmap's section 1
+already covers GTA V's story mode (91 items; golf, tennis, darts, yoga, triathlon, flight school,
+hunting, the stock market and so on). This pass looks at the two places it didn't: **GTA Online**
+(GTA V's online mode, updated until 2025 and beyond) and **GTA VI**. It lists only what is not
+already in the roadmap or in sections 2-4 above.
+
+**GTA VI status**: due on **19 November 2026** (2 [A21]), so it is not out yet. Everything below
+comes from trailers, the 27 August 2026 "Extended Look" and Rockstar's place descriptions, as
+reported by news sites (2 [A20][A22]). Game Informer itself says it doesn't know which of these
+are playable. Re-check after launch. GTA VI is set in Leonida, a Florida parody; Bellerive is
+also the state's Florida in world v3 (Keys, swamp park, airboats, Brisa Beach). Solvera keeps its
+own names and story, and should avoid copying any Leonida set piece.
+
+**Already in our plans, so not repeated here**: from GTA VI (2 [A20]), the gym and bench press
+(2.2), fishing (4.1), basketball, pool, mini-golf (N2), jet skis (4.10), scuba diving (4.1 storm
+wrecks), shooting range, clubbing (4.4), kickboxing and martial arts (2.9), street and off-road
+racing (2.8), skydiving (roadmap 1.1), hunting (roadmap 1.1), and short social clips of the
+player's chaos (R-13's short-video app). From GTA Online, the nightclub (4.4 Blue Lantern), the
+arcade (R-11), the tow truck (R-16) and heists (R-23).
+
+| Idea | From (label, source) | Solvera version | Engine / needs |
+|---|---|---|---|
+| **Bail bonds: bounty hunter** | V5: four bail jumpers for Maude; alive pays $10,000, dead pays $5,000 (2 [A15]). Online: the Bail Office (2 [A17]) | A bondsman in the Lantern Quarter hands you skips. Clues come in the PI clue board style (4.3); the skip runs, hides or bribes. Bring them in **alive for full pay**: tackle, cuff, or trick them into your car. Cartoon tone, and a non-lethal reason to chase | R-5, R-20; PI board (4.3) |
+| **Daily wanted-car list** | Online: Exotic Exports, a daily list of 10 cars (U); V5's Simeon export requests (U) | A fence at Ironwharf posts 10 wanted cars each in-game day; find, steal and deliver them undamaged. Feeds the car collection and teaches the map | E7, existing cars |
+| **Roaming black-market van** | Online: the Gun Van moves to one of 30 spots each day at 06:00 UTC (2 [A16]) | A van at one of about 20 spots per in-game day, hinted by a phone rumour. It sells rare tuning parts, outfits and a few weapons (after R-19), with a daily deal | `shop_menu.gd`, E9 |
+| **Money fronts and laundering** | Online "Money Fronts" (June 2025): a car wash, a smoke shop and helicopter tours; laundering raises Heat, legal jobs lower it, the car-wash safe caps at $100,000 (2 [A18]) | Crime pays **dirty cash**. Big purchases (property, shares, top cars) need **clean cash**, laundered through your fronts (food truck, car wash, your gaming café). Cleaning too fast raises heat; honest shifts at the front lower it. A strong money sink and a reason to run legit businesses. See decision 8 in section 7 | E6, R-22 |
+| **Payphone jobs** | Online: Payphone Hits (U) | Payphones across Bellerive ring now and then. The voice offers a strange job: tail someone, deliver a parcel, solve a riddle, or (later) a hit. A cheap way to deliver random jobs and lore | R-5 |
+| **Pop-up city challenges** | Online freemode events such as King of the Castle and checkpoint hunts (U) | Five-minute challenges announced on the phone: "pop 15 parade balloons in the Quarter", "hold the rooftop", "longest wheelie along the levee road". Score against NPC rivals or your best | E9, R-5 |
+| **Daily buried stash** | Online: daily shipwreck and hidden-cache spots (U) | One Marrow Krewe stash per day, found from a map scrap. Pairs with metal detecting (4.1) | E7 |
+| **Race creator** | Online: the Content Creator (U) | Place checkpoints on the city map from the phone; race your own ghost; share a code through R-27. High replay at almost no content cost | E3, R-27 for sharing |
+| **Transform races** | Online: the vehicle changes at set checkpoints, e.g. car to plane or parachute (2 [A19]) | Bellerive suits it: car, then airboat through the bayou, then bike up the levee | E3, R-26 |
+| **Car meet with rep levels and a test track** | Online LS Car Meet: membership, rep from races and daily visits, a test track for drifting (2 [A19]) | Grows 4.7's Friday car meet: an Ironwharf warehouse with membership, rep tiers that unlock parts and paints, and a test track | E3, tuning (IS-3) |
+| **Arena car-combat show** | Online Arena War: car-combat modes in an arena with a goofy host (2 [A19]) | Turns 2.8's demolition derby into a TV game show: traps, a loud host, sponsor fees. Cartoon tone only | E3, vehicle damage (have) |
+| **Arm wrestling** | Online clubhouse arm wrestling (U) | A tap-and-hold duel in bars and the gym. Tiny, and good for NPC rivalries | E1 |
+| **Community service** | GTA VI: litter picking seen in trailer 2 (2 [A20]) | After Busted, choose a fee **or** a cleanup shift in the Floodline Wards. Clearing storm debris raises High Water reputation and ties to the Wards rebuild (4.4) | E5 |
+| **TV at the safehouse** | GTA VI: watching TV (2 [A20]) | Channels with the city news reacting to your deeds (R-13), cartoons, a cooking show, and your own film shorts (4.2). Reuses content that already exists | R-13 |
+| **Kayaking** | GTA VI: kayaking at Mount Kalaga (2 [A20][A22]) | Paddle trails through the bayou, a calm photo tour, and a slalom course on the Morrow | E3, R-26 |
+| **Base jumping** | GTA VI Extended Look (2 [A20]) | Jump from the Aurum Tower and Solvera Line bridges. An illegal jump from Aurum property earns a wanted star | parachute (roadmap 1.1) |
+| **Backyard wrestling league** | GTA VI Extended Look (2 [A20]) | A Floodline Wards league with folding chairs, paddling pools and a ring announcer; cartoon slams on the R-17 fight system | R-17 |
+| **Bayou wildlife rescue** | GTA VI: zoos (2 [A20]); the city size is fixed, so no zoo | Not a zoo but a rescue centre in Blackwater Bayou: rescue injured animals during events, feed and release them, and photograph them | R-3 animals, E8 |
+| **Snorkelling** | GTA VI: Leonida Keys (2 [A20][A22]) | Later, for the Keys and Isla Serena in world v3. Bellerive's river is too murky | v3 |
+
+**Keep out**, from the same lists:
+- Online's drug labs and street dealers (roadmap section 2);
+- strip clubs (GTA VI coverage mentions them);
+- rampages (mass violence, not our tone);
+- GTA V's Epsilon cult parody: WORLD_BIBLE keeps religious institutions out, and a cult reads as one;
+- the casino's Lucky Wheel and podium car: they wait on the gambling decision.
+
+### 4.12 Stock market
+
+The full design, its anti-exploit rules and a simulation that proves them are in
+`STOCK_MARKET_DESIGN.md` and `tools/stock_market_sim.py`.
+
 ## 5. Picking: the next wave after the roadmap's first wave
 
 Scored the same way as the roadmap: liveliness (1-5) divided by cost. Most rows build on the
@@ -458,3 +514,26 @@ depends on, including later ones.
   https://www.musicinafrica.net/magazine/suno-adjusts-ai-music-ownership-terms-after-warner-music-partnership ·
   https://dynamoi.com/learn/ai-music-distribution/suno-commercial-rights-explained
 - [A13] ACE-Step model card: https://huggingface.co/ACE-Step/ACE-Step-v1-3.5B
+- [A14] GTA V hobbies and pastimes (guides): https://www.gtabase.com/grand-theft-auto-v/side-missions/ ·
+  https://sportskeeda.com/gta/gta-5-100-completion-checklist
+- [A15] GTA V bail bonds and towing: https://www.gtabase.com/grand-theft-auto-v/side-missions/bail-bonds ·
+  https://www.grandtheftwiki.com/Bail_Bonds_-_Glenn_Scoville ·
+  https://www.gtabase.com/side-missions/grand-theft-auto-v/towing-missions
+- [A16] GTA Online Gun Van: https://sportskeeda.com/gta/why-gta-online-gun-van-changes-location-every-day ·
+  https://pcgamer.com/gta-online-gun-van-location
+- [A17] GTA Online businesses: https://www.sportskeeda.com/gta/list-every-business-available-players-gta-online-properties-required ·
+  https://deltiasgaming.com/?p=164609
+- [A18] GTA Online Money Fronts: https://gta.wiki/w/GTA_Online:_Money_Fronts ·
+  https://www.gtabase.com/articles/gta-online-money-fronts-releases-june-17 ·
+  https://massivelyop.com/2025/06/12/gta-online-will-introduce-money-laundering-mechanics-in-the-money-fronts-update-june-17/
+- [A19] GTA Online Arena War, Transform Races, LS Car Meet: https://www.pcgamesn.com/grand-theft-auto-v/gta-online-arena-war ·
+  https://www.pcgamer.com/gta-onlines-transform-races-are-crazy ·
+  https://pcgamer.com/gta-online-los-santos-tuners-update-guide-rep
+- [A20] GTA VI activities (pre-release): https://gameinformer.com/2026/08/27/every-potential-side-activity-we-saw-in-the-grand-theft-auto-vi-extended-look ·
+  https://www.gamesradar.com/games/grand-theft-auto/gta-6-side-activities/ ·
+  https://www.redbull.com/us-en/gta-6-side-activities ·
+  https://www.gamingbible.com/news/gta-6-confirms-side-activities-158807-20250507
+- [A21] GTA VI release date: https://www.gamesradar.com/gta-6-release-date-news-trailers-map-gameplay-rumours/ ·
+  https://gameluster.com/?p=140202
+- [A22] GTA VI regions: https://gameinformer.com/2025/05/06/rockstar-shows-off-six-major-areas-of-vice-city-in-grand-theft-auto-vi ·
+  https://www.gamerguides.com/grand-theft-auto-vi/news/regions-of-grand-theft-auto-vi
