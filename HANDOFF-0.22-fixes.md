@@ -78,6 +78,29 @@ Report issue, Export, Copy) and a BUG button on the HUD. See LOGGING.md.
 Merge fixes: the settings-tab test counts the Log rows (heading and status
 carry meta `section`); the changed-settings diff compares types first.
 
+- Agent notes carried over:
+  - Its follow-up commit bf2f73f (same two fixes, done differently) was
+    not merged; main's own fixes cover it.
+  - The log names the build from `config/version` (now `0.22-fixes`).
+  - The HUD FPS label is rebuilt every frame (small cost, pre-existing).
+  - Android's Save dialog for Export is untested on a device; Copy log
+    is the fallback.
+
+## 6. Called cab never arrived (found by the suite)
+
+- Cause: the curb stop sat on a parked car, or on the player standing in
+  the parking strip; the cab braked for them 5 m short and never reached
+  its last point.
+- Fixes:
+  - `_curb_stop` tries spots 6 and 11 m along the street (short of the
+    spot first) when a car (`room_for`, skipping the cab) or the player on
+    foot is on it.
+  - A called cab stopped on its last leg within `PULL_UP` (9 m) of the
+    player has arrived.
+- Test: `test_cab_stop_skips_parked_car`.
+- Also seeded the suburbs test's spawn probe (20 draws, 80% on suburb
+  loops); one unseeded draw failed now and then.
+
 ## Traps
 
 - A GDScript parse error in `test_runner.gd` makes the runner hang with no

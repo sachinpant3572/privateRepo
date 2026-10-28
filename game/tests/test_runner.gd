@@ -63,7 +63,7 @@ func _run() -> void:
 		"test_player_driving_assists",
 		"test_driving_layouts",
 		"test_touch_driving_layouts",
-		"test_scripted_car_gets_unstuck", "test_heavy_vehicle_pushes_harder", "test_spawns_need_room", "test_overlap_resolves", "test_heavy_pushes_parked", "test_pinned_car_holds_still", "test_xray_only_when_hidden",
+		"test_scripted_car_gets_unstuck", "test_heavy_vehicle_pushes_harder", "test_spawns_need_room", "test_overlap_resolves", "test_heavy_pushes_parked", "test_pinned_car_holds_still", "test_xray_only_when_hidden", "test_cab_stop_skips_parked_car",
 		"test_vehicle_handling_differs",
 		"test_traffic_drives_every_kind",
 		"test_vehicle_models_in_budget_and_grounded", "test_three_wheelers_and_big_trucks",
@@ -4321,8 +4321,19 @@ func test_people_walk_the_suburbs() -> void:
 			on_suburb += 1
 	_check(near >= 8, "people about on the east side, got %d" % near)
 	_check(on_suburb * 10 >= near * 8, "they walk the suburb loops (%d of %d)" % [on_suburb, near])
-	var probe: Array = city.random_sidewalk_between(at, 30.0, 60.0, RandomNumberGenerator.new())
-	_check(not probe.is_empty() and int(probe[0]) >= first, "spawn points out there are on suburb loops")
+	# A seeded spread of draws (one unseeded draw failed now and then).
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var drawn := 0
+	var out_there := 0
+	for k in 20:
+		var probe: Array = city.random_sidewalk_between(at, 30.0, 60.0, rng)
+		if probe.is_empty():
+			continue
+		drawn += 1
+		if int(probe[0]) >= first:
+			out_there += 1
+	_check(drawn > 0 and out_there * 10 >= drawn * 8, "spawn points out there are on suburb loops (%d of %d)" % [out_there, drawn])
 	var road := INF
 	for p in pop.peds:
 		if p.global_position.distance_to(at) < 120.0:
@@ -6966,3 +6977,26 @@ func test_heavy_pushes_parked() -> void:
 	semi.queue_free()
 	parked.queue_free()
 	await _frames(2)
+
+
+## A cab sent to a curb spot with a car parked on it waited behind that
+## car for ever (0.22): the stop moves to the nearest clear spot.
+func test_cab_stop_skips_parked_car() -> void:
+	await _new_game(false)
+	var taxi = game.taxi
+	_place_player_at(game.city.spawn_point)
+	await _frames(2)
+	var curb: Dictionary = taxi._curb_near(game.player.global_position)
+	_check(not curb.is_empty(), "a street by the player")
+	if curb.is_empty():
+		return
+	var first: Array = taxi._curb_stop(curb.a, curb.b, curb.at)
+	var parked = Vehicle.new()
+	parked.city = game.city
+	parked.position = first[0]
+	parked.rotation.y = first[1]
+	game.add_child(parked)
+	await _frames(1)
+	var second: Array = taxi._curb_stop(curb.a, curb.b, curb.at)
+	_check(second[0].distance_to(first[0]) > 4.0, "the stop moves off the parked car, %.1f m" % second[0].distance_to(first[0]))
+	_check(Vehicle.room_for(get_tree(), second[0], second[1], VehicleKit.size_of("taxi"), 0.2), "and is clear of every car")

@@ -431,9 +431,9 @@ func join_traffic_here() -> void:
 ## clear of every vehicle by `margin` (their footprints on the ground, so an
 ## 18-wheeler's trailer counts all the way to its tail, not just near its
 ## middle). Spawners check this so nothing appears inside another vehicle.
-static func room_for(tree: SceneTree, pos: Vector3, yaw: float, size: Vector3, margin := 0.5) -> bool:
+static func room_for(tree: SceneTree, pos: Vector3, yaw: float, size: Vector3, margin := 0.5, skip = null) -> bool:
 	for v in tree.get_nodes_in_group("vehicles"):
-		if v.is_inside_tree() and footprints_meet(pos, yaw, size, v.global_position, v.rotation.y, v._size, margin):
+		if v != skip and v.is_inside_tree() and footprints_meet(pos, yaw, size, v.global_position, v.rotation.y, v._size, margin):
 			return false
 	return true
 

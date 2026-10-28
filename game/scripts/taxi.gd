@@ -49,6 +49,9 @@ const TURN_ZONE := 18.0
 const STOP_ZONE := 22.0
 ## The curb lane: this much further out than the lane line.
 const CURB_SHIFT := 1.25
+## A called cab stopped on its last leg this close (m) to the player has
+## arrived, even short of its stop.
+const PULL_UP := 9.0
 ## Destinations closer than this (m) are left out of the list.
 const NEAR_DEST := 120.0
 const FADE_TIME := 0.35
@@ -410,7 +413,8 @@ func _physics_process(delta: float) -> void:
 			if _check_stuck(delta) or _timer > CALL_TIMEOUT:
 				_say("Your cab got stuck in traffic. Try again.")
 				_release()
-			elif cab.path_index >= cab.path.size() and _stopped():
+			elif _stopped() and (cab.path_index >= cab.path.size() or _pulled_up_by(player)):
+				cab.path_index = cab.path.size()
 				state = State.WAITING
 				_timer = 0.0
 				if called:
@@ -453,6 +457,14 @@ func _process(_delta: float) -> void:
 ## At a standstill: no forward speed and no slide either.
 func _stopped() -> bool:
 	return absf(cab.speed) < 0.5 and cab.get_real_velocity().length() < 0.5
+
+
+## On its last leg and stopped beside the player on foot (held up by them
+## standing in the road, or by a car on the curb): that is the pickup.
+func _pulled_up_by(player) -> bool:
+	if player.vehicle != null or cab.path_index < cab.path.size() - 1:
+		return false
+	return cab.global_position.distance_to(player.global_position) < PULL_UP
 
 
 func _riding_now() -> bool:
@@ -674,7 +686,23 @@ func _curb_stop(from: int, to: int, at: Vector3) -> Array:
 	else:
 		off *= CURB_SHIFT
 	var dir: Vector3 = city.node_pos(to) - city.node_pos(from)
-	return [at + off, atan2(-dir.x, -dir.z)]
+	var yaw := atan2(-dir.x, -dir.z)
+	# A car parked on the spot, or the player standing on it: the nearest
+	# clear one along the street (a cab sent onto either never arrived).
+	var p = game.player
+	var on_foot: bool = p != null and p.vehicle == null
+	var length := dir.length()
+	var along: float = (at - city.node_pos(from)).dot(dir / maxf(length, 0.01))
+	for shift in [0.0, -6.0, 6.0, -11.0, 11.0]:
+		var s: float = along + shift
+		if shift != 0.0 and (s < 6.0 or s > length - 6.0):
+			continue
+		var spot: Vector3 = city.clear_of_works(from, to, at + dir / maxf(length, 0.01) * shift) + off
+		if on_foot and Vehicle.footprints_meet(spot, yaw, VehicleKit.size_of("taxi"), p.global_position, 0.0, Vector3(0.8, 2.0, 0.8), 1.0):
+			continue
+		if Vehicle.room_for(get_tree(), spot, yaw, VehicleKit.size_of("taxi"), 0.3, cab):
+			return [spot, yaw]
+	return [at + off, yaw]
 
 
 ## The shortest drive from `start` into junction `end` by any street but the
