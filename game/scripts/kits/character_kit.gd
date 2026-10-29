@@ -536,7 +536,7 @@ static func _spec(look: Dictionary) -> Dictionary:
 		"w": look.get("build", 1.0),
 		"bulk": bulk,
 		"shoe_style": look.get("shoe_style", "dress" if outfit == "suit" else ("boots" if outfit == "uniform" else "sneakers")),
-		"sides": 8 if look.get("hero", false) else 6,
+		"sides": 12 if look.get("hero", false) else 8,
 	}
 
 
@@ -551,7 +551,7 @@ static func _hips(mb, look: Dictionary, o: Dictionary) -> void:
 		mb.limb(Vector3(0, 1.04, 0), Vector3(0, hem, 0), 0.17 * w, flare, o.shirt, 8)
 		_tube(mb, Vector3(0, hem + 0.035, 0), Vector3(0, hem - 0.002, 0), flare * 0.96, flare * 1.01, o.shirt.darkened(0.2), 8)
 		return
-	mb.ball(Vector3(0, 0.95, 0), Vector3(0.19 * w, 0.13, 0.13), pants, 8, 3)
+	_ball(mb, Vector3(0, 0.95, 0), Vector3(0.19 * w, 0.13, 0.13), pants, 8, 3)
 	if o.bottoms == "skirt":
 		mb.limb(Vector3(0, 1.02, 0), Vector3(0, 0.64, 0), 0.18 * w, 0.24 * w, pants, 8)
 		_tube(mb, Vector3(0, 0.67, 0), Vector3(0, 0.638, 0), 0.232 * w, 0.242 * w, pants.darkened(0.2), 8)
@@ -593,7 +593,18 @@ static func _torso(mb, look: Dictionary, o: Dictionary) -> void:
 	if quilted:
 		_quilt(mb, [[1.08, 0.215, 0.15], [0.98, 0.2, 0.145]], w, top)
 	else:
-		mb.ball(Vector3(0, 1.12, 0), Vector3(0.19 * w * shape, 0.14, 0.13 * shape), shirt if outfit in ["uniform", "dress"] else top, 8, 3)
+		# One lofted body from the waist up to the shoulders (0.24: two
+		# overlapping balls creased where they met), the rings above 1.2
+		# bound to the chest.
+		var rings := []
+		for y in [1.0, 1.05, 1.1, 1.15, 1.2, 1.25, 1.3, 1.35, 1.4, 1.44, 1.47, 1.49]:
+			var g := _profile(y, w, shape)
+			var ring := [y, g.x, g.y, (shirt if outfit in ["hivis", "uniform"] else top) if y >= 1.19 else (shirt if outfit in ["uniform", "dress"] else top)]
+			if rings.size() == 4:
+				ring.append(bone_index("Chest"))
+			rings.append(ring)
+		mb.loft(rings, 12 if o.sides > 8 else 10, 0.012)
+		mb.set_bone(bone_index("Spine"))
 	if outfit in ["blazer", "suit"]:
 		# Tailored jackets come down over the hips.
 		_band(mb, 0.95, 0.205 * w, 0.148, 0.07, jacket)
@@ -608,11 +619,9 @@ static func _torso(mb, look: Dictionary, o: Dictionary) -> void:
 	mb.set_bone(bone_index("Chest"))
 	if quilted:
 		_quilt(mb, [[1.44, 0.23, 0.14], [1.32, 0.27, 0.17], [1.2, 0.255, 0.165]], w, top)
-	else:
-		mb.ball(Vector3(0, 1.3, 0), Vector3(0.25 * w * shape, 0.2, 0.15 * shape), shirt if outfit in ["hivis", "uniform"] else top, 8, 4)
 	var sleeve: Color = o.sleeve if o.sleeves != "none" else skin
 	for side in [-1.0, 1.0]:
-		mb.ball(Vector3(side * 0.24 * w, 1.39, 0), Vector3(0.09, 0.08, 0.09) * (1.08 if quilted and outfit == "puffer" else 1.0), sleeve, 6, 3)
+		_ball(mb, Vector3(side * 0.24 * w, 1.39, 0), Vector3(0.09, 0.08, 0.09) * (1.08 if quilted and outfit == "puffer" else 1.0), sleeve, 8, 4)
 
 	match outfit:
 		"tee", "jersey", "scrubs", "hivis":
@@ -634,7 +643,7 @@ static func _torso(mb, look: Dictionary, o: Dictionary) -> void:
 				_hivis(mb, w, jacket)
 		"tank":
 			# Scoop neck front and back, and the straps.
-			mb.ball(Vector3(0, 1.43, 0), Vector3(0.12 * w, 0.075, 0.125), skin, 8, 2)
+			_ball(mb, Vector3(0, 1.43, 0), Vector3(0.12 * w, 0.075, 0.125), skin, 8, 2)
 			for side in [-1.0, 1.0]:
 				_strip(mb, [_surf(side * 0.13, 1.4, -1.0, w, bulk), Vector3(side * 0.13 * w, 1.5, 0), _surf(side * 0.13, 1.4, 1.0, w, bulk)], 0.025, shirt)
 			if look.has("print"):
@@ -644,12 +653,12 @@ static func _torso(mb, look: Dictionary, o: Dictionary) -> void:
 			_panel(mb, 0.0, 1.46, 1.36, 0.022, 0.022, -1.0, shirt.darkened(0.15), w, bulk, 1)
 			_panel(mb, -0.12, 1.36, 1.32, 0.025, 0.025, -1.0, accent, w, bulk, 1)
 		"dress":
-			mb.ball(Vector3(0, 1.43, 0), Vector3(0.12 * w, 0.07, 0.12), skin, 8, 2)
+			_ball(mb, Vector3(0, 1.43, 0), Vector3(0.12 * w, 0.07, 0.12), skin, 8, 2)
 			_band(mb, 1.06, 0.175 * w, 0.125, 0.03, look.get("belt", shirt.darkened(0.25)))
 		"hoodie":
 			# Hood bunched on the back, drawstrings, kangaroo pocket.
-			mb.ball(Vector3(0, 1.47, 0.11), Vector3(0.16, 0.1, 0.1), jacket.darkened(0.06), 8, 3)
-			mb.ball(Vector3(0, 1.53, 0.1), Vector3(0.1, 0.035, 0.06), jacket.darkened(0.45), 6, 2)
+			_ball(mb, Vector3(0, 1.47, 0.11), Vector3(0.16, 0.1, 0.1), jacket.darkened(0.06), 8, 3)
+			_ball(mb, Vector3(0, 1.53, 0.1), Vector3(0.1, 0.035, 0.06), jacket.darkened(0.45), 6, 2)
 			_tube(mb, Vector3(0, 1.45, 0), Vector3(0, 1.5, 0), 0.09, 0.088, jacket.darkened(0.1))
 			for side in [-1.0, 1.0]:
 				_strip(mb, [_surf(side * 0.035, 1.47, -1.0, w, bulk), _surf(side * 0.045, 1.34, -1.0, w, bulk)], 0.009, NEUTRALS[4] if jacket.v < 0.7 else NEUTRALS[0])
@@ -765,7 +774,7 @@ static func _extras(mb, look: Dictionary, o: Dictionary) -> void:
 ## Quilted puffer bands: [height, half width, half depth] each.
 static func _quilt(mb, bands: Array, w: float, color: Color) -> void:
 	for b in bands:
-		mb.ball(Vector3(0, b[0], 0), Vector3(b[1] * w, 0.068, b[2]), color, 8, 3)
+		_ball(mb, Vector3(0, b[0], 0), Vector3(b[1] * w, 0.068, b[2]), color, 8, 3)
 
 
 ## A logo block on the chest, and on the back for some.
@@ -781,8 +790,8 @@ static func _print(mb, look: Dictionary, w: float, bulk: float, y := 1.32, front
 ## the shoulders.
 static func _hivis(mb, w: float, vest: Color) -> void:
 	var bulk := 1.05
-	mb.ball(Vector3(0, 1.29, 0), Vector3(0.262 * w, 0.18, 0.162), vest, 8, 4)
-	mb.ball(Vector3(0, 1.11, 0), Vector3(0.205 * w, 0.13, 0.145), vest, 8, 3)
+	_ball(mb, Vector3(0, 1.29, 0), Vector3(0.262 * w, 0.18, 0.162), vest, 8, 4)
+	_ball(mb, Vector3(0, 1.11, 0), Vector3(0.205 * w, 0.13, 0.145), vest, 8, 3)
 	for y in [1.15, 1.27]:
 		var g := _girth(y, w, bulk)
 		_band(mb, y, g.x + 0.012, g.y + 0.012, 0.022, REFLECTIVE)
@@ -800,8 +809,8 @@ static func _uniform(mb, look: Dictionary, o: Dictionary) -> void:
 	_tube(mb, Vector3(0, 1.45, 0), Vector3(0, 1.515, 0), 0.092, 0.097, o.shirt.darkened(0.08))
 	if look.get("duty_vest", true):
 		var vest: Color = look.get("vest_color", Color(0.11, 0.12, 0.15))
-		mb.ball(Vector3(0, 1.29, 0), Vector3(0.262 * w, 0.175, 0.162), vest, 8, 4)
-		mb.ball(Vector3(0, 1.12, 0), Vector3(0.205 * w, 0.12, 0.148), vest, 8, 3)
+		_ball(mb, Vector3(0, 1.29, 0), Vector3(0.262 * w, 0.175, 0.162), vest, 8, 4)
+		_ball(mb, Vector3(0, 1.12, 0), Vector3(0.205 * w, 0.12, 0.148), vest, 8, 3)
 		_panel(mb, 0.0, 1.4, 1.32, 0.13, 0.13, 1.0, Color(0.88, 0.88, 0.84), w, bulk, 1, 0.015, 3)
 		_panel(mb, 0.0, 1.27, 1.12, 0.12, 0.12, -1.0, vest.lightened(0.08), w, bulk, 1, 0.014, 3)
 		_panel(mb, -0.1, 1.38, 1.33, 0.025, 0.025, -1.0, gold, w, bulk, 1, 0.016)
@@ -894,7 +903,7 @@ static func _arms(mb, look: Dictionary, o: Dictionary) -> void:
 				for z in [-0.022, 0.022]:
 					_strip(mb, [sh + Vector3(side * 0.08 * puff, -0.03, z), el + Vector3(side * 0.07 * puff, 0, z)], 0.009, look.stripes, sh.lerp(el, 0.5) + Vector3(0, 0, z), Vector3.ONE)
 			if outfit == "puffer":
-				mb.ball(sh.lerp(el, 0.5), Vector3(0.095, 0.05, 0.095), sleeve, 6, 2)
+				_ball(mb, sh.lerp(el, 0.5), Vector3(0.095, 0.05, 0.095), sleeve, 6, 2)
 		else:
 			_tube(mb, sh, el, 0.068, 0.058, skin, sides)
 			if sleeves == "short":
@@ -910,20 +919,18 @@ static func _arms(mb, look: Dictionary, o: Dictionary) -> void:
 
 		mb.set_bone(bone_index(prefix + "LowerArm"))
 		var fore := sleeve if sleeves == "long" else skin
-		mb.ball(el, Vector3(0.062, 0.062, 0.062) * (puff if sleeves == "long" else 1.0), fore, 5, 3)
+		_ball(mb, el, Vector3(0.062, 0.062, 0.062) * (puff if sleeves == "long" else 1.0), fore, 5, 3)
 		_tube(mb, el, wr, 0.06 * (puff if sleeves == "long" else 1.0), 0.05, fore, sides)
 		if sleeves == "long":
 			if look.has("stripes"):
 				for z in [-0.02, 0.02]:
 					_strip(mb, [el + Vector3(side * 0.066 * puff, 0, z), Vector3(side * 0.29, 0.95, 0) + Vector3(side * 0.06, 0, z)], 0.008, look.stripes, el.lerp(wr, 0.5) + Vector3(0, 0, z), Vector3.ONE)
 			if outfit == "puffer":
-				mb.ball(el.lerp(wr, 0.5), Vector3(0.08, 0.045, 0.08), sleeve, 6, 2)
+				_ball(mb, el.lerp(wr, 0.5), Vector3(0.08, 0.045, 0.08), sleeve, 6, 2)
 			_tube(mb, Vector3(side * 0.29, 0.94, 0), wr, 0.063, 0.063, cuff)
 
 		mb.set_bone(bone_index(prefix + "Hand"))
-		# Mitten hand, palm to the thigh, and the thumb forward.
-		mb.ball(Vector3(side * 0.292, 0.835, -0.005), Vector3(0.046, 0.072, 0.058), skin, 6, 3)
-		mb.ball(Vector3(side * 0.268, 0.858, -0.048), Vector3(0.022, 0.036, 0.022), skin, 4, 2)
+		_hand(mb, side, skin, o.sides > 8)
 		if side > 0 and look.has("cane"):
 			_tube(mb, Vector3(0.296, 0.82, -0.03), Vector3(0.32, 0.0, -0.13), 0.013, 0.012, look.cane, 4)
 			_tube(mb, Vector3(0.296, 0.875, 0.025), Vector3(0.296, 0.865, -0.06), 0.015, 0.015, look.cane, 4)
@@ -931,6 +938,25 @@ static func _arms(mb, look: Dictionary, o: Dictionary) -> void:
 			# Screen faces the palm side (forward), so it faces up when texting.
 			mb.box(Vector3(0.29, 0.8, -0.065), Vector3(0.075, 0.15, 0.016), look.phone)
 			mb.box(Vector3(0.29, 0.8, -0.075), Vector3(0.062, 0.13, 0.004), Color(0.1, 0.13, 0.2))
+
+
+## A relaxed hand, palm to the thigh: palm, four fingers curling in towards
+## it and the thumb forward (0.24: was a mitten). Finer on the hero.
+static func _hand(mb, side: float, skin: Color, fine: bool) -> void:
+	var x := side * 0.292
+	var segs := 6 if fine else 4
+	mb.smooth_ball(Vector3(x, 0.848, -0.004), Vector3(0.024, 0.05, 0.043), skin, 10 if fine else 8, 5)
+	# Index to little finger, front to back: knuckle height and length.
+	var fingers := [[-0.027, 0.068], [-0.009, 0.075], [0.009, 0.07], [0.026, 0.056]]
+	for f in fingers:
+		var root := Vector3(x, 0.81, f[0])
+		var tip := Vector3(x - side * 0.016, 0.81 - f[1], f[0] * 1.1)
+		var r := 0.0095 if f[1] > 0.06 else 0.0085
+		mb.smooth_limb(root, tip, r, r * 0.85, skin, segs)
+		mb.smooth_ball(tip, Vector3.ONE * r * 0.85, skin, segs, 3 if fine else 2)
+	var thumb := Vector3(side * 0.278, 0.81, -0.058)
+	mb.smooth_limb(Vector3(side * 0.288, 0.865, -0.032), thumb, 0.014, 0.011, skin, segs)
+	mb.smooth_ball(thumb, Vector3.ONE * 0.011, skin, segs, 3 if fine else 2)
 
 
 ## Legs by cut: hems, cuffs, pockets, socks, then the shoes.
@@ -963,7 +989,7 @@ static func _legs(mb, look: Dictionary, o: Dictionary) -> void:
 
 		mb.set_bone(bone_index(prefix + "LowerLeg"))
 		var lower := skin if bottoms == "shorts" else leg
-		mb.ball(knee, Vector3(fit[1], 0.07, fit[1]) * 0.98, lower, 5, 3)
+		_ball(mb, knee, Vector3(fit[1], 0.07, fit[1]) * 0.98, lower, 5, 3)
 		_tube(mb, knee, ankle, fit[2], fit[3], lower, sides)
 		match bottoms:
 			"jeans":
@@ -981,35 +1007,42 @@ static func _legs(mb, look: Dictionary, o: Dictionary) -> void:
 		_shoe(mb, look, o, side)
 
 
+## Shoes from rounded parts (0.24: were boxes): a sole with rounded corners,
+## a toe box and a heel, toes forward (-z).
 static func _shoe(mb, look: Dictionary, o: Dictionary, side: float) -> void:
 	var x := side * 0.11
 	var col: Color = look.get("shoes", Color(0.12, 0.1, 0.1))
 	match o.shoe_style:
 		"boots":
-			_block(mb, Vector3(x, 0.115, -0.015), Vector3(0.135, 0.19, 0.19), col)
-			_block(mb, Vector3(x, 0.065, -0.14), Vector3(0.13, 0.09, 0.1), col)
-			_block(mb, Vector3(x, 0.018, -0.055), Vector3(0.145, 0.036, 0.3), Color(0.12, 0.1, 0.09))
-			mb.box(Vector3(x, 0.211, -0.03), Vector3(0.137, 0.008, 0.16), col.darkened(0.25))
+			mb.rounded_slab(Vector3(x, 0.018, -0.05), Vector3(0.13, 0.036, 0.31), Color(0.12, 0.1, 0.09))
+			mb.smooth_ball(Vector3(x, 0.05, -0.1), Vector3(0.062, 0.05, 0.11), col, 8, 4)
+			_tube(mb, Vector3(x, 0.035, 0.0), Vector3(x, 0.2, 0.0), 0.07, 0.068, col)
+			_tube(mb, Vector3(x, 0.19, 0.0), Vector3(x, 0.215, 0.0), 0.073, 0.072, col.darkened(0.25))
+			mb.smooth_ball(Vector3(x, 0.07, 0.03), Vector3(0.068, 0.06, 0.07), col, 8, 4)
 		"slides":
 			var socks: Color = look.get("socks", Color(0, 0, 0, 0))
-			_block(mb, Vector3(x, 0.07, -0.05), Vector3(0.11, 0.06, 0.25), socks if socks.a > 0.0 else o.skin)
-			_block(mb, Vector3(x, 0.018, -0.05), Vector3(0.13, 0.036, 0.28), col.darkened(0.2))
-			_block(mb, Vector3(x, 0.075, -0.075), Vector3(0.135, 0.065, 0.1), col)
+			mb.rounded_slab(Vector3(x, 0.016, -0.05), Vector3(0.12, 0.032, 0.28), col.darkened(0.2))
+			mb.smooth_ball(Vector3(x, 0.045, -0.05), Vector3(0.05, 0.035, 0.12), socks if socks.a > 0.0 else o.skin, 8, 4)
+			mb.smooth_ball(Vector3(x, 0.06, -0.075), Vector3(0.062, 0.03, 0.05), col, 8, 3)
 		"dress":
-			_block(mb, Vector3(x, 0.065, -0.055), Vector3(0.12, 0.09, 0.29), col)
-			_block(mb, Vector3(x, 0.012, -0.055), Vector3(0.125, 0.024, 0.295), col.darkened(0.5))
+			mb.rounded_slab(Vector3(x, 0.011, -0.055), Vector3(0.11, 0.022, 0.29), col.darkened(0.5))
+			mb.smooth_ball(Vector3(x, 0.035, -0.105), Vector3(0.052, 0.04, 0.1), col, 8, 4)
+			mb.smooth_ball(Vector3(x, 0.05, 0.0), Vector3(0.054, 0.068, 0.09), col, 8, 4)
 		"heels":
-			_block(mb, Vector3(x, 0.08, -0.07), Vector3(0.1, 0.07, 0.22), col)
-			_block(mb, Vector3(x, 0.04, 0.03), Vector3(0.04, 0.08, 0.04), col.darkened(0.3))
+			mb.smooth_ball(Vector3(x, 0.05, -0.1), Vector3(0.045, 0.035, 0.09), col, 8, 4)
+			mb.smooth_ball(Vector3(x, 0.095, 0.0), Vector3(0.048, 0.05, 0.06), col, 8, 4)
+			_tube(mb, Vector3(x, 0.08, 0.035), Vector3(x, 0.0, 0.04), 0.014, 0.01, col.darkened(0.3), 6)
 		_:
-			# Chunky sneakers: coloured upper, thick sole, laces and a side stripe.
+			# Sneakers: a thick sole, toe box and heel in the upper's colour,
+			# laces, a side flash and a heel tab seen as people walk away.
 			var sole: Color = look.get("sole", Color(0.95, 0.95, 0.93))
-			_block(mb, Vector3(x, 0.09, -0.045), Vector3(0.13, 0.1, 0.26), col)
-			_block(mb, Vector3(x, 0.025, -0.05), Vector3(0.145, 0.05, 0.3), sole)
-			mb.box(Vector3(x, 0.141, -0.1), Vector3(0.06, 0.008, 0.11), col.lightened(0.5) if col.v < 0.8 else col.darkened(0.12))
-			mb.box(Vector3(x + side * 0.066, 0.085, -0.04), Vector3(0.008, 0.045, 0.13), look.get("shoe_accent", col.darkened(0.25)))
-			# Heel tab, seen from behind as people walk away.
-			mb.box(Vector3(x, 0.125, 0.087), Vector3(0.07, 0.06, 0.006), look.get("shoe_accent", col.darkened(0.25)))
+			var accent: Color = look.get("shoe_accent", col.darkened(0.25))
+			mb.rounded_slab(Vector3(x, 0.022, -0.05), Vector3(0.126, 0.044, 0.3), sole, 0.97)
+			mb.smooth_ball(Vector3(x, 0.045, -0.1), Vector3(0.058, 0.045, 0.1), col, 8, 4)
+			mb.smooth_ball(Vector3(x, 0.05, 0.0), Vector3(0.058, 0.08, 0.1), col, 8, 4)
+			mb.box(Vector3(x, 0.088, -0.085), Vector3(0.04, 0.008, 0.07), col.lightened(0.5) if col.v < 0.8 else col.darkened(0.12))
+			mb.smooth_ball(Vector3(x + side * 0.05, 0.058, -0.04), Vector3(0.012, 0.02, 0.07), accent, 6, 3)
+			mb.smooth_ball(Vector3(x, 0.1, 0.062), Vector3(0.024, 0.035, 0.02), accent, 6, 3)
 
 
 static func _head(mb, look: Dictionary, o: Dictionary) -> void:
@@ -1026,14 +1059,24 @@ static func _head(mb, look: Dictionary, o: Dictionary) -> void:
 	var c := Vector3(0, 1.69, 0)
 	var fine: bool = look.get("hero", false)
 	# Skull, longer front to back than across, and a narrower jaw and chin.
-	mb.ball(c + Vector3(0, 0.015, 0.008), Vector3(0.162, 0.18, 0.178), skin, 10 if fine else 8, 6 if fine else 5)
-	mb.ball(c + Vector3(0, -0.085, -0.03), Vector3(0.125, 0.1, 0.13), skin, 8 if fine else 6, 3)
+	mb.smooth_ball(c + Vector3(0, 0.015, 0.008), Vector3(0.162, 0.18, 0.178), skin, 16 if fine else 12, 9 if fine else 7)
+	mb.smooth_ball(c + Vector3(0, -0.075, -0.02), Vector3(0.12, 0.105, 0.125), skin, 12 if fine else 10, 5)
+	mb.smooth_ball(c + Vector3(0, -0.14, -0.085), Vector3(0.055, 0.04, 0.04), skin, 8 if fine else 6, 4)
+	# Face (0.24: was box eyes, nose and mouth): eye whites with dark irises,
+	# brows, a nose with a bridge and a rounded tip, upper and lower lip.
+	var segs := 8 if fine else 6
+	var iris: Color = look.get("eyes", Color(0.2, 0.13, 0.08))
+	var mouth_z := -0.012 if look.get("beard", false) else 0.0
 	for side in [-1.0, 1.0]:
-		mb.ball(c + Vector3(side * 0.165, -0.01, 0.01), Vector3(0.03, 0.05, 0.03), skin.darkened(0.08), 4, 2)
-		mb.box(c + Vector3(side * 0.065, 0.015, -0.16), Vector3(0.035, 0.045, 0.02), Color(0.08, 0.07, 0.07))
-		mb.box(c + Vector3(side * 0.064, 0.06, -0.16), Vector3(0.062, 0.016, 0.02), hair.darkened(0.3))
-	mb.box(c + Vector3(0, -0.035, -0.175), Vector3(0.045, 0.06, 0.04), skin.darkened(0.15))
-	mb.box(c + Vector3(0, -0.1, -0.155), Vector3(0.08, 0.018, 0.02), skin.darkened(0.4))
+		_ball(mb, c + Vector3(side * 0.165, -0.01, 0.01), Vector3(0.026, 0.05, 0.034), skin.darkened(0.08), 6, 3)
+		mb.smooth_ball(c + Vector3(side * 0.062, 0.012, -0.148), Vector3(0.03, 0.019, 0.02), Color(0.93, 0.92, 0.89), segs, 4)
+		mb.smooth_ball(c + Vector3(side * 0.062, 0.011, -0.162), Vector3(0.0135, 0.0145, 0.01), iris, segs, 3)
+		mb.smooth_ball(c + Vector3(side * 0.064, 0.052, -0.158), Vector3(0.037, 0.009, 0.012), hair.darkened(0.3), segs, 3)
+	mb.smooth_limb(c + Vector3(0, 0.025, -0.163), c + Vector3(0, -0.03, -0.186), 0.012, 0.016, skin.darkened(0.04), segs)
+	mb.smooth_ball(c + Vector3(0, -0.035, -0.184), Vector3(0.022, 0.017, 0.016), skin.darkened(0.06), segs, 4)
+	var lip := skin.lerp(Color(0.6, 0.28, 0.28), 0.3).darkened(0.1)
+	mb.smooth_ball(c + Vector3(0, -0.092, -0.148 + mouth_z), Vector3(0.034, 0.009, 0.012), lip.darkened(0.12), segs, 3)
+	mb.smooth_ball(c + Vector3(0, -0.106, -0.146 + mouth_z), Vector3(0.03, 0.011, 0.012), lip, segs, 3)
 	if look.get("sunglasses", false):
 		mb.box(c + Vector3(0, 0.02, -0.174), Vector3(0.25, 0.06, 0.02), Color(0.04, 0.04, 0.05))
 	elif look.get("glasses", false):
@@ -1044,7 +1087,7 @@ static func _head(mb, look: Dictionary, o: Dictionary) -> void:
 		for side in [-1.0, 1.0]:
 			mb.box(c + Vector3(side * 0.172, 0.025, -0.085), Vector3(0.01, 0.015, 0.17), Color(0.06, 0.06, 0.08))
 	if look.get("beard", false):
-		mb.ball(c + Vector3(0, -0.11, -0.04), Vector3(0.14, 0.09, 0.13), hair, 6, 3)
+		_ball(mb, c + Vector3(0, -0.11, -0.04), Vector3(0.14, 0.09, 0.13), hair, 6, 3)
 	if headwear == "":
 		_hair(mb, style, c, hair, skin)
 	else:
@@ -1070,39 +1113,39 @@ static func _head(mb, look: Dictionary, o: Dictionary) -> void:
 static func _hair(mb, style: String, c: Vector3, hair: Color, skin: Color, under_hat := false) -> void:
 	match style:
 		"short":
-			mb.ball(c + Vector3(0, 0.07, 0.02), Vector3(0.18, 0.14, 0.18), hair, 8, 3)
+			_ball(mb, c + Vector3(0, 0.07, 0.02), Vector3(0.18, 0.14, 0.18), hair, 10, 5)
 		"fade":
-			mb.ball(c + Vector3(0, 0.1, 0.015), Vector3(0.165, 0.12, 0.17), hair, 8, 3)
-			mb.ball(c + Vector3(0, 0.04, 0.015), Vector3(0.176, 0.14, 0.176), hair.lerp(skin, 0.5), 8, 3)
+			_ball(mb, c + Vector3(0, 0.1, 0.015), Vector3(0.165, 0.12, 0.17), hair, 10, 5)
+			_ball(mb, c + Vector3(0, 0.04, 0.015), Vector3(0.176, 0.14, 0.176), hair.lerp(skin, 0.5), 10, 5)
 		"buzz":
-			mb.ball(c + Vector3(0, 0.05, 0.015), Vector3(0.175, 0.15, 0.175), hair.lerp(skin, 0.35), 8, 3)
+			_ball(mb, c + Vector3(0, 0.05, 0.015), Vector3(0.175, 0.15, 0.175), hair.lerp(skin, 0.35), 10, 5)
 		"curly":
-			mb.ball(c + Vector3(0, 0.08, 0.02), Vector3(0.19, 0.15, 0.19), hair, 8, 3)
+			_ball(mb, c + Vector3(0, 0.08, 0.02), Vector3(0.19, 0.15, 0.19), hair, 10, 5)
 			for k in 5:
 				var a := TAU * k / 5.0 + 0.3
-				mb.ball(c + Vector3(cos(a) * 0.1, 0.19, 0.02 + sin(a) * 0.1), Vector3(0.07, 0.06, 0.07), hair.lightened(0.06), 5, 2)
+				_ball(mb, c + Vector3(cos(a) * 0.1, 0.19, 0.02 + sin(a) * 0.1), Vector3(0.07, 0.06, 0.07), hair.lightened(0.06), 5, 2)
 		"long":
 			if not under_hat:
-				mb.ball(c + Vector3(0, 0.07, 0.02), Vector3(0.185, 0.145, 0.185), hair, 8, 3)
-			mb.box(c + Vector3(0, -0.13, 0.1), Vector3(0.34, 0.36, 0.1), hair)
+				_ball(mb, c + Vector3(0, 0.07, 0.02), Vector3(0.185, 0.145, 0.185), hair, 10, 5)
+			_ball(mb, c + Vector3(0, -0.1, 0.085), Vector3(0.175, 0.24, 0.09), hair, 10, 5)
 		"bob":
 			if not under_hat:
-				mb.ball(c + Vector3(0, 0.07, 0.02), Vector3(0.19, 0.145, 0.19), hair, 8, 3)
-			mb.box(c + Vector3(0, -0.04, 0.08), Vector3(0.38, 0.2, 0.14), hair)
+				_ball(mb, c + Vector3(0, 0.07, 0.02), Vector3(0.19, 0.145, 0.19), hair, 10, 5)
+			_ball(mb, c + Vector3(0, -0.02, 0.06), Vector3(0.195, 0.13, 0.15), hair, 10, 5)
 			for side in [-1.0, 1.0]:
-				mb.box(c + Vector3(side * 0.175, -0.04, -0.04), Vector3(0.05, 0.2, 0.16), hair)
+				_ball(mb, c + Vector3(side * 0.165, -0.04, -0.035), Vector3(0.035, 0.11, 0.09), hair, 6, 3)
 		"ponytail":
 			if not under_hat:
-				mb.ball(c + Vector3(0, 0.07, 0.02), Vector3(0.18, 0.14, 0.18), hair, 8, 3)
+				_ball(mb, c + Vector3(0, 0.07, 0.02), Vector3(0.18, 0.14, 0.18), hair, 10, 5)
 			mb.limb(c + Vector3(0, 0.06, 0.17), c + Vector3(0, -0.22, 0.22), 0.05, 0.035, hair, 5)
 		"bun":
-			mb.ball(c + Vector3(0, 0.07, 0.02), Vector3(0.18, 0.14, 0.18), hair, 8, 3)
-			mb.ball(c + Vector3(0, 0.2, 0.09), Vector3(0.08, 0.08, 0.08), hair, 6, 3)
+			_ball(mb, c + Vector3(0, 0.07, 0.02), Vector3(0.18, 0.14, 0.18), hair, 10, 5)
+			_ball(mb, c + Vector3(0, 0.2, 0.09), Vector3(0.08, 0.08, 0.08), hair, 6, 3)
 		"afro":
-			mb.ball(c + Vector3(0, 0.1, 0.03), Vector3(0.25, 0.21, 0.24), hair, 8, 4)
+			_ball(mb, c + Vector3(0, 0.1, 0.03), Vector3(0.25, 0.21, 0.24), hair, 10, 5)
 		"locs":
 			if not under_hat:
-				mb.ball(c + Vector3(0, 0.07, 0.02), Vector3(0.18, 0.14, 0.18), hair, 8, 3)
+				_ball(mb, c + Vector3(0, 0.07, 0.02), Vector3(0.18, 0.14, 0.18), hair, 10, 5)
 			for k in 5:
 				var x := (k - 2) * 0.065
 				_tube(mb, c + Vector3(x, 0.08, 0.13 - absf(x) * 0.3), c + Vector3(x * 1.35, -0.24, 0.19 - absf(x) * 0.4), 0.032, 0.026, hair.darkened(0.08 * (k % 2)), 4)
@@ -1112,22 +1155,22 @@ static func _hat(mb, headwear: String, c: Vector3, hat: Color) -> void:
 	match headwear:
 		"cap", "cap_back":
 			var back := -1.0 if headwear == "cap_back" else 1.0
-			mb.ball(c + Vector3(0, 0.08, 0.02), Vector3(0.185, 0.135, 0.185), hat, 8, 3)
-			mb.box(c + Vector3(0, 0.075 if back > 0 else 0.07, -0.2 * back), Vector3(0.21, 0.025, 0.15), hat.darkened(0.25))
+			_ball(mb, c + Vector3(0, 0.08, 0.02), Vector3(0.185, 0.135, 0.185), hat, 8, 3)
+			mb.rounded_slab(c + Vector3(0, 0.075 if back > 0 else 0.07, -0.2 * back), Vector3(0.21, 0.018, 0.15), hat.darkened(0.25))
 			mb.box(c + Vector3(0, 0.15, -0.155 * back), Vector3(0.07, 0.05, 0.01), hat.lightened(0.45) if hat.v < 0.6 else hat.darkened(0.45))
 		"beanie":
-			mb.ball(c + Vector3(0, 0.08, 0.01), Vector3(0.19, 0.17, 0.19), hat, 8, 3)
+			_ball(mb, c + Vector3(0, 0.08, 0.01), Vector3(0.19, 0.17, 0.19), hat, 8, 3)
 			_tube(mb, c + Vector3(0, -0.005, 0.01), c + Vector3(0, 0.07, 0.01), 0.197, 0.192, hat.darkened(0.15), 8)
 		"bucket":
 			mb.limb(c + Vector3(0, 0.05, 0.01), c + Vector3(0, 0.2, 0.01), 0.185, 0.16, hat, 8)
 			_tube(mb, c + Vector3(0, 0.07, 0.01), c + Vector3(0, 0.0, 0.01), 0.19, 0.28, hat.darkened(0.12), 8)
 		"helmet":
-			mb.ball(c + Vector3(0, 0.08, 0.015), Vector3(0.205, 0.165, 0.22), hat, 8, 3)
+			_ball(mb, c + Vector3(0, 0.08, 0.015), Vector3(0.205, 0.165, 0.22), hat, 8, 3)
 			for side in [-1.0, 1.0]:
 				_strip(mb, [c + Vector3(side * 0.07, 0.19, -0.15), c + Vector3(side * 0.07, 0.24, 0.0), c + Vector3(side * 0.07, 0.2, 0.15)], 0.017, Color(0.1, 0.1, 0.11), c + Vector3(0, 0.08, 0), Vector3.ONE)
 			mb.box(c + Vector3(0, 0.1, -0.215), Vector3(0.2, 0.03, 0.04), hat.darkened(0.35))
 		"hardhat":
-			mb.ball(c + Vector3(0, 0.1, 0.01), Vector3(0.19, 0.15, 0.2), hat, 8, 3)
+			_ball(mb, c + Vector3(0, 0.1, 0.01), Vector3(0.19, 0.15, 0.2), hat, 8, 3)
 			var brim := PackedVector2Array()
 			for k in 8:
 				var a := TAU * (k + 0.5) / 8.0
@@ -1136,14 +1179,14 @@ static func _hat(mb, headwear: String, c: Vector3, hat: Color) -> void:
 			_strip(mb, [c + Vector3(0, 0.215, -0.16), c + Vector3(0, 0.258, 0.0), c + Vector3(0, 0.215, 0.17)], 0.022, hat.lightened(0.2), c + Vector3(0, 0.1, 0), Vector3.ONE)
 		"bandana":
 			# A do-rag knotted at the back: the colour reads from above.
-			mb.ball(c + Vector3(0, 0.085, 0.02), Vector3(0.184, 0.135, 0.186), hat, 8, 3)
+			_ball(mb, c + Vector3(0, 0.085, 0.02), Vector3(0.184, 0.135, 0.186), hat, 8, 3)
 			_tube(mb, c + Vector3(0, 0.075, 0.02), c + Vector3(0, 0.105, 0.02), 0.202, 0.2, hat.darkened(0.15), 8)
-			mb.ball(c + Vector3(0, 0.09, 0.22), Vector3(0.035, 0.03, 0.03), hat.darkened(0.1), 4, 2)
+			_ball(mb, c + Vector3(0, 0.09, 0.22), Vector3(0.035, 0.03, 0.03), hat.darkened(0.1), 4, 2)
 			for side in [-1.0, 1.0]:
 				_strip(mb, [c + Vector3(side * 0.015, 0.08, 0.235), c + Vector3(side * 0.05, -0.04, 0.24)], 0.017, hat.darkened(0.1), c, Vector3.ONE)
 		"police":
 			mb.limb(c + Vector3(0, 0.08, 0), c + Vector3(0, 0.2, 0), 0.19, 0.21, hat, 8)
-			mb.box(c + Vector3(0, 0.09, -0.21), Vector3(0.26, 0.03, 0.12), hat.darkened(0.3))
+			mb.rounded_slab(c + Vector3(0, 0.09, -0.21), Vector3(0.26, 0.022, 0.12), hat.darkened(0.3))
 			mb.box(c + Vector3(0, 0.15, -0.2), Vector3(0.06, 0.06, 0.02), Color(0.95, 0.8, 0.25))
 
 
@@ -1151,16 +1194,16 @@ static func _hat(mb, headwear: String, c: Vector3, hat: Color) -> void:
 
 ## An open tube from a to b, with no end caps: sleeves, cuffs, collars and
 ## limbs whose ends hide inside joints.
-static func _tube(mb, a: Vector3, b: Vector3, ra: float, rb: float, color: Color, sides := 6) -> void:
-	var axis := (b - a).normalized()
-	var side := axis.cross(Vector3.FORWARD if absf(axis.z) < 0.9 else Vector3.RIGHT).normalized()
-	var up := side.cross(axis)
-	for i in sides:
-		var a0 := TAU * i / sides
-		var a1 := TAU * (i + 1) / sides
-		var d0 := side * cos(a0) + up * sin(a0)
-		var d1 := side * cos(a1) + up * sin(a1)
-		mb.quad(a + d0 * ra, a + d1 * ra, b + d1 * rb, b + d0 * rb, ((d0 + d1) * 0.5).normalized(), color)
+## Smooth-shaded (0.24: flat facets read as "outdated and primitive").
+static func _tube(mb, a: Vector3, b: Vector3, ra: float, rb: float, color: Color, sides := 8) -> void:
+	mb.smooth_limb(a, b, ra, rb, color, sides)
+
+
+## A smooth-shaded ellipsoid. `sides` and `rings` are the counts the kit was
+## tuned with as flat facets; each gets one more step so the outline reads
+## round as well as the shading.
+static func _ball(mb, center: Vector3, radius: Vector3, color: Color, sides := 6, rings := 3) -> void:
+	mb.smooth_ball(center, radius, color, sides + 2, rings + 1)
 
 
 ## A solid box with all five faces seen from above, however small (MeshBuilder
@@ -1178,7 +1221,7 @@ static func _block(mb, center: Vector3, size: Vector3, color: Color) -> void:
 
 ## A thin ring round the body at height y: hems, belts, reflective bands.
 static func _band(mb, y: float, rx: float, rz: float, h: float, color: Color) -> void:
-	mb.ball(Vector3(0, y, 0), Vector3(rx, h, rz), color, 8, 2)
+	_ball(mb, Vector3(0, y, 0), Vector3(rx, h, rz), color, 8, 2)
 
 
 ## A flat strip along `pts` (2 tris per segment), facing away from `center`
@@ -1232,12 +1275,24 @@ static func _number(mb, number: int, x: float, y: float, dw: float, dh: float, s
 ## The point on the front (side -1) or back (+1) of the torso at (x, y),
 ## lifted `lift` off the cloth.
 static func _surf(x: float, y: float, side: float, w: float, bulk: float, lift := 0.012) -> Vector3:
-	var d := 0.0
-	for e in [[1.3, 0.25, 0.2, 0.15], [1.12, 0.19, 0.14, 0.13]]:
-		var k: float = 1.0 - pow(x / (e[1] * w * bulk), 2.0) - pow((y - e[0]) / e[2], 2.0)
-		if k > 0.0:
-			d = maxf(d, e[3] * bulk * sqrt(k))
+	var g := _profile(y, w, bulk)
+	var d := g.y * sqrt(maxf(0.0, 1.0 - pow(x / g.x, 2.0)))
 	return Vector3(x, y, side * (d + lift))
+
+
+## Half width and half depth of the lofted torso at height y (0.24): the
+## chest and waist ellipsoids joined by a smooth max, the waist eased below
+## its middle so it tucks into the hips instead of closing.
+static func _profile(y: float, w: float, bulk: float) -> Vector2:
+	var t := clampf((y - 1.3) / 0.2, -1.0, 1.0)
+	var chest := Vector2(0.25 * w, 0.15) * bulk * sqrt(1.0 - t * t)
+	var u := (y - 1.12) / 0.14
+	var waist := Vector2(0.19 * w, 0.13) * bulk * sqrt(maxf(0.0, 1.0 - (u * u if u > 0.0 else 0.5 * u * u)))
+	return Vector2(_smax(chest.x, waist.x), _smax(chest.y, waist.y))
+
+
+static func _smax(a: float, b: float, k := 0.02) -> float:
+	return 0.5 * (a + b + sqrt((a - b) * (a - b) + k * k))
 
 
 ## Half width and half depth of the torso at height y.

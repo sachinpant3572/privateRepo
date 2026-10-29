@@ -5,7 +5,7 @@ extends Node3D
 ##   xvfb-run -a -s "-screen 0 1280x720x24" godot --rendering-driver opengl3 \
 ##     --resolution 1280x720 res://tests/char_shots.tscn -- <out_dir> [pages...]
 ## Pages: crowd (street camera distance), kinds_a, kinds_b, hero, gaits,
-## gestures, actions. Each saved shot prints "saved <file>".
+## gestures, actions, faces. Each saved shot prints "saved <file>".
 
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const CharacterKit = preload("res://scripts/kits/character_kit.gd")
@@ -13,7 +13,7 @@ const Rig = preload("res://scripts/rig.gd")
 const Player = preload("res://scripts/player.gd")
 const Cop = preload("res://scripts/cop.gd")
 
-const PAGES := ["crowd", "kinds_a", "kinds_b", "hero", "gaits", "gestures", "actions"]
+const PAGES := ["crowd", "kinds_a", "kinds_b", "hero", "gaits", "gestures", "actions", "faces"]
 ## The street camera's view height on foot (TopDownCamera.FOOT_SIZE).
 const STREET_VIEW := 26.0
 
@@ -91,6 +91,30 @@ func _page_hero() -> void:
 	for i in 4:
 		_person(CharacterKit.category_look(rng, "general"), Vector3(-2.1 + i * 1.5, 0, 1.6), "idle")
 	await _shoot(Vector3(0.2, 0, 0.3), 5.5, "char_4_hero.png")
+
+
+## Close up at eye level (the mission intro camera's view): faces and hands
+## of the hero and three looks with a beard, glasses and long hair, then the
+## shoes from low down.
+func _page_faces() -> void:
+	var looks := [Player.JULES,
+		{"hair": "fade", "beard": true, "glasses": true, "skin": CharacterKit.SKIN[3], "outfit": "polo", "shirt": Color(0.2, 0.36, 0.6)},
+		{"hair": "long", "skin": CharacterKit.SKIN[1], "hair_color": CharacterKit.HAIR[3], "outfit": "tee", "shirt": Color(0.9, 0.85, 0.75), "eyes": Color(0.15, 0.3, 0.25)},
+		{"hair": "short", "hair_color": CharacterKit.GREYS[2], "skin": CharacterKit.SKIN[2], "outfit": "cardigan", "jacket": CharacterKit.KNITS[1], "headwear": "cap", "hat": Color(0.13, 0.17, 0.28)}]
+	var styles := ["sneakers", "dress", "boots", "heels"]
+	for shot in 2:
+		for i in looks.size():
+			var look: Dictionary = looks[i].duplicate()
+			if shot == 1:
+				look["shoe_style"] = styles[i]
+				look["shoes"] = [Color(0.85, 0.2, 0.15), Color(0.2, 0.12, 0.08), Color(0.6, 0.42, 0.24), Color(0.09, 0.09, 0.1)][i]
+			_person(look, Vector3(-1.08 + i * 0.72, 0, 0), "idle", false, PI * (1.0 if shot == 0 else 0.85))
+		camera.rotation_degrees = Vector3(-8.0 if shot == 0 else -25.0, 0.0, 0.0)
+		if shot == 0:
+			await _shoot(Vector3(0, 1.32, 0), 1.6, "char_8_faces.png")
+		else:
+			await _shoot(Vector3(0, 0.12, 0), 1.7, "char_9_shoes.png")
+	camera.rotation_degrees = Vector3(-60.0, 0.0, 0.0)
 
 
 ## Every gait (Rig.STYLES) at its natural speed, and texting: from the

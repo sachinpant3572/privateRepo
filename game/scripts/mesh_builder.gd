@@ -741,6 +741,152 @@ func clump(center: Vector3, radius: Vector3, color: Color, seed: int, sides := 7
 			_tri_idx(a + i, b + j, a + j)
 
 
+## A smooth-shaded ellipsoid (people: heads, bodies, hands): shared vertices
+## with the surface's own normals, `sides` around and `rings` pole to pole,
+## so it reads round instead of faceted.
+func smooth_ball(center: Vector3, radius: Vector3, color: Color, sides := 10, rings := 6) -> void:
+	var base := verts.size()
+	_vert(center + Vector3(0.0, radius.y, 0.0), Vector3.UP, color)
+	for r in range(1, rings):
+		var t := PI * r / rings
+		for i in sides:
+			var d := _sphere_pt(t, TAU * i / sides)
+			_vert(center + d * radius, (d / radius).normalized(), color)
+	_vert(center - Vector3(0.0, radius.y, 0.0), Vector3.DOWN, color)
+	var last := verts.size() - 1
+	var low := base + 1 + (rings - 2) * sides
+	for i in sides:
+		var j := (i + 1) % sides
+		_tri_idx(base, base + 1 + i, base + 1 + j)
+		for r in rings - 2:
+			var a := base + 1 + r * sides
+			var b := a + sides
+			_tri_idx(a + i, b + i, b + j)
+			_tri_idx(a + i, b + j, a + j)
+		_tri_idx(low + i, last, low + j)
+
+
+## A smooth-shaded tapered tube from `a` (radius ra) to `b` (rb), open at
+## both ends: limbs, necks, cuffs and hems on people. The normals lean with
+## the taper, so a cone shades as a cone.
+func smooth_limb(a: Vector3, b: Vector3, ra: float, rb: float, color: Color, sides := 8) -> void:
+	var axis := b - a
+	var length := axis.length()
+	if length < 0.0001:
+		return
+	axis /= length
+	var side := axis.cross(Vector3.FORWARD if absf(axis.z) < 0.9 else Vector3.RIGHT).normalized()
+	var up := side.cross(axis)
+	var lean := (ra - rb) / length
+	var base := verts.size()
+	for end in 2:
+		var c := a if end == 0 else b
+		var r := ra if end == 0 else rb
+		for i in sides:
+			var t := TAU * i / sides
+			var d := side * cos(t) + up * sin(t)
+			_vert(c + d * r, (d + axis * lean).normalized(), color)
+	for i in sides:
+		var j := (i + 1) % sides
+		_tri_idx(base + i, base + sides + i, base + sides + j)
+		_tri_idx(base + i, base + sides + j, base + j)
+
+
+## A slab with rounded corners in plan (a superellipse of `sides` points),
+## smooth sides and a flat top, open underneath: soles, cap brims. The top is
+## `taper` times the size of the bottom.
+func rounded_slab(center: Vector3, size: Vector3, color: Color, taper := 1.0, sides := 12) -> void:
+	var h := size * 0.5
+	var ring := []
+	for i in sides:
+		var t := TAU * (i + 0.5) / sides
+		var c := cos(t)
+		var s := sin(t)
+		# Exponent 0.5 squares the ellipse off into a rounded rectangle.
+		var x := signf(c) * sqrt(absf(c)) * h.x
+		var z := signf(s) * sqrt(absf(s)) * h.z
+		ring.append([Vector3(x, 0, z), Vector3(signf(c) * absf(c) * sqrt(absf(c)) / h.x, 0, signf(s) * absf(s) * sqrt(absf(s)) / h.z).normalized()])
+	var base := verts.size()
+	for k in 2:
+		var y := -h.y if k == 0 else h.y
+		var scale := 1.0 if k == 0 else taper
+		for r in ring:
+			_vert(center + r[0] * scale + Vector3(0, y, 0), r[1], color)
+	for i in sides:
+		var j := (i + 1) % sides
+		_tri_idx(base + i, base + sides + i, base + sides + j)
+		_tri_idx(base + i, base + sides + j, base + j)
+	var top := verts.size()
+	_vert(center + Vector3(0, h.y, 0), Vector3.UP, color)
+	for r in ring:
+		_vert(center + r[0] * taper + Vector3(0, h.y, 0), Vector3.UP, color)
+	for i in sides:
+		_tri_idx(top, top + 1 + i, top + 1 + (i + 1) % sides)
+
+
+## A smooth-shaded body over elliptic rings, bottom to top: each ring is
+## [y, half width, half depth, color] and may add a bone that it and the
+## rings after it bind to (a shared ring stretches when the bones bend, so no
+## crack opens). A colour change starts a fresh ring at the same height so
+## the colours meet on a hard line. Open at the bottom; closed by a pole
+## `cap` above the last ring (left open when 0). Torsos on people.
+func loft(rings: Array, sides := 12, cap := 0.0) -> void:
+	var n := rings.size()
+	var prev := -1
+	var prev_color := Color()
+	for k in n:
+		var r: Array = rings[k]
+		var lo: Array = rings[maxi(k - 1, 0)]
+		var hi: Array = rings[mini(k + 1, n - 1)]
+		var dy: float = hi[0] - lo[0]
+		var slope := Vector2((hi[1] - lo[1]) / dy, (hi[2] - lo[2]) / dy)
+		var color: Color = r[3]
+		if prev >= 0 and color != prev_color:
+			_loft_ring(r, slope, prev_color, sides, prev)
+			prev_color = color
+			if r.size() > 4:
+				set_bone(r[4])
+			prev = _loft_ring(r, slope, color, sides, -1)
+			continue
+		if r.size() > 4:
+			set_bone(r[4])
+		prev = _loft_ring(r, slope, color, sides, prev)
+		prev_color = color
+	if cap > 0.0:
+		var top: Array = rings[n - 1]
+		var pole := verts.size()
+		_vert(Vector3(0.0, top[0] + cap, 0.0), Vector3.UP, prev_color)
+		for i in sides:
+			_tri_idx(pole, prev + i, prev + (i + 1) % sides)
+
+
+## One ring of loft(), joined to the ring at vertex `prev` (none if -1).
+## Returns where it starts.
+func _loft_ring(r: Array, slope: Vector2, color: Color, sides: int, prev: int) -> int:
+	var base := verts.size()
+	var rx: float = r[1]
+	var rz: float = r[2]
+	for i in sides:
+		var t := TAU * i / sides
+		var c := cos(t)
+		var s := sin(t)
+		var nrm := Vector3(rz * c, -(rz * slope.x * c * c + rx * slope.y * s * s), rx * s)
+		_vert(Vector3(rx * c, r[0], rz * s), nrm.normalized(), color)
+	if prev >= 0:
+		for i in sides:
+			var j := (i + 1) % sides
+			_tri_idx(prev + i, base + i, base + j)
+			_tri_idx(prev + i, base + j, prev + j)
+	return base
+
+
+func _vert(p: Vector3, n: Vector3, color: Color) -> void:
+	verts.append(xform * p)
+	normals.append((xform.basis * n).normalized())
+	colors.append(color)
+	uvs.append(_uv(p, n))
+
+
 ## One triangle over existing vertices, wound to face along their normals.
 func _tri_idx(a: int, b: int, c: int) -> void:
 	var n := normals[a] + normals[b] + normals[c]
