@@ -59,6 +59,16 @@ const ROAD_LOOKS := {
 	"gravel": [GRAVEL, 1.0, 0.0, 1.0],
 	"dirt": [DIRT, 1.0, 0.0, 1.0],
 }
+## How far each surface lies over ROAD_Y. Every strip runs right to its
+## nodes, so at a junction (past the pad's circle at the corners) and on a
+## sharp bend the strips of two roads overlap; in one plane two surfaces
+## fight there, flickering in stripes. Stacked 1.5 mm apart they don't
+## (the camera's near plane keeps that much apart: HANDOFF-shimmer.md):
+## loose under paved, fresh tarmac on top.
+const SURFACE_LIFT := {"dirt": 0.0, "gravel": 0.0015, "washed": 0.003, "worn": 0.0045, "fresh": 0.006}
+## Driveways and junction pads lie over the whole stack.
+const DRIVEWAY_Y := ROAD_Y + 0.0075
+const PAD_Y := ROAD_Y + 0.009
 ## Shares of each surface by road class: farm tracks dirt or gravel, lanes
 ## old tarmac or gravel, county roads worn or washed out, the big roads
 ## mostly sound.
@@ -562,13 +572,14 @@ static func _road(ctx: Ctx, e: int) -> void:
 	var h := w * 0.5
 	var mb = ctx.mb
 	var bridge: bool = c.bridge_edges.has(e)
-	var look: Array = ROAD_LOOKS[road_surface(c, e)]
+	var surface := road_surface(c, e)
+	var look: Array = ROAD_LOOKS[surface]
 	var road_color := MeshBuilder.glow(look[0], look[1])
 	var paint_from: int = mb.verts.size()
 	if bridge:
 		_bridge(ctx, e, a, b, w)
 	else:
-		_flat(ctx, _strip(c, e, -h, h), ROAD_Y, road_color)
+		_flat(ctx, _strip(c, e, -h, h), ROAD_Y + SURFACE_LIFT[surface], road_color)
 	var s0 := _setback(c, na, e)
 	var s1 := _setback(c, nb, e)
 	var run := length - s0 - s1
@@ -708,7 +719,7 @@ static func _junctions(ctx: Ctx) -> void:
 		# The pad takes the surface of the widest road through it.
 		var look: Array = ROAD_LOOKS[road_surface(c, widest)]
 		var color := MeshBuilder.glow(look[0], look[1])
-		_flat(ctx, _circle(p, w * 0.5 + 0.6, 14), ROAD_Y + 0.003, color)
+		_flat(ctx, _circle(p, w * 0.5 + 0.6, 14), PAD_Y, color)
 
 
 static func _driveway(ctx: Ctx, path: Array) -> void:
@@ -718,7 +729,7 @@ static func _driveway(ctx: Ctx, path: Array) -> void:
 		return
 	var d := (b - a).normalized()
 	var n := Vector2(-d.y, d.x) * 1.75
-	_flat(ctx, _cw(PackedVector2Array([a - d + n, b + d + n, b + d - n, a - d - n])), ROAD_Y + 0.002, MeshBuilder.glow(GRAVEL, MeshBuilder.CONCRETE))
+	_flat(ctx, _cw(PackedVector2Array([a - d + n, b + d + n, b + d - n, a - d - n])), DRIVEWAY_Y, MeshBuilder.glow(GRAVEL, MeshBuilder.CONCRETE))
 
 
 static func _polyline_quad(ctx: Ctx, a: Vector2, b: Vector2, w: float, y: float, color: Color) -> void:
@@ -734,8 +745,11 @@ static func _far_road(ctx: Ctx, i: int, k: int) -> void:
 	var pts: Array = f.pts
 	var w: float = ctx.country.classes[int(f.cls)].w
 	var cls: String = ctx.country.classes[int(f.cls)].id
-	var color := DIRT if cls in ["track", "trail"] else MeshBuilder.glow(ASPHALT, MeshBuilder.ASPHALT)
-	_polyline_quad(ctx, Vector2(pts[k][0], pts[k][1]), Vector2(pts[k + 1][0], pts[k + 1][1]), w, ROAD_Y, color)
+	var loose: bool = cls in ["track", "trail"]
+	var color := DIRT if loose else MeshBuilder.glow(ASPHALT, MeshBuilder.ASPHALT)
+	# Over the trails that cross it, as the play area's roads are.
+	var y: float = ROAD_Y + SURFACE_LIFT["dirt" if loose else "worn"]
+	_polyline_quad(ctx, Vector2(pts[k][0], pts[k][1]), Vector2(pts[k + 1][0], pts[k + 1][1]), w, y, color)
 
 
 static func _trail(ctx: Ctx, i: int, k: int) -> void:

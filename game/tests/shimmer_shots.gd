@@ -120,6 +120,11 @@ func _country_spots(c) -> Array:
 	for i in mini(2, cands.size()):
 		var p: Vector2 = cands[i][1]
 		found.append(["junction%d" % (i + 1), Vector3(p.x, 0, p.y)])
+		var n: int = c.nodes_near(p, 0.5)[0]
+		var roads := []
+		for e in c.edges_of(n):
+			roads.append("%s/%s/%.1fm" % [c.edge_class(e), CT.road_surface(c, e), c.edge_width(e)])
+		print("junction%d at %s ground %.2f m: %s" % [i + 1, p, Terrain.height(p.x, p.y), ", ".join(roads)])
 	if not cands.is_empty() and not c.paths.is_empty():
 		var j: Vector2 = cands[0][1]
 		var best := Vector2.ZERO

@@ -20,10 +20,16 @@ const QUALITIES := ["low", "medium", "high", "ultra"]
 ## once more per light, and the whole scene again into the headlight
 ## shadow map. So since 0.22 Ultra keeps High's two car lights and no
 ## headlight shadow, and adds only anti-aliasing (cheap on phone GPUs).
+## High has anti-aliasing too (Sachin saw building edges, kerbs, poles and
+## lane paint crawl): on Android the Compatibility renderer does 4x MSAA in
+## tile memory (EXT_multisampled_render_to_texture), with no resolve pass,
+## so it costs little next to the lights. Low and Medium keep it off for
+## the weakest phones (HANDOFF-shimmer.md). Ultra is now the same set as
+## High; it stays a step so saves that picked it keep working.
 const PRESETS := {
 	"low": {"detail": "low", "shadows": false, "bloom": false, "aa": false, "vivid": false, "real_lights": true, "cars": 1, "lamps": 0, "bars": false, "car_shadow": false, "scale": 0.8},
 	"medium": {"detail": "high", "shadows": true, "bloom": false, "aa": false, "vivid": false, "real_lights": true, "cars": 1, "lamps": 2, "bars": false, "car_shadow": false, "scale": 1.0},
-	"high": {"detail": "high", "shadows": true, "bloom": true, "aa": false, "vivid": true, "real_lights": true, "cars": 2, "lamps": 4, "bars": true, "car_shadow": false, "scale": 1.0},
+	"high": {"detail": "high", "shadows": true, "bloom": true, "aa": true, "vivid": true, "real_lights": true, "cars": 2, "lamps": 4, "bars": true, "car_shadow": false, "scale": 1.0},
 	"ultra": {"detail": "high", "shadows": true, "bloom": true, "aa": true, "vivid": true, "real_lights": true, "cars": 2, "lamps": 4, "bars": true, "car_shadow": false, "scale": 1.0},
 }
 ## The settings keys a preset sets (and the effect toggles on the page).

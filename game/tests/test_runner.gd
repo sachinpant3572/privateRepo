@@ -108,6 +108,10 @@ func _run() -> void:
 		"test_idm_keeps_gap_behind_stopped_leader", "test_traffic_density_and_mix_by_district_and_hour",
 		"test_traffic_surge_raises_budget", "test_traffic_yields_to_siren", "test_late_night_signals_flash",
 		"test_zebra_styles_match_city_cells",
+		"test_shader_patterns_filter_by_footprint",
+		"test_high_preset_and_default_have_msaa",
+		"test_camera_near_plane_keeps_depth_precision",
+		"test_ground_layers_never_share_a_plane",
 	]
 	# ONLY=name1,name2 runs just those (handy while working on one test).
 	var only := OS.get_environment("ONLY")
@@ -1671,7 +1675,7 @@ func test_graphics_quality_presets() -> void:
 	var G = game.Graphics
 	var s: Dictionary = game.settings
 	var env: Environment = game.atmosphere.env
-	_check(s.quality == "high" and env.glow_enabled and env.adjustment_enabled and get_viewport().msaa_3d == Viewport.MSAA_DISABLED and game.graphics.cars == 2 and game.graphics.lamps == 4, "a new game starts on High: bloom and vivid colour on, no MSAA, 2 car and 4 lamp lights")
+	_check(s.quality == "high" and env.glow_enabled and env.adjustment_enabled and get_viewport().msaa_3d == Viewport.MSAA_4X and game.graphics.cars == 2 and game.graphics.lamps == 4, "a new game starts on High: bloom, vivid colour and 4x MSAA on, 2 car and 4 lamp lights")
 	G.pick(s, "ultra")
 	game.apply_settings()
 	_check(env.glow_enabled and get_viewport().msaa_3d == Viewport.MSAA_4X and game.graphics.cars == 2 and not game.graphics.car_shadow, "Ultra adds 4x MSAA but keeps two car lights and no headlight shadow (0.22: 20 fps on a phone)")
@@ -9658,3 +9662,75 @@ func test_zebra_styles_match_city_cells() -> void:
 	var CityCells = preload("res://scripts/city_cells.gd")
 	_check(TP.ZEBRA_STYLES == CityCells.ZEBRA_STYLES, "TrafficPlan.ZEBRA_STYLES matches CityCells.ZEBRA_STYLES")
 
+
+## Shimmer (HANDOFF-shimmer.md): the surface shader's fine patterns fade to
+## their average once smaller than a pixel instead of being point-sampled.
+func test_shader_patterns_filter_by_footprint() -> void:
+	var code: String = MeshBuilder.SURFACE_COMMON
+	_check(code.contains("fwidth(") and code.contains("float fine(") and code.contains("float aa_line("),
+		"SURFACE_COMMON has the footprint filters fine() and aa_line() built on fwidth()")
+	_check(code.count("aa_line(") >= 6 and code.count("fine(") >= 6,
+		"joints, seams and speckle go through them (aa_line %d, fine %d uses)" % [code.count("aa_line("), code.count("fine(")])
+
+
+## Shimmer: High (the default) and Ultra smooth edges with 4x MSAA; Low and
+## Medium keep it off; a new game's settings start with it on.
+func test_high_preset_and_default_have_msaa() -> void:
+	var P: Dictionary = preload("res://scripts/graphics.gd").PRESETS
+	_check(P.high.aa and P.ultra.aa and not P.low.aa and not P.medium.aa,
+		"anti-aliasing on in High and Ultra, off in Low and Medium")
+	var fresh = MainScene.instantiate()
+	var s: Dictionary = fresh.settings
+	_check(s.quality == "high" and s.aa, "a new game's settings: quality high, aa on")
+	fresh.free()
+
+
+## Texture overlap: the perspective near plane sits as far out as the near
+## fade allows (nothing visible is clipped), so the 24-bit depth buffer
+## keeps the ground's 1.5 mm layers apart across the view.
+func test_camera_near_plane_keeps_depth_precision() -> void:
+	await _new_game(false)
+	var cam = game.camera
+	var TPC = preload("res://scripts/top_down_camera.gd")
+	var keep_size: float = cam.size
+	for sz in [TPC.FOOT_SIZE, TPC.DRIVE_SIZE, TPC.DRIVE_SIZE * 1.3]:
+		cam.size = sz
+		cam._frame(0.0)
+		var base: float = sz * 0.5 / tan(deg_to_rad(TPC.PERSPECTIVE_FOV) * 0.5)
+		var fade: float = TPC.NEAR_FADE * base
+		var step: float = cam.view_depth * cam.view_depth / (cam.near * 16777216.0)
+		_check(cam.near > 1.0 and cam.near < 0.35 * fade,
+			"size %.0f: near %.2f m is past 1 m and inside the fade's cut (%.2f m)" % [sz, cam.near, 0.35 * fade])
+		_check(step < 0.0005,
+			"size %.0f: depth step at %.0f m is %.2f mm, under a third of the 1.5 mm layer gap" % [sz, cam.view_depth, step * 1000.0])
+	cam.perspective = false
+	cam._frame(0.0)
+	_check(is_equal_approx(cam.near, 1.0), "orthographic keeps a 1 m near plane, got %.2f" % cam.near)
+	cam.perspective = true
+	cam.size = keep_size
+	cam._frame(0.0)
+
+
+## Texture overlap: ground layers that overlap (country road strips at a
+## junction, quarter pavings running into the junction) each have their own
+## height, so two never fight in one plane.
+func test_ground_layers_never_share_a_plane() -> void:
+	var CT = preload("res://scripts/country_tiles.gd")
+	var CityCells = preload("res://scripts/city_cells.gd")
+	var lifts: Array = []
+	for k in CT.ROAD_LOOKS:
+		_check(CT.SURFACE_LIFT.has(k), "country surface %s has a lift" % k)
+		lifts.append(float(CT.SURFACE_LIFT.get(k, -1.0)))
+	lifts.sort()
+	var gap := 1.0
+	for k in range(1, lifts.size()):
+		gap = minf(gap, lifts[k] - lifts[k - 1])
+	_check(gap >= 0.0015 - 1e-6, "country surfaces at least 1.5 mm apart (closest %.2f mm)" % (gap * 1000.0))
+	_check(CT.DRIVEWAY_Y - (CT.ROAD_Y + lifts.back()) >= 0.0015 - 1e-6 and CT.PAD_Y - CT.DRIVEWAY_Y >= 0.0015 - 1e-6,
+		"driveways and junction pads lie over every road surface")
+	var all_in := true
+	for k in CityCells.PAVER_KINDS:
+		all_in = all_in and CityCells.PAVER_LAYERS.has(k)
+	_check(all_in and CityCells.PAVER_LAYERS.size() == 4, "every quarter paving kind has its own layer")
+	var top: float = 0.005 + 0.0015 * (CityCells.PAVER_LAYERS.size() - 1) + 0.01
+	_check(top < 0.025 - 0.0015, "the highest quarter paving (top %.4f m) stays under the zebra (0.025 m)" % top)
