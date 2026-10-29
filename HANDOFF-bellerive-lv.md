@@ -134,3 +134,16 @@ planned size" rule for the city; #104 (organic outline) carries on inside it.
   4.1-4.3 km² target) is measured on the street plan, not the footprint.
 - Self-check after the fixes: 0 highway ends off an exit, 0 unreached nodes,
   112 of 158 exits used.
+
+## Curved roads, Option A (Sachin 2026-10-29: "Lets do A for now")
+
+Research: reference/world/curves_and_map.md. On hold: Sachin asked for rough
+top-down sketches of A, B and C first. Sketch:
+reference/world/curve_options_sketch.png (game/tools/curve_options_sketch.py
+on a plan dump; off-grid share Now 15%, A 28%, B 31%, C 58%). Wait for his pick.
+- Drafted, never run (street_plan.gd): CURVES (Mirador from Lantern (330,-280)
+  out the NW edge; Canyon in the NE lobe) cut into `_holes` as 1 m strips;
+  BOWS bend east-west rows by amp*sin(pi*t) (Morrow Point north, Calle Luna
+  seaward, ramped from Crescent). The sketch shows the bows also need a ramp
+  away from the levee and from Seagrape, and a shore parkway 75 m inland.
+- Map (#107): vector map after the curves settle.

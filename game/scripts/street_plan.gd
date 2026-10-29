@@ -122,6 +122,7 @@ const ROAD_NAMES := {
 	"hibiscus": "Hibiscus Avenue", "tamarind": "Tamarind Avenue", "mangrove": "Mangrove Avenue",
 	"presidio": "Presidio Avenue", "gulfview": "Gulfview Avenue", "pelican": "Pelican Avenue",
 	"seagrape": "Seagrape Avenue", "ocean": "Ocean Drive", "causeway": "Serena Causeway",
+	"mirador": "Mirador Boulevard", "canyon": "Canyon Drive",
 }
 
 ## The citywide arterial grid (California: the boulevards run straight
@@ -145,6 +146,33 @@ const SEAGRAPE_AT := Vector2(1242.0, 1744.0)
 ## junction with Ocean Drive (the line is set to meet it).
 const CAUSEWAY_FROM := Vector2(1586.0, 1400.0)
 const CAUSEWAY_DIR := Vector2(0.6614, 0.7501)
+## Curved roads through the grid (Sachin, 2026-10-29: "some curved roads
+## too ... perfectly connecting straight to other roads, or stretching till
+## the city outside area"): [road, class, Catmull-Rom control points]. Each
+## starts on a grid road and runs out past the outline, so the trim makes it
+## an exit the country carries on. The grid streets they cross are cut at
+## them and meet them; those running alongside are trimmed back.
+const CURVES := [
+	# Mirador Boulevard: the Sunset of Bellerive, from Lantern Boulevard in an
+	# S through Cable Hill up to the hills.
+	["mirador", "boulevard", [Vector2(330, -280), Vector2(240, -300), Vector2(160, -350), Vector2(110, -420),
+			Vector2(60, -500), Vector2(-30, -560), Vector2(-120, -640)]],
+	# Canyon Drive: off Hibiscus Avenue, swinging north out of the north-east.
+	["canyon", "avenue", [Vector2(1460, 100), Vector2(1540, 60), Vector2(1600, 0), Vector2(1640, -90),
+			Vector2(1660, -180), Vector2(1665, -280)]],
+]
+## Bowed districts: the east-west lines (district rows and arterials) of
+## `bank` with x in [x0, x1] and y in [y0, y1] move amp * sin(pi * t) in y,
+## t = (x - x0) / (x1 - x0), so a group of streets curves together and stays
+## parallel, and carries on straight past the span's ends. Below y0 the bow
+## grows from 0 to full over `ramp` metres.
+const BOWS := [
+	# Morrow Point: its rows and boulevards bow north with the river bank.
+	{"bank": "south", "x": [-80.0, 690.0], "y": [1100.0, 2100.0], "amp": -70.0, "ramp": 0.0},
+	# Calle Luna: its streets bow out towards the sea, starting straight at
+	# Crescent Boulevard.
+	{"bank": "north", "x": [1460.0, 2230.0], "y": [500.0, 1900.0], "amp": 60.0, "ramp": 150.0},
+]
 ## A point inside Brisa Beach (between Seagrape and Ocean Drive).
 const BRISA_SEED := Vector2(1634, 1593)
 ## District streets fall up to this share of a block off an even split
@@ -664,6 +692,14 @@ func _layout(src: Array) -> void:
 			[liberty, "avenue", "liberty"], [magnolia, "avenue", "magnolia"], [wharf, "avenue", "wharf"], [river_road, "river", "river_road"],
 			[levee, "river", "levee"], [quay, "quay", "quay"], [PackedVector2Array([b0, b1]), "bridge", "bridge"],
 			[point_ave, "avenue", "point_ave"]]
+	# The curved roads: each is a thin strip in _holes too, so the district
+	# streets crossing it are cut there (and meet it) and those running
+	# alongside it are trimmed back.
+	for c in CURVES:
+		var line := _spline(c[2])
+		_holes.append(Geometry2D.offset_polyline(line, 1.0)[0])
+		for piece in Geometry2D.intersect_polyline_with_polygon(line, north):
+			roads.append([piece, c[1], c[0]])
 	for piece in Geometry2D.intersect_polyline_with_polygon(seagrape, north):
 		roads.append([piece, "avenue", "seagrape"])
 	for piece in Geometry2D.intersect_polyline_with_polygon(ocean, north):
@@ -672,6 +708,8 @@ func _layout(src: Array) -> void:
 	# (and out of Brisa Beach, which has its own grid).
 	for a in ARTERIALS:
 		var line := PackedVector2Array([Vector2(a.x, top), Vector2(a.x, bottom)]) if a.has("x") else PackedVector2Array([Vector2(a.get("from", west), a.y), Vector2(a.get("to", east), a.y)])
+		if a.has("y"):
+			line = _bowed(line, a.bank)
 		for piece in Geometry2D.intersect_polyline_with_polygon(line, north if a.bank == "north" else south):
 			var parts: Array[PackedVector2Array] = [piece]
 			for zone in [brisa, beach]:
@@ -904,7 +942,23 @@ func _grid_lines(src: Array, k: int, region: PackedVector2Array) -> void:
 	for s in _splits(ART_X, p.grid[0], lo.x, hi.x, "x" + p.bank):
 		_add_pieces(src, PackedVector2Array([Vector2(s[0], lo.y), Vector2(s[0], hi.y)]), region, gap, k, 0, "avenue" if s[1] else "")
 	for s in _splits(art_y, p.grid[1], lo.y, hi.y, "y" + p.bank):
-		_add_pieces(src, PackedVector2Array([Vector2(lo.x, s[0]), Vector2(hi.x, s[0])]), region, gap, k, 1, "avenue" if s[1] else "")
+		_add_pieces(src, _bowed(PackedVector2Array([Vector2(lo.x, s[0]), Vector2(hi.x, s[0])]), p.bank), region, gap, k, 1, "avenue" if s[1] else "")
+
+
+## An east-west line bent by the BOWS of `bank` it runs through.
+static func _bowed(line: PackedVector2Array, bank: String) -> PackedVector2Array:
+	var bows := BOWS.filter(func(b): return b.bank == bank and line[0].y >= b.y[0] and line[0].y <= b.y[1])
+	if bows.is_empty():
+		return line
+	var out := _resample(line, STEP * 0.5)
+	for i in out.size():
+		var q := out[i]
+		for b in bows:
+			var t: float = (q.x - b.x[0]) / (b.x[1] - b.x[0])
+			if t > 0.0 and t < 1.0:
+				var w: float = clampf((q.y - b.y[0]) / b.ramp, 0.0, 1.0) if b.ramp > 0.0 else 1.0
+				out[i].y += b.amp * sin(PI * t) * w
+	return out
 
 
 ## The points that split each interval of `arts` into n parts, between lo
