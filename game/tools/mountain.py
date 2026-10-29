@@ -103,6 +103,12 @@ CRESTS = [
 PEAKS = {"mount_calder": SUMMIT, "raven_peak": (400, -3180), "east_peak": (1760, -2880), "north_knob": (1090, -3580),
          "hawk_peak": (60, -2470), "pine_knob": (-160, -3640), "calder_knob": (1080, -1600),
          "larkspur_knob": (1780, -1920)}
+# The summit plateau's sites (x, y, w, d): the car park Mount Calder Road
+# ends in, the restaurant, the helipad, the viewing deck the trails end at
+# and the cable car's top station, each on a flat pad round the summit's rim.
+SUMMIT_SITES = {"car_park": (930.0, -2735.0, 36.0, 24.0), "restaurant": (870.0, -2735.0, 40.0, 30.0),
+                "helipad": (1025.0, -2735.0, 30.0, 30.0), "deck": (985.0, -2668.0, 24.0, 14.0),
+                "cable_top": (915.0, -2665.0, 26.0, 16.0)}
 CREST_ROUND = 35.0  # crests are rounded over this far
 CREST_STEEP = 0.6  # a crest's sides are this much steeper at 1000 m than at the foot
 SMAX = 40.0  # crests and cone blend over this height difference
@@ -118,35 +124,44 @@ LETTERS_SIZE = (150.0, 26.0)
 MASTS = [(1106.0, -1250.0), (1132.0, -1232.0)]
 MAST_SIZE = (18.0, 18.0)
 
-GRADE = {"freeway": 0.06, "highway": 0.075, "road": 0.13, "street": 0.13, "lane": 0.14, "track": 0.25, "trail": 0.3}
+GRADE = {"freeway": 0.06, "highway": 0.075, "road": 0.13, "street": 0.13, "lane": 0.14, "track": 0.25, "trail": 0.3,
+         "rail": 0.025}
 BLEND = 22.0  # cut and fill fade out over this far beside a road's shoulder, or more:
 MAX_BANK = 0.4  # no cut or fill bank steeper than this (the camera looks down at 60 degrees)
 PAD_BLEND = 12.0
+UNDER_DROP = 6.5  # a trail's underpass runs this far below the road over it
 
 
-def roads(route_at):
-    """The mountain's roads, in build order (a later road's junctions take
-    an earlier one's height): [(points, class, name, tag, fillet radius)].
-    route_at(name, near) gives the point on a map route nearest `near`."""
-    freeway = [(690, -338), (696, -560), (722, -850), (752, -1080), (770, -1262), (800, -1420), (900, -1580),
-               (1100, -1740), (1450, -1930), (1900, -1980), (2350, -1820), route_at("Route 1 Gulf Highway", (2700, -1600))]
-    crest = [route_at("Route 9 River Road", (132, -1250)), (270, -1265), (400, -1255), (530, -1240), (650, -1250),
-             (770, -1262), (880, -1322), (1010, -1362), (1110, -1388), (1230, -1342), (1370, -1300), (1520, -1270),
-             (1660, -1225), (1760, -1132), (1840, -1010), (1990, -800), route_at("Route 1 Gulf Highway", (2300, -560))]
-    coyote = [(452, -338), (470, -500), (540, -650), (590, -820), (600, -980), (612, -1120), (650, -1250)]
-    observatory = [(1010, -338), (1015, -470), (1100, -560), (1180, -640), (1190, -700), (1110, -712),
-                   (990, -760), (965, -820), (1000, -870), OBSERVATORY_ROAD_END]
-    fire = [(1110, -1388), (1150, -1335), (1122, -1295), (1090, -1276), (1086, -1250)]
+LINES = Path(__file__).resolve().parent / "mountain_lines.json"
+# The range's own roads (mountain_lines.json, laid by mountain_plan.py), in
+# build order: a later road's junctions take an earlier one's height. The
+# map routes it re-laid (tag "route") go back into world_map.json.
+ROAD_ORDER = ["freeway", "crest", "canyon", "observatory", "fire_road", "calder", "west_ridge_track",
+              "larkspur_track", "calder_trail", "raven_trail"]
+# The cable car: from Cable Hill at the city's edge, by a mid-station on the
+# south-west spur, to the summit's rim.
+CABLE = {"bottom": (0.0, -430.0), "mid": (475.0, -1590.0), "top": SUMMIT_SITES["cable_top"][:2]}
+CABLE_MID_SIZE = (26.0, 16.0)
+CABLE_CLEAR = 18.0  # the cable keeps this far over the ground; a tower goes in where it would not
+CABLE_SPAN = 400.0  # and no span between towers is longer than this
+
+
+def lines():
+    """The planned lines: {id: {cls, name, tag, keep_head, pts, spans}}."""
+    return json.loads(LINES.read_text())
+
+
+def roads():
+    """The range's roads in build order: [(id, points, class, name, tag,
+    spans)], spans [(s0, s1, kind)] along the points ('t' tunnel, 'b'
+    bridge). The Letters Trail from the observatory is laid by hand."""
+    ls = lines()
+    out = [(k, [tuple(q) for q in ls[k]["pts"]], ls[k]["cls"], ls[k]["name"], ls[k]["tag"],
+            [tuple(sp) for sp in ls[k]["spans"]]) for k in ROAD_ORDER if k in ls]
     trail = [(OBSERVATORY[0] + OBSERVATORY_SIZE[0] * 0.5 + 5.0, OBSERVATORY[1] + OBSERVATORY_SIZE[1] * 0.5 - 4.0), (1150, -930),
              (1230, -1010), (LETTERS[0] - LETTERS_SIZE[0] * 0.5 + 10.0, LETTERS[1] + LETTERS_SIZE[1] * 0.5 + 5.0)]
-    return [
-        (freeway, "highway", "Canyon Freeway", "freeway", 200.0),
-        (crest, "road", "Crest Drive", "crest", 45.0),
-        (coyote, "road", "Coyote Canyon Road", "canyon", 50.0),
-        (observatory, "road", "Observatory Road", "observatory", 26.0),
-        (fire, "track", "Summit Fire Road", "fire_road", 12.0),
-        (trail, "trail", "Letters Trail", "letters_trail", 15.0),
-    ]
+    out.append(("letters_trail", trail, "trail", "Letters Trail", "letters_trail", []))
+    return out
 
 
 class Mountain:
@@ -383,7 +398,8 @@ class Mountain:
         than its class allows (or `cap`); ends on the flat or on an earlier
         road keep that height. spans [(s0, s1, kind)]: tunnels ('t') and
         bridges ('b') run straight between their ends, the ground left
-        alone. Returns the max grade it reached."""
+        alone; an underpass ('u') passes UNDER_DROP below the road it
+        crosses there. Returns the max grade it reached."""
         if self.poly.distance(line) > 1.0:
             return 0.0
         n = max(2, math.ceil(line.length / 4.0))
@@ -396,6 +412,8 @@ class Mountain:
             inside |= (s > a) & (s < b)
         # Over a span the "ground" is the straight line between its ends.
         for a, b, _k in spans:
+            if _k == "u":
+                continue
             ia, ib = int(np.searchsorted(s, a)), int(np.searchsorted(s, b))
             ia, ib = max(ia - 1, 0), min(ib, len(s) - 1)
             z[ia:ib + 1] = np.linspace(z[ia], z[ib], ib - ia + 1)
@@ -414,9 +432,12 @@ class Mountain:
             for q in _points(line.intersection(other)):
                 sq = line.project(Point(q))
                 so = other.project(Point(q))
-                if any(a < sq < b for a, b, _k in spans) or any(a < so < b for a, b, _k in ospans):
+                if any(a < so < b for a, b, _k in ospans):
                     continue
-                pins[int(round(sq / (line.length / n)))] = float(np.interp(so, os_, oz))
+                under = any(a < sq < b and k == "u" for a, b, k in spans)
+                if any(a < sq < b for a, b, _k in spans) and not under:
+                    continue
+                pins[int(round(sq / (line.length / n)))] = float(np.interp(so, os_, oz)) - (UNDER_DROP if under else 0.0)
         g = cap if cap is not None else GRADE[cls]
         ds = line.length / n
         for i, h in pins.items():
@@ -431,6 +452,8 @@ class Mountain:
                     z[i] = min(max(z[i], z[i + 1] - g * ds), z[i + 1] + g * ds)
         # Spans stay straight between their (graded) ends.
         for a, b, _k in spans:
+            if _k == "u":
+                continue
             ia, ib = max(int(np.searchsorted(s, a)) - 1, 0), min(int(np.searchsorted(s, b)), len(s) - 1)
             z[ia:ib + 1] = np.linspace(z[ia], z[ib], ib - ia + 1)
         # How far the cut or fill fades out: wide enough to keep its bank gentle.
@@ -438,6 +461,46 @@ class Mountain:
         bank[inside] = BLEND
         self.profiles.append([line, s, z, _HALF[cls], bank, [tuple(sp) for sp in spans]])
         return float(np.max(np.abs(np.diff(z))) / ds)
+
+    def cable(self):
+        """The cable car: {stations: [{id, x, y, z}], towers: [{x, y, z, h}]}.
+        A station's z is its ground (its pad's height); between two
+        stations the cable runs straight from 12 m over each, and a tower
+        stands wherever the ground comes within CABLE_CLEAR of it."""
+        names = ("bottom", "mid", "top")
+        st = [{"id": k, "x": CABLE[k][0], "y": CABLE[k][1], "z": round(max(0.0, self.raw_at(CABLE[k])), 1)} for k in names]
+        towers = []
+
+        def span(a, b, depth=0):
+            n = max(8, int(math.dist(a[:2], b[:2]) / 8.0))
+            u = np.linspace(0.0, 1.0, n + 1)[1:-1]
+            # Clear of the station or tower at each end (it holds the cable up there).
+            L = math.dist(a[:2], b[:2])
+            u = u[(u * L > 60.0) & ((1.0 - u) * L > 60.0)]
+            if len(u) == 0:
+                return
+            xs, ys = a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u
+            g = np.maximum(self.raw(xs, ys), 0.0)
+            clear = a[2] + (b[2] - a[2]) * u - g
+            i = int(np.argmin(clear))
+            if depth > 6:
+                return
+            if clear[i] >= CABLE_CLEAR:
+                if L <= CABLE_SPAN:
+                    return
+                # Clear all the way, but too long a span: a tower halfway, as tall as the cable is high there.
+                i = len(u) // 2
+                top = (float(xs[i]), float(ys[i]), float(g[i]) + min(max(float(clear[i]), CABLE_CLEAR + 12.0), 45.0))
+            else:
+                top = (float(xs[i]), float(ys[i]), float(g[i]) + CABLE_CLEAR + 12.0)
+            span(a, top, depth + 1)
+            towers.append({"x": round(top[0], 1), "y": round(top[1], 1), "z": round(float(g[i]), 1),
+                           "h": round(top[2] - float(g[i]), 1)})
+            span(top, b, depth + 1)
+
+        for s0, s1 in zip(st, st[1:]):
+            span((s0["x"], s0["y"], s0["z"] + 12.0), (s1["x"], s1["y"], s1["z"] + 12.0))
+        return {"stations": st, "towers": towers}
 
     # --- The height grid ------------------------------------------------------------
 
@@ -533,6 +596,7 @@ class Mountain:
 
 
 _HALF = {k: c["w"] * 0.5 for k, c in CLASSES.items()}
+_HALF["rail"] = 5.0  # a single track on its ballast shelf
 
 
 def _smax(a, b, k):

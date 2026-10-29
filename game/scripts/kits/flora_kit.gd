@@ -79,11 +79,12 @@ static func steep(n: Vector3) -> float:
 
 
 ## The ground colour of wild hill ground: golden grass where dry, green
-## where wet, rock on steep faces and near the tops.
+## where wet, rock on steep faces and above about 700 m (Mount Calder's
+## crown, 1000 m; the foothills are 150-300 m).
 static func ground(m: float, n: Vector3, h: float) -> Color:
 	var c := DRY.lerp(GREEN, smoothstep(0.26, 0.64, m))
 	c = c.lerp(ROCK, clampf((steep(n) - 0.14) * 3.5, 0.0, 0.55))
-	return c.lerp(ROCK, clampf((h - 100.0) / 45.0, 0.0, 0.35))
+	return c.lerp(ROCK, clampf((h - 650.0) / 150.0, 0.0, 0.6))
 
 
 ## The plant (one of KINDS) for a wild hill point: weighted by moisture,
@@ -94,13 +95,17 @@ static func pick(x: float, z: float, h: float, n: Vector3, m: float, rng: Random
 	var dry := (1.0 - m) * (1.0 - m)
 	var wet_low := clampf((m - 0.55) * 3.0, 0.0, 1.0) * clampf(1.0 - h / 35.0, 0.0, 1.0)
 	var mid := maxf(0.0, 1.0 - absf(m - 0.45) * 2.4)
+	# The massif's forest: pine from the foothills up, thinning out above
+	# 800 m into the bare rock of the tops; the oaks give way to it.
+	var forest := clampf((h - 120.0) / 180.0, 0.0, 1.0) * (1.0 - clampf((h - 800.0) / 140.0, 0.0, 0.9))
+	var oak := 1.0 - 0.7 * clampf((h - 450.0) / 250.0, 0.0, 1.0)
 	var w := {
-		"rock": 2.5 * clampf((s - 0.12) * 5.0, 0.0, 1.0) + 2.0 * clampf((h - 95.0) / 40.0, 0.0, 1.0),
-		"pine": 5.0 * clampf((h - 65.0) / 30.0, 0.0, 1.0) * m,
+		"rock": 2.5 * clampf((s - 0.12) * 5.0, 0.0, 1.0) + 5.0 * clampf((h - 680.0) / 120.0, 0.0, 1.0),
+		"pine": 7.0 * forest * (0.45 + m),
 		"eucalyptus": 6.0 if h < 55.0 and noise(x, z, 70.0, 3) > 0.74 else 0.0,
 		"sycamore": 5.0 * wet_low,
-		"live_oak": 0.4 + 2.6 * m,
-		"scrub_oak": 2.6 * m,
+		"live_oak": (0.4 + 2.6 * m) * oak,
+		"scrub_oak": 2.6 * m * oak,
 		"toyon": 1.8 * m,
 		"chaparral": 3.2 * mid + 1.2 * dry,
 		"manzanita": 1.8 * mid,

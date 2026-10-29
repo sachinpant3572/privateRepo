@@ -45,8 +45,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from road_classes import CLASSES, CITY_RANK  # noqa: E402
 import farmland  # noqa: E402
 import wealth  # noqa: E402
-from mountain import Mountain, roads as mountain_roads, OBSERVATORY, OBSERVATORY_SIZE, OBSERVATORY_ROAD_END, LETTERS, LETTERS_SIZE, MASTS, MAST_SIZE  # noqa: E402
-from mountain import GRADE  # noqa: E402
+from mountain import Mountain, roads as mountain_roads, lines as mountain_lines, OBSERVATORY, OBSERVATORY_SIZE, OBSERVATORY_ROAD_END, LETTERS, LETTERS_SIZE, MASTS, MAST_SIZE  # noqa: E402
+from mountain import GRADE, SUMMIT_SITES, PEAKS, CABLE, CABLE_MID_SIZE  # noqa: E402
+import numpy as np  # noqa: E402
 
 # An avenue grades like a street.
 GRADE.setdefault("avenue", GRADE["street"])
@@ -70,7 +71,10 @@ BELT_STRAIGHT_MAX = 600.0   # self_check: no straight run longer than this
 URBAN_BOX_MAX = 0.8         # self_check: the urban outline fills less of its bbox
 LEAD_SHORT = 450.0          # a route ending this near the city is led on in to an exit
 # The Bellerive Hills' road tags (tools/mountain.py).
-MTN_TAGS = ("freeway", "crest", "canyon", "observatory", "fire_road", "letters_trail")
+MTN_TAGS = ("freeway", "crest", "canyon", "observatory", "fire_road", "letters_trail", "calder", "track", "trail")
+HOME_TOP = 400.0  # no hillside homes higher than this (m)
+# The fillet the range's planned ways get where a city exit joins them.
+MTN_FILLET = {"highway": 200.0, "road": 45.0, "lane": 30.0, "track": 12.0, "trail": 15.0}
 
 # Ground beyond the play area, so the edge is a fence, not the end of the world.
 BEYOND = 450.0
@@ -699,12 +703,16 @@ class Country:
         self.urban = Polygon(self.L(self.city["urban"])).buffer(0)
         self._exits()
         regs = [Polygon(self.L(r["polygon"])) for r in w["regions"] if r.get("phase") == 2]
+        rp = next((r for r in w["regions"] if r.get("id") == "red_pine"), None)
+        self.red_pine = prep(Polygon(self.L(rp["polygon"]))) if rp else prep(Point(1e9, 1e9).buffer(1.0))
         # The city rect, grown to the footprint's box where the core reaches
         # past it; the shore between it and the Gulf belongs to the city.
         self.city_rect = box(*unary_union([self.city_rect, self.P.envelope]).bounds)
         cx0, cy0, cx1, cy1 = self.city_rect.bounds
         shore = box(cx0 - 100, cy1 - 100, cx1 + 200, cy1 + 700)
-        a = unary_union(regs + [self.city_rect, self.urban, self.P, shore]).buffer(300).buffer(-300)
+        # The whole range is played (Mount Calder and its ridges reach north
+        # into Red Pine, phase 3: only the ground, roads, forest and summit).
+        a = unary_union(regs + [self.city_rect, self.urban, self.P, shore, self.mtn.poly]).buffer(300).buffer(-300)
         a = Polygon(a.exterior)
         # One piece: a corner of the shore box past the Gulf is dropped.
         self.A = max(polys_of(a.difference(self.gulf)), key=lambda g: g.area)
@@ -1342,15 +1350,33 @@ class Country:
         return None
 
     def _mountain_roads(self):
-        """The Bellerive Hills' roads (tools/mountain.py), each graded as it
-        goes in so the ones after it meet it at its height. One that starts
-        at the city starts from the exit that suits it (_pick_exit), along
-        the exit's street."""
-        def route_at(name, near):
-            geom = unary_union([s[0] for s in self.sources if s[2] == name])
-            return nearest_points(Point(near), geom)[1].coords[0]
+        """The range's ways (tools/mountain.py, laid by mountain_plan.py),
+        each graded as it goes in so the ones after it meet it at its
+        height: first the rail pass (its shelf at no more than 2.5%), then
+        the map routes through the range with their bridges, then the
+        range's own roads, tracks and trails. One that starts at the city
+        starts from the exit that suits it (_pick_exit), along the exit's
+        street. Tunnels, bridges, viaducts and the trails' underpasses go
+        into self.structures."""
+        self.structures = []
+        self.rail_pass = None
+        planned = mountain_lines()
+        self._rail_pass(planned["rail_pass"])
+        order = [v["name"] for v in planned.values() if v["tag"] == "route"]
+        by_name = {v["name"]: v for v in planned.values() if v["tag"] == "route"}
+        routes = [s for s in self.sources if s[3] == "route" and self.mtn.poly.distance(s[0]) <= 1.0]
+        routes.sort(key=lambda s: order.index(s[2]) if s[2] in order else len(order))
+        for s in routes:
+            v = by_name.get(s[2])
+            spans = self._spans_on(s[0], self._span_ends(v["pts"], v["spans"])) if v else []
+            spans = self._wet_only(s[0], spans)
+            gr = self.mtn.grade(s[0], s[1], spans=spans)
+            if gr > 0.0:
+                self.mtn_grades.append((s[2], round(gr, 3)))
+            self._note_structures(s[0], s[1], s[2], spans)
 
-        for pts, cls, name, tag, radius in mountain_roads(route_at):
+        for ident, pts, cls, name, tag, spans in mountain_roads():
+            ends = self._span_ends(pts, spans)
             pts = list(pts)
             if self.P.distance(Point(pts[0])) < 400.0:
                 orig, rest = pts[0], pts[1:]
@@ -1364,10 +1390,138 @@ class Country:
                     k = min(40.0, 0.3 * dist(e, p1))
                     pts = [e, (e[0] + d[0] * k, e[1] + d[1] * k)] + rest
                     self._link(ex)
-            line = LineString(fillet(pts, radius, CLASSES[cls]["step"] * 0.5))
-            if cls != "trail":
-                self.mtn_grades.append((name, round(self.mtn.grade(line, cls), 3)))
-            self.add(list(line.coords), cls, name, tag)
+            line = LineString(fillet(pts, MTN_FILLET[cls], CLASSES[cls]["step"] * 0.5))
+            spans = self._wet_only(line, self._spans_on(line, ends))
+            if ident != "letters_trail":
+                if cls == "trail":
+                    spans = sorted(spans + self._underpasses(line, spans))
+                self.mtn_grades.append((name, round(self.mtn.grade(line, cls, spans=spans), 3)))
+            self._note_structures(line, cls, name, spans)
+            # A tunnel's or underpass's stretch is not laid on the ground: the
+            # way stops at its portals (a tunnel's with a barricade).
+            s = 0.0
+            for a, b, k in sorted(sp for sp in spans if sp[2] in "tu"):
+                if a - s > 1.0:
+                    self.add(list(substring(line, s, a).coords), cls, name, tag)
+                if k == "t":
+                    for q, sg in ((a, -1.0), (b, 1.0)):
+                        (x, y), (dx, dy) = _along(line, q)
+                        bx, by = x + dx * sg * 6.0, y + dy * sg * 6.0
+                        self.barricades.append([round(bx, 2), round(by, 2), round(dx, 4), round(dy, 4), CLASSES[cls]["w"]])
+                s = b
+            if line.length - s > 1.0:
+                self.add(list(substring(line, s, line.length).coords), cls, name, tag)
+
+    def _rail_pass(self, plan):
+        """The Morrow Freight Line over the range (world_map.json carries the
+        planned line): graded at no more than 2.5% on its shelf, which is cut
+        and filled into the ground like a road; its tunnels and viaducts are
+        structures, the track drawn only where it runs on the ground."""
+        name = plan["name"]
+        ends = self._span_ends(plan["pts"], plan["spans"])
+        a, b = Point(plan["pts"][0]), Point(plan["pts"][-1])
+        out = []
+        for rl in self.rails:
+            if rl[2] != name or self.mtn.poly.distance(rl[0]) > 1.0:
+                out.append(rl)
+                continue
+            line = rl[0]
+            s0, s1 = sorted((line.project(a), line.project(b)))
+            spans = self._spans_on(line, ends)
+            self.mtn.grade(line, "rail", spans=spans)
+            prof = self.mtn.profiles[-1]
+            self._note_structures(line, "rail", name, spans)
+            ss = [s0 + (s1 - s0) * k / max(1, math.ceil((s1 - s0) / 16.0)) for k in range(math.ceil((s1 - s0) / 16.0) + 1)]
+            zs = [float(np.interp(q, prof[1], prof[2])) for q in ss]
+            g = max(abs(z1 - z0) / max(q1 - q0, 0.1) for z0, z1, q0, q1 in zip(zs, zs[1:], ss, ss[1:]))
+            self.rail_pass = {"name": name, "pts": [[round(line.interpolate(q).coords[0][0], 2), round(line.interpolate(q).coords[0][1], 2),
+                                                     round(z, 2)] for q, z in zip(ss, zs)],
+                              "spans": [[round(x - s0, 1), round(y - s0, 1), k] for x, y, k in spans if s0 - 1 <= x and y <= s1 + 1],
+                              "grade": round(g, 4)}
+            self.mtn_grades.append((name, round(g, 4)))
+            s = 0.0
+            for x, y, _k in sorted(spans):
+                if x - s > 5.0:
+                    out.append([substring(line, s, x), rl[1], rl[2], rl[3]])
+                s = y
+            if line.length - s > 5.0:
+                out.append([substring(line, s, line.length), rl[1], rl[2], rl[3]])
+        self.rails = out
+        if self.rail_pass is None:
+            print("WARNING: the rail pass is not on the map")
+
+    @staticmethod
+    def _span_ends(pts, spans):
+        """Spans [(s0, s1, kind)] along pts as their end points, to be found
+        again on the line as built (_spans_on)."""
+        raw = LineString(pts)
+        return [(raw.interpolate(a).coords[0], raw.interpolate(b).coords[0], k) for a, b, k in spans]
+
+    @staticmethod
+    def _spans_on(line, ends):
+        out = []
+        for p, q, k in ends:
+            if line.distance(Point(p)) > 8.0 or line.distance(Point(q)) > 8.0:
+                continue
+            a, b = sorted((line.project(Point(p)), line.project(Point(q))))
+            if b - a > 2.0:
+                out.append((a, b, k))
+        return out
+
+    def _wet_only(self, line, spans):
+        """A road bridge keeps only its stretch over the water, 4 m either
+        side: the game lays a road's deck at the water's level, so the road
+        comes down its banks to it (the rail's viaducts stay whole)."""
+        out = []
+        for a, b, k in spans:
+            if k != "b":
+                out.append((a, b, k))
+                continue
+            seg = substring(line, a, b)
+            for g in lines_of(seg.intersection(self.water)):
+                q0, q1 = sorted((a + seg.project(Point(g.coords[0])), a + seg.project(Point(g.coords[-1]))))
+                out.append((max(a, q0 - 4.0), min(b, q1 + 4.0), "b"))
+        return out
+
+    def _underpasses(self, line, spans):
+        """Where a trail crosses a lane or bigger it passes under it
+        (mountain.UNDER_DROP down), not across: a span ('u') round each
+        crossing, its ends clear of the road's banks."""
+        out = []
+        for other, _s, _z, hw, _bank, _sp in self.mtn.profiles:
+            if hw < 3.5:
+                continue
+            for q in self._points(line.intersection(other)):
+                sq = line.project(Point(q))
+                if sq < 30.0 or sq > line.length - 30.0 or any(a - 20 < sq < b + 20 for a, b, _k in spans + out):
+                    continue
+                half = hw + 12.0
+                out.append((sq - half, sq + half, "u"))
+        return out
+
+    def _note_structures(self, line, cls, name, spans):
+        """Each span of the line just graded as a structure: {kind, tunnel |
+        under | bridge, way, cls, pts [[x, y, z]] every 8 m, portals}."""
+        prof = self.mtn.profiles[-1] if self.mtn.profiles and self.mtn.profiles[-1][0] is line else None
+        kinds = {"t": "tunnel", "u": "underpass", "b": "viaduct" if cls == "rail" else "bridge"}
+        for a, b, k in spans:
+            n = max(1, math.ceil((b - a) / 8.0))
+            ss = [a + (b - a) * i / n for i in range(n + 1)]
+
+            def at(q):
+                x, y = line.interpolate(q).coords[0]
+                z = float(np.interp(q, prof[1], prof[2])) if prof else 0.0
+                return [round(x, 2), round(y, 2), round(z, 2)]
+            pts = [at(q) for q in ss]
+            rec = {"kind": kinds[k], "way": name, "cls": cls, "length": round(b - a, 1), "pts": pts,
+                   "portals": [pts[0], pts[-1]]}
+            if k == "t":
+                rec["tunnel"] = True
+            elif k == "u":
+                rec["under"] = True
+            else:
+                rec["bridge"] = True
+            self.structures.append(rec)
 
     def mountain_lots(self):
         """The observatory at the end of its road, the letters on the slope
@@ -1427,6 +1581,18 @@ class Country:
             else:
                 h = front_height(l["x"], l["y"], l["yaw"], l["d"])
             pads.append((lot_poly(l["x"], l["y"], l["yaw"], l["w"], l["d"]), h))
+        # The summit's sites, each level at its own ground (the car park at
+        # the end of Mount Calder Road), and the cable car's mid-station.
+        self.mtn_sites = {}
+        for k, (x, y, sw, sd) in SUMMIT_SITES.items():
+            h = self.mtn.profile_near((x, y), 20.0) if k == "car_park" else None
+            h = h if h is not None else self.mtn.raw_at((x, y))
+            self.mtn_sites[k] = {"x": x, "y": y, "w": sw, "d": sd, "z": round(h, 2)}
+        mx, my = CABLE["mid"]
+        self.mtn_sites["cable_mid"] = {"x": mx, "y": my, "w": CABLE_MID_SIZE[0], "d": CABLE_MID_SIZE[1],
+                                       "z": round(self.mtn.raw_at((mx, my)), 2)}
+        for v in self.mtn_sites.values():
+            pads.append((box(v["x"] - v["w"] * 0.5, v["y"] - v["d"] * 0.5, v["x"] + v["w"] * 0.5, v["y"] + v["d"] * 0.5), v["z"]))
         self.terrain = self.mtn.grid(pads)
         self.mtn_pads = pads
 
@@ -2584,7 +2750,7 @@ class Country:
                 if tag in ("arterial", "beltway", "route"):
                     style = "arterial"
             elif style == "mountain":
-                if cls in ("highway", "freeway") or tag in ("observatory", "fire_road", "beltway", "route"):
+                if cls in ("highway", "freeway", "track") or tag in ("observatory", "fire_road", "beltway", "route", "track"):
                     continue
             elif style == "shore":
                 if tag == "seabreeze":
@@ -2629,6 +2795,15 @@ class Country:
                         s += self.rng.uniform(25.0, 60.0)
                         continue
                     if style == "mountain":
+                        # Homes only on the lower slopes (HOME_TOP), and none in
+                        # Red Pine (phase 3: forest and the summit only).
+                        here = line.interpolate(s).coords[0]
+                        if self.mtn.raw_at(here) > HOME_TOP or self.red_pine.contains(Point(here)):
+                            s += 20.0
+                            continue
+                        # Higher up, a mansion more often than a house.
+                        if kind == "house" and self.rng.random() < min(0.8, self.mtn.raw_at(here) / 400.0):
+                            kind = "mansion"
                         # Not where the road climbs steeply past the frontage:
                         # the lot's pad could not sit level with it.
                         ha = self.mtn.profile_near(line.interpolate(s).coords[0], 1.0)
@@ -3667,7 +3842,7 @@ class Country:
     def mountain_check(self):
         """The hills: each road's steepest grade on the final grid, and how
         far the grid strays from its graded profile along the road."""
-        names = {"Canyon Freeway", "Crest Drive", "Coyote Canyon Road", "Observatory Road", "Summit Fire Road"}
+        names = {v["name"] for k, v in mountain_lines().items() if v["cls"] not in ("trail", "rail")}
         worst = {}
         for pc in self.pieces:
             if pc["name"] not in names:
@@ -3863,6 +4038,16 @@ class Country:
             "pivots": self.pivots,
             "walks": self.walks,
             "tiles": tiles,
+            # Mount Calder (tools/mountain.py): tunnels, bridges, viaducts and
+            # underpasses with their heights; the rail pass; the peaks, the
+            # summit's sites and the cable car.
+            "structures": self.structures,
+            "rail_pass": self.rail_pass,
+            "mountain": {
+                "peaks": {k: [p[0], p[1], round(self.mtn.height(p), 1)] for k, p in PEAKS.items()},
+                "sites": self.mtn_sites,
+                "cable": self.mtn.cable(),
+            },
         }
 
 

@@ -871,7 +871,8 @@ func best_pitch(player: Vector3, center: Vector3, now := PITCH_LOW) -> float:
 	var open: Array[Vector3] = []
 	for p in points:
 		var g := Vector3(p.x, Terrain.height(p.x, p.z) + 1.0, p.z)
-		if space.intersect_ray(PhysicsRayQueryParameters3D.create(Vector3(p.x, 400.0, p.z), g, L.WORLD)).is_empty():
+		# From 400 m over the ground there (Mount Calder's top is 1000 m up).
+		if space.intersect_ray(PhysicsRayQueryParameters3D.create(Vector3(p.x, g.y + 400.0, p.z), g, L.WORLD)).is_empty():
 			open.append(g)
 	var best: float = tries[-1]
 	var best_score := 1 << 20
@@ -929,7 +930,10 @@ func _frame(delta: float) -> void:
 		projection = PROJECTION_ORTHOGONAL
 		near = 1.0
 		# The ground under a focus high above it (an aircraft) is further.
-		far = DISTANCE + 120.0 + maxf(_focus.y - Terrain.height(_focus.x, _focus.z), 0.0) * 1.2
+		# On the range the ground falls away below the focus (up to 1000 m
+		# down from Mount Calder's top): reach further the higher it is.
+		var ground := Terrain.height(_focus.x, _focus.z)
+		far = DISTANCE + 120.0 + maxf(_focus.y - ground, 0.0) * 1.2 + clampf(ground * 0.4, 0.0, 300.0)
 		view_depth = DISTANCE
 	global_position = _focus + global_basis.z * back
 
