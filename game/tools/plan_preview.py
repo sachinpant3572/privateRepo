@@ -17,9 +17,13 @@ def main():
     src, out = sys.argv[1], sys.argv[2]
     scale = float(sys.argv[sys.argv.index("--scale") + 1]) if "--scale" in sys.argv else 0.6
     d = json.load(open(src))
-    x0, y0 = -110, -110
-    w = int((d["window"][2] + 220) * scale)
-    h = int((d["window"][3] + 220) * scale)
+    x0, y0, x1, y1 = -110, -110, d["window"][2] + 110, d["window"][3] + 110
+    if d.get("outline"):  # an organic core: frame its bounding box instead of the window
+        xs = [q[0] for q in d["outline"]]
+        ys = [q[1] for q in d["outline"]]
+        x0, y0, x1, y1 = min(xs) - 110, min(ys) - 110, max(xs) + 110, max(ys) + 110
+    w = int((x1 - x0) * scale)
+    h = int((y1 - y0) * scale)
     img = Image.new("RGB", (w, h), (40, 92, 107))
     dr = ImageDraw.Draw(img)
 
@@ -45,6 +49,13 @@ def main():
             dr.line([p(d["nodes"][a]), p(d["nodes"][b])], fill=ROAD[cls], width=max(1, int(WIDTH[cls] * scale)))
     win = d["window"]
     dr.rectangle([p((0, 0)), p((win[2], win[3]))], outline=(255, 60, 60), width=2)
+    if d.get("outline"):
+        dr.line([p(q) for q in d["outline"] + d["outline"][:1]], fill=(90, 220, 90), width=2)
+    for loop in d.get("edge_loops", []):
+        dr.line([p(q) for q in loop + loop[:1]], fill=(255, 150, 40), width=2)
+    for node, dx, dy, cls, road in d.get("exits", []):
+        a = d["nodes"][node]
+        dr.line([p(a), p((a[0] + dx * 60, a[1] + dy * 60))], fill=(60, 160, 255), width=3)
     for name, x, y, f in d["landmarks"]:
         dr.ellipse([p((x - 6, y - 6)), p((x + 6, y + 6))], fill=(255, 220, 40))
         dr.text(p((x + 8, y - 8)), name, fill=(255, 255, 255))

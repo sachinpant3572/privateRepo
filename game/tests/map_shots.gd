@@ -34,7 +34,7 @@ func _run() -> void:
 	await _shot("map_state.png")
 	# World metres: Cinder Ridge and Lake Miravel, then the Golden Flats.
 	for view in [["map_ridge.png", Vector2(5200, 1800), 0.25], ["map_flats.png", Vector2(4300, 5200), 0.25],
-			["map_keys.png", Vector2(9500, 8200), 0.2]]:
+			["map_keys.png", Vector2(9500, 8200), 0.2], ["map_city.png", Vector2(6900, 7400), 0.3], ["map_city_near.png", Vector2(6800, 7300), 0.6]]:
 		fm.pan = view[1] - game.city.map_origin - fm.map.origin
 		fm.zoom = view[2]
 		await _shot(view[0])

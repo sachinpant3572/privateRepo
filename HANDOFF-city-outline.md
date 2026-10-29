@@ -58,3 +58,25 @@ This is now how ideal cities looks, even if they are fully architected."
 ## Order
 
 - After 0.25.2 ships (APK, PR). Then this, then #98 wardrobe, then #97.
+
+## Approach as built (2026-10-29)
+
+- `world_map.json` bellerive `"core"`: the core polygon (world coords;
+  local = world - (6150, 6650)). Bbox local (-300,-330)..(1660,1800),
+  2.72 km² including the river; the old P box was 2.55 km².
+- `street_plan.gd build(..., edge)`: the plan is laid out over
+  bbox(core).grow(margin), then `_trim_to_outline(pins)` keeps each land
+  face whose centre is in the core (plus the faces holding a landmark or
+  the park), smooths 3 passes (a block with one kept or water side is a
+  spur and goes; a land block with 3 kept sides is a notch and stays),
+  and kills edges with no kept face. So the city ends block by block on
+  real grid streets, never a sliver, and the frame street is gone.
+- Results: `exits` (node where a dropped street went on, outward dir,
+  class, road) for the country's roads to join; `edge_loops` (the outer
+  face loops: north bank and south bank) as the footprint.
+- Trap: the notch rule refills a one-row indentation and the spur rule
+  drops a one-block bump, so polygon wiggles must be 2+ blocks wide or
+  tall to show. Big east-side blocks (200 m) absorb small wiggles.
+- Checks (`/tmp/co/edge.py` on a plan dump): plan4 land 2.42 km², bbox
+  fill 0.61, longest straight edge run 380 m (+ a 407 m curved bank), 114
+  exits.

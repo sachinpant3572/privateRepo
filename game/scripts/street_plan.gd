@@ -178,6 +178,16 @@ const PATCHES := [
 ]
 
 var window := Rect2()
+## The city's built-up edge (local metres, from world_map.json "core"):
+## the plan is laid out over its bounding box, then the blocks whose middle
+## lies outside it are dropped. Empty keeps every block.
+var outline := PackedVector2Array()
+## Junctions on the edge where a street went on out of the city:
+## {node, dir (outward), cls, road}. The country's roads carry on from them.
+var exits: Array[Dictionary] = []
+## The plan's outer edge along the street centre lines, one loop per piece
+## of the street graph.
+var edge_loops: Array[PackedVector2Array] = []
 ## The window plus the margin ring of scenery.
 var bounds := Rect2()
 var seed_value := 0
@@ -229,9 +239,10 @@ const GRID := 50.0
 ## Builds the plan inside `win` plus `margin`. `river_line` is the river
 ## centreline in local metres, `landmarks` [id, local point] pairs whose
 ## blocks need room for the landmark, `park_at` where Liberty Green goes.
-func build(win: Rect2, margin: float, seed_v: int, river_line: PackedVector2Array, river_half: float, landmarks: Array, park_at: Vector2) -> void:
+func build(win: Rect2, margin: float, seed_v: int, river_line: PackedVector2Array, river_half: float, landmarks: Array, park_at: Vector2, edge := PackedVector2Array()) -> void:
 	window = win
-	bounds = win.grow(margin)
+	outline = edge
+	bounds = win.grow(margin) if edge.is_empty() else _bbox(edge).grow(margin)
 	seed_value = seed_v
 	_park_at = park_at
 	_river = river_line
@@ -267,6 +278,11 @@ func build(win: Rect2, margin: float, seed_v: int, river_line: PackedVector2Arra
 		_simplify()
 		_compact()
 		_find_faces()
+	if not outline.is_empty():
+		var pins: Array = [park_at]
+		for w in wants:
+			pins.append(w[0])
+		_trim_to_outline(pins)
 	t = _lap("grow", t)
 	_make_blocks()
 	_index()
@@ -1700,9 +1716,15 @@ func _find_faces() -> void:
 		if l[1] > 0.0:
 			pos_count += 1
 	var sign := 1.0 if pos_count * 2 >= loops.size() else -1.0
+	edge_loops = []
 	for l in loops:
 		if l[1] * sign <= 0.0:
-			continue # outside every block
+			# Outside every block: the edge of a piece of the graph.
+			var ring := PackedVector2Array()
+			for x in l[0]:
+				ring.append(node_pos[edge_a[x >> 1]] if (x & 1) == 0 else node_pos[edge_b[x >> 1]])
+			edge_loops.append(ring)
+			continue
 		var halves: PackedInt32Array = l[0]
 		var f := faces.size()
 		var nodes := PackedInt32Array()
@@ -1736,6 +1758,79 @@ func _find_faces() -> void:
 			"kind": "water" if is_water_point(c) else "land", "bbox": _bbox(poly),
 			"inner": PackedVector2Array(), "sides": PackedInt32Array(), "lot": PackedVector2Array(), "front": 0,
 		})
+
+
+## Drops the blocks whose middle lies outside the outline and the streets
+## that only served them, so the city ends block by block along its edge
+## instead of on a frame street. Keeps the junctions where a street went on
+## out as exits.
+func _trim_to_outline(pins: Array) -> void:
+	var keep := PackedByteArray()
+	keep.resize(faces.size())
+	var pinned := PackedByteArray()
+	pinned.resize(faces.size())
+	for f in faces.size():
+		if faces[f].kind != "land":
+			continue
+		if Geometry2D.is_point_in_polygon(faces[f].center, outline):
+			keep[f] = 1
+		for q in pins:
+			if Geometry2D.is_point_in_polygon(q, faces[f].poly):
+				keep[f] = 1
+				pinned[f] = 1
+	# Smooth the block-by-block edge: a block held on by one side is a spur
+	# and goes; a land block with three kept sides is a notch and stays.
+	# Water counts as a side for spurs, so bank blocks are not stripped.
+	for pass_ in 3:
+		var sides: Array[Vector2i] = []
+		sides.resize(faces.size())
+		for e in edge_a.size():
+			var s := edge_face[e]
+			if s.x < 0 or s.y < 0 or s.x == s.y:
+				continue
+			for pair in [[s.x, s.y], [s.y, s.x]]:
+				var o: int = pair[1]
+				if keep[o] == 1:
+					sides[pair[0]].x += 1
+				elif faces[o].kind == "water":
+					sides[pair[0]].y += 1
+		var changed := false
+		for f in faces.size():
+			if faces[f].kind != "land":
+				continue
+			if keep[f] == 1 and pinned[f] == 0 and sides[f].x + sides[f].y <= 1:
+				keep[f] = 0
+				changed = true
+			elif keep[f] == 0 and sides[f].x >= 3:
+				keep[f] = 1
+				changed = true
+		if not changed:
+			break
+	var cut: Array = []
+	for e in edge_a.size():
+		var s := edge_face[e]
+		if not ((s.x >= 0 and keep[s.x] == 1) or (s.y >= 0 and keep[s.y] == 1)):
+			cut.append(e)
+	for e in cut:
+		_kill(e)
+	# A bridge whose far bank lost its blocks goes too.
+	_prune()
+	var out: Array = []
+	for e in cut:
+		for n in [edge_a[e], edge_b[e]]:
+			if _adj[n].size() > 0:
+				out.append([node_pos[n], (node_pos[other(e, n)] - node_pos[n]).normalized(), edge_cls[e], edge_road[e]])
+	_compact()
+	_find_faces()
+	exits = []
+	for x in out:
+		var n := -1
+		for k in node_pos.size():
+			if node_pos[k].is_equal_approx(x[0]):
+				n = k
+				break
+		if n >= 0:
+			exits.append({"node": n, "dir": x[1], "cls": x[2], "road": x[3]})
 
 
 ## Next half-edge round the same face. Half-edge 2e runs a -> b, 2e + 1

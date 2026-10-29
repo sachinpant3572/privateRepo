@@ -137,6 +137,9 @@ var _outer_landmarks: Array = []
 ## country's towns ({id, name, style, faction, local}).
 var _regions: Array = []
 var _towns: Array = []
+## The built-up city's edge in local metres (world_map.json "core"): the
+## street plan keeps the blocks inside it.
+var core_outline := PackedVector2Array()
 
 
 func build(seed_v: int) -> void:
@@ -150,7 +153,7 @@ func build(seed_v: int) -> void:
 	var river := PackedVector2Array()
 	for p in _river:
 		river.append(p - map_origin)
-	plan.build(window, MARGIN, seed_v, river, _river_half, spots, PARK_AT)
+	plan.build(window, MARGIN, seed_v, river, _river_half, spots, PARK_AT, core_outline)
 	country = Country.new()
 	country.name = "Country"
 	country.load_data(seed_v)
@@ -764,6 +767,9 @@ func _load_map() -> void:
 	blocks = Vector2i(int(win.blocks[0]), int(win.blocks[1]))
 	window = Rect2(Vector2.ZERO, Vector2(blocks) * PITCH)
 	map_origin = Vector2(win.origin[0], win.origin[1])
+	core_outline = PackedVector2Array()
+	for q in city.get("core", []):
+		core_outline.append(Vector2(q[0], q[1]) - map_origin)
 	# Districts and landmarks of a later phase are planned, not built yet.
 	for d in city.districts:
 		if int(d.get("phase", 1)) > 2:

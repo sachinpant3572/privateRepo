@@ -32,11 +32,18 @@ func _init() -> void:
 		if rect.has_point(local):
 			spots.append([lm.id, local])
 			names.append(lm.id)
+	var edge := PackedVector2Array()
+	for q in city.get("core", []):
+		edge.append(Vector2(q[0], q[1]) - origin)
 	var t0 := Time.get_ticks_msec()
 	var plan := StreetPlan.new()
-	plan.build(rect, 110.0, 1234, river, half, spots, preload("res://scripts/city.gd").PARK_AT)
+	plan.build(rect, 110.0, 1234, river, half, spots, preload("res://scripts/city.gd").PARK_AT, edge)
 	var ms := Time.get_ticks_msec() - t0
-	var data := {"ms": ms, "window": [rect.position.x, rect.position.y, rect.size.x, rect.size.y], "nodes": [], "edges": [], "faces": [], "landmarks": [], "park": plan.park_face, "pieces": []}
+	var data := {"ms": ms, "window": [rect.position.x, rect.position.y, rect.size.x, rect.size.y], "nodes": [], "edges": [], "faces": [], "landmarks": [], "park": plan.park_face, "pieces": [], "outline": _arr(edge), "exits": [], "edge_loops": []}
+	for x in plan.exits:
+		data.exits.append([x.node, x.dir.x, x.dir.y, x.cls, x.road])
+	for ring in plan.edge_loops:
+		data.edge_loops.append(_arr(ring))
 	for p in plan.node_pos:
 		data.nodes.append([p.x, p.y])
 	for e in plan.edge_count():
