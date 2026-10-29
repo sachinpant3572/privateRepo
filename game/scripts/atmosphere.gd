@@ -11,6 +11,9 @@ signal night_changed(on: bool)
 
 const SkyDome = preload("res://scripts/sky.gd")
 const Birds = preload("res://scripts/birds.gd")
+## The nearest the perspective shadows reach (m); a parked camera frames
+## about 30 m of ground.
+const SHADOW_MIN := 40.0
 
 ## Sky colour, ambient colour and energy, sun colour and energy, by hour.
 const KEYS := [
@@ -68,20 +71,22 @@ var rng := RandomNumberGenerator.new()
 
 
 ## Fits the shadow cascades to the camera (TopDownCamera). In perspective the
-## camera is about 30-100 m from the ground it frames (more when it backs out
-## over a tower; _fit_shadows then reaches further), so the cascades step out from
-## the nearest tower tops to the ground at the top of the screen. The classic
-## camera sits 220 m back (TopDownCamera.DISTANCE), so the ground is 205-235 m
-## away; the splits put the sharpest cascade that holds all of it there, and
-## the nearer ones only hold tower tops.
+## camera frames ground about 30-65 m deep (more when it backs out over a
+## tower); _fit_shadows keeps the shadows just past the top of the screen in
+## two cascades: each cascade draws every caster in it once more, and the
+## old 160 m reach in four drew about three times the city's triangles for
+## shadows nobody saw (0.25.1 log: 250-300k triangles a frame at speed). The
+## classic camera sits 220 m back (TopDownCamera.DISTANCE), so the ground is
+## 205-235 m away; the splits put the sharpest cascade that holds all of it
+## there, and the nearer ones only hold tower tops.
 func set_view(perspective: bool) -> void:
 	_perspective = perspective
 	if perspective:
-		sun.directional_shadow_max_distance = 160.0
-		sun.directional_shadow_split_1 = 0.3
-		sun.directional_shadow_split_2 = 0.5
-		sun.directional_shadow_split_3 = 0.75
+		sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+		sun.directional_shadow_split_1 = 0.4
+		_fit_shadows(true)
 	else:
+		sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
 		sun.directional_shadow_max_distance = 300.0
 		sun.directional_shadow_split_1 = 0.45
 		sun.directional_shadow_split_2 = 0.62
@@ -124,19 +129,23 @@ func _process(delta: float) -> void:
 
 
 ## In perspective the shadows reach past the ground at the top of the screen,
-## which is about 1.4 times the camera's distance (TopDownCamera.view_depth);
-## changed only in 10% steps, so the cascades don't shimmer.
-func _fit_shadows() -> void:
+## which is about 1.4 times the camera's depth (TopDownCamera.view_depth). They
+## grow at once (with 10% to spare, so a camera backing out steadily doesn't
+## refit every frame) and shrink only once 25% too far, so the cascades
+## don't shimmer.
+func _fit_shadows(force := false) -> void:
 	if not _perspective:
 		return
-	var cam := get_viewport().get_camera_3d()
+	var cam := get_viewport().get_camera_3d() if is_inside_tree() else null
 	var depth = cam.get("view_depth") if cam != null else null
 	if not depth is float or depth <= 0.0:
+		if force:
+			sun.directional_shadow_max_distance = 90.0
 		return
-	var want := maxf(160.0, depth * 1.4)
+	var want := maxf(SHADOW_MIN, depth * 1.4)
 	var now := sun.directional_shadow_max_distance
-	if absf(want - now) > now * 0.1 or (want == 160.0 and now != 160.0):
-		sun.directional_shadow_max_distance = want
+	if force or want > now or want * 1.25 < now:
+		sun.directional_shadow_max_distance = want * 1.1
 
 
 ## Changes the weather; `instant` skips the fade (tests and mission starts).

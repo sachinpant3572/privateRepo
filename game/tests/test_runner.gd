@@ -724,6 +724,11 @@ func test_perspective_camera() -> void:
 	_check(cam.perspective and cam.projection == Camera3D.PROJECTION_PERSPECTIVE, "the camera sees in perspective by default")
 	var framed: float = 2.0 * cam.global_position.distance_to(cam._focus) * tan(deg_to_rad(cam.fov) * 0.5)
 	_check(absf(framed - cam.size) < cam.size * 0.01, "perspective frames %.1f m at the player, the zoom asks %.1f" % [framed, cam.size])
+	# The shadows reach just past the top of the screen, in two cascades
+	# (each cascade draws its casters once more; 0.25.1's 160 m in four
+	# drew most of a frame's triangles for nothing on screen).
+	var sun: DirectionalLight3D = game.atmosphere.sun
+	_check(sun.directional_shadow_mode == DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS and sun.directional_shadow_max_distance >= cam.view_depth * 1.25 and sun.directional_shadow_max_distance <= maxf(cam.view_depth * 2.0, game.atmosphere.SHADOW_MIN * 1.1), "perspective shadows reach %.0f m in 2 cascades for %.0f m of view" % [sun.directional_shadow_max_distance, cam.view_depth])
 	# Downtown spots where the usual camera spot would be inside a tower.
 	var city = game.city
 	var space: PhysicsDirectSpaceState3D = cam.get_world_3d().direct_space_state
@@ -818,10 +823,11 @@ func test_perspective_camera() -> void:
 	game.apply_settings()
 	await _frames(2)
 	_check(cam.projection == Camera3D.PROJECTION_ORTHOGONAL and is_equal_approx(cam.rotation_degrees.x, -cam.PITCH), "Settings > View switches to the classic flat view")
+	_check(sun.directional_shadow_mode == DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS and sun.directional_shadow_max_distance == 300.0, "the classic view's shadows reach its far-off ground in 4 cascades")
 	game.settings["view"] = "perspective"
 	game.apply_settings()
 	await _frames(2)
-	_check(cam.projection == Camera3D.PROJECTION_PERSPECTIVE, "and back to perspective")
+	_check(cam.projection == Camera3D.PROJECTION_PERSPECTIVE and sun.directional_shadow_mode == DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS and sun.directional_shadow_max_distance < 300.0, "and back to perspective, shadows fitted again")
 	# Settings > Zoom scales the view, and the city loads further out to match.
 	_place_player(_home(), Vector3.ZERO)
 	game.settings["zoom"] = 1.3
@@ -1189,10 +1195,12 @@ func test_new_car_swing_calms_when_driving() -> void:
 	Controls.camera = cam
 	cam.snap()
 	await _frames(5)
-	# The car faces 135 degrees off the view, and the stick turns it at once.
+	# The car faces 135 degrees off the view, and the stick turns it at once
+	# while GAS drives (the stick is the wheel only).
 	var car = _player_car("sedan", Vector3(0, 0, 400.0), 0.0, PI * 0.75)
 	p.vehicle = car
 	Controls.override_vector = Vector2(0.6, -0.8)
+	Input.action_press("gas")
 	var max_rate := 0.0
 	var late := 0
 	var last: float = cam.yaw
@@ -1205,6 +1213,7 @@ func test_new_car_swing_calms_when_driving() -> void:
 			max_rate = maxf(max_rate, rad_to_deg(absf(wrapf(cam.yaw - last, -PI, PI))) * 60.0)
 		last = cam.yaw
 	Controls.override_vector = null
+	Input.action_release("gas")
 	_check(late > 120 and max_rate <= 45.5, "driving off mid-swing in a new car, the view turns at most 45 degrees a second (%.0f, %d frames moving)" % [max_rate, late])
 	cam.queue_free()
 	p.queue_free()
@@ -1227,6 +1236,7 @@ func test_camera_ninety_turns() -> void:
 	p.vehicle = car
 	cam.snap()
 	Controls.override_vector = Vector2(0, -1)
+	Input.action_press("gas") # GAS drives; the stick steers
 	await _frames(240)
 	var fits := true
 	var report := []
@@ -1274,6 +1284,7 @@ func test_camera_ninety_turns() -> void:
 	_check(absf(cam.yaw + PI * 0.5) < 0.02, "then it turns a whole quarter, square to the streets (%.1f degrees; the car heads %.0f)" % [rad_to_deg(cam.yaw), rad_to_deg(TopDownCamera._heading(-car.global_basis.z))])
 	# On foot: a quick sidestep does not turn the view, a held one does.
 	Controls.override_vector = null
+	Input.action_release("gas")
 	p.vehicle = null
 	car.queue_free()
 	cam.yaw = 0.0
