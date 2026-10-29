@@ -145,7 +145,14 @@ This PR adds the concept, the world, the map, the act 1 missions, the MVP design
 
 - **Stutter**: the log showed 60 hitches (11 in 0.23), with the slowest physics step at 38-52 ms each second while the crowd filled or churned (driving fast: 32-41 fps). Every new person was built on the main thread, about 40-50 ms on the phone. The build is now split: `CharacterKit.prepare()` (body blend, clothes, geometry) runs on worker threads through the new `PeopleBuilder`, and only the quick `assemble()` (skeleton, skin, mesh upload) stays on the main thread. The crowd keeps up to 3 people built ahead and skips a spawn tick rather than build inline; open-top cars order their seated people the same way.
 - **Stiff turns**: with the arrow buttons (and tilt or the on-screen wheel) held gas kept the car accelerating through a turn, so its circle grew with the square of speed; the stick scheme had a corner assist, the wheel schemes had none, which is why three rounds of more grip didn't fix it. Now the tyres scrub: gas can't push past the speed that holds a 9 m circle at full lock, and above it the car sheds up to 6 m/s². Gas held, 90° turn: crossover at 72 km/h 17 m in 1.63 s (was 42 m, 2.58 s), sports car 12 m in 0.98 s (was 22 m, 1.35 s). Not while drifting or on the handbrake; traffic is unchanged.
-- **Tests**: TESTS_LINE
+- **Review**: one independent review, nothing blocking. Fixed from it:
+  - person builds run one at a time at high priority, so they don't hold up city streaming;
+  - the build lock is released even if a build errors;
+  - the crowd test now checks the sidewalk refill path;
+  - the stick scheme also gets the tyre scrub when the view turns behind the car, now tested.
+
+  Still open, minor: foot cops, interior patrons and mission people are still built on the main thread, as before 0.25.1.
+- **Tests**: full suite 1496 checks passed, 0 failed (headless, after the review fixes). APK: `build/solvera-0.25.1-debug.apk` (version code 26).
 
 *0.22 fixes* (Oct 28; Sachin, after playing 0.21 on an S25 Ultra: stutter on Ultra, stiff corners, the see-through tint on open road, the stuck 18-wheeler in his video, and "enable a Logger in the game"). Causes, fixes and traps are in `HANDOFF-0.22-fixes.md`.
 - **18-wheeler stuck and the view shaking**: spawns checked other cars by centre distance only, so a parked car could appear under a 15 m trailer. Traffic, parked and police spawns now check the full rotated footprint (`footprints_meet`), and a police car whose junction is taken tries a spot up the road. The camera's lead and turn and the HUD speed read the car's real flat motion, eased over 0.12 s, not the commanded velocity (which showed 22 km/h on a pinned truck). A parked or lighter car sunk into another is moved out (`shove`) and set back on the ground. Verified: the overlap and the velocity spikes. Inferred, not reproduced headless: the stuck-and-shaking state itself.
