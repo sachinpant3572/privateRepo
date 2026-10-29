@@ -101,6 +101,9 @@ Built by a sub-agent in worktree `.claude/worktrees/agent-a01c2f4e315ebd3c5`, br
   off. Both now end "on" Calder where they first meet it ((731,-2539); (1340,-1343)).
 - W-23 **join_ends** skips the summit car-park end of Mount Calder Road: it had tied it with a
   straight 79 m 47% track to West Ridge Track's junction.
+- W-24 **test_bellerive_hills "grass through" 0.297 m** at Canyon Freeway (2673,-1545) was the test's
+  `_surface_top`, not the road: the lane sample (hw/4 across) lay exactly on a strip triangle edge
+  (hill strips are halved to HILL_PIECE) and float32 put it outside both; the helper now allows 1e-4.
 - W-21 **Grid priority** (`Mountain.grid`): the rail core always owns a node (dk = d - 1000; Route 9
   had creased the shelf), trails yield to any road (d + 1000) and a trail's margin no longer flattens
   a pad (the deck). Partly-covered rail spans are clipped to the pass, not dropped (`_rail_finish`).

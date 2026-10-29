@@ -2702,7 +2702,11 @@ func _surface_top(country, p: Vector2) -> float:
 				if p.x < minf(a.x, minf(b.x, cc.x)) or p.x > maxf(a.x, maxf(b.x, cc.x)) or p.y < minf(a.z, minf(b.z, cc.z)) or p.y > maxf(a.z, maxf(b.z, cc.z)):
 					continue
 				var bc := Geometry3D.get_triangle_barycentric_coords(Vector3(p.x, 0, p.y), Vector3(a.x, 0, a.z), Vector3(b.x, 0, b.z), Vector3(cc.x, 0, cc.z))
-				if bc.x < 0.0 or bc.y < 0.0 or bc.z < 0.0:
+				# A hair of slack: on the hills a road strip is halved down to
+				# HILL_PIECE, so a sample a quarter of the way across lies right
+				# on a triangle edge, and float32 vertices can put it outside
+				# both triangles (a hole that is not there).
+				if bc.x < -1e-4 or bc.y < -1e-4 or bc.z < -1e-4:
 					continue
 				var y := a.y * bc.x + b.y * bc.y + cc.y * bc.z
 				if y <= cap:
