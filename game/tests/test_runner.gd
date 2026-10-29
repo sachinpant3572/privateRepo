@@ -2625,7 +2625,7 @@ func test_people_wear_modern_clothes() -> void:
 		hats[look.get("headwear", "")] = true
 		bags[look.get("bag", "")] = true
 	# About 790 triangles a person before 0.24's smooth bodies, hands, faces
-	# and shoes (about 2400 after); about 20 on screen on an Adreno 830
+	# and shoes (about 2440 after); about 20 on screen on an Adreno 830
 	# drawing 180-200k a frame.
 	_check(total / 400.0 < 2500.0, "average civilian within the triangle budget, got %.0f" % (total / 400.0))
 	_check(outfits.size() >= 14 and hats.size() >= 6 and bags.size() >= 5,
@@ -3006,9 +3006,11 @@ func test_brake_and_steer_drifts() -> void:
 
 
 ## On the wheel or arrows, braking after coasting stops the car at its own
-## brake rate (0.24: coasting held every car to COAST, "all cars take the
-## same amount of time to brake"); a sports car stops shorter than an SUV
-## or a box truck and turns tighter than a sedan. Traffic is untouched.
+## brake rate; a sports car stops shorter than an SUV or a box truck and
+## turns tighter than a sedan. Braking into a corner (which starts a drift)
+## stops each class at nearly its own brake too: a flat drift scrub made
+## every car brake alike there (0.24, "all cars take the same amount of
+## time to brake"). Traffic is untouched.
 func test_classes_brake_and_corner_apart() -> void:
 	await _free_game()
 	Controls.camera = null
@@ -3044,6 +3046,27 @@ func test_classes_brake_and_corner_apart() -> void:
 		car.queue_free()
 		await get_tree().physics_frame
 	_check(turned.sports > turned.sedan * 1.15, "at the same speed the sports car turns tighter than a sedan (%.2f vs %.2f rad)" % [turned.sports, turned.sedan])
+	var cornered := {}
+	for kind in ["sports", "sedan"]:
+		var car = _player_car(kind, Vector3(150.0, 0, 150.0), 25.0)
+		Input.action_press("steer_left")
+		await _frames(6)
+		Input.action_press("brake")
+		var n := 0
+		var drifted := false
+		while car.speed > 1.0 and n < 600:
+			await get_tree().physics_frame
+			drifted = drifted or car.drifting
+			n += 1
+		Input.action_release("brake")
+		Input.action_release("steer_left")
+		cornered[kind] = n
+		_check(drifted, "braking at full lock drifts the %s" % kind)
+		car.queue_free()
+		await get_tree().physics_frame
+	print("corner stop frames: %s" % [cornered])
+	_check(cornered.sports < 90, "the sports car stops from 90 km/h in a braking drift within 1.5 s (%d frames)" % cornered.sports)
+	_check(cornered.sports * 1.15 < cornered.sedan, "braking into a corner the sports car stops well before a sedan (%s)" % [cornered])
 	var traffic = _track_car("sports", Vector3(150.0, 0, 150.0), 0.0)
 	_check(traffic._grip() == Vehicle.CORNER_GRIP and traffic._brake_rate() == traffic._spec.brake and traffic._turn_rate() == traffic.turn_rate, "traffic drives on its kind's spec alone")
 	traffic.queue_free()

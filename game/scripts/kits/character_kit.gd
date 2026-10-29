@@ -661,7 +661,7 @@ static func _torso(mb, look: Dictionary, o: Dictionary) -> void:
 			_ball(mb, Vector3(0, 1.53, 0.1), Vector3(0.1, 0.035, 0.06), jacket.darkened(0.45), 6, 2)
 			_tube(mb, Vector3(0, 1.45, 0), Vector3(0, 1.5, 0), 0.09, 0.088, jacket.darkened(0.1))
 			for side in [-1.0, 1.0]:
-				_strip(mb, [_surf(side * 0.035, 1.47, -1.0, w, bulk), _surf(side * 0.045, 1.34, -1.0, w, bulk)], 0.009, NEUTRALS[4] if jacket.v < 0.7 else NEUTRALS[0])
+				_surf_strip(mb, [Vector2(side * 0.035, 1.47), Vector2(side * 0.045, 1.34)], -1.0, 0.012, w, bulk, 0.009, NEUTRALS[4] if jacket.v < 0.7 else NEUTRALS[0])
 			_panel(mb, 0.0, 1.22, 1.1, 0.1, 0.125, -1.0, jacket.darkened(0.12), w, bulk, 1, 0.016, 3)
 			if look.has("print"):
 				_print(mb, look, w, bulk, 1.33)
@@ -672,13 +672,13 @@ static func _torso(mb, look: Dictionary, o: Dictionary) -> void:
 			_panel(mb, 0.0, 1.47, 1.03, 0.075 if vee else 0.06, 0.03 if vee else 0.055, -1.0, inner, w, bulk, 3)
 			if outfit == "cardigan":
 				# Button band and buttons down the left front, shirt collar.
-				_strip(mb, [_surf(-0.07, 1.46, -1.0, w, bulk, 0.016), _surf(-0.033, 1.25, -1.0, w, bulk, 0.016), _surf(-0.03, 1.03, -1.0, w, bulk, 0.016)], 0.009, jacket.darkened(0.15))
+				_surf_strip(mb, [Vector2(-0.07, 1.46), Vector2(-0.033, 1.25), Vector2(-0.03, 1.03)], -1.0, 0.016, w, bulk, 0.009, jacket.darkened(0.15))
 				for y in [1.24, 1.15, 1.06]:
 					_panel(mb, -0.034, y + 0.012, y - 0.012, 0.012, 0.012, -1.0, jacket.lightened(0.45), w, bulk, 1, 0.02)
 				_tube(mb, Vector3(0, 1.455, 0), Vector3(0, 1.5, 0), 0.085, 0.082, shirt)
 			if outfit in ["blazer", "suit"]:
 				for side in [-1.0, 1.0]:
-					_strip(mb, [_surf(side * 0.09, 1.47, -1.0, w, bulk, 0.02), _surf(side * 0.04, 1.2, -1.0, w, bulk, 0.02)], 0.02, jacket.darkened(0.2))
+					_surf_strip(mb, [Vector2(side * 0.09, 1.47), Vector2(side * 0.04, 1.2)], -1.0, 0.02, w, bulk, 0.02, jacket.darkened(0.2))
 				_panel(mb, -0.15, 1.37, 1.35, 0.035, 0.035, -1.0, accent if look.has("accent") else jacket.lightened(0.15), w, bulk, 1)
 				if look.has("tie"):
 					_panel(mb, 0.0, 1.45, 1.18, 0.018, 0.026, -1.0, look.tie, w, bulk, 2, 0.02)
@@ -690,18 +690,18 @@ static func _torso(mb, look: Dictionary, o: Dictionary) -> void:
 				for side in [-1.0, 1.0]:
 					mb.tri(Vector3(side * 0.06, 1.5, -0.04), _surf(side * 0.19, 1.43, -1.0, w, bulk, 0.02), _surf(side * 0.08, 1.37, -1.0, w, bulk, 0.02), Vector3(0, 0.6, -1).normalized(), jacket.darkened(0.15))
 					_panel(mb, side * 0.13, 1.35, 1.31, 0.045, 0.045, -1.0, jacket.darkened(0.15), w, bulk, 1, 0.017)
-				_strip(mb, [_surf(-0.2, 1.38, 1.0, w, bulk), _surf(0.0, 1.4, 1.0, w, bulk), _surf(0.2, 1.38, 1.0, w, bulk)], 0.008, jacket.lightened(0.3))
+				_surf_strip(mb, [Vector2(-0.2, 1.38), Vector2(0.0, 1.4), Vector2(0.2, 1.38)], 1.0, 0.012, w, bulk, 0.008, jacket.lightened(0.3))
 				_tube(mb, Vector3(0, 1.455, 0), Vector3(0, 1.5, 0), 0.085, 0.082, shirt.darkened(0.15))
 			elif outfit == "jacket":
 				# Zip jacket: stand collar and zip edges.
 				_tube(mb, Vector3(0, 1.45, 0), Vector3(0, 1.53, 0), 0.096, 0.092, jacket.darkened(0.08))
 				for side in [-1.0, 1.0]:
-					_strip(mb, [_surf(side * 0.06, 1.46, -1.0, w, bulk, 0.016), _surf(side * 0.058, 1.25, -1.0, w, bulk, 0.016), _surf(side * 0.056, 1.04, -1.0, w, bulk, 0.016)], 0.007, jacket.lightened(0.3))
+					_surf_strip(mb, [Vector2(side * 0.06, 1.46), Vector2(side * 0.058, 1.25), Vector2(side * 0.056, 1.04)], -1.0, 0.016, w, bulk, 0.007, jacket.lightened(0.3))
 				if look.has("print"):
 					_print(mb, look, w, bulk, 1.32, false)
 		"bomber", "delivery":
 			# Closed zip, rib collar (bomber) or high collar and a reflective band.
-			_strip(mb, [_surf(0.0, 1.48, -1.0, w, bulk, 0.016), _surf(0.0, 1.25, -1.0, w, bulk, 0.016), _surf(0.0, 1.02, -1.0, w, bulk, 0.016)], 0.008, Color(0.6, 0.6, 0.62))
+			_surf_strip(mb, [Vector2(0.0, 1.48), Vector2(0.0, 1.25), Vector2(0.0, 1.02)], -1.0, 0.016, w, bulk, 0.008, Color(0.6, 0.6, 0.62))
 			if outfit == "bomber":
 				_tube(mb, Vector3(0, 1.45, 0), Vector3(0, 1.51, 0), 0.094, 0.09, accent)
 			else:
@@ -710,7 +710,7 @@ static func _torso(mb, look: Dictionary, o: Dictionary) -> void:
 				_band(mb, 1.33, g.x + 0.01, g.y + 0.01, 0.025, REFLECTIVE)
 		"puffer", "puffer_vest":
 			_tube(mb, Vector3(0, 1.45, 0), Vector3(0, 1.56, 0), 0.1, 0.097, jacket.darkened(0.08))
-			_strip(mb, [_surf(0.0, 1.5, -1.0, w, bulk, 0.03), _surf(0.0, 1.25, -1.0, w, bulk, 0.03), _surf(0.0, 1.0, -1.0, w, bulk, 0.03)], 0.007, jacket.darkened(0.4))
+			_surf_strip(mb, [Vector2(0.0, 1.5), Vector2(0.0, 1.25), Vector2(0.0, 1.0)], -1.0, 0.03, w, bulk, 0.007, jacket.darkened(0.4))
 		"uniform":
 			_uniform(mb, look, o)
 	_bag(mb, look, o)
@@ -744,7 +744,7 @@ static func _extras(mb, look: Dictionary, o: Dictionary) -> void:
 		var col: Color = look.camera
 		var p := _surf(0.0, 1.24, -1.0, w, bulk, 0.0)
 		for side in [-1.0, 1.0]:
-			_strip(mb, [_surf(side * 0.08, 1.46, -1.0, w, bulk, 0.024), _surf(side * 0.065, 1.29, -1.0, w, bulk, 0.024)], 0.008, Color(0.1, 0.1, 0.11))
+			_surf_strip(mb, [Vector2(side * 0.08, 1.46), Vector2(side * 0.065, 1.29)], -1.0, 0.024, w, bulk, 0.008, Color(0.1, 0.1, 0.11))
 		_block(mb, p + Vector3(0, 0, -0.04), Vector3(0.14, 0.085, 0.06), col)
 		_block(mb, p + Vector3(0, -0.005, -0.085), Vector3(0.055, 0.055, 0.04), Color(0.15, 0.15, 0.16))
 		mb.box(p + Vector3(0, -0.005, -0.106), Vector3(0.036, 0.036, 0.004), Color(0.3, 0.42, 0.6))
@@ -1058,10 +1058,14 @@ static func _head(mb, look: Dictionary, o: Dictionary) -> void:
 		style = "short"
 	var c := Vector3(0, 1.69, 0)
 	var fine: bool = look.get("hero", false)
-	# Skull, longer front to back than across, and a narrower jaw and chin.
-	mb.smooth_ball(c + Vector3(0, 0.015, 0.008), Vector3(0.162, 0.18, 0.178), skin, 16 if fine else 12, 9 if fine else 7)
-	mb.smooth_ball(c + Vector3(0, -0.075, -0.02), Vector3(0.12, 0.105, 0.125), skin, 12 if fine else 10, 5)
-	mb.smooth_ball(c + Vector3(0, -0.14, -0.085), Vector3(0.055, 0.04, 0.04), skin, 8 if fine else 6, 4)
+	# Skull, longer front to back than across, running into a narrower jaw
+	# as one loft (_head_rings), plus a soft chin. Two crossing balls left a
+	# jagged seam over the cheeks (0.24 review).
+	var keep: Transform3D = mb.xform
+	mb.xform = keep * Transform3D(Basis.IDENTITY, c + Vector3(0, 0, 0.008))
+	mb.loft(_head_rings(skin), 16 if fine else 12, 0.007)
+	mb.xform = keep
+	mb.smooth_ball(c + Vector3(0, -0.14, -0.082), Vector3(0.055, 0.04, 0.04), skin, 8 if fine else 6, 4)
 	# Face (0.24: was box eyes, nose and mouth): eye whites with dark irises,
 	# brows, a nose with a bridge and a rounded tip, upper and lower lip.
 	var segs := 8 if fine else 6
@@ -1240,6 +1244,8 @@ static func _strip(mb, pts: Array, half_w: float, color: Color, center := TORSO_
 ## `rows` x `cols` quads.
 static func _panel(mb, x: float, y0: float, y1: float, hw0: float, hw1: float, side: float, color: Color, w: float, bulk: float,
 		rows := 1, lift := 0.012, cols := 1) -> void:
+	# At least a row every 5 cm, so long panels follow the torso's curve.
+	rows = maxi(rows, ceili(absf(y0 - y1) / 0.05))
 	for r in rows:
 		var ya := lerpf(y0, y1, float(r) / rows)
 		var yb := lerpf(y0, y1, float(r + 1) / rows)
@@ -1278,6 +1284,35 @@ static func _surf(x: float, y: float, side: float, w: float, bulk: float, lift :
 	var g := _profile(y, w, bulk)
 	var d := g.y * sqrt(maxf(0.0, 1.0 - pow(x / g.x, 2.0)))
 	return Vector3(x, y, side * (d + lift))
+
+
+## A strip along the torso surface through `pts` (x, y), re-sampled every
+## 4 cm so it follows the curve instead of cutting under it as chords.
+static func _surf_strip(mb, pts: Array, side: float, lift: float, w: float, bulk: float, half_w: float, color: Color) -> void:
+	var path := [_surf(pts[0].x, pts[0].y, side, w, bulk, lift)]
+	for i in pts.size() - 1:
+		var a: Vector2 = pts[i]
+		var b: Vector2 = pts[i + 1]
+		var n := maxi(1, ceili(a.distance_to(b) / 0.04))
+		for k in range(1, n + 1):
+			var q := a.lerp(b, float(k) / n)
+			path.append(_surf(q.x, q.y, side, w, bulk, lift))
+	_strip(mb, path, half_w, color)
+
+
+## The head's loft rings, chin to crown, about an axis 8 mm behind the head
+## centre: the skull ellipsoid (0.162 x 0.18 x 0.178, centred 0.015 up) and
+## the jaw ellipsoid (0.12 x 0.105 x 0.125, centred 0.075 down and 0.022
+## forward of the axis) joined by a smooth max, so the face has no seam.
+static func _head_rings(skin: Color) -> Array:
+	var rings := []
+	for y in [-0.18, -0.16, -0.13, -0.095, -0.06, -0.025, 0.015, 0.065, 0.115, 0.16, 0.188]:
+		var fs := sqrt(maxf(0.0, 1.0 - pow((y - 0.015) / 0.18, 2.0)))
+		var fj := sqrt(maxf(0.0, 1.0 - pow((y + 0.075) / 0.105, 2.0)))
+		var rx := _smax(0.162 * fs, 0.12 * fj, 0.015)
+		var rz := _smax(0.178 * fs, 0.125 * fj + 0.022 * signf(fj), 0.015)
+		rings.append([y, maxf(rx, 0.004), maxf(rz, 0.004), skin])
+	return rings
 
 
 ## Half width and half depth of the lofted torso at height y (0.24): the

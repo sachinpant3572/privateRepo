@@ -346,7 +346,7 @@ func _mark(what: int, at: Vector3, yaw: float, size: Vector2, delay: float, life
 	var start := clock + delay
 	var span := _rng.randf_range(life.x, life.y)
 	_data[i] = Color(start, span, grow, what + 0.05 + 0.9 * _rng.randf())
-	_xforms[i] = Transform3D(b, Vector3(at.x, Terrain.height(at.x, at.z) + lift + LIFT, at.z))
+	_xforms[i] = Transform3D(b, Vector3(at.x, Terrain.height(at.x, at.z) - Terrain.drop(at.x, at.z) + lift + LIFT, at.z))
 	mm.set_instance_transform(i, _xforms[i])
 	mm.set_instance_custom_data(i, Color(start - _epoch, span, grow, _data[i].a))
 	mm.visible_instance_count = _count

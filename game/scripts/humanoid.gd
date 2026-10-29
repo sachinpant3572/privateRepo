@@ -96,8 +96,9 @@ var clock := 0.0
 var reacted_at := -1.0
 
 var _combo := 0
-## The ground's drop where the person stands (_ground_drop) and where it was looked up.
+## The ground's drop where the person stands (_ground_drop): eased, wanted, where looked up.
 var _drop := 0.0
+var _drop_want := 0.0
 var _drop_at := Vector2.INF
 var _combo_time := 0.0
 var _punch_t := -1.0
@@ -163,18 +164,23 @@ func _physics_process(delta: float) -> void:
 		_think(delta)
 	velocity.y = 0.0
 	move_and_slide()
-	global_position.y = Terrain.height(global_position.x, global_position.z) - _ground_drop()
+	global_position.y = Terrain.height(global_position.x, global_position.z) - _ground_drop(delta)
 	if _pool_size > 0.0 or _trail > 0.0:
 		_bleed_on_ground()
 
 
 ## Off the roads on the hills the ground is drawn a little under
-## Terrain.height (Terrain.drop), looked up each half metre walked.
-func _ground_drop() -> float:
+## Terrain.height (Terrain.drop), looked up each half metre walked and
+## eased at 2 m/s so a step off the paving is a step, not a jump (the first
+## look-up, where the person appears, is taken at once).
+func _ground_drop(delta: float) -> float:
 	var p := Vector2(global_position.x, global_position.z)
 	if p.distance_squared_to(_drop_at) > 0.25:
+		if _drop_at == Vector2.INF:
+			_drop = Terrain.drop(p.x, p.y)
 		_drop_at = p
-		_drop = Terrain.drop(p.x, p.y)
+		_drop_want = Terrain.drop(p.x, p.y)
+	_drop = move_toward(_drop, _drop_want, 2.0 * delta)
 	return _drop
 
 

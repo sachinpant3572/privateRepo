@@ -839,17 +839,16 @@ func loft(rings: Array, sides := 12, cap := 0.0) -> void:
 		var lo: Array = rings[maxi(k - 1, 0)]
 		var hi: Array = rings[mini(k + 1, n - 1)]
 		var dy: float = hi[0] - lo[0]
-		var slope := Vector2((hi[1] - lo[1]) / dy, (hi[2] - lo[2]) / dy)
+		var slope := Vector2.ZERO if is_zero_approx(dy) else Vector2(hi[1] - lo[1], hi[2] - lo[2]) / dy
 		var color: Color = r[3]
+		# Both rings at a colour change share the bone, so the seam can't open.
+		if r.size() > 4:
+			set_bone(r[4])
 		if prev >= 0 and color != prev_color:
 			_loft_ring(r, slope, prev_color, sides, prev)
 			prev_color = color
-			if r.size() > 4:
-				set_bone(r[4])
 			prev = _loft_ring(r, slope, color, sides, -1)
 			continue
-		if r.size() > 4:
-			set_bone(r[4])
 		prev = _loft_ring(r, slope, color, sides, prev)
 		prev_color = color
 	if cap > 0.0:

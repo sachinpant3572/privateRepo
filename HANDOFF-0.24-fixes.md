@@ -18,15 +18,16 @@ and primitive, we need to fix them." Log: breakables.gd:54 get_meta('glow').
   (DROP_RATE 1.5 m/s), Humanoid per 0.5 m. Rejected: lowering the drop
   (chord analysis: 99th percentile 9 m chord rises 0.32 m above terrain, so
   roads would poke through), a contact shadow (an extra draw call a car).
-- Brakes: on the wheel/arrows layouts `_coast` was set when the gas was
-  released and never cleared by the brake, so every car slowed at COAST
-  (4 m/s²) whatever its brake. That is the "same time to brake" bug. Now
-  `_coast = brake <= 0.05 and gas < 0.05`; the stick layout clears it.
+- Brakes: the first guess (the coast flag) was wrong; review showed the old
+  code already reset `_coast` every frame. Real cause: brake + steer (lock
+  >= 0.35, > 9 m/s) starts a drift and the drift scrubbed a flat ~6 m/s², so
+  every car braked alike into corners (sports 113 frames from 25 m/s). Now
+  DRIFT_BRAKE 0.65 x the car's brake: sports 44 frames, sedan 59
+  (test_classes_brake_and_corner_apart; fails at 113 with 0.2).
 - Class handling: VehicleClasses rows gain brakes, cornering, turning, wheel
   multipliers, applied to the player's car only (`_feel`), so traffic tuning
   and its tests do not move. Performance 1.15/1.3/1.15/0.8 (sports: 43.7
-  m/s² brakes, 33 m/s² corner grip vs a sedan's 20.9). Drift scrub is now
-  DRIFT_BRAKE 0.2 x the car's brake (sedan 6.4, was a flat 6).
+  m/s² brakes, 33 m/s² corner grip vs a sedan's 20.9).
 - Human models (cost options, Sachin can switch):
   - A, chosen: upgrade the code-built kit in place. Smooth-shaded ellipsoids
     and limbs (shared vertices, surface normals) instead of flat facets,
@@ -45,10 +46,11 @@ and primitive, we need to fix them." Log: breakables.gd:54 get_meta('glow').
   `_profile` curve (chest and waist ellipsoids joined by a smooth max), its
   rings above y 1.2 bound to Chest so it stretches instead of cracking;
   `_surf` follows the same curve so panels sit on it. Quilted outfits keep
-  `_quilt`. Jaw moved flush with the skull (it stuck out 0.02 m as a
-  muzzle) plus a soft chin. Hair caps and shoulders went to 12x6 / 10x5.
-- Triangles a person (char tris script): 790 avg / 1016 max before; 2396
-  avg / 2674 max after (categories 2381 / 2694, hero 3034, plain 2416).
+  `_quilt`. Head is one loft too (`_head_rings`: skull and jaw
+  ellipsoids joined by a smooth max); two crossing balls left a jagged
+  seam over the cheeks that read as stubble (review). Soft chin ball. Hair caps and shoulders went to 12x6 / 10x5.
+- Triangles a person (char tris script): 790 avg / 1016 max before; 2439
+  avg / 2706 max after (categories 2426 / 2730, hero 3070, plain 2496).
   Budgets: 3300 a look, 2500 average (2600 a category; workers 2507),
   hero 3400. About 20 people on screen
   is about +32k of the 180-200k an Adreno 830 draws at 60 fps. If phones

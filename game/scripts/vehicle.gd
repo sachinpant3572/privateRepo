@@ -58,12 +58,14 @@ const PLAYER_GRIP := 1.9
 ## sliding while the wheel stays turned, losing DRIFT_BLEED (m/s²), and
 ## DRIFT_BRAKE of the car's brake more at full brake. It ends below
 ## DRIFT_END or when the wheel straightens. Not on bicycles, motorbikes or
-## trucks.
+## trucks. Braking into a corner starts one, so the scrub must stay close
+## to the brake: a flat 6 m/s² made every car brake alike in corners (0.24,
+## "all cars take the same amount of time to brake").
 const DRIFT_MIN := 9.0
 const DRIFT_STEER := 0.35
 const DRIFT_END := 5.0
 const DRIFT_BLEED := 2.5
-const DRIFT_BRAKE := 0.2
+const DRIFT_BRAKE := 0.65
 ## Seconds the tail takes to step out or grip again.
 const DRIFT_IN := 0.25
 ## How deep (m) another car must sink in before it is moved out
@@ -632,7 +634,7 @@ static func footprints_meet(a: Vector3, a_yaw: float, a_size: Vector3, b: Vector
 func shove(offset: Vector3) -> void:
 	move_and_collide(offset)
 	# A parked car skips its physics step: put it back on the ground here.
-	global_position.y = Terrain.height(global_position.x, global_position.z)
+	global_position.y = Terrain.height(global_position.x, global_position.z) - _drop
 
 
 ## Hit by another vehicle: `push` is already scaled by the two masses (see
@@ -677,12 +679,10 @@ func _player_input() -> void:
 		throttle = gas
 		if _drift_input(-_steer_in, brake):
 			return
-		# Coasting ends on the brake as well as the gas: left on, it held
-		# every car to COAST (0.24, "all cars take the same amount of time
-		# to brake").
-		_coast = brake <= 0.05 and gas < 0.05
 		if brake > 0.05:
 			_pedal_brake(brake, _steer_in)
+		else:
+			_coast = gas < 0.05
 		return
 	# Stick: the car heads where the stick points; GAS floors it that way
 	# (straight on with the stick at rest), BRAKE stops and reverses.

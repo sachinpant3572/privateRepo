@@ -59,7 +59,7 @@ func _physics_process(delta: float) -> void:
 	vel.y -= GRAVITY * delta
 	global_position += vel * delta
 	rotation += _spin * delta
-	var ground := Terrain.height(global_position.x, global_position.z) + 0.03
+	var ground := Terrain.height(global_position.x, global_position.z) - Terrain.drop(global_position.x, global_position.z) + 0.03
 	if global_position.y <= ground:
 		global_position.y = ground
 		if absf(vel.y) > 2.0:
