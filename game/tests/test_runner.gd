@@ -59,7 +59,8 @@ func _run() -> void:
 		"test_body_kit_builds_bodies", "test_body_seams_hats_and_build_time", "test_people_wear_modern_clothes",
 		"test_crowd_bodies_build_off_the_main_thread",
 		"test_people_dress_for_their_kind", "test_reactions_by_kind_of_person", "test_reaction_starts_on_time",
-		"test_people_notice_by_sight_and_sound", "test_poses_stay_in_joint_limits", "test_crowd_reacts_to_a_punch",
+		"test_people_notice_by_sight_and_sound", "test_poses_stay_in_joint_limits", "test_gait_plants_feet_without_skating",
+		"test_gait_runs_with_knee_drive_and_flight", "test_player_speeds_up_and_slows_down", "test_crowd_reacts_to_a_punch",
 		"test_people_dodge_cars_and_get_up", "test_cops_investigate_off_duty", "test_people_sit_on_benches",
 		"test_vehicle_roster_and_parking",
 		"test_vehicle_speed_ranks",
@@ -6527,6 +6528,117 @@ func test_poses_stay_in_joint_limits() -> void:
 ## their own way, on time: the gang cheers, the tourist films, the office
 ## worker calls it in, the timid one runs, the brave worker shouts and the
 ## medic watches. A cop who catches the player gets their hands up.
+## Heel and ball of both feet (metres, body frame: +z is behind) over
+## `frames` frames of a gait after it settles, then the left thigh and knee
+## flex and elbow bend.
+func _gait_feet(speed: float, style: String, frames: int) -> Array:
+	var skel := CharKit.build_rig({})
+	add_child(skel)
+	var st = RigScript.State.new()
+	st.idle = false
+	st.speed = speed
+	st.style = style
+	var rig = RigScript.new(skel)
+	var feet := [skel.find_bone("LeftFoot"), skel.find_bone("RightFoot")]
+	for f in 120:
+		rig.pose(st, 1.0 / 60.0)
+	var out := []
+	for f in frames:
+		rig.pose(st, 1.0 / 60.0)
+		skel.force_update_all_bone_transforms()
+		var row := []
+		for b in feet:
+			var pose := skel.get_bone_global_pose(b)
+			var turn := pose.basis * skel.get_bone_global_rest(b).basis.inverse()
+			var heel := skel.transform * (pose.origin + turn * Vector3(0.0, -RigScript.FOOT_UP, RigScript.FOOT_HEEL))
+			var ball := skel.transform * (pose.origin + turn * Vector3(0.0, -RigScript.FOOT_UP, -RigScript.FOOT_BALL))
+			row.append(heel)
+			row.append(ball)
+		row.append([rig.bone_rotation(RigScript.L_LEG).x, -rig.bone_rotation(RigScript.L_SHIN).x, rig.bone_rotation(RigScript.L_FORE).x])
+		out.append(row)
+	skel.queue_free()
+	return out
+
+
+func test_gait_plants_feet_without_skating() -> void:
+	# While a foot is flat on the ground it slides back under the body at
+	# the ground speed, so in the world it stays put: the median contact
+	# speed matches, and no contact (one heel or ball touch, start to end)
+	# slips more than a couple of centimetres, the edges included.
+	for c in [[1.5, ""], [4.2, ""], [7.0, "sprint"]]:
+		var rows := _gait_feet(c[0], c[1], 90)
+		var low := INF
+		for r in rows:
+			for i in 4:
+				low = minf(low, r[i].y)
+		var speeds := []
+		var worst := 0.0
+		for i in 4:
+			var slip := 0.0
+			for f in range(1, rows.size()):
+				var a: Vector3 = rows[f - 1][i]
+				var b: Vector3 = rows[f][i]
+				if a.y < low + 0.004 and b.y < low + 0.004:
+					var s := (b.z - a.z) * 60.0
+					speeds.append(s)
+					slip += absf(s - c[0]) / 60.0
+					worst = maxf(worst, slip)
+				else:
+					slip = 0.0
+		speeds.sort()
+		var median: float = speeds[speeds.size() / 2] if speeds.size() > 0 else 0.0
+		_check(speeds.size() >= 6 and absf(median - c[0]) < 0.05 * c[0] and worst < 0.035,
+			"%.1f m/s %s: a planted foot moves back at the ground speed (%d frames, median %.2f, worst slip %.3f m)" \
+			% [c[0], c[1], speeds.size(), median, worst])
+
+
+func test_gait_runs_with_knee_drive_and_flight() -> void:
+	# Running: high knees and a heel kicked up under the hips, both feet off
+	# the ground between steps, elbows bent; walking stays low and straight.
+	var got := {}
+	for c in [[1.5, ""], [4.2, ""], [7.0, "sprint"]]:
+		var rows := _gait_feet(c[0], c[1], 90)
+		var low := INF
+		for r in rows:
+			for i in 4:
+				low = minf(low, r[i].y)
+		var thigh := 0.0
+		var knee := 0.0
+		var elbow := 0.0
+		var flight := 0.0
+		for r in rows:
+			thigh = maxf(thigh, r[4][0])
+			knee = maxf(knee, r[4][1])
+			elbow += r[4][2] / rows.size()
+			flight = maxf(flight, minf(minf(r[0].y, r[1].y), minf(r[2].y, r[3].y)) - low)
+		got[c[0]] = [thigh, knee, elbow, flight]
+	var w: Array = got[1.5]
+	var j: Array = got[4.2]
+	var s: Array = got[7.0]
+	_check(w[1] < 1.2 and w[3] < 0.01, "walk: knee under 69° and a foot always down (knee %.2f, gap %.3f m)" % [w[1], w[3]])
+	_check(j[1] > 1.8 and j[3] > 0.02 and j[2] > 1.3, "jog: heel kick, flight, bent elbows (knee %.2f, flight %.3f m, elbow %.2f)" % [j[1], j[3], j[2]])
+	_check(s[0] > 1.2 and s[0] > j[0] + 0.2 and s[1] > j[1], "sprint: higher knee drive than the jog (thigh %.2f vs %.2f, knee %.2f)" % [s[0], j[0], s[1]])
+
+
+func test_player_speeds_up_and_slows_down() -> void:
+	await _new_game(false)
+	var p = game.player
+	Controls.override_vector = Vector2(0, -1)
+	await _frames(2)
+	var early: float = Vector2(p.velocity.x, p.velocity.z).length()
+	await _frames(28)
+	var full: float = Vector2(p.velocity.x, p.velocity.z).length()
+	Controls.override_vector = null
+	await _frames(2)
+	var stopping: float = Vector2(p.velocity.x, p.velocity.z).length()
+	await _frames(20)
+	var stopped: float = Vector2(p.velocity.x, p.velocity.z).length()
+	_check(early > 0.2 and early < p.JOG_SPEED * 0.5, "the jog builds up over a few steps (%.2f m/s after 2 frames)" % early)
+	_check(absf(full - p.JOG_SPEED) < 0.1, "then holds the jog speed (%.2f)" % full)
+	_check(stopping > 0.5 and stopping < full, "a stop takes a step (%.2f m/s after 2 frames)" % stopping)
+	_check(stopped < 0.05, "and then he stands (%.2f)" % stopped)
+
+
 func test_crowd_reacts_to_a_punch() -> void:
 	await _new_game(false)
 	var p = game.player

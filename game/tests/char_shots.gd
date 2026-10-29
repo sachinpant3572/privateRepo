@@ -244,7 +244,7 @@ func _page_motion() -> void:
 			r[0].phase = TAU * col / 8.0
 	await _shoot_strip(gaits.size(), "char_10_gait.png", true)
 	var step := 1.0 / 60.0
-	var moves := [["punch", 0.4], ["kick", 0.6], ["start", 0.7], ["stop", 0.7]]
+	var moves := [["punch", 0.33], ["hook", 0.33], ["kick", 0.5], ["start", 0.7], ["stop", 0.7]]
 	for row in moves.size():
 		for col in 8:
 			var r := _person(Player.JULES, _strip_pos(row, col), "idle", false, PI * 0.5)
@@ -254,20 +254,21 @@ func _page_motion() -> void:
 			var t_end: float = moves[row][1] * col / 7.0
 			var run_in: bool = moves[row][0] == "stop"
 			st.speed = Player.JOG_SPEED if run_in else 0.0
-			st.guard = moves[row][0] in ["punch", "kick"]
+			st.guard = moves[row][0] in ["punch", "hook", "kick"]
+			st.punch_left = moves[row][0] == "hook"
 			for f in 90:
 				rig.pose(st, step)
 			var t := 0.0
 			while t < t_end - 0.001:
 				match moves[row][0]:
-					"punch":
+					"punch", "hook":
 						st.punch = t / 0.28 if t < 0.28 else -1.0
 					"kick":
 						st.kick = t / 0.45 if t < 0.45 else -1.0
-					"start":
-						st.speed = Player.JOG_SPEED
+					"start": # the hero's speed builds as in Player._think
+						st.speed = minf(Player.JOG_SPEED, (t + step) * Player.ACCEL)
 					"stop":
-						st.speed = 0.0
+						st.speed = maxf(0.0, Player.JOG_SPEED - (t + step) * Player.DECEL)
 				rig.pose(st, step)
 				t += step
 	await _shoot_strip(moves.size(), "char_11_moves.png", false)

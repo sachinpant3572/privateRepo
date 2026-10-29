@@ -4,6 +4,8 @@ extends "res://scripts/humanoid.gd"
 const VehicleKit = preload("res://scripts/kits/vehicle_kit.gd")
 const JOG_SPEED := 4.2
 const SPRINT_SPEED := 7.0
+const ACCEL := 18.0 # m/s²: about a quarter second from standing to a jog
+const DECEL := 26.0 # stops and turns back a little quicker than he starts
 const ENTER_RANGE := 3.5
 
 ## Jules: red zip jacket over a white tee, turned-up jeans, chunky white
@@ -60,7 +62,15 @@ func _think(delta: float) -> void:
 	var dir := Controls.world_move()
 	var sprinting := Input.is_action_pressed("sprint")
 	var speed := SPRINT_SPEED if sprinting else JOG_SPEED
-	walk(dir, speed, delta)
+	# Speed builds and drops over a few steps instead of jumping, so starts
+	# lean in and stops plant a foot.
+	dir.y = 0.0
+	var want := dir * speed
+	var flat := Vector3(velocity.x, 0.0, velocity.z)
+	var rate := ACCEL if want.dot(flat) >= 0.0 and want.length_squared() > flat.length_squared() else DECEL
+	velocity = flat.move_toward(want, rate * delta)
+	if dir.length_squared() > 0.01:
+		face(dir, delta)
 	# Badly hurt, Jules runs holding his side; sprinting pumps the arms.
 	var moving := dir.length_squared() > 0.01
 	style = "limp" if health < max_health * 0.3 else ("sprint" if sprinting and moving else "")

@@ -264,10 +264,10 @@ func pose(s: State, delta: float) -> void:
 				_guard()
 			if s.punch >= 0.0:
 				_punch(s.punch, s.punch_left)
-				rate = 30.0
+				rate = 42.0
 			if s.kick >= 0.0:
 				_kick(s.kick)
-				rate = 30.0
+				rate = 42.0
 			if s.gesture != "":
 				_gesture(s.gesture)
 			if s.action_t >= 0.0 and ACTIONS.has(s.action):
@@ -394,7 +394,7 @@ func _locomotion(s: State, delta: float) -> float:
 	_gt_g = g
 	_gt_f = f
 	_gt_sprint = sprint
-	_gt_tan = -v * (1.0 - beta) / f * (lerpf(0.3, 0.45, g) - 0.1 * sprint)
+	_gt_tan = -v * (1.0 - beta) / f * lerpf(1.0, 0.88, g)
 	_gt_peak = (lerpf(0.07, 0.38, g) + 0.08 * sprint) * moving
 	_gt_rise = lerpf(0.4, 0.32, g)
 	_gt_late = lerpf(0.4, 0.42, g) + 0.15 * sprint
@@ -435,15 +435,15 @@ func _locomotion(s: State, delta: float) -> float:
 	# Arms swing against the legs, a beat behind them, mostly behind the
 	# body; elbows bend more the faster he goes, more in front than behind.
 	var aw := sin(phase - 0.2)
-	var centre := (lerpf(-0.08, -0.26, g) + 0.13 * sprint) * moving
-	var arm := (lerpf(0.27, 0.52, g) + 0.48 * sprint) * moving
+	var centre := (lerpf(-0.08, -0.26, g) + 0.08 * sprint) * moving
+	var arm := (lerpf(0.27, 0.52, g) + 0.38 * sprint) * moving
 	if elderly:
 		arm *= 0.5
 	var spread := 0.08 + 0.06 * g + (0.12 if st == "swagger" else 0.0)
 	_target[L_ARM] = Vector3(centre - aw * arm, 0.0, -spread)
 	_target[R_ARM] = Vector3(centre + aw * arm, 0.0, spread)
-	var elbow := lerpf(0.18, lerpf(0.32, 1.45, g) - 0.05 * sprint, moving)
-	var bend := (0.15 + 0.15 * sprint) * moving
+	var elbow := lerpf(0.18, lerpf(0.32, 1.7, g), moving)
+	var bend := (lerpf(0.12, 0.3, g) + 0.1 * sprint) * moving
 	_target[L_FORE].x = elbow - aw * bend
 	_target[R_FORE].x = elbow + aw * bend
 	# Running hands cross a little toward the middle in front.
@@ -503,8 +503,9 @@ func _foot(ph: float) -> Vector4:
 	var u := (ph - _gt_beta) / (1.0 - _gt_beta)
 	var a0 := _ankle(_gt_c * ls - ls, _gt_p0)
 	var a1 := _ankle(_gt_c * ls, _gt_p1)
-	# Hermite: leaves moving back at the ground speed, reaches forward, and
-	# paws back into the touchdown.
+	# Hermite: leaves moving back with the ground and lands moving back with
+	# it (all of the ground speed in a walk, nine tenths in a run, where
+	# the foot reaches a little past the contact point and paws back).
 	var u2 := u * u
 	var u3 := u2 * u
 	var x := (2.0 * u3 - 3.0 * u2 + 1.0) * a0.x + (u3 - 2.0 * u2 + u) * _gt_tan \
@@ -767,50 +768,89 @@ func _texting() -> void:
 
 
 func _guard() -> void:
-	_target[L_ARM] = Vector3(0.85, 0.0, 0.15)
-	_target[R_ARM] = Vector3(0.75, 0.0, -0.15)
-	_target[L_FORE].x = 1.95
-	_target[R_FORE].x = 1.95
-	_target[CHEST].y = 0.25
-	_target[L_LEG].x += 0.25
-	_target[R_LEG].x -= 0.2
-	_target[L_SHIN].x -= 0.25
-	_target[R_SHIN].x -= 0.25
+	# Orthodox stance: left side leads, fists at the chin, elbows in, knees
+	# soft, bouncing on the balls of the feet like a boxer.
+	var still := 1.0 - _moving
+	_target[L_ARM] = Vector3(0.75, 0.0, 0.3)
+	_target[R_ARM] = Vector3(0.5, 0.0, -0.3)
+	_target[L_FORE] = Vector3(2.05, 0.35, 0.0)
+	_target[R_FORE] = Vector3(2.25, -0.35, 0.0)
+	_target[CHEST].y = -0.3
+	_target[HIPS].y = lerpf(_target[HIPS].y, -0.2, still)
+	_target[HEAD].y = 0.45
+	_target[HEAD].x = 0.12 # chin down
+	_target[SPINE].x -= 0.08
+	if still <= 0.0:
+		return
+	var b := 0.5 + 0.5 * sin(_time * TAU * 2.2)
+	_fight_legs(0.3 + 0.1 * b, 0.0, still)
 
 
-## A straight punch: the arm snaps out by 35% of the move and comes back,
-## the shoulders turn into it, the other fist guards the chin.
+## Feet apart in a fighting stance, left ahead, both knees bent by `flex`;
+## `heel` lifts the rear heel (the pivot of a cross).
+func _fight_legs(flex: float, heel: float, w: float) -> void:
+	_mix(L_LEG, Vector3(0.22, 0.0, -0.06), w)
+	_mix(R_LEG, Vector3(-0.22, 0.0, 0.06), w)
+	_mix(L_SHIN, Vector3(-flex, 0.0, 0.0), w)
+	_mix(R_SHIN, Vector3(-flex - 0.2 * heel, 0.0, 0.0), w)
+	_mix(L_FOOT, Vector3(-(0.22 - flex), 0.0, 0.0), w)
+	_mix(R_FOOT, Vector3(-(-0.22 - flex - 0.2 * heel) - 0.5 * heel, 0.0, 0.0), w)
+
+
+## A punch from the guard, p 0..1: a short load (the fist draws back, the
+## body coils), the strike thrown from the hips with the shoulders turning
+## through and the weight going forward, a beat held, then back to guard.
+## The right hand is a straight cross off a pivoting rear heel; the left
+## (the second of a combo) a hook swung round by the trunk.
 func _punch(p: float, left: bool) -> void:
-	var ext := clampf(p / 0.35, 0.0, 1.0) if p < 0.35 else clampf(1.0 - (p - 0.35) / 0.65, 0.0, 1.0)
-	var arm := L_ARM if left else R_ARM
-	var fore := L_FORE if left else R_FORE
-	var guard_arm := R_ARM if left else L_ARM
-	var guard_fore := R_FORE if left else L_FORE
-	var sgn := -1.0 if left else 1.0
-	_target[arm] = Vector3(lerpf(0.9, 1.55, ext), 0.0, -sgn * 0.25 * ext)
-	_target[fore].x = lerpf(1.9, 0.05, ext)
-	_target[guard_arm] = Vector3(0.85, 0.0, sgn * 0.1)
-	_target[guard_fore].x = 2.0
-	_target[CHEST].y = sgn * 0.5 * ext
-	_target[SPINE].x = -0.15 * ext
-	_target[L_LEG].x = 0.2
-	_target[R_LEG].x = -0.2
-	_target[L_SHIN].x = -0.2
-	_target[R_SHIN].x = -0.3
+	_guard()
+	var a := sin(PI * clampf(p / 0.2, 0.0, 1.0)) # load
+	var e := smoothstep(0.1, 0.36, p) * (1.0 - smoothstep(0.55, 1.0, p))
+	if left:
+		# Elbow out at shoulder height, the forearm twisted level so the
+		# fist comes round across the chin.
+		_target[L_ARM] = Vector3(lerpf(0.75, 1.4, e) - 0.15 * a, 0.0, lerpf(0.3, -0.5, e))
+		_target[L_FORE] = Vector3(lerpf(2.05, 1.6, e), lerpf(0.35, 1.2, e), 0.0)
+		_target[CHEST].y = -0.3 + 0.2 * a - 0.55 * e
+		_target[HIPS].y = -0.2 + 0.1 * a - 0.35 * e
+		_target[SPINE].z = -0.1 * e
+		_target[SPINE].x -= 0.06 * e
+	else:
+		_target[R_ARM] = Vector3(lerpf(0.5, 1.5, e) - 0.2 * a, 0.0, lerpf(-0.3, -0.22, e))
+		_target[R_FORE] = Vector3(lerpf(2.25, 0.08, e), lerpf(-0.35, 0.0, e), 0.0)
+		_target[CHEST].y = -0.3 - 0.15 * a + 0.75 * e
+		_target[HIPS].y = -0.2 - 0.05 * a + 0.4 * e
+		_target[SPINE].x -= 0.16 * e
+	_target[HEAD].y = -(_target[HIPS].y + _target[CHEST].y) * 0.9
+	_fight_legs(0.3 + 0.08 * a, 0.0 if left else e, 1.0 - _moving)
 
 
-## A front kick with the right leg: chamber, snap out, recover.
+## A push kick with the rear (right) leg, p 0..1: the knee comes up to the
+## chest, the foot drives out from the hip with the body leaning back and
+## the arms out for balance, snaps back to the chamber, then down.
 func _kick(p: float) -> void:
-	var ext := clampf(p / 0.4, 0.0, 1.0) if p < 0.4 else clampf(1.0 - (p - 0.4) / 0.6, 0.0, 1.0)
-	_target[R_LEG].x = 1.5 * ext
-	_target[R_SHIN].x = -lerpf(1.6, 0.1, ext) * minf(1.0, p * 6.0)
-	_target[R_FOOT].x = -0.5 * ext
-	_target[L_SHIN].x = -0.2
-	_target[SPINE].x = 0.3 * ext
-	_target[L_ARM] = Vector3(0.6, 0.0, -0.5)
-	_target[R_ARM] = Vector3(-0.3, 0.0, 0.6)
-	_target[L_FORE].x = 1.6
-	_target[R_FORE].x = 0.8
+	var c := smoothstep(0.0, 0.3, p) * (1.0 - smoothstep(0.72, 1.0, p))
+	var e := smoothstep(0.26, 0.46, p) * (1.0 - smoothstep(0.56, 0.78, p))
+	var thigh := 1.45 * c - 0.1 * e
+	var flex := lerpf(2.0, 0.12, e) * c
+	_target[R_LEG] = Vector3(thigh, 0.0, 0.05 * c)
+	_target[R_SHIN] = Vector3(-flex, 0.0, 0.0)
+	_target[R_FOOT] = Vector3(lerpf(-0.35, 0.3, e) * c, 0.0, 0.0)
+	# The standing leg bends a little and stays planted.
+	var sf := 0.15 + 0.25 * c
+	_target[L_LEG] = Vector3(0.1 * c, 0.0, -0.04)
+	_target[L_SHIN] = Vector3(-sf, 0.0, 0.0)
+	_target[L_FOOT] = Vector3(-(0.1 * c - sf), 0.0, 0.0)
+	_target[SPINE].x = 0.12 * c + 0.3 * e
+	_target[HEAD].x = -0.08 * c - 0.25 * e
+	_target[CHEST].y = -0.15 * c
+	_target[HIPS].y = 0.0
+	_target[HEAD].y = 0.15 * c
+	# Fists up in the chamber; the arms open out for balance on the thrust.
+	_target[L_ARM] = Vector3(lerpf(0.75, 0.55, e), 0.0, lerpf(0.3, -0.55, e))
+	_target[R_ARM] = Vector3(lerpf(0.5, -0.45, e), 0.0, lerpf(-0.3, 0.5, e))
+	_target[L_FORE] = Vector3(lerpf(2.05, 1.3, e), 0.0, 0.0)
+	_target[R_FORE] = Vector3(lerpf(2.25, 0.7, e), 0.0, 0.0)
 
 
 ## One-shot reactions, t 0..1.
