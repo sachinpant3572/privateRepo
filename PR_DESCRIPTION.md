@@ -28,6 +28,8 @@ This PR adds the concept, the world, the map, the act 1 missions, the MVP design
 
 **`HANDOFF-heading-camera.md`**: the camera that turns with the car (see *Camera turns with the car* below).
 
+**`HANDOFF-city-outline.md`** (new, plan only): where Bellerive's rectangular outline comes from (the street plan's straight edge street, the countryside's rectangular hole and boxed suburbs, the maps' rectangles) and the chosen fix: an organic outline of the same area, built next.
+
 **`TODO.md`**: a new high-priority entry lists what players disliked in GTA Chinatown Wars, with Solvera's answer to each, research on the iOS and Android ports' patches, and the work still to do.
 
 **`reference/`**: research for the game:
@@ -153,6 +155,24 @@ This PR adds the concept, the world, the map, the act 1 missions, the MVP design
 
   Still open, minor: foot cops, interior patrons and mission people are still built on the main thread, as before 0.25.1.
 - **Tests**: full suite 1496 checks passed, 0 failed (headless, after the review fixes). APK: `build/solvera-0.25.1-debug.apk` (version code 26).
+
+*0.25.2: hero animation, touch controls, shimmer, frame rate* (Oct 29; Sachin: "The Hero-s running animations too are very primitive, same for his other actions."; "Fix the Stick + Pedals controls please. Also, instead slider for controls, show them on the preview screens. Give an option like arrow + pedals, but the arrow can be anywhere where the players touches through his finger [...] Show previews for all these settings, and also allow the players to resize the buttons, or change their placements." and "And also allow resetting the placement back to original places"; "There are shimmering, and texture overlap issues occurring in the game."; with a 0.25.1 log: "Also check this, frwne rates are still dropping"). Decisions are in `HANDOFF-hero-anim.md`, `HANDOFF-controls.md`, `HANDOFF-shimmer.md` and `HANDOFF-fps.md`.
+
+- **Running and actions**: the legs follow the feet (foot placement and two-bone IK). Walk, run and sprint blend by speed, each with its own cadence; the stance foot stays planted while the body passes over it (no skating), the foot rolls from heel to toe, the knee flexes in stance and the body is in the air between strides when running. The arms swing with elbow bend rising with speed. The hero speeds up and slows down over about 0.2 s, so starts and stops take steps instead of snapping. Punches wind up, strike with a hip and shoulder turn and return to a bouncing guard (the second is a hook); the kick chambers, thrusts and re-chambers. Every person uses the new gait.
+- **Stick + pedals fixed**: touches held while the phone or Settings paused the game stayed pressed (the car drove on after closing), a reused touch could leave GAS stuck, and a thumb sliding off a pedal kept it pressed. All fixed: releases always get through, and losing focus or pausing lets go of everything. With the camera turning behind the car the stick did gas, brake and steering from its angle on top of the pedals; it is now the wheel only and GAS/BRAKE drive.
+- **Floating arrows + pedals** (new layout, usually called a floating or dynamic joystick; "floating steering" for left/right only): the arrows appear under the thumb wherever it lands on that half of the screen; slide left or right to steer.
+- **Controls settings**: four layout cards, each with a drawn preview, replace the slider, and the live preview shows the chosen layout over the game. **Edit layout** opens a full-screen editor (On foot / Driving): drag a control to move it, tap it and use - / + to resize (60-160%), **Reset** puts that mode back to the original places, **Done** saves.
+- **Shimmer and overlaps**: ground detail smaller than a pixel fades to its average, and seams and joints are filtered (2-4x fewer flickering pixels driving); coplanar country road surfaces, driveways and pads, and the city's paving layers, are now stacked a few millimetres apart (the probe's z-fighting spots went from 500-6000 flickering pixels to 0-8); the camera's near plane is farther out, which gives the depth buffer more precision. MSAA stays on Ultra only.
+- **Frame rate**: in the log, fps fell to 45-52 while driving with the view backed out, at 250-306k triangles a frame. The sun's shadows reached at least 160 m in 4 cascades while the view frames 30-65 m of ground, so most triangles were shadow passes. In the perspective view, shadows now reach 1.4x what the camera frames, in 2 cascades: about half the triangles (probe: 201k -> 104k parked, 218-226k -> 114k fast), the same shadows and slightly sharper near ones. The log gains `shd_prims`. Not changed: a single 61 ms frame when Settings closes (GPU-side, not reproducible here).
+- **Review**: one independent review, nothing serious. Fixed from it:
+  - a thumb that slides off a pedal or arrow and back onto it, without lifting, presses it again;
+  - look up and mission close-ups keep the far shadows (they see past the top-down view), and the shadows grow before the top of the screen reaches their fade;
+  - the layout editor keeps controls below its top bar (and off the HUD's top buttons);
+  - layout edits show in device logs;
+  - a panicked person standing still no longer pumps their arms.
+
+  Still open, minor: one country driveway still flickers in the foot view (its source is not found yet); looking downhill, far ground can lie past the fitted shadows; MSAA's cost on a real phone is unmeasured; High and Ultra now differ only in MSAA.
+- **Tests**: full suite 1559 checks passed, 0 failed (headless, after the review fixes). APK: `build/solvera-0.25.2-debug.apk` (version code 27).
 
 *0.22 fixes* (Oct 28; Sachin, after playing 0.21 on an S25 Ultra: stutter on Ultra, stiff corners, the see-through tint on open road, the stuck 18-wheeler in his video, and "enable a Logger in the game"). Causes, fixes and traps are in `HANDOFF-0.22-fixes.md`.
 - **18-wheeler stuck and the view shaking**: spawns checked other cars by centre distance only, so a parked car could appear under a 15 m trailer. Traffic, parked and police spawns now check the full rotated footprint (`footprints_meet`), and a police car whose junction is taken tries a spot up the road. The camera's lead and turn and the HUD speed read the car's real flat motion, eased over 0.12 s, not the commanded velocity (which showed 22 km/h on a pinned truck). A parked or lighter car sunk into another is moved out (`shove`) and set back on the ground. Verified: the overlap and the velocity spikes. Inferred, not reproduced headless: the stuck-and-shaking state itself.
