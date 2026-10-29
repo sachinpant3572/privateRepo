@@ -6323,7 +6323,10 @@ func test_every_home_has_a_way_in() -> void:
 			var lv := to_local * Vector3(v.x, 0.0, v.z)
 			if absf(lv.x) > float(l[3]) * 0.5:
 				continue
-			var z_edge := -float(l[4]) * 0.5 - (Kit._reach_at(lv.x, float(l[3])) - 0.6)
+			# Where _route_out puts the road's edge (ze): ROUTE_TUCK + 0.05 in
+			# from the route's far end. With 0.6 the vertices sat exactly on
+			# the 0.05 window's edge and float32 put them in or out by lot.
+			var z_edge: float = -float(l[4]) * 0.5 - (Kit._reach_at(lv.x, float(l[3])) - Kit.ROUTE_TUCK - 0.05)
 			if absf(lv.z - z_edge) > 0.05:
 				continue
 			if absf(v.y - (Terrain.height(v.x, v.z) + 0.05)) < 0.01:

@@ -120,6 +120,9 @@ Built by a sub-agent in worktree `.claude/worktrees/agent-a01c2f4e315ebd3c5`, br
 - W-26 **Range over farmland**: mtn.poly takes 1.95 km2 of the Golden Flats and the hill
   vineyards (fields 603 -> 177, pivots 60 -> 36, farmyards 43 -> 34). test_country_plots_square's
   field floor is 150 and test_birds' farm sample moved to (-900,-1100) ((584,-1824) is up the flank).
+- W-27 **test_every_home's hill-house check** looked for the drive's road-edge vertices at reach - 0.6;
+  `_route_out` puts them at reach - ROUTE_TUCK - 0.05, exactly on the 0.05 window's edge, so a new
+  house on Crest Drive (353.9,-1212.5) fell out by float32. The test now uses the kit's formula.
 
 ## Open issues
 
