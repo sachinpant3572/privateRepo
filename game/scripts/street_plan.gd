@@ -61,12 +61,18 @@ const PARK_SIZE := Vector2(204, 132)
 const ARTERIALS := [
 	{"x": -80.0, "bank": "north", "cls": "avenue", "road": "palmetto"},
 	{"x": 1010.0, "bank": "north", "cls": "avenue", "road": "cypress"},
+	{"x": 1460.0, "bank": "north", "cls": "avenue", "road": "hibiscus"},
+	{"x": 1770.0, "bank": "north", "cls": "avenue", "road": "tamarind"},
+	{"x": 2130.0, "bank": "north", "cls": "avenue", "road": "mangrove"},
+	{"y": -220.0, "bank": "north", "cls": "avenue", "road": "presidio"},
 	{"y": 140.0, "bank": "north", "cls": "boulevard", "road": "aurum"},
 	{"y": 860.0, "bank": "north", "cls": "avenue", "road": "basin", "to": 330.0},
 	{"x": -80.0, "bank": "south", "cls": "avenue", "road": "palmetto"},
 	{"x": 690.0, "bank": "south", "cls": "avenue", "road": "harbor"},
 	{"x": 1010.0, "bank": "south", "cls": "avenue", "road": "cypress"},
 	{"y": 1400.0, "bank": "south", "cls": "boulevard", "road": "morrow"},
+	{"y": 1610.0, "bank": "south", "cls": "avenue", "road": "gulfview"},
+	{"y": 1760.0, "bank": "south", "cls": "avenue", "road": "pelican"},
 ]
 ## Lot rectangle (along the front, deep) each landmark needs; blocks too
 ## small for theirs are joined with a neighbour.
@@ -113,6 +119,9 @@ const ROAD_NAMES := {
 	"palmetto": "Palmetto Avenue", "cypress": "Cypress Avenue", "aurum": "Aurum Boulevard", "basin": "Basin Street",
 	"harbor": "Harbor Way", "morrow": "Morrow Boulevard", "liberty_circle": "Liberty Circle", "aurum_circle": "Aurum Circle",
 	"cypress_circle": "Cypress Circle", "harbor_circle": "Harbor Circle",
+	"hibiscus": "Hibiscus Avenue", "tamarind": "Tamarind Avenue", "mangrove": "Mangrove Avenue",
+	"presidio": "Presidio Avenue", "gulfview": "Gulfview Avenue", "pelican": "Pelican Avenue",
+	"seagrape": "Seagrape Avenue", "ocean": "Ocean Drive",
 }
 
 ## The citywide arterial grid (California: the boulevards run straight
@@ -121,9 +130,18 @@ const ROAD_NAMES := {
 ## local metres, beyond the bounds
 ## too, as the ends of the outer superblocks. North of the river the lines
 ## at y 140, 500 and 860 are arterials; south of it, y 1400.
-const ART_X := [-390.0, -80.0, 330.0, 690.0, 1010.0, 1460.0, 1770.0]
-const ART_Y_NORTH := [-220.0, 140.0, 500.0, 860.0, 1220.0]
-const ART_Y_SOUTH := [1040.0, 1240.0, 1400.0, 1610.0, 1760.0]
+const ART_X := [-390.0, -80.0, 330.0, 690.0, 1010.0, 1460.0, 1770.0, 2130.0]
+const ART_Y_NORTH := [-580.0, -220.0, 140.0, 500.0, 860.0, 1220.0, 1580.0]
+const ART_Y_SOUTH := [1040.0, 1240.0, 1400.0, 1610.0, 1760.0, 1990.0]
+## Brisa Beach runs along the Gulf on the diagonal (local metres; the coast
+## is world_map's, from (1450, 2000) north-east to (2250, 1350)). Ocean
+## Drive is the city's sea edge, 75 m inland, the hotels on its inland
+## side; Seagrape Avenue runs 330 m inland, where the city grid takes over.
+const GULF_DIR := Vector2(0.776, -0.630)
+const OCEAN_AT := Vector2(1402.8, 1941.8)
+const SEAGRAPE_AT := Vector2(1242.0, 1744.0)
+## A point inside Brisa Beach (between Seagrape and Ocean Drive).
+const BRISA_SEED := Vector2(1634, 1593)
 ## District streets fall up to this share of a block off an even split
 ## (so the grid isn't ruler-straight in its spacing).
 const SPLIT_JITTER := 0.12
@@ -167,6 +185,20 @@ const PATCHES := [
 		"su": [90.0, 90.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
 	{"id": "wards_n", "bank": "north", "seed": Vector2(1000, 150), "grid": [4, 6], "angle": 0.0,
 		"su": [90.0, 90.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
+	# Cable Hill (San Francisco's painted rows) and Jade Gate (its
+	# Chinatown), north of Presidio Avenue at the foot of the hills. Their
+	# streets carry on south through Gilt and Midtown.
+	{"id": "hill_n", "bank": "north", "seed": Vector2(0, -350), "grid": [4, 6], "angle": 0.0,
+		"su": [90.0, 90.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
+	{"id": "china_n", "bank": "north", "seed": Vector2(500, -350), "grid": [3, 6], "angle": 0.0,
+		"su": [120.0, 120.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.08, "max": [0.0, 0.0, 0.0]},
+	# Calle Luna (Miami's Little Havana): the city grid, low pastel shops.
+	{"id": "havana_e", "bank": "north", "seed": Vector2(1700, 800), "grid": [4, 6], "angle": 0.0,
+		"su": [90.0, 90.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
+	# Brisa Beach (Miami Beach): its grid squares up to the coast, cross
+	# streets down to Ocean Drive, long blocks along it.
+	{"id": "brisa_e", "bank": "north", "seed": BRISA_SEED, "angle": -39.0, "origin": OCEAN_AT, "bend": 0.0,
+		"su": [92.0, 104.0], "sv": [80.0, 90.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
 	# Ironwharf: big industrial lots, a few streets dropped for yards.
 	{"id": "docks", "bank": "north", "seed": Vector2(1000, 960), "grid": [4, 3], "angle": 0.0,
 		"su": [90.0, 90.0], "sv": [120.0, 120.0], "fam": "uv", "cls": "street", "cut": [0.12, 0.1], "lane": 0.0, "max": [190.0, 250.0, 40000.0]},
@@ -191,6 +223,8 @@ var edge_loops: Array[PackedVector2Array] = []
 ## How far past the edge street's centreline the city reaches (its outer
 ## half, sidewalk and a verge).
 const EDGE_PAD := 24.0
+## The largest block the edge trim fills in as a notch (m²).
+const NOTCH_MAX := 30000.0
 ## The window plus the margin ring of scenery.
 var bounds := Rect2()
 var seed_value := 0
@@ -410,6 +444,14 @@ func in_city(p: Vector2) -> bool:
 	return is_water_point(p) and Geometry2D.is_point_in_polygon(p, outline)
 
 
+## True on Brisa Beach's sea front: Ocean Drive and the strip past it to
+## the sand (the edge there follows the straight Gulf shore).
+func sea_front(p: Vector2) -> bool:
+	var t := (p - OCEAN_AT).dot(GULF_DIR)
+	var off := (p - OCEAN_AT).dot(Vector2(-GULF_DIR.y, GULF_DIR.x))
+	return t > -80.0 and t < 1400.0 and off > -40.0 and off < 120.0
+
+
 ## Distance from local point p to the city's edge (the core outline; the
 ## river through the city is not an edge). INF without an outline.
 func edge_distance(p: Vector2) -> float:
@@ -546,8 +588,8 @@ func _layout(src: Array) -> void:
 	var rampart := PackedVector2Array([Vector2(ART_X[3], top), p4])
 	var west := bounds.position.x - 30.0
 	var east := bounds.end.x + 30.0
-	var crescent := PackedVector2Array([Vector2(west, ART_Y_NORTH[2]), Vector2(east, ART_Y_NORTH[2])])
-	var wharf := PackedVector2Array([Vector2(ART_X[3] - 5.0, ART_Y_NORTH[3]), Vector2(east, ART_Y_NORTH[3])])
+	var crescent := PackedVector2Array([Vector2(west, ART_Y_NORTH[3]), Vector2(east, ART_Y_NORTH[3])])
+	var wharf := PackedVector2Array([Vector2(ART_X[3] - 5.0, ART_Y_NORTH[4]), Vector2(ART_X[5], ART_Y_NORTH[4])])
 	# Founders Circle sits on Lantern Boulevard where Liberty Avenue sets
 	# off; the Esplanade runs west from it to City Hall, on the grounds'
 	# axis.
@@ -556,18 +598,14 @@ func _layout(src: Array) -> void:
 	# The few diagonals: Liberty Avenue, the old road out to the east (it
 	# meets the grid at Rampart and Crescent), and Magnolia Avenue, out to
 	# the hills in the west from the City Hall grounds' corner.
-	var lib_at := Vector2(ART_X[3], ART_Y_NORTH[2])
-	var lib_dir := (lib_at - circle_at).normalized()
-	# Past Liberty Circle it turns a degree or so to meet the city's edge
-	# where a cross street does, so the two leave the city as one road
-	# instead of two side by side.
-	var edge_x := bounds.end.x - 4.0
-	var lib_y := lib_at.y + lib_dir.y / lib_dir.x * (edge_x - lib_at.x)
-	var ys: Array = ART_Y_NORTH.duplicate()
-	for sp in _splits(ART_Y_NORTH, 6, -INF, INF, "ynorth"):
-		ys.append(sp[0])
-	var lib_end := Vector2(edge_x, _nearest(ys, lib_y, INF))
-	var liberty := PackedVector2Array([circle_at, lib_at, lib_end + (lib_end - lib_at).normalized() * (east - edge_x)])
+	var lib_at := Vector2(ART_X[3], ART_Y_NORTH[3])
+	# Brisa Beach: Ocean Drive along the sea edge, Seagrape Avenue behind,
+	# both parallel to the coast (clipped to the land as roads below).
+	var ocean := PackedVector2Array([OCEAN_AT - GULF_DIR * 60.0, OCEAN_AT + GULF_DIR * 1400.0])
+	var seagrape := PackedVector2Array([SEAGRAPE_AT - GULF_DIR * 60.0, SEAGRAPE_AT + GULF_DIR * 1800.0])
+	# Liberty Avenue runs on south-east through Calle Luna to Seagrape.
+	var lib_far := lib_at + (lib_at - circle_at).normalized() * 3000.0
+	var liberty := PackedVector2Array([circle_at, lib_at, _cross(PackedVector2Array([lib_at, lib_far]), seagrape)])
 	var magnolia := PackedVector2Array([Vector2(west, 40.0), grounds.position])
 	# River Road: along the bank up to Rampart. Past it the wharves have the
 	# water.
@@ -597,15 +635,43 @@ func _layout(src: Array) -> void:
 		if bounds.grow(-60.0).has_point(rb[1]):
 			cut_out.append(_roundabout(src, rb[0], rb[1], rb[2]))
 	_moreau_square()
+	# Districts: the land cut apart along the seams. Presidio Avenue splits
+	# Cable Hill and Jade Gate off Gilt and Midtown; Hibiscus Avenue ends the
+	# Wards and Ironwharf at Calle Luna.
+	var road_cut := river_road.duplicate()
+	road_cut.insert(0, river_road[0] + (river_road[0] - river_road[1]).normalized() * 60.0)
+	road_cut.append(p4 + (p4 - river_road[river_road.size() - 2]).normalized() * 4.0)
+	var presidio := PackedVector2Array([Vector2(west, ART_Y_NORTH[1]), Vector2(ART_X[3], ART_Y_NORTH[1])])
+	var hib_end := _cross(PackedVector2Array([Vector2(ART_X[5], top), Vector2(ART_X[5], bottom)]), seagrape)
+	var hibiscus := PackedVector2Array([Vector2(ART_X[5], ART_Y_NORTH[3]), hib_end + Vector2(0, 5)])
+	var north_parts: Array = [north]
+	for seam in [lantern, crescent, rampart, road_cut, wharf, presidio, hibiscus, seagrape, ocean]:
+		north_parts = _cut(north_parts, seam)
+	var brisa := _piece(north_parts, BRISA_SEED)
+	var beach := _piece(north_parts, OCEAN_AT + GULF_DIR * 500.0 + Vector2(-GULF_DIR.y, GULF_DIR.x) * 40.0)
 	var roads: Array = [[lantern, "boulevard", "lantern"], [crescent, "boulevard", "crescent"], [rampart, "avenue", "rampart"],
 			[liberty, "avenue", "liberty"], [magnolia, "avenue", "magnolia"], [wharf, "avenue", "wharf"], [river_road, "river", "river_road"],
 			[levee, "river", "levee"], [quay, "quay", "quay"], [PackedVector2Array([b0, b1]), "bridge", "bridge"],
 			[point_ave, "avenue", "point_ave"]]
-	# The other arterials, on the same grid: clipped to the land they cross.
+	for piece in Geometry2D.intersect_polyline_with_polygon(seagrape, north):
+		roads.append([piece, "avenue", "seagrape"])
+	for piece in Geometry2D.intersect_polyline_with_polygon(ocean, north):
+		roads.append([piece, "avenue", "ocean"])
+	# The other arterials, on the same grid: clipped to the land they cross
+	# (and out of Brisa Beach, which has its own grid).
 	for a in ARTERIALS:
 		var line := PackedVector2Array([Vector2(a.x, top), Vector2(a.x, bottom)]) if a.has("x") else PackedVector2Array([Vector2(a.get("from", west), a.y), Vector2(a.get("to", east), a.y)])
 		for piece in Geometry2D.intersect_polyline_with_polygon(line, north if a.bank == "north" else south):
-			roads.append([piece, a.cls, a.road])
+			var parts: Array[PackedVector2Array] = [piece]
+			for zone in [brisa, beach]:
+				if a.bank != "north" or zone.is_empty():
+					continue
+				var next: Array[PackedVector2Array] = []
+				for part in parts:
+					next.append_array(Geometry2D.clip_polyline_with_polygon(part, zone))
+				parts = next
+			for part in parts:
+				roads.append([part, a.cls, a.road])
 	for r in roads:
 		# Roads through the circle and the City Hall grounds stop at their
 		# rings (the stubs left inside are pruned).
@@ -618,13 +684,6 @@ func _layout(src: Array) -> void:
 		for piece in pieces:
 			if _length(piece) > 10.0:
 				src.append({"pts": _resample(piece, STEP), "cls": r[1], "road": r[2], "patch": -1, "fam": -1})
-	# Districts: the land cut apart along the seams.
-	var road_cut := river_road.duplicate()
-	road_cut.insert(0, river_road[0] + (river_road[0] - river_road[1]).normalized() * 60.0)
-	road_cut.append(p4 + (p4 - river_road[river_road.size() - 2]).normalized() * 4.0)
-	var north_parts: Array = [north]
-	for seam in [lantern, crescent, rampart, road_cut, wharf]:
-		north_parts = _cut(north_parts, seam)
 	var south_parts := _cut([south], PackedVector2Array([b1 - Vector2(0, 5), Vector2(b1.x, bottom)]))
 	# A street round the edge of the scenery closes off the outermost blocks.
 	var frame := _rect_poly(bounds.grow(-4.0))
@@ -848,7 +907,9 @@ func _splits(arts: Array, n: int, lo: float, hi: float, axis: String) -> Array:
 		for j in range(1, n):
 			var f := float(j) / n
 			var halfway := absf(f - 0.5) < 0.001
-			var key := hash([seed_value, axis, i, n, j])
+			# Keyed by the interval's place before the north grew a row
+			# (-580), so the old streets keep their jitter.
+			var key := hash([seed_value, axis, i - (1 if arts == ART_Y_NORTH else 0), n, j])
 			var block: float = (arts[i + 1] - arts[i]) / n
 			var nudge := 0.0 if halfway else (float(absi(key) % 1000) / 999.0 * 2.0 - 1.0) * SPLIT_JITTER * block
 			var at: float = lerpf(arts[i], arts[i + 1], f) + nudge
@@ -1808,18 +1869,25 @@ func _trim_to_outline(pins: Array) -> void:
 			if Geometry2D.is_point_in_polygon(q, faces[f].poly):
 				keep[f] = 1
 				pinned[f] = 1
-	# Smooth the block-by-block edge: a block held on by one side is a spur
-	# and goes; a land block with three kept sides is a notch and stays.
-	# Water counts as a side for spurs, so bank blocks are not stripped.
+	# Smooth the block-by-block edge: a block held on by one neighbour is a
+	# spur and goes; a land block of up to a few blocks' size with three
+	# kept neighbours is a notch and stays (a long strip along the edge,
+	# like the beach past Ocean Drive, is not). Water counts as a neighbour
+	# for spurs, so bank blocks are not stripped.
 	for pass_ in 3:
 		var sides: Array[Vector2i] = []
 		sides.resize(faces.size())
+		var seen := {}
 		for e in edge_a.size():
 			var s := edge_face[e]
 			if s.x < 0 or s.y < 0 or s.x == s.y:
 				continue
 			for pair in [[s.x, s.y], [s.y, s.x]]:
 				var o: int = pair[1]
+				var key := Vector2i(pair[0], o)
+				if seen.has(key):
+					continue
+				seen[key] = true
 				if keep[o] == 1:
 					sides[pair[0]].x += 1
 				elif faces[o].kind == "water":
@@ -1831,7 +1899,7 @@ func _trim_to_outline(pins: Array) -> void:
 			if keep[f] == 1 and pinned[f] == 0 and sides[f].x + sides[f].y <= 1:
 				keep[f] = 0
 				changed = true
-			elif keep[f] == 0 and sides[f].x >= 3:
+			elif keep[f] == 0 and sides[f].x >= 3 and faces[f].area < NOTCH_MAX:
 				keep[f] = 1
 				changed = true
 		if not changed:

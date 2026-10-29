@@ -280,7 +280,8 @@ func test_city_follows_world_map() -> void:
 func test_city_outline_is_organic() -> void:
 	# Sachin: "Belleriv looks like a perfectly squared/rectangle city. This
 	# is now how ideal cities looks, even if they are fully architected."
-	# The city keeps its planned size (2026-10-28).
+	# Sachin, 2026-10-29: "Make Bellerive the size of Las Venturas then, but
+	# with California + San Fierro + Florida mix." (Las Venturas: ~4.1 km².)
 	await _new_game(false)
 	var city = game.city
 	var plan = city.plan
@@ -303,9 +304,10 @@ func test_city_outline_is_organic() -> void:
 		y += 20.0
 	var km2 := land * 400.0 / 1e6
 	var fill := land * 400.0 / box.get_area()
-	_check(km2 > 2.2 and km2 < 2.8, "the city keeps its size: %.2f km2 of land" % km2)
+	_check(km2 > 3.9 and km2 < 4.5, "the city is Las Venturas' size: %.2f km2 of land" % km2)
 	_check(fill < 0.8, "the outline is no box: the land fills %.0f%% of its bounding box" % (fill * 100.0))
-	# No long straight edge (a river bank may run on; it follows the river).
+	# No long straight edge (a river bank may run on, and Ocean Drive; they
+	# follow the river and the Gulf shore).
 	var longest := 0.0
 	for loop in plan.edge_loops:
 		var run := 0.0
@@ -316,7 +318,7 @@ func test_city_outline_is_organic() -> void:
 			if a.distance_to(b) < 0.1:
 				continue
 			var d := (b - a).normalized()
-			if plan.river_distance((a + b) * 0.5) < plan._river_half + 30.0:
+			if plan.river_distance((a + b) * 0.5) < plan._river_half + 30.0 or plan.sea_front((a + b) * 0.5):
 				run = 0.0
 			elif d.dot(dir) > cos(deg_to_rad(8.0)):
 				run += a.distance_to(b)

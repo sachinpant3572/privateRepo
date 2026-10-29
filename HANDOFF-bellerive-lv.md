@@ -55,6 +55,33 @@ planned size" rule for the city; #104 (organic outline) carries on inside it.
   on the real hill behind), ~16-23 h for the whole growth. Real slopes are
   the bigger option for Sachin to switch to.
 
+- **Core = old core + four lobes (2026-10-29).** Lobes in local metres:
+  sf (-290..520, y to -570), ne (1420..1800, y to -200), florida (1450..2220,
+  y 180..1820, 70 m inland of the Gulf), south (-80..1430, y to 1945).
+  World-map shapely: core 4.16 km², land 3.86 km². Built with /tmp/co/grow.py
+  (union, buffer 15/-15 mitre, simplify 4). The north edge stops at the
+  mountain's foot (y -430 for x 270..1640): the hills' FALLOFF ends there.
+- **Street plan for the growth (street_plan.gd).**
+  - Arterials: ART_X += 2130; ART_Y_NORTH = -580 + old + 1580; ART_Y_SOUTH
+    += 1990. Superblock bounds that were no road inside the city now are:
+    Presidio Ave (y -220), Hibiscus (x 1460), Tamarind (x 1770), Mangrove
+    (x 2130), Gulfview (y 1610 south), Pelican (y 1760 south). (Before, y
+    1610 and x 1460 gave 126-200 m blocks.)
+  - Seams: Presidio (y -220, west to Rampart) splits off **hill** (west of
+    Lantern; Cable Hill, painted Victorian rows) and **china** (Lantern to
+    Rampart; Jade Gate, new chinatown style). Hibiscus seam (x 1460, Crescent
+    to Seagrape) ends the Wards and Ironwharf (Wharf St stops at 1460).
+    **Seagrape Ave** (diagonal 330 m inland, parallel to the Gulf, dir
+    (0.776,-0.630)) and **Ocean Drive** (75 m inland, the city's sea edge)
+    bound **brisa** (Brisa Beach: grid turned -39 degrees to the coast, Deco
+    hotels on Ocean Drive, condos behind). Between Hibiscus, Crescent and
+    Seagrape: **havana** (Calle Luna: city grid, low pastel shops).
+  - Liberty Avenue now ends at Seagrape (T junction) instead of the east
+    edge. North of Crescent, east of 1460, the Wards North grid runs on.
+  - City arterials on x clip out of the brisa region (its own grid).
+- **Edge falloff**: outline edges within ~80 m of the Gulf are not edges
+  for EDGE_OPEN/EDGE_LOW (the hotels front the sea).
+
 ## Traps carried over from #104
 
 - The trim's notch/spur rules: outline wiggles must be 2+ blocks to show.

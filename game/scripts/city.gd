@@ -53,7 +53,7 @@ const COUNTRY_BASE := 1_000_000
 const TOWN_RADIUS := 420.0
 const PATCH_DISTRICTS := {
 	"gilt": "gilt_district", "midtown": "midtown", "quarter": "lantern_quarter", "wards": "floodline_wards",
-	"docks": "ironwharf", "point": "morrow_point",
+	"docks": "ironwharf", "point": "morrow_point", "hill": "cable_hill", "china": "jade_gate", "havana": "calle_luna", "brisa": "brisa_beach",
 }
 
 ## Window size in blocks, from the map.
