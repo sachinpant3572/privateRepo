@@ -6092,7 +6092,7 @@ func test_mount_calder() -> void:
 		if not rd.name in ["Mount Calder Road", "Crest Drive", "Canyon Freeway", "Coyote Canyon Road", "Observatory Road", "Summit Fire Road", "West Ridge Track", "Larkspur Track"]:
 			continue
 		var nodes: PackedInt32Array = rd.nodes
-		var s := [0.0]
+		var s: Array[float] = [0.0]
 		for k in range(1, nodes.size()):
 			s.append(s[-1] + c.node_pos[nodes[k]].distance_to(c.node_pos[nodes[k - 1]]))
 		var j := 0
@@ -6106,7 +6106,7 @@ func test_mount_calder() -> void:
 				continue
 			var a: Vector2 = c.node_pos[nodes[k]]
 			var b: Vector2 = c.node_pos[nodes[j]]
-			var g := absf(Terrain.height(b.x, b.y) - Terrain.height(a.x, a.y)) / (s[j] - s[k])
+			var g: float = absf(Terrain.height(b.x, b.y) - Terrain.height(a.x, a.y)) / (s[j] - s[k])
 			var cap: float = caps.get(c.edge_class(e), 0.3)
 			if Terrain.height(a.x, a.y) > 300.0:
 				climbs += 1
