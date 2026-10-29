@@ -2667,7 +2667,9 @@ func test_people_wear_modern_clothes() -> void:
 					bones_ok = false
 			if absf(sum - 1.0) > 0.01:
 				bones_ok = false
-		_check(mb.triangle_count() < 4900, "%s look stays under 4900 triangles, got %d" % [look.get("outfit"), mb.triangle_count()])
+		# The hero is built on the denser hero body.
+		var cap := 12000 if look.get("hero", false) else 4900
+		_check(mb.triangle_count() < cap, "%s look stays under %d triangles, got %d" % [look.get("outfit"), cap, mb.triangle_count()])
 	_check(bones_ok, "every vertex is bound to real bones, weights summing to 1")
 	var total := 0
 	var outfits := {}
