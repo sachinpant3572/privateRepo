@@ -95,6 +95,18 @@ No location given; causes found with a probe (`game/tests/shimmer_shots.tscn`).
   test_camera_near_plane_keeps_depth_precision, test_ground_layers_never_share_a_plane.
 - test_graphics_quality_presets (line 1674) now expects 4x MSAA on a new game.
 
+- Full suite after the fixes: `1526 checks passed, 0 failed`, exit 0.
+
+## Open
+
+- Driveway spot, foot view (AE15 367): a ladder of dark plank lines shows through a tan
+  surface in the 1.5n shot (`/tmp/shimmer_shots/crop_z_after_driveway_ab.png`). It is NOT
+  grounds_kit `_footpath`'s boardwalk lines: raising them 2.5 mm changed nothing
+  (367 -> 367). The source is not found yet; likely a plot/lot surface coplanar with
+  another piece's plank lines. Small (a few hundred px at one home).
+- Bird flocks show in every ZPROBE diff (they move between shots); not depth.
+- AA cost on a real phone is unmeasured (no device here).
+
 ## Docs host
 
 - docs.godotengine.org is blocked from this container (CONNECT 403); used raw.githubusercontent.com.
