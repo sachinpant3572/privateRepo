@@ -6543,6 +6543,9 @@ func test_crowd_reacts_to_a_punch() -> void:
 	for row in crowd:
 		var ped = game.population.spawn_ped_at(p.global_position + row[2])
 		ped.walk_speed = 0.0
+		# A body built ahead brings its own category's pace (an elderly one
+		# runs at 3.2 m/s): set the usual one.
+		ped.run_speed = 5.2
 		ped.category = row[0]
 		ped.personality = row[1]
 		ped.brave = row[1] == "brave"
