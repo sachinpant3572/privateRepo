@@ -2594,7 +2594,7 @@ func test_body_kit_builds_bodies() -> void:
 	const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 	var o := {"outfit": "tee", "bottoms": "jeans", "skin": Color(0.8, 0.6, 0.5), "top": Color(0.2, 0.3, 0.8),
 		"sleeve": Color(0.2, 0.3, 0.8), "pants": Color(0.2, 0.2, 0.3), "sleeves": "short", "shoe_style": "sneakers"}
-	var budget := {"crowd": [3000, 1200], "hero": [10000, 3500]}
+	var budget := {"crowd": [3600, 1200], "hero": [11000, 3500]}
 	for mesh in ["crowd", "hero"]:
 		var mb := MeshBuilder.new()
 		var b: Dictionary = BodyKit.add_body(mb, {"body": "male"}, o, mesh)
@@ -2660,10 +2660,15 @@ func test_people_wear_modern_clothes() -> void:
 		var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
 		var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
 		for v in range(0, bones.size(), 4):
-			if bones[v] < 0 or bones[v] >= CharacterKit.BONES.size() or weights[v] != 1.0:
+			var sum := 0.0
+			for q in 4:
+				sum += weights[v + q]
+				if weights[v + q] > 0.0 and (bones[v + q] < 0 or bones[v + q] >= CharacterKit.BONES.size()):
+					bones_ok = false
+			if absf(sum - 1.0) > 0.01:
 				bones_ok = false
-		_check(mb.triangle_count() < 3300, "%s look stays under 3300 triangles, got %d" % [look.get("outfit"), mb.triangle_count()])
-	_check(bones_ok, "every vertex is bound rigidly to one real bone")
+		_check(mb.triangle_count() < 4900, "%s look stays under 4900 triangles, got %d" % [look.get("outfit"), mb.triangle_count()])
+	_check(bones_ok, "every vertex is bound to real bones, weights summing to 1")
 	var total := 0
 	var outfits := {}
 	var hats := {}
@@ -2677,9 +2682,10 @@ func test_people_wear_modern_clothes() -> void:
 		hats[look.get("headwear", "")] = true
 		bags[look.get("bag", "")] = true
 	# About 790 triangles a person before 0.24's smooth bodies, hands, faces
-	# and shoes (about 2440 after); about 20 on screen on an Adreno 830
-	# drawing 180-200k a frame.
-	_check(total / 400.0 < 2500.0, "average civilian within the triangle budget, got %.0f" % (total / 400.0))
+	# and shoes, about 2440 after, about 4230 on 0.25's MakeHuman bodies
+	# (near detail; far detail under half); about 20 on screen on an
+	# Adreno 830 drawing 180-200k a frame.
+	_check(total / 400.0 < 4400.0, "average civilian within the triangle budget, got %.0f" % (total / 400.0))
 	_check(outfits.size() >= 14 and hats.size() >= 6 and bags.size() >= 5,
 		"street looks vary: %d outfits, %d hats, %d bags" % [outfits.size(), hats.size(), bags.size()])
 	var bare := MeshBuilder.new()
@@ -5938,7 +5944,12 @@ func test_people_dress_for_their_kind() -> void:
 				var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
 				var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
 				for v in range(0, bones.size(), 4):
-					if bones[v] < 0 or bones[v] >= CharKit.BONES.size() or weights[v] != 1.0:
+					var sum := 0.0
+					for q in 4:
+						sum += weights[v + q]
+						if weights[v + q] > 0.0 and (bones[v + q] < 0 or bones[v + q] >= CharKit.BONES.size()):
+							rigid = false
+					if absf(sum - 1.0) > 0.01:
 						rigid = false
 			tris += t
 			most = maxi(most, t)
@@ -5983,11 +5994,11 @@ func test_people_dress_for_their_kind() -> void:
 		total += tris
 		count += 40
 		_check(wrong.is_empty(), "%s people dress the part %s" % [cat, wrong])
-		_check(tris / 40.0 < 2600.0 and most < 3300, "%s looks within budget: %.0f average, %d at most" % [cat, tris / 40.0, most])
+		_check(tris / 40.0 < 4500.0 and most < 4900, "%s looks within budget: %.0f average, %d at most" % [cat, tris / 40.0, most])
 		if cat in ["office", "gang", "tourist", "elderly"]:
 			_check(flair >= 24, "most %s people carry their kind's touches (%d of 40)" % [cat, flair])
-	_check(rigid, "every category look is bound rigidly to real bones")
-	_check(total / float(count) < 2500.0, "the street as a whole stays within budget, %.0f a person" % (total / float(count)))
+	_check(rigid, "every category look is bound to real bones, weights summing to 1")
+	_check(total / float(count) < 4400.0, "the street as a whole stays within budget, %.0f a person" % (total / float(count)))
 	var hero := MeshBuilder.new()
 	CharKit.build(hero, Player.JULES)
 	var plain_look: Dictionary = Player.JULES.duplicate()
@@ -5995,7 +6006,7 @@ func test_people_dress_for_their_kind() -> void:
 	plain_look.erase("stripes")
 	var plain := MeshBuilder.new()
 	CharKit.build(plain, plain_look)
-	_check(hero.triangle_count() < 3400 and hero.triangle_count() >= plain.triangle_count() + 60,
+	_check(hero.triangle_count() < 12000 and hero.triangle_count() >= plain.triangle_count() + 60,
 		"Jules is built finer than a plain look and stays in budget (%d against %d)" % [hero.triangle_count(), plain.triangle_count()])
 
 

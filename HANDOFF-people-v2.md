@@ -21,26 +21,6 @@ the Framerates?"
   So the MakeHuman clothes, hair, proxies and game-engine rig are not
   available: clothes are made as shells of the body.
 
-## Plan
-
-1. `game/tools/people/build_people.py` (offline, numpy + pyfqmr + trimesh):
-   body group of base.obj, macro targets per body variant, pose the arms
-   down and curl the fingers with the MH rig (LBS), fit each of our 17
-   BONES segments (per-bone affine along the bone, blended by weight), so
-   rig.gd animations and held-item offsets stay as they are. Decimate once
-   (head kept denser), carry weights, parts and variant positions to the
-   decimated vertices by barycentric lookup on the source surface.
-2. Output one binary file per LOD in `game/assets/people/`, shared topology
-   for all variants; GDScript blends variants per look (gender, weight,
-   muscle, age) like MakeHuman does.
-3. `scripts/kits/body_kit.gd`: per-face region rules from the look (top,
-   sleeves, bottoms, shoes, socks, hair) -> vertex colours, cloth pushed out
-   along the normal, a lip strip at each cloth edge; then the existing kit's
-   extras (hair styles, hats, bags, glasses, prints) on the same mesh. One
-   surface, one draw call.
-4. Frame budget: about 3.5k tris near, about 1.2k far; 20 people about 70k
-   of the 180-200k budget.
-
 ## Decisions
 
 - Fit: MH body posed (arms down, palms in, fingers relaxed) and kept in its
@@ -92,7 +72,7 @@ the Framerates?"
 - Clothes (revised, no offline cuts): the kit computes fit tables at
   runtime from the blended verts (torso slices: half width and front/back
   depth on a height grid, shoulder-top silhouette; neck ellipse; limb radii;
-  foot and head boxes). Regions per face from its part and canonical
+  foot and head boxes). Regions (per vertex since 0.25, below) from part and canonical
   centroid (skin, top, sleeve, cuff, bottoms, socks, hidden feet, scoop,
   beard); vertices split at region borders with shared positions; cloth
   offset = max of adjacent regions (tee ~0.004, puffer ~0.036). Offline
@@ -106,9 +86,6 @@ the Framerates?"
   (moved by the hand joint delta). Removed in body mode: torso loft,
   shoulder balls, limb tubes, `_hand`, neck tube, head loft and face parts,
   beard ball. Body extras: eyeballs with irises at the blended eye centres.
-- MeshBuilder needs: multi-bone skinned ranges, a lods dict in commit
-  (`{0.2: far_indices}` including extras), a near-only flag, tags.
-  build_rig uses the blended joints.
 - Hero mesh (Sachin, 10-29: "Ensure that our hero has much better
   structure and looks than the NPCs"): a second, denser simplification of
   the same body, `hero/` blocks beside `crowd/` in body.bin (5002 v, near
@@ -119,6 +96,36 @@ the Framerates?"
 - Gender: look.body "male"/"female" (random looks: col 1 male, col 2
   female; named looks set it). Shape weights from build, category
   (athlete muscle, elderly old).
+
+## Kit integration (0.25)
+
+- Regions per vertex (`BodyKit._region`), not per face. A triangle whose
+  corners differ is split along its edges: on one bone's part the cut is
+  found by bisecting `_region` (6 steps); across two parts it sits where
+  the two bones' skin weights are equal (smooth armholes). Regions with the
+  same colour and thickness merge first, the far LOD is never cut, and
+  hidden feet are not cut. Cost: near crowd body 3000 -> about 3440 tris.
+- The waistband is a level line between the hip and spine joints
+  (`_below_waist`, `waist` per outfit, none for dresses), not the bones'
+  ragged border. Under skirts and dresses the top 30% of the thighs takes
+  the skirt's colour (full thighs reach past the skirt shell).
+- Neckline: `fit().neckline`, 16 angle bins, where the neck outline meets
+  the chest (male front about 1.455, back about 1.52; women's back clamped
+  to neck joint - 0.03). Collars map old heights over 1.465 onto it, a
+  quarter lower under the jaw, at 2x WARP_GAP.
+- Warp (`CharacterKit._warp`): torso details by height knots and the body's
+  slice outline, lift kept at 60% (WARP_KEEP) plus WARP_GAP 4 mm; limbs
+  along the new bones; head by the head box; rigid groups (`rigid` tag)
+  move whole. Normals after the warp take the side of the old normals
+  (Godot winds front faces clockwise, so the cross product points in: it
+  had turned every warped detail dark).
+- Body mode drops the kit's hem bands: the body's TOP/BOTTOMS border is the
+  hem. Open jacket fronts are 3x3 quads at 16 mm lift so the curve holds.
+- Budgets (near LOD, measured): crowd average about 4230 tris (was 2440 on
+  0.24), most about 4660; hero 11200. 20 people about 85k of the 180-200k
+  frame budget; the far LOD is under half.
+- Cast looks set the body keys; convertible seats use the body's
+  `hip_height`.
 
 ## Traps
 

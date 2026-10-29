@@ -238,8 +238,8 @@ static func _dress(look: Dictionary, o: Dictionary) -> Dictionary:
 		"bare_shoulders": o.sleeves == "none"}
 
 
-## The region of one triangle: its bone `part`, mean place along the bone,
-## canonical centroid `c` (base shape), face code; `cj` the base joints.
+## The region of a point of the body: its bone `part`, place along the bone,
+## canonical position `c` (base shape), face code; `cj` the base joints.
 static func _region(part: int, along: float, c: Vector3, code: int, cj: Dictionary, d: Dictionary) -> int:
 	match part:
 		HEAD:
@@ -253,6 +253,8 @@ static func _region(part: int, along: float, c: Vector3, code: int, cj: Dictiona
 		NECK:
 			return BEARD if code == FACE_NECK_BEARD or code == FACE_BEARD else SKIN
 		CHEST, SPINE:
+			if part == SPINE and _below_waist(c, cj, d):
+				return LEGS if d.bottoms == "dress" else BOTTOMS
 			var neck: Vector3 = cj.Neck
 			if d.scoop > 0.0 and c.y > neck.y - d.scoop - 0.03 and c.z < neck.z - 0.02:
 				return SKIN
@@ -260,7 +262,7 @@ static func _region(part: int, along: float, c: Vector3, code: int, cj: Dictiona
 				return SKIN
 			return TOP
 		HIPS:
-			if along > d.waist:
+			if not _below_waist(c, cj, d):
 				return TOP
 			return LEGS if d.bottoms == "dress" else BOTTOMS
 		5, 8:  # upper arms
@@ -273,6 +275,10 @@ static func _region(part: int, along: float, c: Vector3, code: int, cj: Dictiona
 			return SKIN
 		11, 14:  # thighs
 			if d.bottoms in ["skirt", "dress"]:
+				# The skirt's own colour high on the thighs, where full thighs
+				# reach out past its shell.
+				if along < 0.3:
+					return TOP if d.bottoms == "dress" else BOTTOMS
 				return LEGS
 			if d.bottoms == "shorts":
 				return BOTTOMS if along < 0.74 else LEGS
@@ -285,6 +291,12 @@ static func _region(part: int, along: float, c: Vector3, code: int, cj: Dictiona
 			return LEGS
 	# Feet: inside the shoes, except in slides.
 	return SKIN if d.feet else HIDDEN
+
+
+## Whether a torso point (base shape) is under the waistband: a level line
+## (bones' own borders are ragged), none when the top covers the hips.
+static func _below_waist(c: Vector3, cj: Dictionary, d: Dictionary) -> bool:
+	return d.waist >= 0.0 and c.y < lerpf(cj.Hips.y, cj.Spine.y, d.waist)
 
 
 ## Adds the look's body to `mb` (near and far detail levels, skinned) and
@@ -308,54 +320,135 @@ static func add_body(mb, look: Dictionary, o: Dictionary, mesh := "crowd") -> Di
 	var colors: Array = d.colors
 	var thick: PackedFloat32Array = d.thick
 	var lists: Array = [block(mesh + "/near"), block(mesh + "/far")]
-	var regs := []
+	# Regions per vertex; a triangle whose corners differ is cut where the
+	# region changes along its edges, so hems and the face's paint run as
+	# lines rather than following the triangles' sawtooth.
+	# Regions that look the same (a shaven chin, sleeves in the shirt's
+	# colour) count as one, so only edges that show cost triangles.
+	var same := PackedByteArray()
+	same.resize(REGIONS)
+	for r in REGIONS:
+		same[r] = r
+		for e in r:
+			if r != HIDDEN and e != HIDDEN and colors[e] == colors[r] and thick[e] == thick[r]:
+				same[r] = e
+				break
+	var rv := PackedByteArray()
+	rv.resize(pos.size())
+	for v in pos.size():
+		rv[v] = same[_region(part[v], along[v], canon[v], face[v], cj, d)]
 	var push := PackedFloat32Array()
 	push.resize(pos.size())
 	for idx: PackedInt32Array in lists:
-		var r := PackedByteArray()
-		r.resize(idx.size() / 3)
-		for t in r.size():
-			var a := idx[t * 3]
-			var bb := idx[t * 3 + 1]
-			var cc := idx[t * 3 + 2]
-			var p := part[a] if part[a] == part[bb] or part[a] == part[cc] else part[bb]
-			var code := face[a] if face[a] == face[bb] or face[a] == face[cc] else face[bb]
-			if face[bb] != face[cc] and face[a] != face[bb] and face[a] != face[cc]:
-				code = 0
-			var reg := _region(p, (along[a] + along[bb] + along[cc]) / 3.0, (canon[a] + canon[bb] + canon[cc]) / 3.0,
-				code, cj, d)
-			r[t] = reg
-			if reg != HIDDEN:
-				for v in [a, bb, cc]:
-					push[v] = maxf(push[v], thick[reg])
-		regs.append(r)
+		for t in range(0, idx.size(), 3):
+			var th := 0.0
+			for k in 3:
+				if rv[idx[t + k]] != HIDDEN:
+					th = maxf(th, thick[rv[idx[t + k]]])
+			for k in 3:
+				push[idx[t + k]] = maxf(push[idx[t + k]], th)
 	var first: int = mb.verts.size()
-	var slot := PackedInt32Array()
+	# Arrays, not packed ones: the lambdas below share them by reference.
+	var slot := []
 	slot.resize(pos.size() * REGIONS)
 	slot.fill(-1)
-	var sb := PackedInt32Array()
-	var sw := PackedFloat32Array()
+	var cuts := {}
+	var sb := []
+	var sw := []
+	var put := func(v: int, reg: int) -> int:
+		var s := v * REGIONS + reg
+		if slot[s] < 0:
+			slot[s] = mb.verts.size()
+			mb._vert(pos[v] + nrm[v] * push[v], nrm[v], colors[reg])
+			for q in 4:
+				sb.append(bones[v * 4 + q])
+				sw.append(weights[v * 4 + q])
+		return slot[s]
+	# The point on edge e0-e1 where the region turns (found from the lower
+	# index, so both triangles on the edge agree), one vertex per region.
+	var cut := func(e0: int, e1: int, reg: int) -> int:
+		var a := mini(e0, e1)
+		var bb := maxi(e0, e1)
+		var key := (a * pos.size() + bb) * REGIONS + reg
+		if cuts.has(key):
+			return cuts[key]
+		var t := 0.5
+		if face[a] == face[bb] and (part[a] == part[bb] or (part[a] <= SPINE and part[bb] <= SPINE)):
+			var lo := 0.0
+			var hi := 1.0
+			for it in 6:
+				t = (lo + hi) * 0.5
+				var r := same[_region(part[a], lerpf(along[a], along[bb], t), canon[a].lerp(canon[bb], t), face[a], cj, d)]
+				if r == rv[a]:
+					lo = t
+				else:
+					hi = t
+			t = (lo + hi) * 0.5
+		elif part[a] != part[bb]:
+			# Across two bones' parts (part is the bone weighing most): where
+			# their weights are equal, which runs smoothly round the joint.
+			var f0 := 0.0
+			var f1 := 0.0
+			for q in 4:
+				var ba := bones[a * 4 + q]
+				var bz := bones[bb * 4 + q]
+				f0 += weights[a * 4 + q] * (1.0 if ba == part[a] else (-1.0 if ba == part[bb] else 0.0))
+				f1 += weights[bb * 4 + q] * (1.0 if bz == part[a] else (-1.0 if bz == part[bb] else 0.0))
+			if f0 - f1 > 1e-5:
+				t = clampf(f0 / (f0 - f1), 0.05, 0.95)
+		var n := nrm[a].lerp(nrm[bb], t).normalized()
+		var at := pos[a].lerp(pos[bb], t) + n * lerpf(push[a], push[bb], t)
+		cuts[key] = mb.verts.size()
+		mb._vert(at, n, colors[reg])
+		var mix := {}
+		for q in 4:
+			mix[bones[a * 4 + q]] = mix.get(bones[a * 4 + q], 0.0) + weights[a * 4 + q] * (1.0 - t)
+			mix[bones[bb * 4 + q]] = mix.get(bones[bb * 4 + q], 0.0) + weights[bb * 4 + q] * t
+		var ks: Array = mix.keys()
+		ks.sort_custom(func(x, y): return mix[x] > mix[y])
+		var sum := 0.0
+		for q in 4:
+			sum += mix[ks[q]] if q < ks.size() else 0.0
+		for q in 4:
+			sb.append(ks[q] if q < ks.size() else 0)
+			sw.append(mix[ks[q]] / sum if q < ks.size() else 0.0)
+		return cuts[key]
 	for l in 2:
 		mb.set_lod(MeshBuilder.LOD_NEAR if l == 0 else MeshBuilder.LOD_FAR)
 		var idx: PackedInt32Array = lists[l]
-		var r: PackedByteArray = regs[l]
-		for t in r.size():
-			var reg: int = r[t]
-			if reg == HIDDEN:
+		for t in range(0, idx.size(), 3):
+			var c := [idx[t], idx[t + 1], idx[t + 2]]
+			var r := [rv[c[0]], rv[c[1]], rv[c[2]]]
+			if r[0] == r[1] and r[1] == r[2]:
+				if r[0] != HIDDEN:
+					mb._tri_idx(put.call(c[0], r[0]), put.call(c[1], r[0]), put.call(c[2], r[0]))
 				continue
-			var ids := PackedInt32Array([0, 0, 0])
-			for k in 3:
-				var v := idx[t * 3 + k]
-				var s := v * REGIONS + reg
-				if slot[s] < 0:
-					slot[s] = mb.verts.size()
-					mb._vert(pos[v] + nrm[v] * push[v], nrm[v], colors[reg])
-					for q in 4:
-						sb.append(bones[v * 4 + q])
-						sw.append(weights[v * 4 + q])
-				ids[k] = slot[s]
-			mb._tri_idx(ids[0], ids[1], ids[2])
-	mb.skin(first, sb, sw)
+			# The corner alone in its region goes first. The far level, the
+			# shoes' hidden feet and three regions keep the whole triangle in
+			# one region (the corners' majority, or the first).
+			var k := 0
+			if r[0] == r[1]:
+				k = 2
+			elif r[0] == r[2]:
+				k = 1
+			if l == 1 or HIDDEN in r or (k == 0 and r[1] != r[2]):
+				var reg: int = r[0] if k == 0 and r[1] != r[2] else r[(k + 1) % 3]
+				if reg != HIDDEN:
+					mb._tri_idx(put.call(c[0], reg), put.call(c[1], reg), put.call(c[2], reg))
+				continue
+			var a: int = c[k]
+			var m: int = c[(k + 1) % 3]
+			var nn: int = c[(k + 2) % 3]
+			var ra: int = r[k]
+			var rb: int = r[(k + 1) % 3]
+			if ra != HIDDEN:
+				mb._tri_idx(put.call(a, ra), cut.call(a, m, ra), cut.call(a, nn, ra))
+			if rb != HIDDEN:
+				var pm: int = cut.call(a, m, rb)
+				var pn: int = cut.call(a, nn, rb)
+				mb._tri_idx(pm, put.call(m, rb), put.call(nn, rb))
+				mb._tri_idx(pm, put.call(nn, rb), pn)
+	mb.skin(first, PackedInt32Array(sb), PackedFloat32Array(sw))
 	mb.set_lod(MeshBuilder.LOD_BOTH)
 	return b
 
@@ -386,7 +479,7 @@ const LIMBS := {5: 6, 6: 7, 8: 9, 9: 10, 11: 12, 12: 13, 14: 15, 15: 16}
 
 
 ## The body's measures for fitting the kit's parts to it, cached in `b`:
-## torso and neck slices (outline per height), limb radii, the shoulder-top
+## torso and neck slices (outline per height), the neckline, limb radii, the shoulder-top
 ## line, hand centres, foot boxes and the head's front, back, crown and
 ## forehead width. Measured on the bare body (cloth is added on top).
 static func fit(b: Dictionary) -> Dictionary:
@@ -408,12 +501,15 @@ static func fit(b: Dictionary) -> Dictionary:
 	top.fill(-1.0)
 	var shoulder := 0.0
 	var boxes := {}
+	var nj: Vector3 = j.Neck
 	for i in pos.size():
 		var p := part[i]
 		var v := pos[i]
 		var cap := (p == 5 or p == 8) and v.y > arm_y
 		torso[i] = 1 if p <= CHEST or p == 11 or p == 14 or cap else 0
-		neck[i] = 1 if p == NECK else 0
+		# The neck, with the chest round its foot (collars sit there).
+		neck[i] = 1 if p == NECK or ((p == CHEST or p == SPINE) and v.y > nj.y - 0.12
+			and Vector2(v.x, v.z - nj.z).length() < 0.14) else 0
 		if p == SPINE or p == CHEST or cap:
 			var k := mini(int(absf(v.x) / 0.01), top.size() - 1)
 			top[k] = maxf(top[k], v.y)
@@ -433,11 +529,37 @@ static func fit(b: Dictionary) -> Dictionary:
 	var limbs := {}
 	for p in LIMBS:
 		limbs[p] = _limb_table(pos, part, p, j[BONE_NAMES[p]], j[BONE_NAMES[LIMBS[p]]])
-	var f := {"torso": _slices(pos, near, torso), "neck": _slices(pos, near, neck), "top": top, "shoulder": shoulder,
+	var ns := _slices(pos, near, neck)
+	var f := {"torso": _slices(pos, near, torso), "neck": ns, "neckline": _neckline(ns, nj.y), "top": top, "shoulder": shoulder,
 		"limbs": limbs, "hands": [boxes[7].get_center(), boxes[10].get_center()], "feet": [boxes[13], boxes[16]],
 		"eye": eye, "crown": head.end.y, "back": head.end.z, "brow": brow}
 	b["fit"] = f
 	return f
+
+
+## Where the neck rises out of the chest and shoulders, per slice angle bin:
+## the lowest height from which the neck slices stay within 1.5 cm of the
+## neck's own radius (2 cm over the neck joint), at the back no lower than
+## 3 cm under the joint.
+static func _neckline(ns: Dictionary, neck_y: float) -> PackedFloat32Array:
+	var line := PackedFloat32Array()
+	line.resize(SLICE_BINS)
+	for bin in SLICE_BINS:
+		var phi := (bin + 0.5) / SLICE_BINS * TAU - PI
+		var rn := slice_r(ns, neck_y + 0.02, phi) + 0.015
+		var y := neck_y + 0.02
+		while y > neck_y - 0.11 and slice_r(ns, y - 0.005, phi) <= rn:
+			y -= 0.005
+		# A flat upper back (women's) would let it slide down the back.
+		line[bin] = maxf(y, neck_y - 0.03) if sin(phi) > 0.0 else y
+	return line
+
+
+## The neckline's height at angle phi (atan2(z - cz, x)).
+static func neckline_y(line: PackedFloat32Array, phi: float) -> float:
+	var fa := (phi + PI) / TAU * SLICE_BINS - 0.5
+	var b0 := int(floorf(fa))
+	return lerpf(line[posmod(b0, SLICE_BINS)], line[posmod(b0 + 1, SLICE_BINS)], fa - b0)
 
 
 ## Fills the gaps (-1) in `a` from the nearest set entries, linearly

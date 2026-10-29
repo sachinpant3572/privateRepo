@@ -715,7 +715,9 @@ static func _torso(mb, look: Dictionary, o: Dictionary) -> void:
 			rings.append(ring)
 		mb.loft(rings, 12 if o.sides > 8 else 10, 0.012)
 		mb.set_bone(bone_index("Spine"))
-	if outfit in ["blazer", "suit"]:
+	if o.body:
+		pass # The body's own TOP / BOTTOMS boundary is the hem.
+	elif outfit in ["blazer", "suit"]:
 		# Tailored jackets come down over the hips.
 		_band(mb, 0.95, 0.205 * w, 0.148, 0.07, jacket)
 	elif not tucked and not quilted:
@@ -781,7 +783,7 @@ static func _torso(mb, look: Dictionary, o: Dictionary) -> void:
 			# Open front showing the layer under it.
 			var inner := shirt
 			var vee := outfit in ["blazer", "suit", "cardigan"]
-			_panel(mb, 0.0, 1.47, 1.03, 0.075 if vee else 0.06, 0.03 if vee else 0.055, -1.0, inner, w, bulk, 3)
+			_panel(mb, 0.0, 1.47, 1.03, 0.075 if vee else 0.06, 0.03 if vee else 0.055, -1.0, inner, w, bulk, 3, 0.016, 3)
 			if outfit == "cardigan":
 				# Button band and buttons down the left front, shirt collar.
 				_surf_strip(mb, [Vector2(-0.07, 1.46), Vector2(-0.033, 1.25), Vector2(-0.03, 1.03)], -1.0, 0.016, w, bulk, 0.009, jacket.darkened(0.15))
@@ -808,7 +810,7 @@ static func _torso(mb, look: Dictionary, o: Dictionary) -> void:
 				# Zip jacket: stand collar and zip edges.
 				_tube(mb, Vector3(0, 1.45, 0), Vector3(0, 1.53, 0), 0.096, 0.092, jacket.darkened(0.08))
 				for side in [-1.0, 1.0]:
-					_surf_strip(mb, [Vector2(side * 0.06, 1.46), Vector2(side * 0.058, 1.25), Vector2(side * 0.056, 1.04)], -1.0, 0.016, w, bulk, 0.007, jacket.lightened(0.3))
+					_surf_strip(mb, [Vector2(side * 0.06, 1.46), Vector2(side * 0.058, 1.25), Vector2(side * 0.056, 1.04)], -1.0, 0.022, w, bulk, 0.007, jacket.lightened(0.3))
 				if look.has("print"):
 					_print(mb, look, w, bulk, 1.32, false)
 		"bomber", "delivery":
@@ -1429,9 +1431,11 @@ static func _warp(mb, look: Dictionary, o: Dictionary, b: Dictionary, first_v: i
 			var rr := Vector2(p.x, p.z).length()
 			var an := 1.0 if bone == BodyKit.NECK else smoothstep(1.4, 1.44, p.y) * (1.0 - smoothstep(0.1, 0.13, rr))
 			if an > 0.0:
+				# Heights over the old neck foot (1.465) go over the neckline,
+				# a quarter lower under the jaw.
 				var th := atan2(p.z, p.x)
-				var yk := _knot(p.y, kn)
-				var r := _fit_r(rr / 0.07, BodyKit.slice_r(neck, yk, th) + WARP_GAP, 0.07)
+				var yk := BodyKit.neckline_y(f.neckline, th) + (p.y - 1.465) * (1.0 - 0.25 * maxf(0.0, -sin(th)))
+				var r := _fit_r(rr / 0.07, BodyKit.slice_r(neck, yk, th) + WARP_GAP * 2.0, 0.07)
 				q = q.lerp(Vector3(cos(th) * r, yk, BodyKit.slice_cz(neck, yk) + sin(th) * r), an)
 		elif BodyKit.LIMBS.has(bone):
 			var seg: Array = OLD_LIMBS[bone]
@@ -1513,6 +1517,9 @@ static func _warp(mb, look: Dictionary, o: Dictionary, b: Dictionary, first_v: i
 		if co.dot(ns) * cn.dot(ns) < 0.0:
 			idx[t + 1] = c
 			idx[t + 2] = bb
+			cn = -cn
+		# Godot's front faces wind clockwise: the normal is the side the old ones were on.
+		if cn.dot(ns) < 0.0:
 			cn = -cn
 		for v in [a, bb, c]:
 			acc[v] += cn
