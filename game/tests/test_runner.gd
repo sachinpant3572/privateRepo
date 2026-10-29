@@ -6352,6 +6352,10 @@ func test_every_home_has_a_way_in() -> void:
 				continue
 			if absf(v.y - (Terrain.height(v.x, v.z) + 0.05)) < 0.01:
 				on_ground += 1
+			# The tucked end's corners sit at the road edge too, under the
+			# road's top (ROUTE_OUT_Y, slab top 0.01 up): not a route top.
+			elif absf(v.y - (Terrain.height(v.x, v.z) + Kit.ROUTE_OUT_Y + 0.01)) < 0.01:
+				continue
 			elif absf(v.y - (pad + 0.05)) < 0.01:
 				on_pad += 1
 		Kit.reach = [0.0, 0.0, 0.0]

@@ -804,7 +804,8 @@ static func _lot(ctx: Ctx, i: int) -> void:
 
 ## A hill lot's routes past its front: from the pad's height at the front
 ## to the ground's (the draped road's) at the road edge, the reach there
-## less the tuck out (Kit.reach still holds the lot's).
+## less the tuck out and the 0.05 _route_out leaves under the road
+## (Kit.reach still holds the lot's).
 static func _bend_routes(ctx: Ctx, l: Array) -> void:
 	if Kit.route_out_verts.is_empty():
 		return
@@ -817,7 +818,7 @@ static func _bend_routes(ctx: Ctx, l: Array) -> void:
 		for i in range(r.x, r.y):
 			var v: Vector3 = ctx.mb.verts[i]
 			var lv := to_local * v
-			var run := maxf(Kit._reach_at(lv.x, float(l[3])) - Kit.ROUTE_TUCK, 0.5)
+			var run := maxf(Kit._reach_at(lv.x, float(l[3])) - Kit.ROUTE_TUCK - 0.05, 0.5)
 			var t := clampf((front - lv.z) / run, 0.0, 1.0)
 			ctx.mb.verts[i] = v + Vector3(0.0, lerpf(pad, Terrain.height(v.x, v.z), t), 0.0)
 		ctx.fixed.append([r.x, r.y])

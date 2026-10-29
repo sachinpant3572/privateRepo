@@ -93,7 +93,20 @@ helipad needs helicopters: task #82, not started (Sachin's word needed).
     sideways offset failed the lead-in's min radius.
   - build_country.py: Verdant Hills sites try an estate first until one
     house has turned to its view (`view_turns`); the coin toss alone left
-    none turned.
+    none turned. Phase 2's mountain zone covers 3.59 km² of Verdant Hills,
+    so farm_lots skips it: Heights and street-side estates now turn to the
+    sun too (`sun=True`) and try a square 84 m plot first (`_view_turn`
+    needs min >= 80, |W-D| <= 8).
+  - Seabreeze Drive: where the city's south lobe cuts it, the cut ends
+    (within 61 m of the footprint) lead in to an exit (`_to_exit`); the
+    Brisa cross streets start on the drive as cut (`drive_cut`), not on a
+    lead-in (one ran inland past Palmetto Row's end, a dead end).
+  - Tests: exits count when the point 120 m ahead lies in the play area
+    (the south lobe's exits face the beach); walks floor 5 (58 loops
+    before the city took in the eastside and Brisa blocks); the hill-drive
+    check skips vertices where ground and pad lie within 3 cm, and the
+    tucked end's corners (ground + ROUTE_OUT_Y + 0.01). `_bend_routes`
+    runs to reach - TUCK - 0.05, the road edge `_route_out` draws.
 
 ## Decided
 
