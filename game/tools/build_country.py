@@ -1038,6 +1038,9 @@ class Country:
         drive_full = LineString(fillet(list(drive.coords), 80.0, 8.0))
         drive = drive_full.intersection(belt_poly.buffer(0.5)).intersection(self.A).difference(self.P.buffer(60.0))
         kept = [piece for piece in lines_of(drive) if piece.length > 60.0]
+        # The cross streets start on the drive as cut, not on its lead-ins
+        # (one from a lead-in would run inland past Palmetto Row's end).
+        drive_cut = unary_union(kept)
         for k, piece in enumerate(kept):
             # Where the city's south lobe cuts the drive, its ends (60 m
             # off the footprint) are led in to an exit, not left dead.
@@ -1061,7 +1064,7 @@ class Country:
             b = (base[0] + inland[0] * 300, base[1] + inland[1] * 300)
             if bt_prep.contains(Point(a)):
                 self.brisa_feet.append((a, base))
-            a = self._first_hit(a, b, self.ocean_drive)
+            a = self._first_hit(a, b, drive_cut)
             # Past Seabreeze Drive's end a cross street would stop short.
             if a is not None and bt_prep.contains(Point(a)):
                 self._clip_add([a, b], bt, "street", "", "brisa")

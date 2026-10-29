@@ -6346,6 +6346,10 @@ func test_every_home_has_a_way_in() -> void:
 			var z_edge: float = -float(l[4]) * 0.5 - (Kit._reach_at(lv.x, float(l[3])) - Kit.ROUTE_TUCK - 0.05)
 			if absf(lv.z - z_edge) > 0.05:
 				continue
+			# Where the ground lies within a few cm of the pad the two
+			# heights can't be told apart: only telling vertices count.
+			if absf(Terrain.height(v.x, v.z) - pad) < 0.03:
+				continue
 			if absf(v.y - (Terrain.height(v.x, v.z) + 0.05)) < 0.01:
 				on_ground += 1
 			elif absf(v.y - (pad + 0.05)) < 0.01:
