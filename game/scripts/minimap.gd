@@ -16,7 +16,8 @@ uniform vec2 extent_uv = vec2(0.1);
 // The ground directions (x, z) of the minimap's right and up.
 uniform vec2 axis_r = vec2(1.0, 0.0);
 uniform vec2 axis_u = vec2(0.0, -1.0);
-// The playable window inside the bake (xy min, zw max); past it the state.
+// The playable window inside the bake (xy min, zw max); past it, and where
+// the bake is clear (past a trimmed city's edge), the state.
 uniform vec4 city_uv_rect = vec4(0.0, 0.0, 1.0, 1.0);
 // Past the city's bake: the whole state (state_map.gd).
 uniform sampler2D state_tex : filter_linear;
@@ -32,7 +33,7 @@ void fragment() {
 	vec2 g = axis_r * p.x - axis_u * p.y;
 	vec2 uv = center_uv + g * extent_uv;
 	vec4 c = texture(map_tex, uv);
-	if (any(lessThan(uv, city_uv_rect.xy)) || any(greaterThan(uv, city_uv_rect.zw))) {
+	if (any(lessThan(uv, city_uv_rect.xy)) || any(greaterThan(uv, city_uv_rect.zw)) || c.a < 0.5) {
 		c = texture(state_tex, state_center_uv + g * state_extent_uv);
 	}
 	float rim = smoothstep(0.92, 0.95, d);
@@ -72,6 +73,9 @@ func _ready() -> void:
 	var win: Rect2 = game.city.window
 	var lo: Vector2 = (win.position - map.origin) / MapImage.PX_M / map.size
 	var hi: Vector2 = (win.end - map.origin) / MapImage.PX_M / map.size
+	if not game.city.plan.outline.is_empty():
+		lo = Vector2.ZERO
+		hi = Vector2.ONE
 	_mat.set_shader_parameter("city_uv_rect", Vector4(lo.x, lo.y, hi.x, hi.y))
 	_map_rect = ColorRect.new()
 	_map_rect.material = _mat

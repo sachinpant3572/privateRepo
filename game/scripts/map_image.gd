@@ -92,7 +92,9 @@ static func bake(city) -> Dictionary:
 	var bounds: Rect2 = plan.bounds.grow(40.0)
 	var size := Vector2i(ceili(bounds.size.x / PX_M), ceili(bounds.size.y / PX_M))
 	var img := Image.create(size.x, size.y, false, Image.FORMAT_RGBA8)
-	img.fill(WATER)
+	# Past a trimmed city's edge the bake is clear, so the state map (its
+	# country, river and coast) shows through; the maps draw it underneath.
+	img.fill(WATER if plan.outline.is_empty() else Color(WATER, 0.0))
 	var origin := bounds.position
 	for f in plan.faces.size():
 		var inside: bool = city.in_window(f)

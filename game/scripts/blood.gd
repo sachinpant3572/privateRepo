@@ -370,7 +370,7 @@ func _paving(p: Vector2) -> float:
 	if city == null:
 		return 0.0
 	var plan = city.get("plan")
-	if plan != null and plan.bounds.has_point(p):
+	if plan != null and plan.in_city(p):
 		if plan.is_water_point(p):
 			return -1.0
 		var face: int = plan.face_of(p)

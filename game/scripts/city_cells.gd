@@ -122,6 +122,12 @@ const PARCEL_MAX := {
 	"docks": Vector2(84, 64), "brownstone": Vector2(40, 34), "painted": Vector2(44, 32),
 }
 const PARCEL_DEFAULT := Vector2(50, 44)
+## Towers reach full height this far in from the city's edge; nearer it
+## they are lower and fewer (HANDOFF-city-outline.md). Downtown sits near
+## the north-west edge, so a longer falloff would flatten a third of it.
+const EDGE_LOW := 150.0
+## Parcels this near the edge may be a parking lot or a green.
+const EDGE_OPEN := 90.0
 ## Room a landmark's parcel takes beyond its lot need (along, deep).
 const LANDMARK_ROOM := Vector2(8, 6)
 ## The Wards landmarks are a house or apartment in a row of shotguns.
@@ -187,6 +193,9 @@ class Ctx:
 	var used: Array = []
 	## Class of the street along the parcel's front (+z), or "".
 	var front_cls := ""
+	## The block's distance to the city's edge (StreetPlan.edge_distance):
+	## towers give way to lower buildings, lots and greens toward it.
+	var edge := INF
 
 
 static func build(city, cell: int) -> Dictionary:
@@ -958,6 +967,7 @@ static func _land_block(ctx: Ctx, style: String) -> void:
 	if district == "wards" and city.faces_square(ctx.face):
 		district = "painted"
 	var grounds: bool = ctx.plan.set_piece(ctx.face) == "grounds"
+	ctx.edge = ctx.plan.edge_distance(ctx.plan.faces[ctx.face].center)
 	var lawn: bool = style in LAWNS or grounds
 	_flat_in_front(ctx, ctx.ff, ctx.lot, KERB + 0.01, _paved(LOT_GROUND.green if lawn else LOT_GROUND.get(district, PAVEMENT)))
 	if style in LAWNS:
@@ -1103,16 +1113,27 @@ static func _landmark(ctx: Ctx, id: String) -> void:
 
 static func _district_parcel(ctx: Ctx, district: String) -> void:
 	var roll := ctx.rng.randf()
+	# Toward the city's edge the towers thin out to low blocks (EDGE_LOW),
+	# and on the edge some lots stand empty, parked or green (EDGE_OPEN).
+	var low := clampf(ctx.edge / EDGE_LOW, 0.0, 1.0)
+	if ctx.edge < EDGE_OPEN:
+		var pick := hash([ctx.cell, ctx.hx, ctx.hz, ctx.frame.origin.x]) % 100
+		if pick < 9:
+			_parking(ctx)
+			return
+		if pick < 15:
+			_pocket_park(ctx)
+			return
 	match district:
 		"midtown":
-			if roll < 0.1 and ctx.hx >= 11.0 and ctx.hz >= 9.0:
+			if roll < 0.1 and ctx.hx >= 11.0 and ctx.hz >= 9.0 and low >= 1.0:
 				_civic(ctx, "led_tower", PLAZA)
 			elif roll < 0.16:
 				_plaza(ctx)
-			elif roll < 0.55 and ctx.hx >= 15.0 and ctx.hz >= 15.0:
+			elif roll < 0.55 * low and ctx.hx >= 15.0 and ctx.hz >= 15.0:
 				_kit(ctx, Skyline, MIDTOWN_TOWERS[ctx.rng.randi() % MIDTOWN_TOWERS.size()], PLAZA)
 			else:
-				_downtown(ctx, 1.4)
+				_downtown(ctx, lerpf(0.5, 1.4, low))
 		"brownstone":
 			if roll < 0.08:
 				_pocket_park(ctx)
@@ -1125,10 +1146,10 @@ static func _district_parcel(ctx: Ctx, district: String) -> void:
 				_plaza(ctx)
 			elif roll < 0.18:
 				_parking(ctx)
-			elif roll < 0.5 and ctx.hx >= 15.0 and ctx.hz >= 15.0:
+			elif roll < 0.5 * low and ctx.hx >= 15.0 and ctx.hz >= 15.0:
 				_kit(ctx, Skyline, GILT_TOWERS[ctx.rng.randi() % GILT_TOWERS.size()], PLAZA)
 			else:
-				_downtown(ctx)
+				_downtown(ctx, lerpf(0.5, 1.0, low))
 		"wards":
 			if ctx.front_cls in ["avenue", "boulevard"] and roll < 0.75:
 				_strip(ctx)

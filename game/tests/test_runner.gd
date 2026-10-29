@@ -411,15 +411,16 @@ func test_street_plan_is_a_california_grid() -> void:
 		if sides.x < 0 and sides.y < 0 and plan.edge_class(e) != "bridge":
 			orphans += 1
 	_check(orphans == 0, "no holes in the map (%d streets with no block either side)" % orphans)
-	# And all land in the window is in some block (a missing street can
-	# leave an open area that isn't next to any street).
+	# And all land inside the city's edge is in some block (a missing street
+	# can leave an open area that isn't next to any street).
 	var bare: Array = []
-	var y := 4.0
-	while y < city.window.end.y:
-		var x := 4.0
-		while x < city.window.end.x:
+	var y: float = plan.bounds.position.y + 4.0
+	while y < plan.bounds.end.y:
+		var x: float = plan.bounds.position.x + 4.0
+		while x < plan.bounds.end.x:
 			var p := Vector2(x, y)
-			if plan.face_of(p) < 0 and plan.river_distance(p) > plan._river_half + 25.0:
+			var inside: bool = plan.edge_loops.any(func(l): return Geometry2D.is_point_in_polygon(p, l))
+			if inside and plan.face_of(p) < 0 and plan.river_distance(p) > plan._river_half + 25.0 and plan.edge_distance(p) > 8.0:
 				bare.append(p)
 			x += 10.0
 		y += 10.0
@@ -749,10 +750,30 @@ func test_perspective_camera() -> void:
 	var shadows_fit := 0
 	var pitch_sum := 0.0
 	var pitch_true := 0
+	# Spots in front of downtown's towers, where the usual camera spot is
+	# inside the tower behind the player, then random ones (for a spot
+	# where a building hides the player).
+	var spots: Array = []
+	var dt := Rect2(0, 0, 650, 500)
+	for cx in range(50, 650, 100):
+		for cz in range(50, 500, 100):
+			city.stream_now(Vector3(cx, 0, cz))
+	await get_tree().physics_frame
+	var back: Vector3 = cam.global_basis.z * base
+	for cell in city.get_children():
+		for body in cell.get_children():
+			if not body is StaticBody3D:
+				continue
+			for c in body.get_children():
+				if c is CollisionShape3D and c.shape is BoxShape3D and c.shape.size.y > back.y + 6.0:
+					var t: Vector3 = c.global_position
+					if dt.has_point(Vector2(t.x, t.z)) and str(city.district_at(t).get("id", "")) in ["gilt_district", "midtown"]:
+						spots.append(Vector3(t.x - back.x, 0, t.z - back.z))
 	for i in 900:
+		spots.append(Vector3(rng.randf_range(win.position.x, win.end.x), 0, rng.randf_range(win.position.y, win.end.y)))
+	for at in spots:
 		if inside_spots >= 6 and blocked_spot != null:
 			break
-		var at := Vector3(rng.randf_range(win.position.x, win.end.x), 0, rng.randf_range(win.position.y, win.end.y))
 		if not str(city.district_at(at).get("id", "")) in ["gilt_district", "midtown"]:
 			continue
 		city.stream_now(at)
@@ -1629,11 +1650,16 @@ func test_state_map_shows_the_whole_state() -> void:
 	fm.close()
 	var mat: ShaderMaterial = game.hud.minimap._mat
 	_check(mat.get_shader_parameter("state_tex") == fm.state.texture, "the minimap shows the state past the city's edge")
+	# The bake is clear past the city's edge, so the minimap shows all of it
+	# and the state map shows through round the outline.
 	var uv_rect: Vector4 = mat.get_shader_parameter("city_uv_rect")
-	var lo: Vector2 = (city.window.position - fm.map.origin) / fm.map.size
-	var hi: Vector2 = (city.window.end - fm.map.origin) / fm.map.size
-	_check(uv_rect.is_equal_approx(Vector4(lo.x, lo.y, hi.x, hi.y)) and lo.x > 0.0 and hi.x < 1.0,
-		"the minimap shows the city's bake only inside the playable window, got %s" % uv_rect)
+	_check(uv_rect.is_equal_approx(Vector4(0, 0, 1, 1)), "the minimap shows the whole city bake, got %s" % uv_rect)
+	var bake: Image = fm.map.texture.get_image()
+	var far: Vector2 = (city.plan.bounds.position + Vector2(2, 2) - fm.map.origin) / preload("res://scripts/map_image.gd").PX_M
+	var station: Vector3 = city.landmark_front("union_station")
+	var mid: Vector2 = (Vector2(station.x, station.z) - fm.map.origin) / preload("res://scripts/map_image.gd").PX_M
+	_check(bake.get_pixelv(Vector2i(far)).a < 0.5 and bake.get_pixelv(Vector2i(mid)).a > 0.5,
+		"the city bake is clear past the edge and solid in town")
 	game.waypoint = null
 
 
@@ -3826,33 +3852,47 @@ func test_cars_knock_down_roadside_props() -> void:
 	var city = game.city
 	city.stream_now(city.spawn_point)
 	Controls.camera = null
+	# One prop of each kind with room behind it to drive on (a building
+	# right behind a prop would stop the car whatever the prop does).
+	var space: PhysicsDirectSpaceState3D = city.get_world_3d().direct_space_state
+	var room := PhysicsShapeQueryParameters3D.new()
+	var probe := BoxShape3D.new()
+	probe.size = Vector3(2.2, 1.0, 7.0)
+	room.shape = probe
 	var found := {}
 	for cell in city.get_children():
 		for body in cell.get_children():
 			if not body is StaticBody3D:
 				continue
 			for c in body.get_children():
-				if c is CollisionShape3D and c.has_meta("brk"):
-					var kind: String = c.get_meta("brk").kind
-					if kind in ["street_light", "hydrant", "street_tree", "traffic_light"] and not found.has(kind):
-						found[kind] = c
+				if not (c is CollisionShape3D and c.has_meta("brk")):
+					continue
+				var kind: String = c.get_meta("brk").kind
+				if not kind in ["street_light", "hydrant", "street_tree", "traffic_light"] or found.has(kind):
+					continue
+				var at: Vector3 = c.global_position
+				at.y = 0.0
+				# Head for it from the middle of the nearest street.
+				var p := Vector2(at.x, at.z)
+				var best := INF
+				var road := Vector2.ZERO
+				for e in city.plan.edge_count():
+					if not city.plan.drivable(e):
+						continue
+					var q := Geometry2D.get_closest_point_to_segment(p, city.plan.pos(city.plan.edge_a[e]), city.plan.pos(city.plan.edge_b[e]))
+					if q.distance_to(p) < best:
+						best = q.distance_to(p)
+						road = q
+				var dir := Vector3(p.x - road.x, 0, p.y - road.y).normalized()
+				room.transform = Transform3D(Basis.looking_at(dir), at + dir * 5.5 + Vector3(0, 0.8, 0))
+				room.exclude = [body.get_rid()]
+				if space.intersect_shape(room, 1).is_empty():
+					found[kind] = [c, at, dir]
 	_check(found.size() >= 3, "street lights, hydrants and trees near the start can be knocked down (%s)" % [found.keys()])
 	for kind in found:
-		var shape: CollisionShape3D = found[kind]
-		var at: Vector3 = shape.global_position
-		at.y = 0.0
-		# Head for it from the middle of the nearest street.
-		var p := Vector2(at.x, at.z)
-		var best := INF
-		var road := Vector2.ZERO
-		for e in city.plan.edge_count():
-			if not city.plan.drivable(e):
-				continue
-			var q := Geometry2D.get_closest_point_to_segment(p, city.plan.pos(city.plan.edge_a[e]), city.plan.pos(city.plan.edge_b[e]))
-			if q.distance_to(p) < best:
-				best = q.distance_to(p)
-				road = q
-		var dir := Vector3(p.x - road.x, 0, p.y - road.y).normalized()
+		var shape: CollisionShape3D = found[kind][0]
+		var at: Vector3 = found[kind][1]
+		var dir: Vector3 = found[kind][2]
 		var start := at - dir * 12.0
 		var car = _player_car("sedan", start, 16.0, atan2(-dir.x, -dir.z))
 		car.global_position = start

@@ -410,6 +410,15 @@ func in_city(p: Vector2) -> bool:
 	return is_water_point(p) and Geometry2D.is_point_in_polygon(p, outline)
 
 
+## Distance from local point p to the city's edge (the core outline; the
+## river through the city is not an edge). INF without an outline.
+func edge_distance(p: Vector2) -> float:
+	var best := INF
+	for k in outline.size():
+		best = minf(best, Geometry2D.get_closest_point_to_segment(p, outline[k], outline[(k + 1) % outline.size()]).distance_to(p))
+	return best
+
+
 ## Block containing local point p, or -1 (river, edge of the map).
 func face_of(p: Vector2) -> int:
 	var key := Vector2i(floori(p.x / GRID), floori(p.y / GRID))

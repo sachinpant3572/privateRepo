@@ -89,11 +89,15 @@ static func bake(map_origin: Vector2, city = null) -> Dictionary:
 	for r in islands:
 		_fill(img, o, _poly(r.polygon), REGION_COLORS.island)
 	for c in world.cities:
-		var rect := _rect(c.rect)
-		_fill(img, o, _box(rect), CITY.lerp(LAND, 0.35))
+		# A city with an "urban" outline fills that shape, its districts
+		# clipped to it; others fill their rects.
+		var shape := _poly(c.urban) if c.has("urban") else _box(_rect(c.rect))
+		_fill(img, o, shape, CITY.lerp(LAND, 0.35))
 		for d in c.districts:
 			var col: Color = DISTRICT_COLORS.get(d.style, MapImage.STYLE_COLORS.get(d.style, CITY))
-			_fill(img, o, _box(_rect(d.rect).grow(-12.0)), col.lerp(CITY, 0.3))
+			var box := _box(_rect(d.rect).grow(-12.0))
+			for piece in (Geometry2D.intersect_polygons(box, shape) if c.has("urban") else [box]):
+				_fill(img, o, piece, col.lerp(CITY, 0.3))
 	for r in world.routes:
 		match r.type:
 			"highway":
@@ -153,7 +157,7 @@ static func _streets(img: Image, map_origin: Vector2, city) -> void:
 	for e in plan.edge_count():
 		var a: Vector2 = plan.pos(plan.edge_a[e])
 		var b: Vector2 = plan.pos(plan.edge_b[e])
-		if city.window.has_point((a + b) * 0.5) or not plan.drivable(e):
+		if (plan.in_city((a + b) * 0.5) if not plan.outline.is_empty() else city.window.has_point((a + b) * 0.5)) or not plan.drivable(e):
 			continue
 		_line(img, Vector2.ZERO, PackedVector2Array([a + map_origin, b + map_origin]), maxf(plan.edge_width(e) * 1.4, 9.0), ROAD)
 	var country = city.country

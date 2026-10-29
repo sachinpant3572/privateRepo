@@ -571,7 +571,7 @@ func habitat_at(p: Vector2) -> String:
 	var city = _city()
 	if city == null:
 		return "country"
-	if city.plan != null and city.plan.bounds.has_point(p):
+	if city.plan != null and city.plan.in_city(p):
 		if city.plan.is_water_point(p):
 			return "river"
 		var d: Dictionary = city.district_at(Vector3(p.x, 0.0, p.y))
@@ -638,7 +638,7 @@ func _open_ground(p: Vector2) -> float:
 	var city = _city()
 	if city == null:
 		return 0.0
-	if city.plan != null and city.plan.bounds.has_point(p):
+	if city.plan != null and city.plan.in_city(p):
 		if city.plan.is_water_point(p):
 			return -1.0
 		return LOT_TOP if _in_lot(city, p) else -1.0
@@ -648,7 +648,7 @@ func _open_ground(p: Vector2) -> float:
 
 ## Inside a city block (off the streets and kerbs).
 static func _in_lot(city, p: Vector2) -> bool:
-	if city == null or city.plan == null or not city.plan.bounds.has_point(p):
+	if city == null or city.plan == null or not city.plan.in_city(p):
 		return false
 	var face: int = city.plan.face_of(p)
 	return face >= 0 and Geometry2D.is_point_in_polygon(p, city.plan.inner(face))

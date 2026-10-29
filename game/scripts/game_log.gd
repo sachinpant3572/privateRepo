@@ -566,7 +566,7 @@ func _where(at: Vector3, s: Dictionary) -> void:
 			region = r.name
 			break
 	s["region"] = region
-	s["in_city"] = city.plan.bounds.has_point(local)
+	s["in_city"] = city.plan.in_city(local)
 	# The road lookup costs more than the rest of a snapshot: it runs on its
 	# own frame (_refresh_road), and here only the first time.
 	if _road.is_empty():

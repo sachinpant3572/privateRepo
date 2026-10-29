@@ -252,7 +252,7 @@ func cell_of_face(f: int) -> int:
 ## them all).
 func district_at(pos: Vector3) -> Dictionary:
 	var local := Vector2(pos.x, pos.z)
-	var inside: bool = plan.bounds.has_point(local)
+	var inside: bool = plan.in_city(local)
 	if inside:
 		var f: int = plan.face_of(local)
 		var patch: String = plan.face_patch(f) if f >= 0 else plan.patch_at(local)
@@ -395,16 +395,16 @@ func curb_yaw(f: int) -> float:
 	return atan2(x.x, x.z)
 
 
-## A block is playable (full detail, collisions, people) when it touches
-## the window.
+## A block is playable (full detail, collisions, people): every block of
+## a plan trimmed to the core outline, else the blocks touching the window.
 func in_window(f: int) -> bool:
-	return f >= 0 and (plan.faces[f].bbox as Rect2).intersects(window)
+	return f >= 0 and (not plan.outline.is_empty() or (plan.faces[f].bbox as Rect2).intersects(window))
 
 
 ## Whether a local point is somewhere you can go: the street plan (its
 ## margin ring included) or the country's play area.
 func playable(local: Vector2) -> bool:
-	return plan.bounds.has_point(local) or (country != null and country.in_play_area(local))
+	return plan.in_city(local) or (country != null and country.in_play_area(local))
 
 
 ## A block with a sidewalk and a lot (not a traffic island).
@@ -879,7 +879,16 @@ func _make_rails() -> void:
 	var depot := landmark_block("streetcar_depot")
 	if drowned >= 0 and depot >= 0:
 		var path := route_nodes(front_frame(drowned).origin, front_frame(depot).origin)
-		_add_rail(PackedInt32Array(Array(path)), true)
+		# The route may leave the trimmed city through the country; rails stay
+		# on city streets, one line per city run.
+		var run := PackedInt32Array()
+		for n in path:
+			if n < COUNTRY_BASE:
+				run.append(n)
+			else:
+				_add_rail(run, true)
+				run = PackedInt32Array()
+		_add_rail(run, true)
 
 
 func _road_edges(n: int, road: String) -> Array:
@@ -983,7 +992,7 @@ func _pick_roadworks() -> void:
 		var mid := (a + b) * 0.5
 		var length := a.distance_to(b)
 		var run: float = length - plan.clearance(na, e) - plan.clearance(nb, e) - 1.0
-		if run < 50.0 or mid.distance_to(spawn_point) < WORKS_CLEAR_OF_SPAWN or not window.has_point(Vector2(mid.x, mid.z)):
+		if run < 50.0 or mid.distance_to(spawn_point) < WORKS_CLEAR_OF_SPAWN or not plan.in_city(Vector2(mid.x, mid.z)):
 			continue
 		var id: String = district_at(mid).get("id", "")
 		if not by_district.has(id):

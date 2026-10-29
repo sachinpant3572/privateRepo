@@ -46,8 +46,6 @@ const SPACING := 110.0
 const MIN_GAP := 40.0
 ## The door point: this far out from the shop's front, on the sidewalk.
 const DOOR_OUT := 1.2
-## Doors stay this far inside the playable window.
-const EDGE := 15.0
 ## Suburb places (country lots round the city, HANDOFF-bellerive-expand
 ## BX-3): the country kinds that open as a place, and the zones they may
 ## stand in. At most SUBURB_MAX of them, spaced as in the city.
@@ -79,7 +77,7 @@ static func build(city) -> Array:
 			var r: Rect2 = p[0]
 			if p[1] or r.end.y < rect.end.y - 0.5:
 				continue
-			if not (city.window as Rect2).grow(-EDGE).has_point(ff * Vector2(r.get_center().x, r.end.y + DOOR_OUT)):
+			if not city.plan.in_city(ff * Vector2(r.get_center().x, r.end.y + DOOR_OUT)):
 				continue
 			if not candidates.has(district):
 				candidates[district] = []

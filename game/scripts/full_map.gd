@@ -173,19 +173,22 @@ func _draw() -> void:
 		var so := _to_screen(Vector3(state.origin.x, 0, state.origin.y))
 		draw_texture_rect(state.texture, Rect2(so, state.world_size / MapImage.PX_M * zoom), false)
 	# Only the playable window of the city's bake: past it the state shows.
+	# A city trimmed to its outline draws whole (clear past its edge).
+	var trimmed: bool = not game.city.plan.outline.is_empty()
 	var win_px := Rect2((game.city.window.position - map.origin) / MapImage.PX_M, game.city.window.size / MapImage.PX_M)
-	if state.is_empty():
+	if state.is_empty() or trimmed:
 		win_px = Rect2(Vector2.ZERO, map.size)
 	var tl := _to_screen(Vector3(map.origin.x, 0, map.origin.y)) + win_px.position * zoom
 	draw_texture_rect_region(map.texture, Rect2(tl, win_px.size * zoom), win_px)
 	var font := ThemeDB.fallback_font
-	# Playable area outline.
+	# Playable area outline (the window; a trimmed city shows its own edge).
 	var city = game.city
-	var win: Rect2 = city.window
-	var ring := PackedVector2Array()
-	for c in [win.position, Vector2(win.end.x, win.position.y), win.end, Vector2(win.position.x, win.end.y), win.position]:
-		ring.append(_to_screen(Vector3(c.x, 0, c.y)))
-	draw_polyline(ring, Color(1, 1, 1, 0.8), 3.0)
+	if not trimmed:
+		var win: Rect2 = city.window
+		var ring := PackedVector2Array()
+		for c in [win.position, Vector2(win.end.x, win.position.y), win.end, Vector2(win.position.x, win.end.y), win.position]:
+			ring.append(_to_screen(Vector3(c.x, 0, c.y)))
+		draw_polyline(ring, Color(1, 1, 1, 0.8), 3.0)
 	var far := zoom < STATE_ZOOM
 	if far:
 		_draw_state_labels(font)
