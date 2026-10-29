@@ -147,6 +147,12 @@ func _run() -> void:
 		await _convertibles(game)
 		get_tree().quit()
 		return
+	if OS.get_environment("SHOTS") == "traffic":
+		# Signals by day and night, a queue at a red, rush hour and a quiet
+		# night (HANDOFF-0.23-traffic.md).
+		await _traffic(game)
+		get_tree().quit()
+		return
 	await _shot("1_on_foot.png")
 	game.waypoint = game.city.node_pos(game.city.nearest_node(game.city.landmark_front("lantern_square")))
 	await _frames(30)
@@ -1032,6 +1038,175 @@ func _blood_ped(game, rng: RandomNumberGenerator, near: Array, pos: Vector3, yaw
 	ped.rotation.y = yaw
 	game.add_child(ped)
 	return ped
+
+
+## Traffic (0.23), all through the gameplay camera on foot unless noted: a
+## downtown signal by day and at night (96), the same up close (96 close,
+## a fixed camera), a queue held at a red (97), downtown at the 8:00 rush
+## and a residential street at 2:30 (98).
+func _traffic(game) -> void:
+	var TP = preload("res://scripts/traffic_plan.gd")
+	var TM = preload("res://scripts/traffic.gd")
+	var city = game.city
+	var traffic = game.population.traffic
+	var s: Vector3 = city.spawn_point
+	# The downtown signal nearest the spawn point with its longest approach.
+	var best := -1
+	var best_d := INF
+	var from := -1
+	for n in city.plan.node_count():
+		if not city.drive_node(n) or city.node_pos(n).distance_to(s) > best_d:
+			continue
+		if str(city.district_at(city.node_pos(n)).get("style", "")) != "downtown":
+			continue
+		var j: Dictionary = TP.junction(city, n)
+		if int(j.kind) != TP.SIGNALS:
+			continue
+		var far := -1
+		var far_len := 70.0
+		for leg in j.legs:
+			if not leg.link and float(leg.length) > far_len and city.next_nodes(leg.to).has(n):
+				far = int(leg.to)
+				far_len = float(leg.length)
+		if far >= 0:
+			best = n
+			best_d = city.node_pos(n).distance_to(s)
+			from = far
+	if best < 0:
+		print("traffic: no downtown signal with a 70 m approach")
+		return
+	var c: Vector3 = city.node_pos(best)
+	var dir: Vector3 = c - city.node_pos(from)
+	dir.y = 0.0
+	dir = dir.normalized()
+	var side := Vector3(-dir.z, 0.0, dir.x)
+	var corner: Vector3 = _sidewalk_near(game, c - dir * 14.0 + side * 10.0)
+	print("traffic: signal %d at %s, approach from %d" % [best, c, from])
+	game.player.visible = false
+	# The game's camera held on the junction: about the on-foot view (40 m),
+	# the driving view (62 m) at night, and close up (22 m).
+	for v in [["96_traffic_junction_day", 12.5, 40.0], ["96_traffic_junction_night", 22.0, 40.0],
+			["96_traffic_junction_night_drive", 22.0, 62.0], ["96_traffic_junction_night_close", 22.0, 22.0]]:
+		game.atmosphere.hour = v[1]
+		game.camera.fixed_focus = c
+		game.camera.room_size = v[2]
+		await _stand(game, corner, 300 if v[2] == 40.0 else 30)
+		print("traffic %s: %d cars, budget %d, %d lenses" % [v[0], game.population.cars.size(), traffic.budget(), traffic._mm.visible_instance_count])
+		await _shot(v[0] + ".png")
+	# A queue held at a red: six cars down the longest approach.
+	game.atmosphere.hour = 12.5
+	var e: Dictionary = traffic._entry(best)
+	var g: int = e.legs[e.to_leg[from]].group
+	traffic._set_phase(e, TM.CROSS_GO if g == 0 else TM.MAIN_GO)
+	e.go_end = 1e9
+	var lanes: int = city.lane_count(from, best)
+	var queue: Array = []
+	for i in 6:
+		var lane: int = i % mini(lanes, 2)
+		var s0: Vector3 = city.lane_start(from, best, lane)
+		var u: Vector3 = city.lane_point(from, best, lane) - s0
+		u.y = 0.0
+		u = u.normalized()
+		var car = Vehicle.new()
+		car.kind = ["sedan", "taxi", "van", "suv", "compact", "box_truck"][i]
+		car.city = city
+		car.position = s0 + u * (12.0 + 11.0 * floorf(i / 2.0))
+		car.rotation.y = atan2(-u.x, -u.z)
+		car.rng.seed = 70 + i
+		car.start_traffic(city, from, best, lane)
+		game.add_child(car)
+		queue.append(car)
+	game.camera.fixed_focus = c - dir * 22.0
+	game.camera.room_size = 48.0
+	await _stand(game, _sidewalk_near(game, c - dir * 24.0 + side * 9.0), 900)
+	var held := queue.filter(func(q): return is_instance_valid(q) and q.is_waiting())
+	print("traffic red queue: light %d, %d of 6 waiting" % [traffic.light(best, from), held.size()])
+	await _shot("97_traffic_red_queue.png")
+	for q in queue:
+		if is_instance_valid(q):
+			q.queue_free()
+	traffic._set_phase(e, TM.MAIN_GO)
+	# Rush hour downtown, then a residential street deep in the night, both
+	# framed wide (100 m; the driving view is 62 m). Population's reach is
+	# the same at both sizes (2.1x vs 2.07x), so the frame doesn't change
+	# where cars spawn; the log gives the counts, which the shot alone can't.
+	game.atmosphere.hour = 8.0
+	game.camera.fixed_focus = c
+	game.camera.room_size = 100.0
+	await _stand(game, corner, 1200)
+	print("traffic rush: %d cars (%d within 50 m), budget %d, density %.2f" % [game.population.cars.size(),
+		_cars_within(game, c, 50.0), traffic.budget(), traffic._density])
+	await _shot("98_traffic_rush_downtown.png")
+	var quiet := Vector3.INF
+	var q_style := ""
+	for style in ["rowhouse", "brownstone", "suburb", "wards"]:
+		var q_d := INF
+		for n in city.plan.node_count():
+			var p: Vector3 = city.node_pos(n)
+			if not city.drive_node(n) or p.distance_to(s) > q_d or str(city.district_at(p).get("style", "")) != style:
+				continue
+			var spot := _sidewalk_near(game, p + Vector3(9, 0, 9))
+			if str(city.district_at(spot).get("style", "")) == style:
+				quiet = spot
+				q_d = p.distance_to(s)
+		if quiet != Vector3.INF:
+			q_style = style
+			break
+	game.atmosphere.hour = 2.5
+	game.camera.fixed_focus = quiet
+	await _stand(game, quiet, 1200)
+	print("traffic quiet (%s): %d cars (%d within 50 m), budget %d, density %.2f" % [q_style,
+		game.population.cars.size(), _cars_within(game, quiet, 50.0), traffic.budget(), traffic._density])
+	await _shot("98_traffic_quiet_night.png")
+	# A rough frame-time probe back at the rush: physics time per frame with
+	# the junction controller running and with it paused, in alternating
+	# blocks of 150 frames so traffic drifting about weighs on both alike.
+	game.atmosphere.hour = 8.0
+	game.camera.fixed_focus = null
+	game.camera.room_size = 0.0
+	game.player.visible = true
+	await _stand(game, corner, 900)
+	var sums := [0.0, 0.0]
+	var worsts := [0.0, 0.0]
+	var draws := [0.0, 0.0]
+	for block in 6:
+		var m := block % 2 # 0 controller on, 1 paused
+		traffic.set_physics_process(m == 0)
+		for i in 150:
+			await get_tree().physics_frame
+			var t: float = Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)
+			sums[m] += t
+			worsts[m] = maxf(worsts[m], t)
+			draws[m] += Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
+	traffic.set_physics_process(true)
+	for m in 2:
+		print("traffic probe (controller %s): %d cars, physics %.2f ms a frame (worst %.2f), %.0f draw calls" % [
+			"on" if m == 0 else "paused", game.population.cars.size(), sums[m] / 450.0 * 1000.0,
+			worsts[m] * 1000.0, draws[m] / 450.0])
+
+
+## How many population cars are within `r` m of `pos` (flat distance).
+func _cars_within(game, pos: Vector3, r: float) -> int:
+	var count := 0
+	for car in game.population.cars:
+		if is_instance_valid(car) and Vector2(car.global_position.x - pos.x, car.global_position.z - pos.z).length() <= r:
+			count += 1
+	return count
+
+
+## The sidewalk point nearest `pos`.
+func _sidewalk_near(game, pos: Vector3) -> Vector3:
+	var sw: Array = game.city.nearest_sidewalk(pos)
+	return game.city.sidewalk_loops[sw[0]][sw[1]]
+
+
+## The player on foot at `pos`, the gameplay camera on them, for `frames`.
+func _stand(game, pos: Vector3, frames: int) -> void:
+	game.city.stream_now(pos)
+	game.player.global_position = pos
+	game.player.reset_physics_interpolation()
+	game.camera.snap()
+	await _frames(frames)
 
 
 ## Middle of the street of road `road` nearest `near` (local metres), on

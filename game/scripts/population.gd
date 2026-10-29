@@ -5,8 +5,11 @@ extends Node
 const Pedestrian = preload("res://scripts/pedestrian.gd")
 const Vehicle = preload("res://scripts/vehicle.gd")
 const VehicleKit = preload("res://scripts/kits/vehicle_kit.gd")
+const Traffic = preload("res://scripts/traffic.gd")
 
 const PED_COUNT := 18
+## The old fixed traffic count; Traffic.budget() sets it now (district, hour,
+## events and graphics quality).
 const TRAFFIC_COUNT := 8
 const PED_SPAWN := Vector2(30.0, 50.0)
 const CAR_SPAWN := Vector2(40.0, 70.0)
@@ -23,6 +26,15 @@ var rng := RandomNumberGenerator.new()
 var _tick := 0.0
 var _parked := {} # parked spot index -> car spawned there
 var _first_pass := true
+## Junction controls, speed limits, demand and the district mix (Traffic).
+var traffic
+
+
+func _ready() -> void:
+	traffic = Traffic.new()
+	traffic.name = "Traffic"
+	traffic.game = game
+	add_child(traffic)
 
 
 func _physics_process(delta: float) -> void:
@@ -44,7 +56,7 @@ func _physics_process(delta: float) -> void:
 		var spot: Array = game.city.random_sidewalk_between(center, PED_SPAWN.x, PED_SPAWN.y * r, rng, out_of_view)
 		if not spot.is_empty():
 			_add_ped(spot[0], spot[1])
-	if cars.size() < TRAFFIC_COUNT:
+	if cars.size() < traffic.budget():
 		_spawn_traffic(center, r)
 	_update_parked(center)
 
@@ -85,14 +97,24 @@ func _add_ped(loop: int, point: int):
 	return ped
 
 
+## Sets a car off out of view, more often on the arterials than the side
+## streets (Traffic.spawn_weight): two tries a tick.
 func _spawn_traffic(center: Vector3, r: float) -> void:
-	var n: int = game.city.random_node_between(center, CAR_SPAWN.x, CAR_SPAWN.y * r, rng, out_of_view)
-	if n < 0:
+	var n := -1
+	var to := -1
+	for attempt in 2:
+		n = game.city.random_node_between(center, CAR_SPAWN.x, CAR_SPAWN.y * r, rng, out_of_view)
+		if n < 0:
+			return
+		var options: Array = game.city.next_nodes(n)
+		if options.is_empty():
+			continue
+		to = options[rng.randi() % options.size()]
+		if rng.randf() < traffic.spawn_weight(n, to):
+			break
+		to = -1
+	if to < 0:
 		return
-	var options: Array = game.city.next_nodes(n)
-	if options.is_empty():
-		return
-	var to: int = options[rng.randi() % options.size()]
 	var car = _new_traffic_car(n, to)
 	var lane: int = rng.randi() % game.city.lane_count(n, to)
 	car.position = game.city.lane_start(n, to, lane)
@@ -191,14 +213,32 @@ func _roof(car) -> void:
 		car.roof_up = VehicleKit.roof_up_at_spawn(rng, sky != null and sky.is_night(), sky != null and sky.rain > 0.05)
 
 
-## A traffic vehicle setting off on the street from junction a to b. The
-## 18-wheeler (longer than VehicleKit.LONG_HAUL) sets off only where there
-## are two or more lanes each way (avenues, boulevards, highways), never
-## down a one-lane quarter street.
+## A traffic vehicle setting off on the street from junction a to b, of a
+## kind from the district's mix (Traffic.pick_kind), with its driver's
+## share of the speed limit. The 18-wheeler (longer than
+## VehicleKit.LONG_HAUL) sets off only where there are two or more lanes
+## each way (avenues, boulevards, highways), never down a one-lane quarter
+## street.
 func _new_traffic_car(a: int, b: int):
-	var car = _new_car()
+	var car = Vehicle.new()
+	var at: Vector3 = game.city.node_pos(a)
+	car.kind = traffic.pick_kind(at, rng)
+	var tries := 0
 	while VehicleKit.size_of(car.kind).z > VehicleKit.LONG_HAUL and game.city.lane_count(a, b) < 2:
-		car.kind = VehicleKit.CIVILIAN[rng.randi() % VehicleKit.CIVILIAN.size()]
-		car.body_color = VehicleKit.pick_paint(car.kind, rng)
-		_roof(car)
+		tries += 1
+		car.kind = traffic.pick_kind(at, rng) if tries < 20 else "sedan"
+	car.body_color = VehicleKit.pick_paint(car.kind, rng)
+	_roof(car)
+	car.drive_factor = driver_factor(rng)
 	return car
+
+
+## A driver's cruising speed as a share of the limit: most drive at it
+## give or take, one in ten speeds, one in twenty dawdles.
+static func driver_factor(rand: RandomNumberGenerator) -> float:
+	var r := rand.randf()
+	if r < 0.05:
+		return rand.randf_range(0.85, 0.9)
+	if r < 0.15:
+		return rand.randf_range(1.1, 1.2)
+	return rand.randf_range(0.92, 1.08)

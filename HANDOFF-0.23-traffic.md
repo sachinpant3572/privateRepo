@@ -4,118 +4,141 @@ Sachin, 2026-10-28: "Also build realistic traffic lights, and simulate
 realistic traffic too, based upon the type of district, congestion, events
 happening, what the region is meant for etc. factors."
 
-## Where it starts (survey, file:line at commit 58f901d)
+The design as first written, where it started and the cost estimate are
+in HANDOFF-0.23-traffic-archive.md. This note is what was built.
 
-- Traffic: a fixed bubble of `TRAFFIC_COUNT 8` cars (population.gd:10),
-  spawned at junctions 40-70 m out (`_spawn_traffic` :88). The kind comes
-  from the flat `VehicleKit.CIVILIAN` list. Nothing varies by place or time;
-  `world_map.json` `npc_density` is text that no code reads.
-- Driving: `Vehicle._traffic_ai` (vehicle.gd:629-694) follows lanes on one
-  road graph (city + country, `city.next_nodes`, `lane_point`,
-  `pick_turn`). It cruises at `TRAFFIC_CRUISE 13` m/s everywhere and at
-  6.5 m/s near junctions. A fixed 8 m ray (`_ahead`) brakes it. There are
-  no speed limits (country `edge_speed` exists, unused), no give-way rules
-  and no junction occupancy.
-- Lights: `Props.traffic_light` (prop_kit.gd:91) is a static mesh with a
-  permanently lit green lens, put 60% per downtown block side
-  (city_cells.gd:1968), not per junction approach. Nothing reacts to it.
-- Stop bars already sit at `_setback + gap` (city_cells.gd:365, 508).
-- Districts: `city.district_at(pos)` gives `style` (quarter, docks,
-  downtown, midtown, heights, wards, bayou, brownstone) or town or region
-  kinds. Country: `zone_at`; lots carry tier and land value.
-- Clock: `atmosphere.hour`. Events: wanted level, police cars, missions,
-  roadworks.
+## Files
 
-## Design (decided)
+- `traffic_plan.gd` (static, pure; the cell builder calls it off the main
+  thread): junction control, stop lines (`stop_back` = the painted bar),
+  speed limits, pole and lens geometry, signs.
+- `traffic.gd` (child of Population, group "traffic"): signal
+  controllers, all-way stop queues, demand budget, vehicle mix, surges,
+  sirens, the vehicle cache and the lens MultiMesh. Vehicles find it
+  lazily; without one they drive with no controls.
+- population.gd: budget from Traffic, kind from the district mix, a
+  per-driver speed factor. city_cells.gd: poles and signs per approach
+  (no more random green poles). prop_kit.gd `traffic_light`: mast arm,
+  heads, ped heads, cabinet. vehicle.gd: `_traffic_ai` and its new
+  helpers, consts and vars, the `_ahead` ray. `_police_ai` is unchanged:
+  traffic finds police drivers itself (`Traffic.sirens`) and yields.
 
-Signals (MUTCD and ITE practice, US):
-- Junctions with 3+ legs where an arterial (2+ lanes each way) meets a
-  street get signals. Minor-minor junctions get all-way stops. A minor leg
-  meeting a major road gets a two-way stop on the minor leg. Roundabouts
-  yield on entry. Rural country junctions: stop on the minor road;
-  signals only in towns.
-- One controller per signalled junction. Legs pair by opposite direction
-  into phases: main pair (higher rank) and cross pair; T junctions run
-  main pair plus stem.
-- Timing:
-  - yellow = 1.0 + v / (2 × 3.05) s, from the approach speed limit (3-5 s);
-  - all-red 1.5 s;
-  - main green 22 s, cross 14 s, so the cycle is about 45 s. That is
-    shorter than a real 90 s cycle so a player isn't stuck, but in the
-    same proportions.
-- Semi-actuated: the cross phase is skipped and main green rests when no
-  car (the player included) waits on the cross approaches.
-- Late night (00:00-05:00): flashing yellow on the main road and flashing
-  red on the cross street (treated as a stop sign).
-- California rules: right turn on red after a full stop when clear;
-  permissive left turns yield to oncoming traffic.
-- Heads: the housings stay in the baked cell mesh, one per approach,
-  hanging over its lanes and placed per approach at signalled junctions
-  instead of the random per-block-side poles. Lit lenses are one global
-  MultiMesh of camera-facing glow quads (one draw call), so they read
-  from the top-down camera. Pedestrian heads show WALK, flashing hand and
-  hand with the phases.
+## Decisions (as built)
 
-Driving:
-- Speed limits by road class (US):
-  - lane and quarter: 25 mph (11.2 m/s); street: 30 (13.4);
-    avenue: 35 (15.6); boulevard and bridge: 40 (17.9);
-  - country: road 45 (20), highway 55 (24.6), freeway 65 (29).
-  - Each driver ±10%, with a few speeders.
-- Car following: the Intelligent Driver Model, `a = a_max [1 - (v/v0)^4 -
-  (s*/s)^2]` with `s* = s0 + vT + v dv / (2 sqrt(a b))`, s0 2 m, T 1.4 s,
-  comfortable braking b 3 m/s². The leader comes from a look-ahead that
-  scales with speed and follows the lane. The stop line acts as a leader
-  standing still.
-- Stops: at a red or yellow light the car stops if it can stop
-  comfortably (d > v² / (2 × 3)); otherwise it goes on. At stop signs it
-  makes a full stop of 1 s, then first come, first served, and only when
-  the junction box is clear.
-- Emergency vehicles: traffic pulls right and slows for police with
-  sirens on.
-- Blockages: a stationary car ahead (wreck, parked badly) for 3+ s → the
-  car changes lane if it can, otherwise creeps round.
+Control, by leg rank (StreetPlan: arterial 4+, collector 2-3, local 1):
+- Main group = top leg plus its most opposite leg (dot < -0.7). Arterial
+  main x collector+ cross: signal. Collector x collector: signal in
+  downtown, midtown, docks, quarter, else all-way stop. Local x local:
+  all-way stop. Anything x local cross: two-way stop on the cross legs.
+  Roundabout ring free, spokes yield. Nodes with a country link: never
+  signals. Country: the two best, most opposite legs major, the rest
+  yield (no signs drawn: country tiles are not this package's).
+- Pretimed in downtown, midtown, quarter (main 22 s, cross 14 s, offset
+  by node hash); semi-actuated elsewhere: rests in main green; a car
+  within 45 m of a cross approach calls it after main's 12 s minimum;
+  cross 7 s minimum, extended 3 s per car within 30 m, 14 s maximum.
+- Yellow = max(3, 1 + v / 6.1) s from the approach limit (ITE); all red
+  1.5 s. Walk with its own green, then 7 s flashing hand before the
+  yellow (an actuated cross street: 4 s walk); a call on a resting main
+  green waits out the flashing hand.
+- Flash 00:00-05:00 (main flashing yellow, cross flashing red = stop),
+  except crossings of two arterials, which keep cycling. A knocked-down
+  pole hides its lenses and turns the junction to all-way flashing red
+  (the manager polls breakables' info; breakables.gd untouched).
+- Poles: far-side mast arm on the departure leg straight ahead (US), at
+  the corner (setback + 0.5, 0.6 m behind the curb), heads over each
+  lane; else near side. One cabinet per junction.
+- Lenses: housings baked and dim; lit lenses are one MultiMesh of
+  camera-facing quads (one draw call, no lights, MAX_LENSES 1024 within
+  130 m), bigger at night, so they read from the top-down camera.
 
-Demand (density and mix):
-- The budget comes from district × hour × road, capped by graphics
-  quality (Low 8 … Ultra 18):
-  - Hour factor: the FHWA weekday profile (AM peak 7-9, PM peak 16-18,
-    1-2% per hour at night).
-  - District profile: downtown and midtown run high by day with peaks;
-    the quarter peaks in the evening and at night; docks peak 6-18 by
-    day; wards, brownstone and heights are residential (low, with
-    peaks); bayou and country roads are low; freeways are high.
-- Mix by district:
-  - docks: trucks;
-  - downtown: taxis, luxury, EVs;
-  - heights: luxury, EVs, SUVs;
-  - wards: old compacts, pickups, vans, three-wheelers;
-  - farmland: pickups, tippers, cargo trikes.
-- Events: wanted level (police on the road, traffic yields), roadworks
-  (already narrow lanes), wrecks block lanes, and a `traffic.surge(pos,
-  radius, factor, secs)` hook for missions.
+Driving (vehicle.gd `_traffic_ai`):
+- Limits: lane, quarter, quay 25 mph (11.2 m/s); street 30 (13.4); avenue
+  35 (15.6); boulevard 40 (17.9); country road 45, highway 55, freeway
+  65; roadworks 25. Cruise = min(limit x driver factor, 0.8 x the kind's
+  top speed): factor 0.92-1.08 for most, 10% speeders 1.1-1.2, 5% slow
+  0.85-0.9. Rain: -10% and T +0.4 s.
+- IDM: a_max = clamp(accel x 0.3, 1.5, 3.5), s0 2 m, T 1.4 s, b 3, on the
+  nearest leader along this street and the next (cached list, rescanned
+  every 3 frames); the 8 m ray stays for people and odd obstacles.
+- The stop line is a leader standing still (cars stop 0.4 m short). At
+  the line under 0.3 m/s the foot stays on the brake: IDM alone creeps
+  the last bit, which read as rolling over a red.
+- Yellow: stop if d > v^2/6. Red: stop unless d < v^2/18. Right on red
+  after a full stop when the cross traffic gap is clear; permissive lefts
+  yield to oncoming. Don't block the box: on green a car waits at the
+  line while its exit street has no room.
+- Signs: full stop of 1 s, then first come first served, and only with
+  the box clear. Box clear counts a car's end nearest the middle, not
+  its centre (a car half into the box let the next one go). Gridlock
+  give-up 25 s at a sign, 90 s at a red.
+- Sirens (any police driver): within 15 m, or within 40 m and closing,
+  slow to 2.5 m/s and pull right; resume after. Police don't stop at
+  lights.
+- Blockages: behind something that never moves, go round after 3, 6 or
+  10 s (wreck or parked; a driver; traffic not queued at a junction).
+- `_drive` eases the throttle by the angle still to steer; `_traffic_ai`
+  undoes that, or a car slowed to a stop mid U-turn.
+- Taxis and `_script_ai` don't obey lights (taxi.gd is not this
+  package's); hook: they could call `traffic.may_go` like `_traffic_ai`,
+  and not count `_stuck_time` behind a car whose `is_waiting()` is true
+  (a queue, not a blockage). Today a called cab goes round queues at
+  reds; it arrived in 25-55 s in six runs, so the phone test waits up to
+  the game's CALL_TIMEOUT (120 s) instead of 60 s.
 
-## Packages
+Demand and mix (traffic.gd):
+- Budget = clamp(round(cap x level x hour x surge), 2, cap), cap by
+  quality (low 8, medium 11, high 14, ultra 18), refreshed every 2 s.
+- Level by district (downtown 0.9 ... bayou 0.3; country regions 0.2;
+  near a freeway 0.7). Hour: FHWA urban weekday profile by default;
+  nightlife (quarter, strip), port (docks, industrial, market), leisure
+  (beach, park), freight (truck stop) profiles. Floor 12% of peak.
+- Where cars set off: arterials far more than side streets
+  (SPAWN_WEIGHT).
+- Mix: multipliers on VehicleKit.CIVILIAN weights by district (freight,
+  cbd, town_centre, wealthy, working, nightlife, market, rural,
+  truck_stop, suburb); taxis x2 from 21:00 to 05:00. Nothing under
+  0.5 for trucks and three-wheelers, so every kind still turns up.
+- Events: `traffic.surge(pos, radius, factor, secs)` (a factor under 1
+  thins traffic: a closure); sirens; roadworks; wrecks.
 
-- Agent (worktree): all of the above. It owns `scripts/traffic*.gd` (new),
-  population.gd, city_cells.gd light placement, prop_kit.gd
-  `traffic_light`, and vehicle.gd `_traffic_ai`, `_police_ai` yield and the
-  `_ahead` ray.
-- Main session: exhaust, tyre smoke and tyre marks (vehicle.gd `_effects`,
-  fx.gd, puffs.gd, kits/vehicle_emissions.gd). Notes in
-  HANDOFF-0.23-exhaust.md.
-- Models agent: vehicle.gd `_build_model`, vehicle_kit.gd.
+## Tests (test_runner.gd, at the end of the list)
 
-## Cost
+signal phases and yellow timing; stop at red, go on green; all-way stop
+first come first served; speed limits by road class; IDM gap behind a
+stopped car; density and mix by district and hour; surge raises the
+budget; yield to a siren; late-night flash; zebra styles match.
+Test design: real junctions found near the spawn point (arterial blocks
+there run 100-130 m); lights forced with `_set_phase` and `go_end = 1e9`.
 
-- Full package: an agent run of about 2-3 hours, roughly 400-600k tokens.
-- Cheaper option: signals with phases and speed limits only (no IDM,
-  demand or events), about 1 hour.
-- Chosen: the full package, because Sachin asked for district, congestion
-  and event factors by name.
+## Gates
 
-## Open questions / traps
+- Shots: `SHOTS=traffic` (96-98 in screenshots.gd, 7 shots), with a rough
+  frame-time probe at the end of the run. Judged 2026-10-28: red, amber
+  and green lenses read true at 22, 40 and 62 m by night (deep hues: ACES
+  turned the first red orange); a queue of 5-6 held at a red; rush 10-11
+  cars in the bubble (budget 11, density 0.81) vs a brownstone street at
+  2:30 with 3 (budget 2, density 0.10).
+- Full suite 2026-10-29: 1261 checks passed, 1 failed:
+  test_country_kit_builds_every_kind (farmhouse_big solids overlap, 24
+  rows). Not this package's: country_kit.gd and its preloads are
+  untouched here (prop_kit's `traffic_light` only, which it never calls)
+  and the test builds from fixed seeds, so it fails on the base too.
+- Probe (xvfb, opengl3, 11 cars): physics 3.0-3.4 ms a frame with the
+  controller running, 2.8-4.1 paused: its cost is below the probe's
+  noise. Lenses: one MultiMesh draw; no lights.
+- Finding, not changed (population's spawn ring, not this design): the
+  car bubble scales with the camera (`reach()` up to 2.1x), so at the
+  driving zoom cars spawn 40-145 m out and despawn past about 200 m. 11
+  cars over that disc leave 0-3 on screen even at the downtown rush, so
+  the shot doesn't read as busy; the counts in the log carry it. Fix:
+  a tighter ring for traffic (spawn just off screen, despawn sooner),
+  about an hour with test retunes.
 
+## Traps
+
+- The worktree's imports generate `.uid` files for puffs.gd and
+  kits/vehicle_emissions.gd (the main session's scripts): don't commit
+  them from here.
 - Raising speeds and adding stops changes taxi, roadworks and traffic test
   timings. Keep their meaning; retune waits, not checks.
-- Performance on phones: 18 cars is the Ultra cap; probe frame time.
