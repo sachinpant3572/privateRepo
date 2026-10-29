@@ -2884,11 +2884,13 @@ class Country:
                 while s < line.length - 14.0:
                     kind = self.rng.choices(kinds, weights)[0]
                     if style == "estates":
-                        width = float(round(self.rng.uniform(64.0, 84.0)))
+                        # Square plot first until a house has turned to its
+                        # view (see _heights_lots).
+                        width = 84.0 if self.view_turns == 0 else float(round(self.rng.uniform(64.0, 84.0)))
                         if s + width > line.length - 14.0:
                             break
                         if any(self.estate_at(self._side_point(line, s + width * 0.5, sgn, w * 0.5 + 3.5 + depth * 0.5),
-                                              (width, depth), "", zname, 0)
+                                              (width, depth), "", zname, 0, sun=True)
                                for depth in ((width,) if width >= 80.0 else ()) + (88.0, 76.0, 64.0)):
                             s += width + self.rng.uniform(2.0, 6.0)
                         else:
