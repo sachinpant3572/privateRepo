@@ -141,9 +141,10 @@ const GULF_DIR := Vector2(0.776, -0.630)
 const OCEAN_AT := Vector2(1402.8, 1941.8)
 const SEAGRAPE_AT := Vector2(1242.0, 1744.0)
 ## Serena Causeway (world_map's `overseas` highway) heads out over the Gulf
-## from (1450, 1400) to (2000, 1870), crossing Ocean Drive on the way.
-const CAUSEWAY_FROM := Vector2(1450.0, 1400.0)
-const CAUSEWAY_DIR := Vector2(550.0, 470.0) / Vector2(550.0, 470.0).length()
+## from (1586, 1400) to (2000, 1870), landing on a Brisa cross street's
+## junction with Ocean Drive (the line is set to meet it).
+const CAUSEWAY_FROM := Vector2(1586.0, 1400.0)
+const CAUSEWAY_DIR := Vector2(0.6614, 0.7501)
 ## A point inside Brisa Beach (between Seagrape and Ocean Drive).
 const BRISA_SEED := Vector2(1634, 1593)
 ## District streets fall up to this share of a block off an even split
@@ -667,12 +668,6 @@ func _layout(src: Array) -> void:
 		roads.append([piece, "avenue", "seagrape"])
 	for piece in Geometry2D.intersect_polyline_with_polygon(ocean, north):
 		roads.append([piece, "avenue", "ocean"])
-	# Serena Causeway: the highway over the Gulf lands on Ocean Drive. Its
-	# first stretch runs seaward off the Drive across the beach, so the trim
-	# leaves the city an exit there for the country road to meet.
-	var causeway_at := _cross(PackedVector2Array([CAUSEWAY_FROM, CAUSEWAY_FROM + CAUSEWAY_DIR * 1200.0]), ocean)
-	for piece in Geometry2D.intersect_polyline_with_polygon(PackedVector2Array([causeway_at, causeway_at + CAUSEWAY_DIR * 300.0]), north):
-		roads.append([piece, "avenue", "causeway"])
 	# The other arterials, on the same grid: clipped to the land they cross
 	# (and out of Brisa Beach, which has its own grid).
 	for a in ARTERIALS:
@@ -1947,6 +1942,17 @@ func _trim_to_outline(pins: Array) -> void:
 				break
 		if n >= 0:
 			exits.append({"node": n, "dir": x[1], "cls": x[2], "road": x[3]})
+	# Serena Causeway lands on Ocean Drive across the beach, which is left
+	# out of the city: the Drive's junction nearest the landing is its exit.
+	var landing = Geometry2D.line_intersects_line(CAUSEWAY_FROM, CAUSEWAY_DIR, OCEAN_AT, GULF_DIR)
+	if landing != null and not Geometry2D.is_point_in_polygon(landing + CAUSEWAY_DIR * 30.0, outline):
+		var best := -1
+		for k in node_pos.size():
+			if node_pos[k].distance_to(landing) < 80.0 and _adj[k].any(func(e): return edge_road[e] == "ocean") \
+					and (best < 0 or node_pos[k].distance_to(landing) < node_pos[best].distance_to(landing)):
+				best = k
+		if best >= 0 and not exits.any(func(x): return x.node == best):
+			exits.append({"node": best, "dir": CAUSEWAY_DIR, "cls": "avenue", "road": "causeway"})
 
 
 ## Next half-edge round the same face. Half-edge 2e runs a -> b, 2e + 1

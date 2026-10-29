@@ -91,7 +91,7 @@
     {"id": "crimson_gate", "name": "Headlands Road and Crimson Gate Bridge", "type": "highway", "phase": 5, "line": [[9600, 1800], [10400, 1900], [11100, 2150], [11550, 2500], [11420, 3250]]},
     {"id": "narrows_bridge_road", "name": "Narrows Toll Bridge (to Northland)", "type": "highway", "phase": 6, "line": [[9450, 1100], [9700, 850], [9700, 0]]},
     {"id": "dam_road", "name": "Dam Road", "type": "road", "phase": 3, "line": [[3400, 3300], [3900, 3420], [4300, 3380], [4700, 3420], [5000, 3250], [5200, 3000], [6000, 3300], [6800, 3700]]},
-    {"id": "overseas", "name": "Serena Causeway", "type": "highway", "phase": 4, "line": [[7600, 8050], [8150, 8520], [8700, 8530], [9000, 8540], [9650, 8500], [10100, 8440], [10700, 8400], [11000, 8400], [11350, 8400]]},
+    {"id": "overseas", "name": "Serena Causeway", "type": "highway", "phase": 4, "line": [[7736, 8050], [8150, 8520], [8700, 8530], [9000, 8540], [9650, 8500], [10100, 8440], [10700, 8400], [11000, 8400], [11350, 8400]]},
     {"id": "granite_road", "name": "Granite Access Road", "type": "road", "phase": 3, "line": [[1350, 3000], [1500, 2350], [1300, 1600]]},
     {"id": "wheaton_road", "name": "Wheaton Road", "type": "road", "phase": 2, "line": [[3900, 6100], [4600, 4900], [5200, 4300], [6450, 4500]]},
     {"id": "glades_road", "name": "Glades Road", "type": "road", "phase": 2, "line": [[3600, 7650], [4100, 7900], [4700, 8150]]},

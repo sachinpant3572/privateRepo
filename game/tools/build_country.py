@@ -1074,6 +1074,7 @@ class Country:
             self.add(list(piece.coords), "freeway", "Bellerive Beltway", "beltway")
             self.belt_pieces.append(self.sources[-1][0])
         self.belt_line = unary_union(self.belt_pieces)
+        self._flats_expressway()
         self._mountain_roads()
         self.routes_geom = unary_union([s[0] for s in self.sources if s[3] == "route"])
         self.major_geom = unary_union([s[0] for s in self.sources if s[3] in ("route",) + MTN_TAGS])
@@ -1809,9 +1810,9 @@ class Country:
         keep_out += [t["zone"].buffer(25.0) for t in self.town_zones]
         return poly.difference(unary_union(keep_out)).difference(self.water.buffer(14.0))
 
-    def farm_roads(self):
-        """The Golden Flats Expressway off the Beltway, and the section grid
-        of paved roads and dirt tracks."""
+    def _flats_expressway(self):
+        """The Golden Flats Expressway off the Beltway, laid before the
+        suburb streets so it has first pick of the city's west exits."""
         belt = self.belt_line
         bp = prep(self.belt_poly)
         first = next((k for k, p in enumerate(farmland.EXPRESSWAY) if not bp.contains(Point(p))), 0)
@@ -1821,6 +1822,10 @@ class Country:
         # Start a few metres off the Beltway; join_ends ties it on.
         pts = [(on[0] + u[0] * 4.0, on[1] + u[1] * 4.0)] + farmland.EXPRESSWAY[first:]
         self._route(pts, "highway", farmland.EXPRESSWAY_NAME, self.A.difference(self.P))
+
+    def farm_roads(self):
+        """The section grid of paved roads and dirt tracks on the Golden
+        Flats (the Expressway is laid with the Beltway, _flats_expressway)."""
         area = self._flats_area()
         drivable = [s[0] for s in self.sources if CLASSES[s[1]]["graph"]]
         # County Road 10 bridges the Cinder Lower, so the land west of it
