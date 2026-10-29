@@ -75,6 +75,14 @@ helipad needs helicopters: task #82, not started (Sachin's word needed).
   boulevard medians (Aurum past Union Station (390,166)), own viaduct
   elsewhere; built in phase 4 on phase 3's decks.
 
+- **Measured (2026-10-29)**: city land 4.22 km² (fill 0.63), on target
+  (Las Venturas 4.1-4.3). Core outline bulges a block east of Tamarind
+  (world (8060, 6690)) so the edge doesn't run straight 423 m.
+- **Waiting on the country regeneration** (after phase 2 merges): country
+  joins/tiles/estates/sidewalk-loop tests and the traffic every-kind test.
+  Stale country links tie downtown city nodes to old country nodes (a
+  tuk-tuk at (371,186) heads for country node 3450 through buildings).
+
 ## Decided
 
 - **1000 m geometry [M].** A 1000 m peak needs a base of ~2-3 km to the city
