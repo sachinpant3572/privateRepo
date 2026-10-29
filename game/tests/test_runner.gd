@@ -6207,10 +6207,10 @@ func test_mount_calder() -> void:
 			continue
 		var line: Array = route.line
 		for k in range(1, line.size()):
-			var a := Vector2(line[k - 1][0], line[k - 1][1]) - game.city.map_origin
-			var b := Vector2(line[k][0], line[k][1]) - game.city.map_origin
+			var a: Vector2 = Vector2(line[k - 1][0], line[k - 1][1]) - game.city.map_origin
+			var b: Vector2 = Vector2(line[k][0], line[k][1]) - game.city.map_origin
 			for i in int(ceilf(a.distance_to(b) / 10.0)) + 1:
-				var q := a.lerp(b, minf(i * 10.0 / maxf(a.distance_to(b), 0.01), 1.0))
+				var q: Vector2 = a.lerp(b, minf(i * 10.0 / maxf(a.distance_to(b), 0.01), 1.0))
 				if not plan.in_city(q):
 					continue
 				var d: float = plan.river_distance(q)
