@@ -69,6 +69,15 @@ const FALL_TIME := 0.5
 const GETUP_TIME := 1.0
 ## One-shot actions and their length in seconds; the owner advances
 ## action_t by delta / ACTIONS[action].
+## Stride frequency (full cycles a second) by ground speed, walking and
+## running (gait studies; the run one rises slowly with speed).
+const WALK_CADENCE := [Vector2(0.5, 0.65), Vector2(1.0, 0.8), Vector2(1.4, 0.92), Vector2(2.0, 1.0), Vector2(2.6, 1.08)]
+const RUN_CADENCE := [Vector2(2.0, 1.3), Vector2(3.0, 1.35), Vector2(4.2, 1.42), Vector2(5.5, 1.5), Vector2(7.0, 1.65), Vector2(8.5, 1.8)]
+## The foot about its ankle (rest units): the heel is behind it, the ball of
+## the foot ahead, the sole below.
+const FOOT_HEEL := 0.08
+const FOOT_BALL := 0.15
+const FOOT_UP := 0.107
 const ACTIONS := {"startle": 0.6, "dodge": 0.7, "duck": 1.0, "stumble": 0.8}
 const STYLES := ["", "jog", "sprint", "panic", "limp", "elderly", "patrol", "carry", "rain", "swagger", "pockets"]
 const GESTURES := ["phone", "talk", "wave", "hands_up", "cower", "point", "eat", "browse", "work", "pay", "search",
@@ -139,6 +148,22 @@ var _hip := 0.92
 var _thigh := 0.4
 var _shin := 0.4
 var _step_phase := 0.0
+# The gait (see _locomotion): eased speed, hip height above rest (rest
+# units) and this frame's stride numbers.
+var _gv := 0.0
+var _gait_h := 0.0
+var _gt_ls := 0.0
+var _gt_beta := 0.6
+var _gt_c := 0.45
+var _gt_p0 := 0.0
+var _gt_p1 := 0.0
+var _gt_g := 0.0
+var _gt_f := 1.0
+var _gt_sprint := 0.0
+var _gt_tan := 0.0
+var _gt_peak := 0.0
+var _gt_rise := 0.4
+var _gt_late := 0.4
 ## How much the body is walking (0 standing, 1 on the move).
 var _moving := 0.0
 ## Standing weight: +1 on the left leg, -1 on the right.
@@ -189,6 +214,8 @@ func pose(s: State, delta: float) -> void:
 	var h := skeleton.scale.y
 	if s.down:
 		_down_time += delta
+		_moving = 0.0
+		_gv = 0.0
 		grounded = false
 		direct = true
 		_idle(s, delta, false)
@@ -259,14 +286,23 @@ func pose(s: State, delta: float) -> void:
 			_target[HEAD].x += clampf(s.look_pitch, -0.5, 0.5) * s.look_amount
 	for i in _target.size():
 		_target[i] = _target[i].clamp(LIMITS[i][0], LIMITS[i][1])
+	# While moving the legs and hips follow the gait almost directly (easing
+	# would blur its curves and lag the feet behind the ground speed); the
+	# upper body a little softer.
 	var k := 1.0 - exp(-rate * delta)
+	var k_legs := 1.0 - exp(-maxf(rate, lerpf(rate, 60.0, _moving)) * delta)
+	var k_body := 1.0 - exp(-maxf(rate, lerpf(rate, 36.0, _moving)) * delta)
 	for i in _rot.size():
-		_rot[i] = _rot[i].lerp(_target[i], k)
+		_rot[i] = _rot[i].lerp(_target[i], k if _moving <= 0.0 else (k_legs if i == HIPS or i >= L_LEG else k_body))
 		skeleton.set_bone_pose_rotation(_bones[i], Quaternion.from_euler(_rot[i]))
-	# Walking keeps about half the dip a stiff-legged model would have (the
-	# real pelvis and ankles take up the rest).
-	var ground := -_ground_drop() * h * lerpf(1.0, 0.5, _moving) if grounded else 0.0
-	_ground = lerpf(_ground, ground, 1.0 - exp(-30.0 * delta))
+	# Standing, the hips drop until the lower foot reaches the ground; moving,
+	# they ride the gait's height (never letting a heel or toe sink).
+	var ground := 0.0
+	if grounded:
+		ground = lerpf(-_ground_drop(), _gait_h, _moving) * h
+	_ground = lerpf(_ground, ground, lerpf(1.0 - exp(-30.0 * delta), 1.0, _moving))
+	if grounded and _moving > 0.0:
+		_ground = maxf(_ground, -_foot_drop() * h)
 	if direct:
 		_lift = lift
 		_tilt = tilt
@@ -294,16 +330,40 @@ func _leg_drop(a: float, b: float, z: float) -> float:
 	return _thigh + _shin - (_thigh * cos(a) + _shin * cos(a + b)) * cos(z)
 
 
+## Like _ground_drop, but down to the lowest heel or ball of either foot
+## (so a pointed or flexed foot counts).
+func _foot_drop() -> float:
+	var low := INF
+	for side in 2:
+		var leg := L_LEG if side == 0 else R_LEG
+		var a := _rot[HIPS].x + _rot[leg].x
+		var b := a + _rot[leg + 1].x
+		var p := b + _rot[leg + 2].x
+		var z := cos(_rot[HIPS].z + _rot[leg].z)
+		var ankle := (_thigh * cos(a) + _shin * cos(b)) * z
+		var heel := ankle + FOOT_UP * cos(p) + FOOT_HEEL * sin(p)
+		var ball := ankle + FOOT_UP * cos(p) - FOOT_BALL * sin(p)
+		low = minf(low, -maxf(heel, ball))
+	return _thigh + _shin + FOOT_UP + low
+
+
 func _mix(bone: int, v: Vector3, w: float) -> void:
 	_target[bone] = _target[bone].lerp(v, w)
 
 
-## Walk, jog, run and sprint. Cadence comes from the speed and the stride
-## each foot sweeps while planted, so feet do not skate. Returns extra hip
-## lift (running bounce); walking's dip comes from grounding.
+## Walk, jog, run and sprint, driven by the feet. Each foot is planted for
+## the stance part of its cycle and slides back under the hips at exactly
+## the ground speed (no skating), rolling from heel strike (or the ball, in
+## a sprint) to toe-off; through the swing it follows an authored path
+## (low in a walk, the heel kicked up under the hips in a run, high knees
+## in a sprint). The hip height comes from an authored stance knee bend and
+## a ballistic flight, and two-bone IK turns each foot into thigh, knee and
+## ankle angles. Cadence and duty factor follow walking and running data.
+## Returns extra hip lift (none: the height goes through _gait_h).
 func _locomotion(s: State, delta: float) -> float:
-	var speed := s.speed
 	var st := s.style
+	_gv = lerpf(_gv, s.speed, 1.0 - exp(-10.0 * delta))
+	var speed := _gv
 	var moving := smoothstep(0.08, 0.7, speed)
 	_moving = moving
 	var run := clampf((speed - 2.3) / maxf(s.run_speed - 2.3, 0.1), 0.0, 1.0)
@@ -314,71 +374,212 @@ func _locomotion(s: State, delta: float) -> float:
 		sprint = maxf(sprint, run)
 	var elderly := st == "elderly"
 	var limp := st == "limp"
-	var amp := lerpf(0.18, 0.5, clampf(speed / 1.4, 0.0, 1.0))
-	amp = lerpf(amp, 0.8, run) + 0.12 * sprint
+	# g: walking (0) to running (1) by speed, the way people switch near 2.3 m/s.
+	var g := smoothstep(1.9, 2.8, speed)
+	if st == "jog":
+		g = maxf(g, moving)
+	var v := speed / skeleton.scale.y # in rest units, like the bones
+	var f := lerpf(_table(WALK_CADENCE, speed), _table(RUN_CADENCE, speed), g)
 	if elderly:
-		amp *= 0.7
+		f *= 1.15
 	if st == "swagger":
-		amp *= 1.08
-	var stance := lerpf(0.6, 0.36, run) - 0.04 * sprint
-	var sweep := 2.0 * 0.82 * sin(amp) * skeleton.scale.y
-	var omega := minf(TAU * speed * stance / maxf(sweep, 0.05), 11.5)
+		f *= 0.94
+	var beta := lerpf(0.62, 0.37, g) - 0.1 * sprint
+	beta = minf(beta, lerpf(0.82, 0.9, g) * f / maxf(v, 0.01)) # the leg can reach
+	_gt_ls = v * beta / f
+	_gt_beta = beta
+	_gt_c = lerpf(0.47, 0.38, g)
+	_gt_p1 = lerpf(0.3, 0.12, g) - 0.3 * sprint
+	_gt_p0 = -lerpf(0.55, 0.75, g) - 0.25 * sprint
+	_gt_g = g
+	_gt_f = f
+	_gt_sprint = sprint
+	_gt_tan = -v * (1.0 - beta) / f * (lerpf(0.3, 0.45, g) - 0.1 * sprint)
+	_gt_peak = (lerpf(0.07, 0.38, g) + 0.08 * sprint) * moving
+	_gt_rise = lerpf(0.4, 0.32, g)
+	_gt_late = lerpf(0.4, 0.42, g) + 0.15 * sprint
+	var warp := 1.0
 	if limp:
-		omega *= 1.0 + 0.25 * cos(phase) # hurries off the bad leg
-	phase = fmod(phase + delta * omega * maxf(moving, 0.05), TAU)
-	var kswing := (lerpf(1.05, 1.85, run) + 0.3 * sprint) * moving
-	var kload := lerpf(0.12, 0.5, run) * moving
-	var bend := 0.18 if elderly else 0.0
+		warp = 1.0 + 0.25 * cos(phase) # hurries off the bad leg
+	phase = fmod(phase + delta * TAU * f * warp, TAU)
+	# Left foot touches down at phase PI/2, when sin(phase) (which the styles
+	# swing their arms by) peaks; the right half a cycle later.
+	var feet: Array[Vector4] = []
+	for side in 2:
+		var ph := fposmod(phase / TAU - 0.25 + 0.5 * side, 1.0)
+		var t := _foot(ph)
+		if limp and side == 1 and ph >= beta: # the bad leg barely lifts
+			var u := (ph - beta) / (1.0 - beta)
+			t.y -= _gt_peak * 0.55 * _bump(u)
+		feet.append(t)
+	var hgt := _gait_height(feet)
+	if elderly:
+		hgt -= 0.035
+	_gait_h = hgt - _hip
+	# Pelvis drops on the swinging side and the spine evens it out.
+	var drop := cos(phase) * 0.055 * moving * (1.0 - 0.6 * g)
+	if limp:
+		drop = cos(phase) * 0.1 * moving
 	for side in 2:
 		var leg := L_LEG if side == 0 else R_LEG
 		var shin := L_SHIN if side == 0 else R_SHIN
 		var foot := L_FOOT if side == 0 else R_FOOT
-		var ph := phase + PI * side
-		var a := amp * (0.55 if limp and side == 1 else 1.0)
-		var swing := pow(maxf(0.0, cos(ph + 0.35)), 1.5)
-		var load := pow(maxf(0.0, -cos(ph)), 2.0)
-		var ks := kswing * (0.4 if limp and side == 1 else 1.0)
-		_target[leg].x = sin(ph) * a * moving + 0.3 * sprint * swing + bend * 0.5
-		_target[shin].x = -(ks * swing + kload * load) - bend
-		var level := lerpf(0.6, 1.0, maxf(0.0, -cos(ph)))
-		var toe_off := pow(maxf(0.0, cos(ph + PI / 2.0 + 0.2)), 4.0)
-		var heel := pow(maxf(0.0, cos(ph - PI / 2.0)), 4.0)
-		_target[foot].x = -(_target[leg].x + _target[shin].x) * level + (0.2 * heel - 0.45 * toe_off) * moving
-	# Arms swing against the legs, a beat behind them.
-	var asw := sin(phase - 0.25)
-	var arm := amp * lerpf(0.75, 1.0, run) * moving * (1.0 + 0.3 * sprint)
-	if elderly:
-		arm *= 0.5
-	var spread := 0.07 + 0.08 * run + (0.12 if st == "swagger" else 0.0)
-	_target[L_ARM] = Vector3(-asw * arm, 0.0, -spread)
-	_target[R_ARM] = Vector3(asw * arm, 0.0, spread)
-	var elbow := lerpf(0.18, 1.45, run) + 0.2 * sprint
-	_target[L_FORE].x = elbow + maxf(0.0, -asw) * 0.3 * moving
-	_target[R_FORE].x = elbow + maxf(0.0, asw) * 0.3 * moving
-	# Pelvis turns with the forward leg, shoulders against it; the pelvis
-	# drops on the swinging side and the spine evens it out.
-	var tw := sin(phase) * moving * (1.4 if st == "swagger" else 1.0)
-	_target[HIPS].y = -tw * lerpf(0.1, 0.15, run)
-	_target[CHEST].y = tw * lerpf(0.2, 0.3, run)
-	var drop := cos(phase) * 0.055 * moving * (1.0 - 0.6 * run)
-	if limp:
-		drop = cos(phase) * 0.1 * moving
+		var t := feet[side]
+		var j := _leg_ik(t.x, t.y - hgt)
+		_target[leg].x = j.x * moving
+		_target[shin].x = -j.y * moving
+		_target[foot].x = (t.z - (j.x - j.y)) * moving
+		_target[leg].z -= drop
 	_target[HIPS].z = drop
 	_target[SPINE].z = -drop * 0.8
-	_target[L_LEG].z -= drop
-	_target[R_LEG].z -= drop
-	_target[SPINE].x = -lerpf(0.04, 0.2, run) * moving - 0.16 * sprint
+	# Arms swing against the legs, a beat behind them, mostly behind the
+	# body; elbows bend more the faster he goes, more in front than behind.
+	var aw := sin(phase - 0.2)
+	var centre := (lerpf(-0.08, -0.26, g) + 0.13 * sprint) * moving
+	var arm := (lerpf(0.27, 0.52, g) + 0.48 * sprint) * moving
+	if elderly:
+		arm *= 0.5
+	var spread := 0.08 + 0.06 * g + (0.12 if st == "swagger" else 0.0)
+	_target[L_ARM] = Vector3(centre - aw * arm, 0.0, -spread)
+	_target[R_ARM] = Vector3(centre + aw * arm, 0.0, spread)
+	var elbow := lerpf(0.18, lerpf(0.32, 1.45, g) - 0.05 * sprint, moving)
+	var bend := (0.15 + 0.15 * sprint) * moving
+	_target[L_FORE].x = elbow - aw * bend
+	_target[R_FORE].x = elbow + aw * bend
+	# Running hands cross a little toward the middle in front.
+	_target[L_FORE].y = 0.3 * g * moving
+	_target[R_FORE].y = -0.3 * g * moving
+	# Pelvis turns with the forward leg, shoulders against it.
+	var tw := sin(phase) * moving * (1.4 if st == "swagger" else 1.0)
+	_target[HIPS].y = -tw * lerpf(0.1, 0.15, g)
+	_target[CHEST].y = tw * (lerpf(0.2, 0.28, g) + 0.08 * sprint)
+	_target[SPINE].x = -(lerpf(0.05, 0.13, g) + 0.12 * sprint) * moving
 	_target[HEAD].x = -_target[SPINE].x * 0.7
 	_target[HEAD].y = -(_target[HIPS].y + _target[CHEST].y)
 	# Starting leans in, stopping leans back.
 	var acc := clampf(s.accel / 8.0, -1.0, 1.0)
-	_target[SPINE].x += -0.2 * maxf(acc, 0.0) + 0.14 * maxf(-acc, 0.0) * (1.0 - run)
+	_target[SPINE].x += -0.2 * maxf(acc, 0.0) + 0.14 * maxf(-acc, 0.0) * (1.0 - g)
 	var still := 1.0 - moving
 	_stance(still, delta)
 	_turn_in_place(s, still, delta)
 	_style(s, moving, run)
-	# Running bounce: up in flight, down on each landing.
-	return (0.05 * (0.5 - 0.5 * cos(2.0 * phase)) - 0.04) * run * moving
+	return 0.0
+
+
+## Linear look-up in a [speed, value] table.
+func _table(t: Array, x: float) -> float:
+	if x <= t[0].x:
+		return t[0].y
+	for i in range(1, t.size()):
+		if x <= t[i].x:
+			return lerpf(t[i - 1].y, t[i].y, (x - t[i - 1].x) / (t[i].x - t[i - 1].x))
+	return t[t.size() - 1].y
+
+
+## The ankle (x forward of the hip, y up from the rest ground, in rest
+## units) of a foot whose flat position is `gx`, pitched by `p` (toe up +)
+## about the heel or, toe down, about the ball.
+func _ankle(gx: float, p: float) -> Vector2:
+	var sole := _hip - _thigh - _shin - FOOT_UP
+	var pivot := gx - FOOT_HEEL if p >= 0.0 else gx + FOOT_BALL
+	var o := Vector2(FOOT_HEEL if p >= 0.0 else -FOOT_BALL, FOOT_UP)
+	return Vector2(pivot + o.x * cos(p) - o.y * sin(p), sole + o.x * sin(p) + o.y * cos(p))
+
+
+## A foot at cycle point `ph` (0 touchdown, stance until _gt_beta, then
+## swing): ankle x, y, ground pitch, and the knee bend that sets the hip
+## height while it bears weight (w).
+func _foot(ph: float) -> Vector4:
+	var ls := _gt_ls
+	if ph < _gt_beta:
+		var sp := ph / _gt_beta
+		var p := 0.0
+		if sp < 0.15:
+			p = lerpf(_gt_p1, 0.0, smoothstep(0.0, 0.15, sp))
+		elif sp > 0.55:
+			p = lerpf(0.0, _gt_p0, smoothstep(0.55, 1.0, sp))
+		var a := _ankle(_gt_c * ls - ls * sp, p)
+		return Vector4(a.x, a.y, p, _stance_knee(sp))
+	var u := (ph - _gt_beta) / (1.0 - _gt_beta)
+	var a0 := _ankle(_gt_c * ls - ls, _gt_p0)
+	var a1 := _ankle(_gt_c * ls, _gt_p1)
+	# Hermite: leaves moving back at the ground speed, reaches forward, and
+	# paws back into the touchdown.
+	var u2 := u * u
+	var u3 := u2 * u
+	var x := (2.0 * u3 - 3.0 * u2 + 1.0) * a0.x + (u3 - 2.0 * u2 + u) * _gt_tan \
+		+ (3.0 * u2 - 2.0 * u3) * a1.x + (u3 - u2) * _gt_tan
+	var y := lerpf(a0.y, a1.y, u) + _gt_peak * _bump(u)
+	var p := lerpf(_gt_p0, _gt_p1, smoothstep(0.2, 0.9, u))
+	return Vector4(x, y, p, lerpf(_stance_knee(1.0), _stance_knee(0.0), u))
+
+
+## Swing lift: up early (the heel kicks up in a run), down late.
+func _bump(u: float) -> float:
+	return smoothstep(0.0, _gt_rise, u) * (1.0 - smoothstep(_gt_late, 1.0, u))
+
+
+## Authored knee bend through stance (sp 0..1): a walk loads a little and
+## vaults over a nearly straight leg, a run compresses to about 43 degrees.
+func _stance_knee(sp: float) -> float:
+	var walk := 0.08 + 0.2 * sin(PI * minf(sp / 0.35, 1.0)) + 0.55 * smoothstep(0.6, 1.0, sp)
+	var k0 := 0.25 + 0.05 * _gt_sprint
+	var km := 0.75 + 0.05 * _gt_sprint
+	var run := lerpf(k0, km, smoothstep(0.0, 0.45, sp)) if sp < 0.45 \
+		else lerpf(km, 0.2, smoothstep(0.45, 1.0, sp))
+	return lerpf(walk, run, _gt_g)
+
+
+## How high the hips may be for a foot at (x, y) with the knee bent k.
+func _reach(x: float, y: float, k: float) -> float:
+	var d2 := _thigh * _thigh + _shin * _shin + 2.0 * _thigh * _shin * cos(k)
+	return y + sqrt(maxf(d2 - x * x, 0.0))
+
+
+## Hip height (rest units) for this point of the cycle: a walk takes the
+## lowest the feet allow with their knee bends (it dips in double support
+## and rises over the planted leg); a run sinks from touchdown to mid-stance,
+## rises to toe-off and flies on a ballistic arc to the next touchdown.
+## Never higher than nearly straight legs can reach the feet.
+func _gait_height(feet: Array[Vector4]) -> float:
+	var walk := INF
+	var cap := INF
+	for t in feet:
+		walk = minf(walk, _reach(t.x, t.y, t.w))
+		cap = minf(cap, _reach(t.x, t.y, 0.12))
+	var hgt := walk
+	if _gt_g > 0.0:
+		var ls := _gt_ls
+		var sig := minf(2.0 * _gt_beta, 1.0)
+		var q := fposmod(phase / TAU - 0.25, 0.5) * 2.0
+		var a0 := _ankle(_gt_c * ls - ls, _gt_p0)
+		var a1 := _ankle(_gt_c * ls, _gt_p1)
+		var am := _ankle(_gt_c * ls - ls * 0.45, 0.0)
+		var h_off := _reach(a0.x, a0.y, _stance_knee(1.0))
+		var h_on := _reach(a1.x, a1.y, _stance_knee(0.0))
+		var h_mid := _reach(am.x, am.y, _stance_knee(0.45))
+		var r := 0.0
+		if q < sig:
+			var sp := q / sig
+			r = lerpf(h_on, h_mid, smoothstep(0.0, 0.45, sp)) if sp < 0.45 \
+				else lerpf(h_mid, h_off, smoothstep(0.45, 1.0, sp))
+		else:
+			var u := (q - sig) / (1.0 - sig)
+			var tf := (1.0 - sig) * 0.5 / _gt_f
+			r = lerpf(h_off, h_on, smoothstep(0.0, 1.0, u)) + 9.8 / skeleton.scale.y * tf * tf * 0.5 * u * (1.0 - u)
+		hgt = lerpf(walk, r, _gt_g)
+	return minf(hgt, cap)
+
+
+## Thigh angle (forward +) and knee bend for an ankle at (x, y) from the
+## hip (y negative, down), by the law of cosines; the knee bends forward.
+func _leg_ik(x: float, y: float) -> Vector2:
+	var t := _thigh
+	var sh := _shin
+	var d := clampf(sqrt(x * x + y * y), absf(t - sh) + 0.01, (t + sh) * 0.999)
+	var knee := acos(clampf((t * t + sh * sh - d * d) / (2.0 * t * sh), -1.0, 1.0))
+	var inner := acos(clampf((t * t + d * d - sh * sh) / (2.0 * t * d), -1.0, 1.0))
+	return Vector2(atan2(x, -y) + inner, PI - knee)
 
 
 ## Weight on one leg, the other knee easy, shoulders tilted against the
@@ -480,11 +681,11 @@ func _style(s: State, moving: float, run: float) -> void:
 			_target[SPINE].z -= 0.08 * moving
 			_target[SPINE].x -= 0.08
 		"sprint":
-			_target[L_FORE].x = maxf(_target[L_FORE].x, 1.5)
-			_target[R_FORE].x = maxf(_target[R_FORE].x, 1.5)
+			_target[L_FORE].x = maxf(_target[L_FORE].x, 1.1)
+			_target[R_FORE].x = maxf(_target[R_FORE].x, 1.1)
 		"jog":
-			_target[L_FORE].x = maxf(_target[L_FORE].x, 1.5)
-			_target[R_FORE].x = maxf(_target[R_FORE].x, 1.5)
+			_target[L_FORE].x = maxf(_target[L_FORE].x, 1.3)
+			_target[R_FORE].x = maxf(_target[R_FORE].x, 1.3)
 			_target[SPINE].x -= 0.04 * run
 
 
