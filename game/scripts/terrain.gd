@@ -16,6 +16,9 @@ static var heights := PackedFloat32Array()
 static var bounds := Rect2()
 ## The grid as a texture for shaders (`terrain_dm`), kept for tests.
 static var height_texture: ImageTexture
+## The country's ground_drop (set when it loads): how far the drawn ground
+## lies under height() at a point, for what stands on it (drop()).
+static var drop_source := Callable()
 
 
 ## Reads the "terrain" entry of country.json ({} or null clears it).
@@ -61,6 +64,14 @@ static func height(x: float, z: float) -> float:
 	var a := heights[k] + (heights[k + 1] - heights[k]) * fu
 	var b := heights[k + nx] + (heights[k + nx + 1] - heights[k + nx]) * fu
 	return a + (b - a) * fv
+
+
+## How far under height() the ground is drawn at x, z (the hills' ground
+## off the roads; Country.ground_drop). Cars and people stand that much lower.
+static func drop(x: float, z: float) -> float:
+	if nx == 0 or not drop_source.is_valid():
+		return 0.0
+	return drop_source.call(Vector2(x, z))
 
 
 static func height_at(p: Vector3) -> float:

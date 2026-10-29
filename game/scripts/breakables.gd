@@ -50,8 +50,9 @@ static func smash(col: KinematicCollision3D, velocity: Vector3, by_player: bool)
 	for c in body.get_children():
 		if c is CollisionShape3D and c.has_meta("brk") and c.get_meta("brk").get("down", false):
 			c.set_deferred("disabled", true)
-	collapse(body.get_meta("mesh", null), info.v)
-	collapse(body.get_meta("glow", null), info.g)
+	# get_meta with a null default still logs an error when the key is missing.
+	collapse(body.get_meta("mesh") if body.has_meta("mesh") else null, info.v)
+	collapse(body.get_meta("glow") if body.has_meta("glow") else null, info.g)
 	var dir := Vector3(velocity.x, 0, velocity.z).normalized()
 	_topple(body.get_parent(), info.kind, base, dir)
 	var fx = body.get_tree().root.get_node_or_null("Fx")

@@ -25,6 +25,9 @@ static var LOAD_RADIUS := 130.0
 static var UNLOAD_RADIUS := 210.0
 const LOOKAHEAD := 1.2
 const NODE_GRID := 50.0
+## Off a road's paving on the hills, the drop under a car or person (see
+## ground_drop) grows to the ground's over this many metres.
+const DROP_EASE := 1.0
 ## Barricades stand BARRICADE_IN m inside the play area where a road leaves
 ## it; the road's junctions within BARRICADE_CUT of its end at the edge are
 ## cut off for traffic, which could never reach them to turn round.
@@ -145,6 +148,7 @@ func load_data(seed_v := 1234) -> void:
 			plan_links[int(pair[1])] = []
 		plan_links[int(pair[1])].append(int(pair[0]))
 	Terrain.load_data(d.get("terrain"))
+	Terrain.drop_source = ground_drop
 	lots = d.lots
 	plots = d.get("plots", [])
 	plot_types = d.get("plot_types", [])
@@ -424,6 +428,57 @@ func road_distance(p: Vector2, reach := 60.0) -> float:
 			var b := node_pos[edge_b[e]]
 			best = minf(best, p.distance_to(Geometry2D.get_closest_point_to_segment(p, a, b)) - edge_width(e) * 0.5)
 	return best
+
+
+## How far the drawn ground lies under Terrain.height at p, for the cars and
+## people standing there (Terrain.ground). The hills' ground is drawn
+## Tiles.HILL_GROUND_DROP low, but roads and their sidewalks, far roads,
+## driveways, the trail and the lots and plots on their pads are not: none
+## there, eased in over DROP_EASE past a road's paving (the kerb).
+func ground_drop(p: Vector2) -> float:
+	var h := Terrain.height(p.x, p.y)
+	if h <= 0.0:
+		return 0.0
+	var paved := INF
+	for n in nodes_near(p, 40.0):
+		for e in _adj[n]:
+			var d := p.distance_to(Geometry2D.get_closest_point_to_segment(p, node_pos[edge_a[e]], node_pos[edge_b[e]])) - edge_width(e) * 0.5
+			if edge_class(e) in Tiles.LIGHT_CLASSES:
+				d -= Tiles.SIDEWALK
+			paved = minf(paved, d)
+	if paved <= 0.0:
+		return 0.0
+	var t: Dictionary = tiles.get(Vector2i(floori(p.x / tile_size), floori(p.y / tile_size)), {})
+	for i in t.get("p", []):
+		var path: Array = paths[int(i)]
+		if _near_segment(p, path[0], path[1], 1.75 + 1.0):
+			return 0.0
+	for pair in t.get("t", []):
+		var pts: Array = trails[int(pair[0])].pts
+		if _near_segment(p, pts[int(pair[1])], pts[int(pair[1]) + 1], 1.75):
+			return 0.0
+	for pair in t.get("f", []):
+		var f: Dictionary = far_roads[int(pair[0])]
+		if _near_segment(p, f.pts[int(pair[1])], f.pts[int(pair[1]) + 1], float(classes[int(f.cls)].w) * 0.5):
+			return 0.0
+	for i in t.get("l", []):
+		if _inside(p, lots[int(i)]):
+			return 0.0
+	for i in t.get("q", []):
+		if _inside(p, plots[int(i)]):
+			return 0.0
+	return Tiles.HILL_GROUND_DROP * minf(1.0, h * 0.5) * smoothstep(0.0, DROP_EASE, paved)
+
+
+static func _near_segment(p: Vector2, a: Array, b: Array, r: float) -> bool:
+	var q := Geometry2D.get_closest_point_to_segment(p, Vector2(a[0], a[1]), Vector2(b[0], b[1]))
+	return p.distance_squared_to(q) <= r * r
+
+
+## Whether p lies in the footprint of a lot or plot row [x, z, yaw, width, depth, ...].
+static func _inside(p: Vector2, row: Array) -> bool:
+	var d := (p - Vector2(row[0], row[1])).rotated(float(row[2]))
+	return absf(d.x) <= float(row[3]) * 0.5 and absf(d.y) <= float(row[4]) * 0.5
 
 
 ## Everything the water plane must cover, in local metres.

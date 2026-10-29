@@ -96,6 +96,9 @@ var clock := 0.0
 var reacted_at := -1.0
 
 var _combo := 0
+## The ground's drop where the person stands (_ground_drop) and where it was looked up.
+var _drop := 0.0
+var _drop_at := Vector2.INF
 var _combo_time := 0.0
 var _punch_t := -1.0
 var _kick_t := -1.0
@@ -160,9 +163,19 @@ func _physics_process(delta: float) -> void:
 		_think(delta)
 	velocity.y = 0.0
 	move_and_slide()
-	global_position.y = Terrain.height(global_position.x, global_position.z)
+	global_position.y = Terrain.height(global_position.x, global_position.z) - _ground_drop()
 	if _pool_size > 0.0 or _trail > 0.0:
 		_bleed_on_ground()
+
+
+## Off the roads on the hills the ground is drawn a little under
+## Terrain.height (Terrain.drop), looked up each half metre walked.
+func _ground_drop() -> float:
+	var p := Vector2(global_position.x, global_position.z)
+	if p.distance_squared_to(_drop_at) > 0.25:
+		_drop_at = p
+		_drop = Terrain.drop(p.x, p.y)
+	return _drop
 
 
 ## Behaviour hook for subclasses; called only while standing and alive.

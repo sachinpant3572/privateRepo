@@ -62,7 +62,7 @@ func _run() -> void:
 		"test_vehicle_speed_ranks",
 		"test_player_driving_assists",
 		"test_driving_layouts",
-		"test_brake_and_steer_drifts",
+		"test_brake_and_steer_drifts", "test_classes_brake_and_corner_apart", "test_movers_stand_on_hill_ground",
 		"test_touch_driving_layouts",
 		"test_scripted_car_gets_unstuck", "test_heavy_vehicle_pushes_harder", "test_spawns_need_room", "test_overlap_resolves", "test_heavy_pushes_parked", "test_pinned_car_holds_still", "test_xray_only_when_hidden", "test_cars_prewarmed", "test_hero_seen_under_roofs", "test_cab_stop_skips_parked_car",
 		"test_vehicle_classes_cover_every_kind", "test_suspension_bounces_and_settles", "test_side_hit_spins_and_dents", "test_hard_crash_throws_panel", "test_crash_throws_rider", "test_car_fire_then_explodes",
@@ -3001,6 +3001,93 @@ func test_brake_and_steer_drifts() -> void:
 	Input.action_release("steer_left")
 	car.queue_free()
 	Controls.scheme = "stick"
+
+
+## On the wheel or arrows, braking after coasting stops the car at its own
+## brake rate (0.24: coasting held every car to COAST, "all cars take the
+## same amount of time to brake"); a sports car stops shorter than an SUV
+## or a box truck and turns tighter than a sedan. Traffic is untouched.
+func test_classes_brake_and_corner_apart() -> void:
+	await _free_game()
+	Controls.camera = null
+	Controls.scheme = "arrows"
+	var frames := {}
+	for kind in ["sports", "suv", "box_truck"]:
+		var car = _player_car(kind, Vector3(150.0, 0, 150.0), 20.0)
+		await _frames(10) # coasting
+		var before: float = car.speed
+		Input.action_press("brake")
+		var n := 0
+		while car.speed > 1.0 and n < 600:
+			await get_tree().physics_frame
+			n += 1
+		Input.action_release("brake")
+		frames[kind] = n
+		var want: float = car._spec.brake * car._cls.brakes
+		_check(absf(n / 60.0 - (before - 1.0) / want) < 0.12, "a %s brakes after coasting at its own rate (%d frames from %.1f m/s, %.0f m/s² expected)" % [kind, n, before, want])
+		car.queue_free()
+		await get_tree().physics_frame
+	print("stop frames: %s" % [frames])
+	_check(frames.sports < frames.suv and frames.suv < frames.box_truck, "the sports car stops shortest, then the SUV, then the box truck (%s)" % [frames])
+	var turned := {}
+	for kind in ["sports", "sedan"]:
+		var car = _player_car(kind, Vector3(150.0, 0, 150.0), 20.0)
+		var yaw0: float = car.rotation.y
+		Input.action_press("gas")
+		Input.action_press("steer_left")
+		await _frames(40)
+		Input.action_release("steer_left")
+		Input.action_release("gas")
+		turned[kind] = wrapf(car.rotation.y - yaw0, -PI, PI)
+		car.queue_free()
+		await get_tree().physics_frame
+	_check(turned.sports > turned.sedan * 1.15, "at the same speed the sports car turns tighter than a sedan (%.2f vs %.2f rad)" % [turned.sports, turned.sedan])
+	var traffic = _track_car("sports", Vector3(150.0, 0, 150.0), 0.0)
+	_check(traffic._grip() == Vehicle.CORNER_GRIP and traffic._brake_rate() == traffic._spec.brake and traffic._turn_rate() == traffic.turn_rate, "traffic drives on its kind's spec alone")
+	traffic.queue_free()
+	Controls.scheme = "stick"
+
+
+## Off the paving on the hills the ground is drawn HILL_GROUND_DROP below
+## the height grid (so it never pokes through a road); cars and people
+## stand on it there instead of floating (0.24, "it seems to be in air"),
+## and keep to the grid on roads, drives and pads.
+func test_movers_stand_on_hill_ground() -> void:
+	await _new_game(false)
+	var c = game.city.country
+	var off := Vector2.INF
+	var road := Vector2.INF
+	for i in 40:
+		for j in 40:
+			var p := Vector2(600.0 + i * 9.0, -1300.0 + j * 9.0)
+			if Terrain.height(p.x, p.y) < 3.0:
+				continue
+			var d: float = c.ground_drop(p)
+			if off == Vector2.INF and absf(d - c.Tiles.HILL_GROUND_DROP) < 0.001:
+				off = p
+			if road == Vector2.INF:
+				for n in c.nodes_near(p, 5.0):
+					road = c.node_pos[n]
+	_check(off != Vector2.INF, "there is open hill ground away from roads and lots")
+	_check(road != Vector2.INF and c.ground_drop(road) == 0.0, "on a hill road the drop is 0 (%s)" % [road])
+	_check(Terrain.drop(0.0, 0.0) == 0.0, "in the flat city there is no drop")
+	if off == Vector2.INF:
+		return
+	var ground: float = Terrain.height(off.x, off.y) - c.Tiles.HILL_GROUND_DROP
+	var pos := Vector3(off.x, ground, off.y)
+	game.city.stream_now(pos)
+	var car = Vehicle.new()
+	car.kind = "sports"
+	game.add_child(car)
+	car.global_position = pos
+	car.driver = Vehicle.Driver.PLAYER
+	game.player.global_position = pos + Vector3(3.0, 0.0, 0.0)
+	await _frames(60)
+	var feet: Vector3 = game.player.global_position
+	var under := Terrain.height(feet.x, feet.z) - Terrain.drop(feet.x, feet.z)
+	_check(absf(car.global_position.y - ground) < 0.03, "a car parked on the hillside sits on the drawn ground (%.2f m, ground %.2f m)" % [car.global_position.y, ground])
+	_check(absf(feet.y - under) < 0.03 and Terrain.drop(feet.x, feet.z) > 0.1, "a person on the hillside stands on the drawn ground (%.2f m, ground %.2f m)" % [feet.y, under])
+	car.queue_free()
 
 
 func _player_car(kind: String, pos: Vector3, speed: float, yaw := 0.0):
@@ -7193,7 +7280,7 @@ func test_vehicle_classes_cover_every_kind() -> void:
 		if not Classes.OF_KIND.has(kind):
 			missing.append(kind)
 	_check(missing.is_empty(), "every vehicle kind has a class (missing: %s)" % [missing])
-	var fields := ["hz", "zeta", "roll_max", "pitch_max", "crumple", "dent_cap", "damage", "throw", "kick"]
+	var fields := ["hz", "zeta", "roll_max", "pitch_max", "crumple", "dent_cap", "damage", "throw", "kick", "brakes", "cornering", "turning", "wheel"]
 	var short := []
 	for c in Classes.CLASSES:
 		for f in fields:

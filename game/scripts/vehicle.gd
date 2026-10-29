@@ -24,6 +24,9 @@ signal path_done(car)
 enum Driver { NONE, PLAYER, TRAFFIC, POLICE, SCRIPT, CHASER }
 
 const COAST := 4.0
+## How fast (m/s) a car or person settles onto ground drawn under
+## Terrain.height (_ground_drop).
+const DROP_RATE := 1.5
 ## How much of gravity's pull along a slope reaches the speed (the rest the
 ## engine and brakes take).
 const SLOPE_PULL := 0.6
@@ -53,13 +56,14 @@ const PLAYER_GRIP := 1.9
 ## like other games offer"): brake while turning at least DRIFT_STEER of
 ## full lock above DRIFT_MIN (m/s) and the tail steps out; the car keeps
 ## sliding while the wheel stays turned, losing DRIFT_BLEED (m/s²), and
-## DRIFT_BRAKE more at full brake. It ends below DRIFT_END or when the
-## wheel straightens. Not on bicycles, motorbikes or trucks.
+## DRIFT_BRAKE of the car's brake more at full brake. It ends below
+## DRIFT_END or when the wheel straightens. Not on bicycles, motorbikes or
+## trucks.
 const DRIFT_MIN := 9.0
 const DRIFT_STEER := 0.35
 const DRIFT_END := 5.0
 const DRIFT_BLEED := 2.5
-const DRIFT_BRAKE := 6.0
+const DRIFT_BRAKE := 0.2
 ## Seconds the tail takes to step out or grip again.
 const DRIFT_IN := 0.25
 ## How deep (m) another car must sink in before it is moved out
@@ -265,6 +269,10 @@ var _cls: Dictionary
 var _tilt_v := Vector2.ZERO
 ## The body's rise on its springs (m, up positive) and how fast it moves.
 var _heave := 0.0
+## The ground's drop under the car (_ground_drop): eased, wanted, where looked up.
+var _drop := 0.0
+var _drop_want := 0.0
+var _drop_at := Vector2.INF
 var _heave_v := 0.0
 ## The ground's vertical speed under the car last frame (m/s): a change is
 ## a bump or a crest the springs take.
@@ -659,9 +667,9 @@ func _player_input() -> void:
 			s = clampf(w[0] + Input.get_axis("steer_left", "steer_right"), -1.0, 1.0)
 			gas = maxf(gas, w[1])
 			brake = maxf(brake, w[2])
-		# Turning in takes STEER_IN seconds; letting go or turning back
-		# is twice as quick.
-		var rate := 1.0 / STEER_IN
+		# Turning in takes STEER_IN seconds (scaled by the class's wheel);
+		# letting go or turning back is twice as quick.
+		var rate := 1.0 / (STEER_IN * _feel("wheel"))
 		if signf(s) != signf(_steer_in) or absf(s) < absf(_steer_in):
 			rate *= 2.0
 		_steer_in = move_toward(_steer_in, s, rate * get_physics_process_delta_time())
@@ -669,13 +677,16 @@ func _player_input() -> void:
 		throttle = gas
 		if _drift_input(-_steer_in, brake):
 			return
+		# Coasting ends on the brake as well as the gas: left on, it held
+		# every car to COAST (0.24, "all cars take the same amount of time
+		# to brake").
+		_coast = brake <= 0.05 and gas < 0.05
 		if brake > 0.05:
 			_pedal_brake(brake, _steer_in)
-		else:
-			_coast = gas < 0.05
 		return
 	# Stick: the car heads where the stick points; GAS floors it that way
 	# (straight on with the stick at rest), BRAKE stops and reverses.
+	_coast = false
 	var dir := Controls.world_move()
 	throttle = dir.length()
 	if throttle > 0.05:
@@ -733,7 +744,24 @@ func _long_haul() -> bool:
 func _grip() -> float:
 	if _long_haul():
 		return 1.0
-	return PLAYER_GRIP if driver == Driver.PLAYER else CORNER_GRIP
+	return PLAYER_GRIP * _feel("cornering") if driver == Driver.PLAYER else CORNER_GRIP
+
+
+## The class's handling multiplier `key` (VehicleClasses: brakes,
+## cornering, turning, wheel) for the player's car; traffic drives on its
+## kind's spec alone, so its junction speeds and stops do not change.
+func _feel(key: String) -> float:
+	return _cls.get(key, 1.0) if driver == Driver.PLAYER else 1.0
+
+
+## Braking (m/s²): the kind's, scaled by its class for the player.
+func _brake_rate() -> float:
+	return _spec.brake * _feel("brakes")
+
+
+## Heading turn rate (rad/s) at full lock, scaled by the class for the player.
+func _turn_rate() -> float:
+	return turn_rate * _feel("turning")
 
 
 ## Traffic: follows its lane junction to junction at the street's limit
@@ -1260,7 +1288,7 @@ func _drive(delta: float) -> void:
 				target = minf(target, assisted)
 		var grip_turn: float = clampf(pace / _spec.steer_low, 0.0, 1.0) * (1.0 - _spec.steer_fade * clampf(pace / max_speed, 0.0, 1.0))
 		steer = clampf(angle * 2.0, -1.0, 1.0)
-		var rate_want: float = steer * turn_rate * grip_turn * lerpf(1.0, 1.6, loose)
+		var rate_want: float = steer * _turn_rate() * grip_turn * lerpf(1.0, 1.6, loose)
 		# The tyres hold only so much sideways pull (corner_g = v * yaw rate)
 		# and the wheels turn only so far: at speed the arc widens. The
 		# handbrake lets the tail come round past grip (a drift).
@@ -1286,22 +1314,22 @@ func _drive(delta: float) -> void:
 	if desired_dir == Vector3.ZERO or _coast:
 		rate = COAST
 	elif signf(target) != signf(speed) and pace > 0.5:
-		rate = _spec.brake
+		rate = _brake_rate()
 		_hard_brake = pace > 9.0
 	elif corner > 0.0:
-		rate = _spec.brake
+		rate = _brake_rate()
 	elif absf(target) < pace:
 		rate = COAST * 2.0
 	if drifting:
 		# Sliding: the throttle holds the drift, the brake scrubs it off,
 		# and the sideways tyres bleed speed either way.
-		rate = accel * 0.5 if target > speed else DRIFT_BRAKE * _drift_brake
+		rate = accel * 0.5 if target > speed else _brake_rate() * DRIFT_BRAKE * _drift_brake
 		_hard_brake = false
 	speed = move_toward(speed, target, rate * delta)
 	if _slide > 0.0:
 		speed = maxf(speed - DRIFT_BLEED * _slide * delta, 0.0)
 	if braking or handbrake:
-		speed = move_toward(speed, 0.0, (_spec.brake if braking else 10.0) * delta)
+		speed = move_toward(speed, 0.0, (_brake_rate() if braking else 10.0) * delta)
 	# Hills: slower up, faster down (none of it on the flat). A car stopped
 	# with nobody on the gas stays put, as if on its parking brake, so a
 	# parked car neither creeps downhill nor keeps simulating.
@@ -1321,7 +1349,7 @@ func _drive(delta: float) -> void:
 	velocity = Vector3(velocity.x, 0.0, velocity.z).lerp(want, clampf(grip * delta, 0.0, 1.0))
 	var before := velocity
 	move_and_slide()
-	global_position.y = Terrain.height(global_position.x, global_position.z)
+	global_position.y = Terrain.height(global_position.x, global_position.z) - _ground_drop(delta)
 	_ground_bumps(delta)
 	_ground_slope(delta)
 	# Tilt follows how the body really moves, so a car pinned against a
@@ -1340,7 +1368,7 @@ func _drive(delta: float) -> void:
 ## circle (v² / R = corner_g). The path is tighter than R, since the velocity
 ## lags the heading by the model's grip.
 func _corner_speed() -> float:
-	var k: float = CORNER_RADIUS * turn_rate
+	var k: float = CORNER_RADIUS * _turn_rate()
 	return minf(k / (1.0 + k * _spec.steer_fade / max_speed), sqrt(_spec.corner_g * _grip() * CORNER_RADIUS))
 
 
@@ -1377,6 +1405,19 @@ func _body_tilt(delta: float, lateral: float, forward: float) -> void:
 ## stop simulating).
 func _settled() -> bool:
 	return _spin == 0.0 and _tilt.length_squared() + _tilt_v.length_squared() + _heave * _heave + _heave_v * _heave_v < 1e-6
+
+
+## Off the roads on the hills the ground is drawn a little under
+## Terrain.height (Terrain.drop): looked up each metre of travel and eased
+## (DROP_RATE), so the car settles off the kerb onto the dirt instead of
+## floating over it.
+func _ground_drop(delta: float) -> float:
+	var p := Vector2(global_position.x, global_position.z)
+	if p.distance_squared_to(_drop_at) > 1.0:
+		_drop_at = p
+		_drop_want = Terrain.drop(p.x, p.y)
+	_drop = move_toward(_drop, _drop_want, DROP_RATE * delta)
+	return _drop
 
 
 ## Bumps and crests: when the ground under the car speeds up or slows its
