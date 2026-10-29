@@ -1162,7 +1162,11 @@ static func _district_parcel(ctx: Ctx, district: String) -> void:
 			# lower apartment blocks stand behind.
 			var front := Vector2(ctx.frame.origin.x, ctx.frame.origin.z) + Vector2(ctx.frame.basis.z.x, ctx.frame.basis.z.z) * ctx.hz
 			var seaward := Vector2(-StreetPlan.GULF_DIR.y, StreetPlan.GULF_DIR.x)
-			if ctx.plan.sea_front(front) and Vector2(ctx.frame.basis.z.x, ctx.frame.basis.z.z).dot(seaward) > 0.5:
+			# A hotel needs a lot about 18 x 16 m or more (terrace, body, rooms).
+			var hotel := ctx.hx >= 9.0 and ctx.hz >= 8.0
+			if not hotel:
+				_downtown(ctx, lerpf(0.4, 0.8, low))
+			elif ctx.plan.sea_front(front) and Vector2(ctx.frame.basis.z.x, ctx.frame.basis.z.z).dot(seaward) > 0.5:
 				_kit(ctx, Civic, "deco_hotel", PLAZA, 1.0)
 			elif roll < 0.08:
 				_pocket_park(ctx)
@@ -1568,7 +1572,9 @@ static func _downtown(ctx: Ctx, tall := 1.0) -> void:
 
 static func _tower(ctx: Ctx, pos: Vector3, w: float, d: float, h: float) -> void:
 	var local := _at(ctx, pos + Vector3(0, KERB, 0), PI)
-	Buildings.tower(ctx.mb, local, maxf(w, 8.0), maxf(d, 8.0), h, ctx.rng)
+	# At least the 4.6 m lobby and one glass storey: a low `tall` (0.4 in
+	# Calle Luna) rolled 4.4 m, a negative glass block.
+	Buildings.tower(ctx.mb, local, maxf(w, 8.0), maxf(d, 8.0), maxf(h, 8.0), ctx.rng)
 	_done(ctx, local)
 
 

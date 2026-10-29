@@ -2203,7 +2203,7 @@ static func deco_hotel(mb, out: Array, w: float, d: float, rng: RandomNumberGene
 	var floors := 3 if rng.randf() < 0.55 else 4
 	const FH := 3.2
 	var H := FH * floors + 0.8
-	var terrace := clampf(d * 0.25, 3.0, 6.0)
+	var terrace := clampf(d * 0.25, minf(3.0, d * 0.2), 6.0)
 	var hf := -d * 0.5 + terrace
 	var hb := d * 0.5 - 1.0
 	var hd := hb - hf

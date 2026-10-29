@@ -122,6 +122,12 @@ func _run() -> void:
 		await _views(game)
 		get_tree().quit()
 		return
+	if OS.get_environment("SHOTS") == "lv":
+		# The Las Venturas-size growth (HANDOFF-bellerive-lv.md): Cable Hill,
+		# Jade Gate, Calle Luna, Brisa Beach and Ocean Drive, Morrow Point south.
+		await _lv(game)
+		get_tree().quit()
+		return
 	if OS.get_environment("SHOTS") == "roads":
 		# Just the wide roads (quick look while working on them).
 		await _roads(game)
@@ -773,6 +779,33 @@ func _roads(game) -> void:
 		game.camera.room_size = stop[2]
 		game.camera.snap()
 		await _frames(240)
+		await _shot(stop[0] + ".png")
+	game.camera.fixed_focus = null
+	game.camera.room_size = 0.0
+
+
+## The new districts of the Las Venturas-size growth, each printed with
+## the district the game finds there.
+func _lv(game) -> void:
+	var stops := [
+		["lv_1_cable_hill", Vector2(60, -380), 80.0],
+		["lv_2_jade_gate", Vector2(420, -330), 70.0],
+		["lv_3_calle_luna", Vector2(1700, 1000), 70.0],
+		["lv_4_brisa_beach", Vector2(1720, 1450), 80.0],
+		["lv_5_ocean_drive", Vector2(1900, 1510), 70.0],
+		["lv_6_morrow_point_south", Vector2(700, 1800), 90.0],
+	]
+	for stop in stops:
+		var at: Vector2 = stop[1]
+		var pos := Vector3(at.x, Terrain.height(at.x, at.y), at.y)
+		game.city.stream_now(pos)
+		game.player.global_position = pos
+		game.player.reset_physics_interpolation()
+		game.camera.fixed_focus = pos
+		game.camera.room_size = stop[2]
+		game.camera.snap()
+		await _frames(240)
+		print("district ", stop[0], " ", game.city.district_at(pos).get("name", "?"))
 		await _shot(stop[0] + ".png")
 	game.camera.fixed_focus = null
 	game.camera.room_size = 0.0
