@@ -107,6 +107,8 @@ helipad needs helicopters: task #82, not started (Sachin's word needed).
     check skips vertices where ground and pad lie within 3 cm, and the
     tucked end's corners (ground + ROUTE_OUT_Y + 0.01). `_bend_routes`
     runs to reach - TUCK - 0.05, the road edge `_route_out` draws.
+  - city.gd loads every world_map region for `district_at` (phase 3+ after
+    1-2): the summit lies in Red Pine (phase 3) and read "Jade Gate".
 
 ## Decided
 

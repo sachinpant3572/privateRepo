@@ -797,20 +797,25 @@ func _load_map() -> void:
 		elif not window.has_point(local) and lm.type != "peak":
 			# Peaks are names on the map, not places to go.
 			_outer_landmarks.append(entry)
+	# Every region, built or not: phase 2's range runs north into Red Pine
+	# (phase 3), whose county holds Mount Calder's summit; left out, the
+	# summit read as the nearest city district.
+	var later: Array = []
 	for r in world.regions:
 		var phase := int(r.get("phase", 1))
-		if phase > 2:
-			continue
 		var poly := PackedVector2Array()
 		for q in r.polygon:
 			poly.append(Vector2(q[0], q[1]))
 		var entry := {"id": r.id, "name": r.name, "style": r.type, "faction": "", "poly": poly}
 		# Phase 1 regions (the Bellerive Hills) lie inside a phase 2 one's
-		# outline and are looked up first.
+		# outline and are looked up first; later phases come last.
 		if phase == 1:
 			_regions.push_front(entry)
-		else:
+		elif phase == 2:
 			_regions.append(entry)
+		else:
+			later.append(entry)
+	_regions.append_array(later)
 	for w in world.water:
 		if w.id == "morrow":
 			_river_half = w.width * 0.5

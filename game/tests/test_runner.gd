@@ -6148,6 +6148,9 @@ func test_mount_calder() -> void:
 			for n in rd.nodes:
 				main_top = maxf(main_top, Terrain.height(c.node_pos[n].x, c.node_pos[n].y))
 	_check(main_top > 900.0, "Mount Calder Road reaches the top (%.0f m)" % main_top)
+	# The HUD names the summit after its county, not the nearest district.
+	var at_top: Dictionary = game.city.district_at(Vector3(float(top[0]), 0.0, float(top[1])))
+	_check(str(at_top.get("id", "")) == "red_pine", "the summit lies in Red Pine County (%s)" % str(at_top.get("name", "")))
 	# The summit's pads are flat.
 	for id in ["restaurant", "helipad", "deck", "cable_top", "car_park", "cable_mid"]:
 		var site: Dictionary = m.sites.get(id, {})
