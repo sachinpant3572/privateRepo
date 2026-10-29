@@ -140,7 +140,11 @@ planned size" rule for the city; #104 (organic outline) carries on inside it.
 Research: reference/world/curves_and_map.md. On hold: Sachin asked for rough
 top-down sketches of A, B and C first. Sketch:
 reference/world/curve_options_sketch.png (game/tools/curve_options_sketch.py
-on a plan dump; off-grid share Now 15%, A 28%, B 31%, C 58%). Wait for his pick.
+on a plan dump). Sachin then chose a mix: C's tensor field, B for Cable Hill,
+A's 1-2 curved roads, roundabouts and the hand-placed set pieces. Four mix
+variations: reference/world/mix_options_sketch.png (game/tools/mix_sketch.py).
+Waiting for his pick of 1-4. In the sketch, field arterials don't always meet
+the roundabouts; in the build, put roundabouts where field arterials cross.
 - Drafted, never run (street_plan.gd): CURVES (Mirador from Lantern (330,-280)
   out the NW edge; Canyon in the NE lobe) cut into `_holes` as 1 m strips;
   BOWS bend east-west rows by amp*sin(pi*t) (Morrow Point north, Calle Luna
