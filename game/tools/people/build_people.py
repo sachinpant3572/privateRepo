@@ -7,8 +7,10 @@ body.bin (float32 / int32 blocks). One topology for every shape: the
 shapes are MakeHuman macro settings per gender (base, fat, thin, muscle,
 old, young, tall, short), each posed into our rest pose with MakeHuman's own proportions; its
 joints (our 17 bones) are written per shape, and the game blends shapes and
-joints per look. Indices: the near mesh, plus a far LOD that uses a subset
-of the same vertices. See HANDOFF-people-v2.md.
+joints per look. Two meshes simplified from it, each with its own vertex
+blocks under a prefix: `crowd/` and a denser `hero/`. Indices per mesh: the
+near mesh, plus a far LOD that uses a subset of the same vertices. See
+HANDOFF-people-v2.md.
 """
 import json
 import os
@@ -22,8 +24,10 @@ import mh  # noqa: E402
 import pose  # noqa: E402
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../assets/people")
-NEAR_TRIS = 3000
-FAR_TRIS = 1000
+# Triangles (near, far LOD) per mesh: the crowd's, and a denser one for the
+# hero (Sachin, 10-29: "Ensure that our hero has much better structure and
+# looks than the NPCs"); there is only one hero on screen.
+MESHES = {"crowd": (3000, 1000), "hero": (10000, 3000)}
 # Importance by scale: the simplifier keeps more of what is bigger.
 HEAD_SCALE = 2.6
 HAND_SCALE = 1.5
@@ -189,41 +193,9 @@ def main():
 			shapes[gname + "_" + sname] = (vf * ks, {n: j * ks for n, j in joints.items()}, [e * ks for e in eyes])
 			print("shape", gname, sname, flush=True)
 	ref, ref_j, _ = shapes["male_base"]
-
 	# Simplify on a body half way to fat, so the triangles follow the belly,
 	# hips and back rolls too, not only the slim base.
 	simp = importance((ref + shapes["male_fat"][0]) * 0.5, W, ref_j)
-	near = simplify(tris.reshape(-1), simp, NEAR_TRIS)
-	far = simplify(near, simp, FAR_TRIS)
-	used = np.unique(near)
-	remap = -np.ones(len(v0), dtype=np.int64)
-	remap[used] = np.arange(len(used))
-	near_i = remap[near]
-	far_i = remap[far]
-	n = len(used)
-	print("verts", n, "near tris", len(near_i) // 3, "far tris", len(far_i) // 3)
-
-	# Four strongest bones per vertex.
-	Wu = W[used]
-	order = np.argsort(-Wu, axis=1)[:, :4]
-	bw = np.take_along_axis(Wu, order, axis=1)
-	bw /= bw.sum(axis=1, keepdims=True)
-	bones = order.astype(np.int32)
-	part = order[:, 0].astype(np.int32)
-
-	# Position along the part's bone, 0 at the joint and 1 at the next joint;
-	# leaves (head, hands, feet) measure in metres below their joint.
-	base = ref[used]
-	along = np.zeros(n)
-	for i, name in enumerate(PARTS):
-		sel = part == i
-		j = ref_j[name]
-		if name in pose.TAIL:
-			t = ref_j[pose.TAIL[name]]
-			d = t - j
-			along[sel] = (base[sel] - j) @ d / np.dot(d, d)
-		else:
-			along[sel] = j[1] - base[sel, 1]
 
 	blocks = []
 	layout = {}
@@ -233,19 +205,53 @@ def main():
 		layout[name] = {"offset": sum(b.nbytes for b in blocks), "count": int(arr.size), "kind": kind}
 		blocks.append(arr)
 
-	meta = {"verts": n, "shapes": [], "joints": {}, "eyes": {}, "bones": pose.NAMES,
+	meta = {"shapes": list(shapes), "joints": {}, "eyes": {}, "bones": pose.NAMES, "meshes": {},
 		"source": "MakeHuman 1.x base mesh, macro targets and default rig (CC0)"}
 	for key, (vf, joints, eyes) in shapes.items():
-		meta["shapes"].append(key)
-		put("pos_" + key, vf[used], "f")
 		meta["joints"][key] = {k: [round(float(x), 5) for x in j] for k, j in joints.items()}
 		meta["eyes"][key] = [[round(float(x), 5) for x in e] for e in eyes]
-	put("near", near_i, "i")
-	put("far", far_i, "i")
-	put("bones", bones, "i")
-	put("weights", bw, "f")
-	put("part", part, "i")
-	put("along", along, "f")
+	for mesh, (near_n, far_n) in MESHES.items():
+		near = simplify(tris.reshape(-1), simp, near_n)
+		far = simplify(near, simp, far_n)
+		used = np.unique(near)
+		remap = -np.ones(len(v0), dtype=np.int64)
+		remap[used] = np.arange(len(used))
+		near_i = remap[near]
+		far_i = remap[far]
+		n = len(used)
+		print(mesh, "verts", n, "near tris", len(near_i) // 3, "far tris", len(far_i) // 3)
+		meta["meshes"][mesh] = {"verts": n}
+
+		# Four strongest bones per vertex.
+		Wu = W[used]
+		order = np.argsort(-Wu, axis=1)[:, :4]
+		bw = np.take_along_axis(Wu, order, axis=1)
+		bw /= bw.sum(axis=1, keepdims=True)
+		bones = order.astype(np.int32)
+		part = order[:, 0].astype(np.int32)
+
+		# Position along the part's bone, 0 at the joint and 1 at the next joint;
+		# leaves (head, hands, feet) measure in metres below their joint.
+		base = ref[used]
+		along = np.zeros(n)
+		for i, name in enumerate(PARTS):
+			sel = part == i
+			j = ref_j[name]
+			if name in pose.TAIL:
+				t = ref_j[pose.TAIL[name]]
+				d = t - j
+				along[sel] = (base[sel] - j) @ d / np.dot(d, d)
+			else:
+				along[sel] = j[1] - base[sel, 1]
+
+		for key, (vf, joints, eyes) in shapes.items():
+			put(mesh + "/pos_" + key, vf[used], "f")
+		put(mesh + "/near", near_i, "i")
+		put(mesh + "/far", far_i, "i")
+		put(mesh + "/bones", bones, "i")
+		put(mesh + "/weights", bw, "f")
+		put(mesh + "/part", part, "i")
+		put(mesh + "/along", along, "f")
 	meta["layout"] = layout
 	os.makedirs(OUT, exist_ok=True)
 	with open(os.path.join(OUT, "body.bin"), "wb") as f:

@@ -1,5 +1,4 @@
 {
- "verts": 1502,
  "shapes": [
   "male_base",
   "male_fat",
@@ -1625,116 +1624,234 @@
   "RightLowerLeg",
   "RightFoot"
  ],
+ "meshes": {
+  "crowd": {
+   "verts": 1502
+  },
+  "hero": {
+   "verts": 5002
+  }
+ },
  "source": "MakeHuman 1.x base mesh, macro targets and default rig (CC0)",
  "layout": {
-  "pos_male_base": {
+  "crowd/pos_male_base": {
    "offset": 0,
    "count": 4506,
    "kind": "f"
   },
-  "pos_male_fat": {
+  "crowd/pos_male_fat": {
    "offset": 18024,
    "count": 4506,
    "kind": "f"
   },
-  "pos_male_thin": {
+  "crowd/pos_male_thin": {
    "offset": 36048,
    "count": 4506,
    "kind": "f"
   },
-  "pos_male_muscle": {
+  "crowd/pos_male_muscle": {
    "offset": 54072,
    "count": 4506,
    "kind": "f"
   },
-  "pos_male_old": {
+  "crowd/pos_male_old": {
    "offset": 72096,
    "count": 4506,
    "kind": "f"
   },
-  "pos_male_young": {
+  "crowd/pos_male_young": {
    "offset": 90120,
    "count": 4506,
    "kind": "f"
   },
-  "pos_male_tall": {
+  "crowd/pos_male_tall": {
    "offset": 108144,
    "count": 4506,
    "kind": "f"
   },
-  "pos_male_short": {
+  "crowd/pos_male_short": {
    "offset": 126168,
    "count": 4506,
    "kind": "f"
   },
-  "pos_female_base": {
+  "crowd/pos_female_base": {
    "offset": 144192,
    "count": 4506,
    "kind": "f"
   },
-  "pos_female_fat": {
+  "crowd/pos_female_fat": {
    "offset": 162216,
    "count": 4506,
    "kind": "f"
   },
-  "pos_female_thin": {
+  "crowd/pos_female_thin": {
    "offset": 180240,
    "count": 4506,
    "kind": "f"
   },
-  "pos_female_muscle": {
+  "crowd/pos_female_muscle": {
    "offset": 198264,
    "count": 4506,
    "kind": "f"
   },
-  "pos_female_old": {
+  "crowd/pos_female_old": {
    "offset": 216288,
    "count": 4506,
    "kind": "f"
   },
-  "pos_female_young": {
+  "crowd/pos_female_young": {
    "offset": 234312,
    "count": 4506,
    "kind": "f"
   },
-  "pos_female_tall": {
+  "crowd/pos_female_tall": {
    "offset": 252336,
    "count": 4506,
    "kind": "f"
   },
-  "pos_female_short": {
+  "crowd/pos_female_short": {
    "offset": 270360,
    "count": 4506,
    "kind": "f"
   },
-  "near": {
+  "crowd/near": {
    "offset": 288384,
    "count": 9000,
    "kind": "i"
   },
-  "far": {
+  "crowd/far": {
    "offset": 324384,
    "count": 3000,
    "kind": "i"
   },
-  "bones": {
+  "crowd/bones": {
    "offset": 336384,
    "count": 6008,
    "kind": "i"
   },
-  "weights": {
+  "crowd/weights": {
    "offset": 360416,
    "count": 6008,
    "kind": "f"
   },
-  "part": {
+  "crowd/part": {
    "offset": 384448,
    "count": 1502,
    "kind": "i"
   },
-  "along": {
+  "crowd/along": {
    "offset": 390456,
    "count": 1502,
+   "kind": "f"
+  },
+  "hero/pos_male_base": {
+   "offset": 396464,
+   "count": 15006,
+   "kind": "f"
+  },
+  "hero/pos_male_fat": {
+   "offset": 456488,
+   "count": 15006,
+   "kind": "f"
+  },
+  "hero/pos_male_thin": {
+   "offset": 516512,
+   "count": 15006,
+   "kind": "f"
+  },
+  "hero/pos_male_muscle": {
+   "offset": 576536,
+   "count": 15006,
+   "kind": "f"
+  },
+  "hero/pos_male_old": {
+   "offset": 636560,
+   "count": 15006,
+   "kind": "f"
+  },
+  "hero/pos_male_young": {
+   "offset": 696584,
+   "count": 15006,
+   "kind": "f"
+  },
+  "hero/pos_male_tall": {
+   "offset": 756608,
+   "count": 15006,
+   "kind": "f"
+  },
+  "hero/pos_male_short": {
+   "offset": 816632,
+   "count": 15006,
+   "kind": "f"
+  },
+  "hero/pos_female_base": {
+   "offset": 876656,
+   "count": 15006,
+   "kind": "f"
+  },
+  "hero/pos_female_fat": {
+   "offset": 936680,
+   "count": 15006,
+   "kind": "f"
+  },
+  "hero/pos_female_thin": {
+   "offset": 996704,
+   "count": 15006,
+   "kind": "f"
+  },
+  "hero/pos_female_muscle": {
+   "offset": 1056728,
+   "count": 15006,
+   "kind": "f"
+  },
+  "hero/pos_female_old": {
+   "offset": 1116752,
+   "count": 15006,
+   "kind": "f"
+  },
+  "hero/pos_female_young": {
+   "offset": 1176776,
+   "count": 15006,
+   "kind": "f"
+  },
+  "hero/pos_female_tall": {
+   "offset": 1236800,
+   "count": 15006,
+   "kind": "f"
+  },
+  "hero/pos_female_short": {
+   "offset": 1296824,
+   "count": 15006,
+   "kind": "f"
+  },
+  "hero/near": {
+   "offset": 1356848,
+   "count": 30000,
+   "kind": "i"
+  },
+  "hero/far": {
+   "offset": 1476848,
+   "count": 9000,
+   "kind": "i"
+  },
+  "hero/bones": {
+   "offset": 1512848,
+   "count": 20008,
+   "kind": "i"
+  },
+  "hero/weights": {
+   "offset": 1592880,
+   "count": 20008,
+   "kind": "f"
+  },
+  "hero/part": {
+   "offset": 1672912,
+   "count": 5002,
+   "kind": "i"
+  },
+  "hero/along": {
+   "offset": 1692920,
+   "count": 5002,
    "kind": "f"
   }
  }

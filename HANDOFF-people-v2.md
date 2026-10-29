@@ -109,6 +109,13 @@ the Framerates?"
 - MeshBuilder needs: multi-bone skinned ranges, a lods dict in commit
   (`{0.2: far_indices}` including extras), a near-only flag, tags.
   build_rig uses the blended joints.
+- Hero mesh (Sachin, 10-29: "Ensure that our hero has much better
+  structure and looks than the NPCs"): a second, denser simplification of
+  the same body, `hero/` blocks beside `crowd/` in body.bin (5002 v, near
+  10000 tris, far 3000; crowd 1502 v, 3000/1000). Only one hero is on
+  screen, so the cost is about 7k tris more than a crowd person. Hero look:
+  athletic (muscle about 0.5, tall about 0.15), the kit's finer `hero`
+  details (sides 12, stripes).
 - Gender: look.body "male"/"female" (random looks: col 1 male, col 2
   female; named looks set it). Shape weights from build, category
   (athlete muscle, elderly old).
@@ -117,3 +124,17 @@ the Framerates?"
 
 - `git ls-tree -l` on a blobless clone fetches every blob; use sparse.
 - `pkill -f <pat>` kills its own shell if the pattern is in the command.
+
+## Hero systems (planned, after the kit integration)
+
+Sachin, 10-29: "We can also setup a skinny, muscular, fat system like in
+GTA for our Hero, and Hair + Beard growth mechanism like from RDR2."
+- Body: hero `fat` and `muscle` stats (0..1) drive the look's weight and
+  muscle blend. Eating (diner meals, store food, bag snacks) adds fat;
+  sprinting, walking and boxing at The Pit burn it; boxing and workouts
+  add muscle; going long without food loses both slowly. Saved with the
+  game; the hero mesh is rebuilt when a stat moves past a step.
+- Hair and beard: lengths grow with game days (hair slower than beard),
+  drawn as length steps of the kit's hair and beard; a barber place trims
+  or styles them for cash. Saved with the game.
+
