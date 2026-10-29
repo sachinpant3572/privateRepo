@@ -34,9 +34,25 @@ Sachin, 2026-10-29, with a 0.25.1 device log (SM-S938B, Ultra, arrows):
   (shadows >= 1.25 x view_depth when backed out) still holds.
 - Near cascade is sharper than before (about 24 m deep against 48 m).
 
-## Settings-close hitch
+## Results (2026-10-29)
 
-- (see Results)
+- perf_probe with the fit as shipped: parked 104k triangles (shadow 74k),
+  fast 114k (shadow 69k), against 201k / 218-226k in 0.25.1.
+- Shots (perf_probe -- <dir>, 15:30, parked and fast, 0.25.1 vs fit): the
+  same shadows, the near ones a touch sharper; draws 92 -> 71, 100 -> 77.
+- Log snap gains `shd_prims` (shadow-pass triangles) for the next log.
+- Tests: test_perspective_camera checks 2 cascades and a reach of
+  1.25-2x view_depth, and 4 cascades / 300 m in classic.
+
+## Settings-close hitch (not changed)
+
+- One 61 ms frame on the frame Settings closed (paused -> playing), with
+  cpu 7.6 / phys 0.7 ms that second: GPU-side (likely the game view's 3D
+  coming back on: disable_3d false, buffers and shadow maps redrawn).
+- perf_probe times the 8 frames after close: no long frame on llvmpipe, so
+  it can't be reproduced here. A one-off on closing a menu, not in play;
+  left as is. If it matters: turn 3D back on two frames before the page
+  hides (close() would turn async; 16 tests call it).
 
 ## Traps
 
