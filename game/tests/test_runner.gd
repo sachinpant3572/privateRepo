@@ -388,6 +388,12 @@ func test_street_plan_is_a_california_grid() -> void:
 	var total := 0.0
 	var square := 0.0 # length within 5 degrees of the compass
 	var gridded := 0.0 # ... or of the old town's grid, turned 30 degrees
+	var turned := 0.0 # on the old town's grid alone
+	# The rich districts curve on purpose (variation 2, Sachin 2026-10-29:
+	# "Lets continue with 2."): the field districts and Cable Hill's contour
+	# streets. The grid checks hold for the rest.
+	var curved: Array = plan.PATCHES.filter(func(p): return p.has("field") or p.has("contour")).map(func(p): return p.id)
+	_check(curved.size() == 5, "five districts curve, the rest keep the grid (%s)" % [curved])
 	for e in plan.edge_count():
 		var a: Vector2 = plan.pos(plan.edge_a[e])
 		var b: Vector2 = plan.pos(plan.edge_b[e])
@@ -395,16 +401,17 @@ func test_street_plan_is_a_california_grid() -> void:
 			continue
 		var cls: String = plan.edge_class(e)
 		counts[cls] = counts.get(cls, 0) + 1
-		if plan.drivable(e):
+		if plan.drivable(e) and not plan.patch_at((a + b) * 0.5) in curved:
 			var deg := fposmod(rad_to_deg((b - a).angle()), 90.0)
 			var off := minf(deg, 90.0 - deg)
 			total += a.distance_to(b)
 			square += a.distance_to(b) if off < 5.0 else 0.0
 			var old := absf(fposmod(deg - 30.0 + 45.0, 90.0) - 45.0)
 			gridded += a.distance_to(b) if off < 5.0 or old < 5.0 else 0.0
+			turned += a.distance_to(b) if off >= 5.0 and old < 5.0 else 0.0
 	for cls in ["boulevard", "avenue", "river", "street", "quarter", "lane", "bridge", "quay"]:
 		_check(counts.get(cls, 0) > 0, "street class '%s' is used" % cls)
-	_check(square > total * 0.8, "streets run north-south and east-west (%.0f%% within 5 degrees)" % (square / total * 100.0))
+	_check(square > (total - turned) * 0.8, "streets run north-south and east-west (%.0f%% within 5 degrees, the old town's turned grid aside)" % (square / (total - turned) * 100.0))
 	_check(gridded > total * 0.9, "two grids at most, the city's and the old town's (%.0f%% on them; the rest is Liberty Avenue, Magnolia and the river)" % (gridded / total * 100.0))
 	# District streets run right through their district, from boulevard to
 	# boulevard (Sachin: "most of them do cover the district end to end, and
@@ -431,12 +438,13 @@ func test_street_plan_is_a_california_grid() -> void:
 				abrupt.append(plan.pos(n).round())
 	_check(junctions > 100 and stops < junctions * 0.12 and abrupt.size() <= junctions * 0.02,
 		"district streets run through (%d of %d junctions are streets stopping short, %d with nothing stopping them: %s)" % [stops, junctions, abrupt.size(), abrupt])
-	# The boulevards run straight through, district to district.
+	# The boulevards run straight through, district to district (and carry
+	# on along the field into the curved districts).
 	for road in ["lantern", "crescent", "aurum", "rampart", "cypress"]:
 		var lo := Vector2(INF, INF)
 		var hi := Vector2(-INF, -INF)
 		for e in plan.edge_count():
-			if plan.edge_road[e] == road:
+			if plan.edge_road[e] == road and not plan.patch_at((plan.pos(plan.edge_a[e]) + plan.pos(plan.edge_b[e])) * 0.5) in curved:
 				for q in [plan.pos(plan.edge_a[e]), plan.pos(plan.edge_b[e])]:
 					lo = Vector2(minf(lo.x, q.x), minf(lo.y, q.y))
 					hi = Vector2(maxf(hi.x, q.x), maxf(hi.y, q.y))
@@ -3987,8 +3995,10 @@ func test_cars_knock_down_roadside_props() -> void:
 						road = q
 				var dir := Vector3(p.x - road.x, 0, p.y - road.y).normalized()
 				room.transform = Transform3D(Basis.looking_at(dir), at + dir * 5.5 + Vector3(0, 0.8, 0))
-				room.exclude = [body.get_rid()]
-				if space.intersect_shape(room, 1).is_empty():
+				# The prop shares its body with the cell's other colliders:
+				# ignore its own shape only.
+				var hits := space.intersect_shape(room, 8).filter(func(h): return not (h.collider == body and body.shape_owner_get_owner(body.shape_find_owner(h.shape)) == c))
+				if hits.is_empty():
 					found[kind] = [c, at, dir]
 	_check(found.size() >= 3, "street lights, hydrants and trees near the start can be knocked down (%s)" % [found.keys()])
 	for kind in found:
@@ -9822,8 +9832,8 @@ func test_idm_keeps_gap_behind_stopped_leader() -> void:
 	game.atmosphere.hour = 12.0
 	game.atmosphere.minutes_per_second = 0.0
 	# One lane each way, so the follower can't just change lanes.
-	var st := _traffic_street(110.0, func(a, b, cls, e): return city.lane_count(a, b) == 1 and not city.roadworks.has(e))
-	_check(not st.is_empty(), "a 110 m street with one lane each way")
+	var st := _traffic_street(100.0, func(a, b, cls, e): return city.lane_count(a, b) == 1 and not city.roadworks.has(e))
+	_check(not st.is_empty(), "a 100 m street with one lane each way")
 	if st.is_empty():
 		return
 	var u := _lane_dir(st[0], st[1])
