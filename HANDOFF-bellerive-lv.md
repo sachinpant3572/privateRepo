@@ -145,9 +145,6 @@ A's 1-2 curved roads, roundabouts and the hand-placed set pieces. Four mix
 variations: reference/world/mix_options_sketch.png (game/tools/mix_sketch.py).
 Waiting for his pick of 1-4. In the sketch, field arterials don't always meet
 the roundabouts; in the build, put roundabouts where field arterials cross.
-- Drafted, never run (street_plan.gd): CURVES (Mirador from Lantern (330,-280)
-  out the NW edge; Canyon in the NE lobe) cut into `_holes` as 1 m strips;
-  BOWS bend east-west rows by amp*sin(pi*t) (Morrow Point north, Calle Luna
-  seaward, ramped from Crescent). The sketch shows the bows also need a ramp
-  away from the levee and from Seagrape, and a shore parkway 75 m inland.
+- Drafted, never run (street_plan.gd): CURVES (Mirador, Canyon) and BOWS
+  (amp*sin(pi*t) row bends); superseded by the mix once Sachin picks.
 - Map (#107): vector map after the curves settle.
