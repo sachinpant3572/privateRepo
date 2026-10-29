@@ -54,7 +54,9 @@ static func height(x: float, z: float) -> float:
 		return 0.0
 	var u := (x - origin.x) / cell
 	var v := (z - origin.y) / cell
-	if u < 0.0 or v < 0.0 or u >= nx - 1 or v >= ny - 1:
+	# Written so a NaN or infinite point (no comparison holds) reads as off
+	# the grid instead of indexing at int(NaN).
+	if not (u >= 0.0 and v >= 0.0 and u < nx - 1 and v < ny - 1):
 		return 0.0
 	var i := int(u)
 	var j := int(v)
