@@ -140,6 +140,10 @@ the Framerates?"
   (output vertex = source a, b, t, region; skin mix; wound near/far
   indices; per-vertex region mask for the push). A build only lerps.
   fit() uses per-mesh edge and limb vertex lists instead of whole sweeps.
+  Measured (12 category looks, this container, ms): crowd add_body 21.1 ->
+  1.2 with the recipe cached, 12-13 for a new recipe (LRU of 64 dresses);
+  fit 5.8 -> 3.5 (results byte-identical); whole CharacterKit.build 25.5 ->
+  about 5. Hero add_body 4.1 cached / 32 new, whole build about 8-14 (was 85).
 - Hats: covering headwear sets the scalp thickness to 0 (no hair through).
 - T-junctions: three-region triangles split as a fan through a centre
   point; whole-region triangles (hidden corner) take their neighbours'

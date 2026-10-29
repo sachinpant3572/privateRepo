@@ -54,7 +54,7 @@ func _run() -> void:
 		"test_failed_mission_can_be_retried",
 		"test_empty_rooms_phone_and_clues",
 		"test_lantern_lights_ambush",
-		"test_body_kit_builds_bodies", "test_people_wear_modern_clothes",
+		"test_body_kit_builds_bodies", "test_body_seams_hats_and_build_time", "test_people_wear_modern_clothes",
 		"test_people_dress_for_their_kind", "test_reactions_by_kind_of_person", "test_reaction_starts_on_time",
 		"test_people_notice_by_sight_and_sound", "test_poses_stay_in_joint_limits", "test_crowd_reacts_to_a_punch",
 		"test_people_dodge_cars_and_get_up", "test_cops_investigate_off_duty", "test_people_sit_on_benches",
@@ -2638,6 +2638,51 @@ func test_body_kit_builds_bodies() -> void:
 	_check(waist.call(fat) > waist.call(slim) * 1.3, "fat widens the waist (%.3f vs %.3f)" % [waist.call(fat), waist.call(slim)])
 	_check(tall.joints.Head.y > slim.joints.Head.y + 0.05, "tall raises the head (%.2f vs %.2f)" % [tall.joints.Head.y, slim.joints.Head.y])
 	_check(is_same(BodyKit.blend({"body": "female", "weight": 1.0}), fat), "a blended look is cached")
+
+## Colour borders leave no cracks (near level, welded by position, bare feet
+## so nothing is hidden), a hat flattens the hair, and a rebuild of a seen
+## dress only blends (the cut recipe is cached).
+func test_body_seams_hats_and_build_time() -> void:
+	const BodyKit = preload("res://scripts/kits/body_kit.gd")
+	const MeshBuilder = preload("res://scripts/mesh_builder.gd")
+	var o := {"outfit": "tee", "bottoms": "shorts", "skin": Color(0.8, 0.6, 0.5), "top": Color(0.2, 0.3, 0.8),
+		"sleeve": Color(0.2, 0.3, 0.8), "pants": Color(0.2, 0.2, 0.3), "sleeves": "short", "shoe_style": "slides"}
+	for look in [{"body": "male", "beard": true, "hair": "fade"}, {"body": "female", "hair": "long", "weight": 0.6}]:
+		for mesh in ["crowd", "hero"]:
+			var mb := MeshBuilder.new()
+			BodyKit.add_body(mb, look, o, mesh)
+			var near: PackedInt32Array = mb.lod_indices()[0]
+			var id := {}
+			var weld := PackedInt32Array()
+			for v in mb.verts:
+				var k := Vector3i((v * 20000.0).round())
+				if not id.has(k):
+					id[k] = id.size()
+				weld.append(id[k])
+			var edges := {}
+			for t in range(0, near.size(), 3):
+				for e in 3:
+					var a := weld[near[t + e]]
+					var c := weld[near[t + (e + 1) % 3]]
+					if a != c:
+						var key := Vector2i(mini(a, c), maxi(a, c))
+						edges[key] = edges.get(key, 0) + 1
+			var open := 0
+			for key in edges:
+				open += 1 if edges[key] == 1 else 0
+			_check(open == 0, "%s %s: %d open edges at colour borders" % [mesh, look.body, open])
+	for hat in [{"headwear": "cap"}, {"hair": "beanie"}]:
+		var d: Dictionary = BodyKit._dress(hat, o)
+		_check(d.thick[BodyKit.SCALP] == 0.0, "no hair through a hat (%s)" % [hat])
+	_check(BodyKit._dress({"hair": "afro"}, o).thick[BodyKit.SCALP] > 0.01, "an afro stands off the head")
+	var look := {"body": "male", "weight": 0.3, "beard": true}
+	BodyKit.add_body(MeshBuilder.new(), look, o)
+	var t0 := Time.get_ticks_usec()
+	for i in 5:
+		look["muscle"] = 0.1 * i
+		BodyKit.add_body(MeshBuilder.new(), look, o)
+	var ms := (Time.get_ticks_usec() - t0) / 5000.0
+	_check(ms < 12.0, "a crowd body with a seen dress builds in %.1f ms" % ms)
 
 ## Every outfit and the named cast build as one rigidly skinned mesh within
 ## the triangle budget; random looks vary; old look keys still work; a phone
