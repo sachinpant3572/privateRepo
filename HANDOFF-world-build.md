@@ -9,9 +9,8 @@ and for freightlines too this will cover every district, cover the mountain
 cross it in between too. Build this too as best as possible." / underpasses
 and tunnels: "No this wont be skipped. We will build everything."
 
-Research behind it: reference/world/map_and_mountain_research.md.
-#105 (Bellerive at LV size) folds into phase 1: its open test failures are
-on the street plan that phase 1 rewrites.
+Research: reference/world/map_and_mountain_research.md. #105 (Bellerive at
+LV size) folds into phase 1 (its failures are on the plan phase 1 rewrites).
 
 ## Phases (rough cost; order fixed by dependencies)
 
@@ -75,9 +74,8 @@ helipad needs helicopters: task #82, not started (Sachin's word needed).
   boulevard medians (Aurum past Union Station (390,166)), own viaduct
   elsewhere; built in phase 4 on phase 3's decks.
 
-- **Measured (2026-10-29)**: city land 4.22 km² (fill 0.63), on target
-  (Las Venturas 4.1-4.3). Core outline bulges a block east of Tamarind
-  (world (8060, 6690)) so the edge doesn't run straight 423 m.
+- **Measured (2026-10-29)**: city land 4.22 km² (fill 0.63, LV 4.1-4.3).
+  Core bulges a block east of Tamarind (world (8060, 6690)).
 - **Integration with phase 2 (2026-10-29)**, after the first regeneration
   left 37 plan exits unlinked:
   - Core notch at Aurum (local x 1180-1500, y -120..190) removed: it cut
@@ -106,16 +104,16 @@ helipad needs helicopters: task #82, not started (Sachin's word needed).
     0.05. Grid-border and rail-shelf checks count only play-area cells (the
     taper band outside it still rises); the suburb walk test stands on the
     loop with the highest share of suburb sidewalk (framed loops hug the edge).
-  - city.gd loads every world_map region for `district_at` (phase 3+ after
-    1-2): the summit lies in Red Pine (phase 3) and read "Jade Gate".
-  - Review fixes: freight_line keeps out of the city (pass foot → Morrow
-    east bank (-545,-615) → Golden Flats); `freight_docks` spur runs 92 m
-    off the river's centre into the FREIGHT_STRIP to Rampart; east of it
-    the docks and Ironwharf get street running in the quay street (phase
-    4). `walks_out` carries linked road ends the FRAME_IN 4 m on to the
-    edge street (unclosed faces had cut the walks). mountain.py `grid()`
-    pads 7 cells and tapers the outer 6 to 0 (the border stepped 4.5 m).
-    Exits test stays at 30 m ahead (120 m hid 7 unlinked exits).
+  - city.gd loads every world_map region for `district_at` (the summit, in
+    phase 3's Red Pine, read "Jade Gate"). Review: `walks_out` carries road
+    ends FRAME_IN 4 m on; mountain.py `grid()` pads 7 cells tapering to 0.
+  - Freight (mountain_world_map.py, second review): the main line leaves
+    the pass 700 m short of its city-facing foot (south on x -340), turns
+    west at (-340,-1000) over the Morrow, runs between County Roads 14 and
+    12 square to the range roads. Docks spur: a turnout there, down the east
+    bank 92 m off the river, into FREIGHT_STRIP. `walls()` drops a bridge
+    run's bank segment a rail crosses (level crossing on land).
+    test_freight_line_crosses_cleanly checks it.
 
 ## Decided
 
@@ -137,6 +135,9 @@ helipad needs helicopters: task #82, not started (Sachin's word needed).
 
 - Golden Flats Expressway and phase 2 roads on the new west flank: re-route
   or pass; settle with the terrain sketch in phase 2.
+- Phase 3: the freight line and its spur cross the Solvera Line (being
+  built) twice, and the pass shares Route 9 for ~400 m (rails at grade in the
+  road): flyovers / its own shelf there. Phase 4: Lantern Blvd crossing.
 
 ## Traps
 
@@ -146,4 +147,3 @@ helipad needs helicopters: task #82, not started (Sachin's word needed).
   ART_JOIN 45 m.
 - Cable Hill: a ring within ~75 m of the crest grazes Mirador and the hug
   check drops it whole (with the radials' inner ends).
-- Plan renders: a view script on a `tests/plan_dump.gd` dump; blue = no face.

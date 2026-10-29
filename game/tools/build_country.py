@@ -2464,6 +2464,18 @@ class Country:
                     walls.append([round(piece[0][0], 2), round(piece[0][1], 2), round(piece[1][0], 2), round(piece[1][1], 2),
                                   self._wall_kind(piece[0], piece[1])])
         self.wall_list = walls
+        # A rail that crosses a run's bank segment crosses the road there at
+        # grade, on land: the deck stops short of it (the wall gap above keeps
+        # the whole run).
+        rails = [rl[0] for rl in self.rails]
+        for run in bridge_runs:
+            nodes = self.roads[run["road"]]["nodes"]
+            for k, end in ((run["from"], "from"), (run["to"] - 1, "to")):
+                if run[end] == run["water"][0 if end == "from" else 1] or run["to"] - run["from"] < 2:
+                    continue
+                seg = LineString([self.nodes[nodes[k]], self.nodes[nodes[k + 1]]])
+                if any(seg.intersects(rl) for rl in rails):
+                    run[end] += 1 if end == "from" else -1
         self.bridges = bridge_runs
 
     def _wall_kind(self, a, b):
@@ -2497,7 +2509,7 @@ class Country:
                 s0 = max(0, s - 1)
                 s1 = min(n, k + 1)
                 pts = [self.nodes[road["nodes"][i]] for i in range(s0, s1 + 1)]
-                runs.append({"road": r, "from": s0, "to": s1, "pts": pts, "w": CLASSES[CLASS_NAMES[road["cls"]]]["w"]})
+                runs.append({"road": r, "from": s0, "to": s1, "water": (s, k), "pts": pts, "w": CLASSES[CLASS_NAMES[road["cls"]]]["w"]})
         return runs
 
     # --- Lots ---------------------------------------------------------------------

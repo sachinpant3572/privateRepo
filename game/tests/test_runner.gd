@@ -99,7 +99,7 @@ func _run() -> void:
 		"test_traffic_drives_into_the_country", "test_traffic_turns_round_at_barricades",
 		"test_country_kit_builds_every_kind",
 		"test_country_plots_square_to_their_roads", "test_estates_and_clusters", "test_grounds_kit_builds_every_part",
-		"test_bellerive_hills", "test_mount_calder", "test_golden_flats_farmland", "test_every_home_has_a_way_in", "test_homes_by_wealth",
+		"test_bellerive_hills", "test_mount_calder", "test_freight_line_crosses_cleanly", "test_golden_flats_farmland", "test_every_home_has_a_way_in", "test_homes_by_wealth",
 		"test_new_home_kinds_and_live_cars", "test_people_walk_the_suburbs", "test_suburb_home_cars_are_live",
 		"test_road_surfaces_and_roadworks", "test_traffic_flows_past_roadworks", "test_boundaries_vary_by_household",
 		"test_game_log_file_and_rotation", "test_game_log_snapshot_and_events", "test_game_log_report_copy_and_off",
@@ -6244,6 +6244,109 @@ func test_mount_calder() -> void:
 	# The cable car: from the city's north edge, by a mid-station, to the top.
 	var st: Array = m.cable.stations
 	_check(st.size() == 3 and float(st[0].z) < 5.0 and float(st[2].z) > 900.0, "the cable car climbs from the city to the top (%s)" % [st])
+
+
+## The freight line off the pass and its docks spur (second review): every
+## road they cross they cross at grade and at 30 degrees or more (never on a
+## bridge deck, never running along it), they keep 4 m off every lot, and
+## they bend no tighter than a 150 m radius (the line once doubled back at
+## the pass's foot). The pass itself is checked in test_mount_calder.
+func test_freight_line_crosses_cleanly() -> void:
+	await _new_game(false)
+	var c = game.city.country
+	var plan = game.city.plan
+	var pass_pts := PackedVector2Array()
+	for q: Array in c.rail_pass.get("pts", []):
+		pass_pts.append(Vector2(q[0], q[1]))
+	var deck := []
+	var shallow := []
+	var runs := []
+	var near := []
+	var tight := []
+	var samples := PackedVector2Array()
+	var length := 0.0
+	for rl: Dictionary in c.rails:
+		if not str(rl.name).begins_with("Morrow Freight Line"):
+			continue
+		var pts := PackedVector2Array()
+		for q: Array in rl.pts:
+			pts.append(Vector2(q[0], q[1]))
+		var run := 0.0
+		var run_w := 0.0
+		for k in range(1, pts.size()):
+			var a := pts[k - 1]
+			var b := pts[k]
+			var dir := (b - a).normalized()
+			if k >= 2:
+				var turn := absf((a - pts[k - 2]).angle_to(b - a))
+				var step := minf(a.distance_to(pts[k - 2]), a.distance_to(b))
+				if turn > 0.01 and step / turn < 150.0 and tight.size() < 4 and not _near_line(a, pass_pts, 12.0):
+					tight.append([a.round(), roundf(step / turn)])
+			for i in int(ceilf(a.distance_to(b) / 2.0)):
+				var p := a.lerp(b, i * 2.0 / a.distance_to(b))
+				if _near_line(p, pass_pts, 12.0) or not c.in_play_area(p):
+					run = 0.0
+					continue
+				samples.append(p)
+				length += 2.0
+				if plan.in_city(p):
+					run = 0.0
+					continue
+				var on_w := -1.0
+				for n in c.nodes_near(p, 60.0):
+					for e in c.edges_of(n):
+						var na: Vector2 = c.pos(c.edge_a[e])
+						var nb: Vector2 = c.pos(c.edge_b[e])
+						if p.distance_to(Geometry2D.get_closest_point_to_segment(p, na, nb)) < c.edge_width(e) * 0.5 + 2.0:
+							on_w = maxf(on_w, c.edge_width(e))
+				if on_w < 0.0:
+					run = 0.0
+					continue
+				run += 2.0
+				run_w = on_w if run <= 2.0 else maxf(run_w, on_w)
+				if run > 2.0 * (run_w + 4.0) + 8.0 and runs.size() < 4:
+					runs.append(p.round())
+					run = -INF
+			# Its crossings.
+			for n in c.nodes_near((a + b) * 0.5, a.distance_to(b) * 0.5 + 60.0):
+				for e in c.edges_of(n):
+					var na: Vector2 = c.pos(c.edge_a[e])
+					var nb: Vector2 = c.pos(c.edge_b[e])
+					var x = Geometry2D.segment_intersects_segment(a, b, na, nb)
+					if x == null or _near_line(x, pass_pts, 12.0) or not c.in_play_area(x):
+						continue
+					if c.bridge_edges.has(e) and deck.size() < 4:
+						deck.append("%s at %s" % [c.road_name(e), Vector2(x).round()])
+					var ang := absf(dir.angle_to(nb - na))
+					ang = minf(ang, PI - ang)
+					if ang < deg_to_rad(30.0) and shallow.size() < 4:
+						shallow.append("%s %.0f deg at %s" % [c.road_name(e), rad_to_deg(ang), Vector2(x).round()])
+	_check(length > 3000.0, "the freight line and its spur run %.0f m in the play area off the pass" % length)
+	_check(deck.is_empty(), "they cross no road on a bridge deck (%s)" % str(deck))
+	_check(shallow.is_empty(), "they cross every road at 30 degrees or more (%s)" % str(shallow))
+	_check(runs.is_empty(), "they run along no road outside the city (%s)" % str(runs))
+	_check(tight.is_empty(), "they bend no tighter than 150 m (%s)" % str(tight))
+	var cells := {}
+	for p in samples:
+		cells[Vector2i(floori(p.x / 50.0), floori(p.y / 50.0))] = cells.get(Vector2i(floori(p.x / 50.0), floori(p.y / 50.0)), []) + [p]
+	for l: Array in c.lots:
+		var at := Vector2(l[0], l[1])
+		var cell := Vector2i(floori(at.x / 50.0), floori(at.y / 50.0))
+		for dx in range(-1, 2):
+			for dy in range(-1, 2):
+				for p: Vector2 in cells.get(cell + Vector2i(dx, dy), []):
+					var q := (p - at).rotated(-float(l[2]))
+					var d := Vector2(maxf(absf(q.x) - float(l[3]) * 0.5, 0.0), maxf(absf(q.y) - float(l[4]) * 0.5, 0.0)).length()
+					if d < 4.0 and near.size() < 4 and not near.has(at.round()):
+						near.append(at.round())
+	_check(near.is_empty(), "they keep 4 m off every lot (%s)" % str(near))
+
+
+func _near_line(p: Vector2, line: PackedVector2Array, r: float) -> bool:
+	for k in range(1, line.size()):
+		if p.distance_to(Geometry2D.get_closest_point_to_segment(p, line[k - 1], line[k])) < r:
+			return true
+	return false
 
 
 ## Sachin: "Ensure there are routes leading to all houses from the street or

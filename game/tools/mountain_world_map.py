@@ -14,6 +14,7 @@ from pathlib import Path
 
 import mountain as M
 from shapely.geometry import LineString, Point
+from shapely.ops import substring
 import numpy as np
 
 P = Path(__file__).resolve().parent.parent / "data" / "world_map.json"
@@ -73,25 +74,38 @@ fr = routes["freight_line"]
 o = [(x - OX, y - OY) for x, y in orig_routes["freight_line"]["line"]]
 rp = simp([tuple(p) for p in lines["rail_pass"]["pts"]], 1.0)
 assert abs(rp[0][0] - o[4][0]) < 1 and abs(rp[0][1] - o[4][1]) < 1, (rp[0], o[4])
-# From the pass's foot it keeps out of the city (the sketch ran it over Cable
-# Hill's crest and the cable car's bottom station): west to the Morrow's east
-# bank at FREIGHT_JUNCTION, then over the river to Golden Flats as before.
-# The docks spur runs down the bank FREIGHT_BANK m off the river's centreline
-# into the city's freight strip on the north bank (street_plan.gd
-# FREIGHT_STRIP: water's edge 80 m, River Road 106 m), along it to Rampart
-# Avenue; past Rampart the docks and Ironwharf take it in the quay street.
-FREIGHT_JUNCTION = (-545.0, -615.0)
+# The pass ends at its foot (-50, -850) heading east-southeast, toward the
+# city; the line now goes west, so it leaves the pass FREIGHT_BRANCH m short
+# of the foot, where the shelf runs straight south along x -340, and turns
+# west at FREIGHT_TURN over the Morrow, north of the Golden Flats Expressway
+# (the river's crossing by the expressway is a bridge); from FREIGHT_WEST it
+# runs west between County Roads 14 and 12, square to the Golden Flats grid's
+# range roads (clear of Ridley Crossing and the airstrip). The docks spur carries on
+# straight south from the branch (a turnout), down to the Morrow's east bank
+# FREIGHT_BANK m off the river's centreline, over the expressway on land, and
+# along the bank into the city's freight strip on the north bank (street_plan.gd
+# FREIGHT_STRIP: water's edge 80 m, River Road 106 m) to Rampart Avenue; past
+# Rampart the docks and Ironwharf take it in the quay street.
+FREIGHT_BRANCH = 700.0
+FREIGHT_TURN = (-340.0, -1000.0)
+FREIGHT_WEST = (-1250.0, -1300.0)
+SPUR_BEND = (-340.0, -960.0)
+SPUR_ON_BANK = (-545.0, -615.0)
 FREIGHT_BANK = 92.0
 FREIGHT_END_X = 680.0
-fr["line"] = W([o[0]] + rp[::-1] + [(-300.0, -760.0), FREIGHT_JUNCTION] + o[6:])
+pl = LineString(rp[::-1])
+head = [tuple(q) for q in substring(pl, 0.0, pl.length - FREIGHT_BRANCH + 50.0).coords]
+assert abs(head[-1][0] - FREIGHT_TURN[0]) < 1.0, head[-1]
+fr["line"] = W([o[0]] + head + [FREIGHT_TURN, FREIGHT_WEST] + o[7:])
 changed.append("freight_line")
 river = LineString([(x - OX, y - OY) for x, y in next(t for t in w["water"] if t["id"] == "morrow")["line"]])
 bank = river.offset_curve(-FREIGHT_BANK, join_style=1)
 if bank.distance(Point(450.0, 1125.0 - FREIGHT_BANK)) > 5.0:
     bank = river.offset_curve(FREIGHT_BANK, join_style=1)
-a = bank.project(Point(FREIGHT_JUNCTION))
-pts = [bank.interpolate(s).coords[0] for s in np.arange(a + 60.0, bank.length, 20.0)]
-pts = [FREIGHT_JUNCTION] + [p for p in pts if p[0] <= FREIGHT_END_X or p[1] < -100.0]
+a = bank.project(Point(SPUR_ON_BANK))
+pts = [bank.interpolate(s).coords[0] for s in np.arange(a, bank.length, 20.0)]
+pts = [p for p in pts if p[0] <= FREIGHT_END_X or p[1] < -100.0]
+pts = [substring(pl, 0.0, pl.length - FREIGHT_BRANCH).coords[-1], SPUR_BEND] + pts
 spur = next((r for r in w["routes"] if r["id"] == "freight_docks"), None)
 if spur is None:
     spur = {"id": "freight_docks", "name": "Morrow Freight Line (docks spur)", "type": "rail", "phase": fr.get("phase", 3)}
