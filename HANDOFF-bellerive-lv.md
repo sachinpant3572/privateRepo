@@ -90,3 +90,26 @@ planned size" rule for the city; #104 (organic outline) carries on inside it.
 - perf_probe on the trimmed city (2026-10-29): parked 123k triangles
   (shadow 84k), fast 145k (shadow 88k), against 104k / 114k in 0.25.2.
   To fix before the APK.
+
+## Built (2026-10-29)
+
+- Styles: **painted** (Cable Hill, Victorian rows), **chinatown** (Jade Gate,
+  `chinatown_row`), **havana** (Calle Luna, `havana_row`, bungalows),
+  **beach** (Brisa Beach, `deco_hotel` on Ocean Drive, condos behind). Kits
+  in civic_kit.gd (~2091-2249); style tables in map_image, traffic, sky,
+  vehicle. Shots: `SHOTS=lv` (6 stops, prints each stop's district).
+- Small-lot guards: a Deco hotel needs hx >= 9 and hz >= 8 (else
+  `_downtown`); `_tower` keeps h >= 8 m (its lobby is 4.6 m; `_downtown(0.4)`
+  rolled 4.4 m, a negative BoxShape3D in Calle Luna).
+- Kit checks (civic/shady/skyline_check) accept a 4th collider field (the
+  breakable Dictionary city.gd reads), as city.gd does.
+
+## Traps (this task)
+
+- Godot `Geometry2D.is_point_in_polygon` counts both edges when its ray
+  grazes a vertex: a point 290 m outside the city read as inside. The tests
+  use `_in_polygon` (even-odd along +x, half-open) in test_runner.gd.
+- test_places_line_the_streets: country suburb shops "Levee Mart" (576,1860)
+  and "Sunrise Grocery" (1852,1510) now sit inside the grown core, so city
+  colliders block their doorsteps. The country agent's regeneration clips
+  country plots out of the core; rerun that test after merging it.
