@@ -44,7 +44,15 @@ PLATEAU_R = 85.0
 CONE_R = [1650, 1600, 1600, 1600, 1600, 1750, 1700, 1600]  # N, NE, E, SE, S, SW, W, NW
 CONE_P = [1.2, 1.25, 1.3, 1.3, 1.3, 1.3, 1.3, 1.25]
 KNOB = (978.0, -2788.0, 12.0)  # the summit's rock knob: x, y, height over the plateau
-APRON = (620.0, 2700.0, 1.7)  # the gullies' floor: height at the summit, reach, power
+# The gullies' floor: height at the summit, reach by bearing (as CONE_R), power.
+APRON = (620.0, [2350, 2550, 2500, 2450, 2600, 2300, 2050, 2050], 1.7)
+# Water (W-2): the range stops at the Morrow, which runs round its west and
+# north foot in a gorge (the West Ridge ends in it; Cinder Ridge rises past
+# it). Ground near water is held under WALL x (distance past BANK); past the
+# river (the FAR side) the range fades out over FAR_FADE.
+WALL = 0.55
+BANK = 10.0
+FAR_FADE = 260.0
 CITY_FADE = 260.0  # the range rises from 0 over this far from the city and its Beltway (self.flat)
 
 # Crests the ground falls away from: [(x, y, height)...], width (m).
@@ -70,7 +78,7 @@ FOOT_RISE = 0.9
 CRESTS = [
     # West Ridge: Raven Peak, on toward Cinder Ridge past Pine Knob.
     ([(950, -2750, 990), (790, -2880, 810), (580, -3030, 700), (400, -3180, 790), (200, -3330, 610),
-      (40, -3470, 520), (-160, -3640, 590), (-450, -3880, 380), (-750, -4130, 210), (-950, -4380, 60)], 0.43),
+      (40, -3470, 520), (-160, -3640, 590), (-450, -3880, 300), (-750, -4130, 190), (-950, -4380, 60)], 0.43),
     # East Ridge: East Peak, falling into the Verdant Hills.
     ([(950, -2750, 990), (1200, -2840, 790), (1450, -2900, 640), (1760, -2880, 780), (2050, -2760, 560),
       (2300, -2590, 400), (2550, -2430, 190), (2750, -2300, 30)], 0.43),
@@ -162,16 +170,48 @@ class Mountain:
         self.ridged = [(rng.uniform(-1.0, 1.0, (64, 64)), 260.0, 0.07), (rng.uniform(-1.0, 1.0, (64, 64)), 110.0, 0.03)]
         k = np.fft.rfft(np.array(CONE_R, dtype=float))
         kp = np.fft.rfft(np.array(CONE_P, dtype=float))
-        self._cone_k = (k, kp)
-        self.profiles = []  # [LineString, s samples, z samples, half width, bank]
+        ka = np.fft.rfft(np.array(APRON[1], dtype=float))
+        self._cone_k = (k, kp, ka)
+        self._water(world)
+        self.profiles = []  # [LineString, s samples, z samples, half width, bank, spans]
         self.poly = self._outline()
         self.boundary = self.poly.exterior
+
+    def _water(self, world):
+        """The water near the range (local), and the far side of the Morrow."""
+        o = next(c for c in world["cities"] if c["id"] == "bellerive")["demo_window"]["origin"]
+        near = shapely.box(-2500.0, -6000.0, 4500.0, 500.0)
+        parts = []
+        for wt in world["water"]:
+            if "polygon" in wt:
+                g = Polygon([(x - o[0], y - o[1]) for x, y in wt["polygon"]]).buffer(0)
+            elif wt["type"] in ("river", "creek"):
+                g = LineString([(x - o[0], y - o[1]) for x, y in wt["line"]]).buffer(wt["width"] * 0.5)
+            else:
+                continue
+            if g.intersects(near):
+                parts.append(g.intersection(near))
+            if wt.get("id") == "morrow":
+                riv = [(x - o[0], y - o[1]) for x, y in wt["line"]]
+        self.water_geom = unary_union(parts)
+        shapely.prepare(self.water_geom)
+        # The far side: west and north of the river from where it leaves the
+        # flats (-450, -1350) to where it turns north (1150, -5150).
+        i0 = riv.index((1150, -5150))
+        i1 = riv.index((-450, -1350))
+        arc = riv[i0:i1 + 1]
+        self.river_arc = LineString(arc)
+        self.far = Polygon(arc + [(-3500.0, arc[-1][1]), (-3500.0, -7000.0), (arc[0][0], -7000.0)]).buffer(0)
+        shapely.prepare(self.far)
 
     # --- The ground's own shape -------------------------------------------------
 
     @staticmethod
-    def _value(grid, xs, ys, wave):
-        u, v = xs / wave, ys / wave
+    def _value(grid, xs, ys, wave, ang=0.0):
+        # Each octave's lattice is turned by its own angle, so no octave lines
+        # up with the map's axes (no straight bands across the range).
+        c, s = math.cos(ang), math.sin(ang)
+        u, v = (xs * c - ys * s) / wave, (xs * s + ys * c) / wave
         i0, j0 = np.floor(u).astype(int), np.floor(v).astype(int)
         fu, fv = u - i0, v - j0
         fu, fv = fu * fu * (3 - 2 * fu), fv * fv * (3 - 2 * fv)
@@ -182,10 +222,10 @@ class Mountain:
 
     def _noise(self, xs, ys, h):
         out = np.zeros_like(xs)
-        for grid, wave, amp, per_m in self.lattice:
-            out += self._value(grid, xs, ys, wave) * (amp + per_m * h)
-        for grid, wave, per_m in self.ridged:
-            out += (0.5 - 2.0 * np.abs(self._value(grid, xs, ys, wave))) * per_m * h
+        for n, (grid, wave, amp, per_m) in enumerate(self.lattice):
+            out += self._value(grid, xs, ys, wave, 0.47 + 0.71 * n) * (amp + per_m * h)
+        for n, (grid, wave, per_m) in enumerate(self.ridged):
+            out += (0.5 - 2.0 * np.abs(self._value(grid, xs, ys, wave, 0.23 + 0.83 * n))) * per_m * h
         return out
 
     @staticmethod
@@ -201,7 +241,7 @@ class Mountain:
         dx, dy = xs - SUMMIT[0], ys - SUMMIT[1]
         r = np.hypot(dx, dy)
         b = np.arctan2(dx, -dy)
-        k, kp = self._cone_k
+        k, kp, _ka = self._cone_k
         # Spurs and gullies all round: the foot wanders in and out.
         R = self._trig(k, b) * (1.0 + 0.1 * np.sin(7.0 * b + 1.3) + 0.06 * np.sin(12.0 * b + 0.4))
         p = self._trig(kp, b)
@@ -227,26 +267,37 @@ class Mountain:
     def _base(self, xs, ys):
         """The smooth shape, before noise."""
         massif = self._cone(xs, ys)
-        ah, ar, ap = APRON
+        ah, _ar, ap = APRON
+        b = np.arctan2(xs - SUMMIT[0], -(ys - SUMMIT[1]))
+        ar = self._trig(self._cone_k[2], b)
         apron = ah * np.clip(1.0 - np.hypot(xs - SUMMIT[0], ys - SUMMIT[1]) / ar, 0.0, 1.0) ** ap
         massif = _smax(massif, apron, SMAX)
+        pts_ = shapely.points(xs, ys)
+        far = shapely.contains(self.far, pts_)
+        dfar = np.where(far, shapely.distance(self.river_arc, pts_), 0.0)
+        keep = 1.0 - _smooth(np.clip(dfar / FAR_FADE, 0.0, 1.0))
         for pts, slope in CRESTS:
             d, hc = self._along(xs, ys, pts)
             # Steeper sides high up: deep gullies between the upper spurs,
             # gentler slopes into the flats.
             s = slope * (1.0 + CREST_STEEP * np.clip(hc / 1000.0, 0.0, 1.0))
             massif = _smax(massif, hc - s * (np.sqrt(d * d + CREST_ROUND ** 2) - CREST_ROUND), SMAX)
+        massif = np.maximum(massif, 0.0) * keep
         kx, ky, kh = KNOB
         massif = massif + kh * np.exp(-((xs - kx) ** 2 + (ys - ky) ** 2) / (24.0 ** 2))
-        du = shapely.distance(shapely.points(xs, ys), self.flat)
+        du = shapely.distance(pts_, self.flat)
         massif = np.maximum(massif, 0.0) * _smooth(np.clip(du / CITY_FADE, 0.0, 1.0))
         foot = np.zeros_like(xs)
         for pts, width in RIDGES:
             d, hc = self._along(xs, ys, pts)
             foot = np.maximum(foot, hc * np.exp(-(d / width) ** 2))
         foot *= 1.0 + FOOT_RISE * _smooth(np.clip((-ys - 560.0) / 700.0, 0.0, 1.0))
-        foot *= _smooth(np.clip(du / CITY_FADE, 0.0, 1.0))
-        return _smax(massif, foot, SMAX)
+        foot *= _smooth(np.clip(du / CITY_FADE, 0.0, 1.0)) * keep
+        h = _smax(massif, foot, SMAX)
+        # Down to the water: a gorge wall, rounded at its foot and its lip.
+        dw = shapely.distance(self.water_geom, pts_)
+        wall = WALL * (dw - BANK) + 2.0 * np.maximum(dw - 500.0, 0.0)  # a gorge, not the whole range
+        return np.maximum(_smin(h, wall, 30.0), 0.0)
 
     def raw(self, xs, ys):
         """Height of the untouched ground at arrays of points (0 off the range)."""
@@ -295,157 +346,78 @@ class Mountain:
         b = hh[j + 1, i] * (1 - fu) + hh[j + 1, i + 1] * fu
         return a * (1 - fv) + b * fv
 
-    def trace(self, start, heading, grade, spine=None, half=300.0, goal=None, stop=None, avoid=None, others=(),
-              step=8.0, turn=24.0, hairpin_r=15.0, sep=36.0, max_len=16000.0, top=None, pull=3.0):
-        """A line up the ground at about `grade`, as a road builder lays one:
-        each step takes the heading (within `turn` degrees of the last) whose
-        ground rises closest to grade x step, keeping `sep` clear of its own
-        earlier legs and of `others` (lines). With a `spine` (a line up a
-        spur) it zigzags across it, turning in a hairpin of `hairpin_r` when
-        it is `half` off to either side. It heads for `goal` once the goal is
-        within its grade, and stops there, at height `top`, or when
-        stop(point) says so. heading in degrees (0 = east, 90 = south)."""
-        pts = [tuple(start)]
-        h = math.radians(heading)
-        z = float(self.ground([start[0]], [start[1]])[0])
-        side = 0
-        if spine is not None:
-            side = 1 if self._offset(spine, start, h) >= 0.0 else -1
-        length = 0.0
-        own_gap = math.pi * hairpin_r + 60.0
-        other_pts = np.array([q for ln in others for q in _dense(ln, 6.0)]) if others else np.zeros((0, 2))
-        cand = np.radians(np.linspace(-turn, turn, 13))
-        while length < max_len:
-            p = pts[-1]
-            if goal is not None:
-                dg = math.dist(p, goal)
-                if dg < step * 1.5:
-                    pts.append(tuple(goal))
-                    break
-                reach = float(self.ground([goal[0]], [goal[1]])[0]) - z <= grade * 1.05 * dg
-            else:
-                reach = False
-            th = h + cand
-            qx, qy = p[0] + step * np.cos(th), p[1] + step * np.sin(th)
-            rise = (self.ground(qx, qy) - z) / step
-            over = np.maximum(rise - grade, 0.0)
-            cost = ((rise - grade) / 0.03) ** 2 + (over / 0.01) ** 2 + 0.6 * (cand / math.radians(turn)) ** 2
-            gb = math.atan2(goal[1] - p[1], goal[0] - p[0]) if goal is not None else h
-            if goal is not None:
-                # On a face this barely tilts a leg; on a saddle it picks the
-                # way on rather than back up the knob behind.
-                cost = cost + pull * (1.0 - np.cos(th - gb))
-            if reach:
-                cost = cost * 0.2 + 6.0 * (1.0 - np.cos(th - gb)) + (over / 0.01) ** 2
-            elif rise.max() < grade * 0.9:
-                # Gentler ground than the grade: on toward the goal, as steeply as it goes.
-                cost = 3.0 * (1.0 - np.cos(th - gb)) + 0.3 * ((grade - rise) / 0.03) ** 2 + (over / 0.01) ** 2
-            # Clear of its own earlier legs and of the other lines.
-            n_old = 0
-            s_acc = 0.0
-            for k in range(len(pts) - 1, 0, -1):
-                s_acc += math.dist(pts[k], pts[k - 1])
-                if s_acc > own_gap:
-                    n_old = k
-                    break
-            near = np.array(pts[:n_old]) if n_old > 0 else np.zeros((0, 2))
-            if len(other_pts):
-                near = np.vstack([near, other_pts]) if len(near) else other_pts
-            if len(near):
-                d = np.min(np.hypot(qx[:, None] - near[None, :, 0], qy[:, None] - near[None, :, 1]), axis=1)
-                cost = cost + 40.0 * np.clip(1.0 - d / sep, 0.0, 1.0) ** 2 + np.where(d < sep * 0.6, 500.0, 0.0)
-            if avoid is not None:
-                cost = cost + np.where(shapely.contains_xy(avoid, qx, qy), 1000.0, 0.0)
-            k = int(np.argmin(cost))
-            q = (float(qx[k]), float(qy[k]))
-            if spine is not None and not reach and side * self._offset(spine, q, th[k]) > half:
-                # A hairpin, turning uphill.
-                arc = self._hairpin(p, h, hairpin_r)
-                pts += arc
-                length += math.pi * hairpin_r
-                h = h + math.pi
-                side = -side
-                z = float(self.ground([pts[-1][0]], [pts[-1][1]])[0])
-                continue
-            pts.append(q)
-            length += step
-            h = float(th[k])
-            z = float(self.ground([q[0]], [q[1]])[0])
-            if top is not None and z >= top:
-                break
-            if stop is not None and stop(q):
-                break
-        return pts
-
-    @staticmethod
-    def _offset(spine, p, h):
-        """Signed distance of p from the spine line (+ to the spine's left)."""
-        s = spine.project(Point(p))
-        a = spine.interpolate(max(0.0, min(s, spine.length - 1.0))).coords[0]
-        b = spine.interpolate(max(0.0, min(s, spine.length - 1.0)) + 1.0).coords[0]
-        cross = (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])
-        return math.copysign(spine.distance(Point(p)), cross)
-
-    def _hairpin(self, p, h, r):
-        """A half circle of radius r from p, heading h, turning to the higher side."""
-        lx, ly = -math.sin(h), math.cos(h)  # left normal (y down: this is the right hand on the map)
-        hl = float(self.ground([p[0] + lx * 2 * r], [p[1] + ly * 2 * r])[0])
-        hr = float(self.ground([p[0] - lx * 2 * r], [p[1] - ly * 2 * r])[0])
-        sgn = 1.0 if hl >= hr else -1.0
-        cx, cy = p[0] + sgn * lx * r, p[1] + sgn * ly * r
-        a0 = math.atan2(p[1] - cy, p[0] - cx)
-        n = max(6, int(math.pi * r / 5.0))
-        # Sweep the way that starts along the current heading.
-        sweep = math.pi if (math.cos(h) * -math.sin(a0) + math.sin(h) * math.cos(a0)) > 0 else -math.pi
-        return [(cx + r * math.cos(a0 + sweep * k / n), cy + r * math.sin(a0 + sweep * k / n)) for k in range(1, n + 1)]
-
     # --- Road profiles -------------------------------------------------------------
 
+    def _profile_z(self, prof, p, reach):
+        line, s, z, hw, _bank, spans = prof
+        d = line.distance(Point(p))
+        if d >= reach(hw):
+            return None
+        sp = line.project(Point(p))
+        if any(a < sp < b for a, b, _k in spans):
+            return None
+        return d, float(np.interp(sp, s, z))
+
     def profile_at(self, p):
-        """The height of the nearest graded road at p, or None off them."""
+        """The height of the nearest graded road at p, or None off them (or
+        over a tunnel or under a bridge)."""
         best = None
-        for line, s, z, hw, _bank in self.profiles:
-            d = line.distance(Point(p))
-            if d < hw + 3.0 and (best is None or d < best[0]):
-                best = (d, float(np.interp(line.project(Point(p)), s, z)))
+        for prof in self.profiles:
+            got = self._profile_z(prof, p, lambda hw: hw + 3.0)
+            if got and (best is None or got[0] < best[0]):
+                best = got
         return None if best is None else best[1]
 
     def profile_near(self, p, reach):
         """The height of the nearest graded road within `reach` of p (the
         road a lot fronts), or None."""
         best = None
-        for line, s, z, _hw, _bank in self.profiles:
-            d = line.distance(Point(p))
-            if d < reach and (best is None or d < best[0]):
-                best = (d, float(np.interp(line.project(Point(p)), s, z)))
+        for prof in self.profiles:
+            got = self._profile_z(prof, p, lambda _hw: reach)
+            if got and (best is None or got[0] < best[0]):
+                best = got
         return None if best is None else best[1]
 
-    def grade(self, line, cls, ends=None):
+    def grade(self, line, cls, ends=None, spans=(), cap=None):
         """Grades a road: its height follows the ground, smoothed, no steeper
-        than its class allows; ends on the flat or on an earlier road keep
-        that height. Returns the max grade it reached."""
+        than its class allows (or `cap`); ends on the flat or on an earlier
+        road keep that height. spans [(s0, s1, kind)]: tunnels ('t') and
+        bridges ('b') run straight between their ends, the ground left
+        alone. Returns the max grade it reached."""
         if self.poly.distance(line) > 1.0:
             return 0.0
         n = max(2, math.ceil(line.length / 4.0))
         s = np.linspace(0.0, line.length, n + 1)
-        pts = [line.interpolate(v).coords[0] for v in s]
-        z = self.raw(np.array([p[0] for p in pts]), np.array([p[1] for p in pts]))
+        pts = np.array([line.interpolate(v).coords[0] for v in s])
+        ground = self.raw(pts[:, 0], pts[:, 1])
+        z = ground.copy()
+        inside = np.zeros(len(s), dtype=bool)
+        for a, b, _k in spans:
+            inside |= (s > a) & (s < b)
+        # Over a span the "ground" is the straight line between its ends.
+        for a, b, _k in spans:
+            ia, ib = int(np.searchsorted(s, a)), int(np.searchsorted(s, b))
+            ia, ib = max(ia - 1, 0), min(ib, len(s) - 1)
+            z[ia:ib + 1] = np.linspace(z[ia], z[ib], ib - ia + 1)
         k = 15
         if len(z) > k:
             z = np.convolve(np.pad(z, k // 2, mode="edge"), np.ones(k) / k, mode="valid")
         pins = {}
-        for i in (0, len(pts) - 1):
-            h = self.profile_at(pts[i])
-            pins[i] = h if h is not None else self.raw_at(pts[i])
+        for i in (0, len(s) - 1):
+            h = self.profile_at(tuple(pts[i]))
+            pins[i] = h if h is not None else float(ground[i])
         if ends:
             for i, h in ends.items():
-                pins[i if i >= 0 else len(pts) + i] = h
-        # Where it crosses an earlier road, both share that height.
-        for other, os, oz, _hw, _bank in self.profiles:
+                pins[i if i >= 0 else len(s) + i] = h
+        # Where it crosses an earlier road at grade, both share that height.
+        for other, os_, oz, _hw, _bank, ospans in self.profiles:
             for q in _points(line.intersection(other)):
-                i = int(round(line.project(Point(q)) / (line.length / n)))
-                pins[i] = float(np.interp(other.project(Point(q)), os, oz))
-        g = GRADE[cls]
+                sq = line.project(Point(q))
+                so = other.project(Point(q))
+                if any(a < sq < b for a, b, _k in spans) or any(a < so < b for a, b, _k in ospans):
+                    continue
+                pins[int(round(sq / (line.length / n)))] = float(np.interp(so, os_, oz))
+        g = cap if cap is not None else GRADE[cls]
         ds = line.length / n
         for i, h in pins.items():
             z[i] = h
@@ -457,54 +429,72 @@ class Mountain:
             for i in range(len(z) - 2, -1, -1):
                 if i not in pins:
                     z[i] = min(max(z[i], z[i + 1] - g * ds), z[i + 1] + g * ds)
+        # Spans stay straight between their (graded) ends.
+        for a, b, _k in spans:
+            ia, ib = max(int(np.searchsorted(s, a)) - 1, 0), min(int(np.searchsorted(s, b)), len(s) - 1)
+            z[ia:ib + 1] = np.linspace(z[ia], z[ib], ib - ia + 1)
         # How far the cut or fill fades out: wide enough to keep its bank gentle.
-        bank = np.maximum(BLEND, np.abs(self.raw(np.array([p[0] for p in pts]), np.array([p[1] for p in pts])) - z) / MAX_BANK)
-        self.profiles.append([line, s, z, _HALF[cls], bank])
+        bank = np.maximum(BLEND, np.abs(ground - z) / MAX_BANK)
+        bank[inside] = BLEND
+        self.profiles.append([line, s, z, _HALF[cls], bank, [tuple(sp) for sp in spans]])
         return float(np.max(np.abs(np.diff(z))) / ds)
 
     # --- The height grid ------------------------------------------------------------
 
     def grid(self, pads):
         """The final heights: the ground, cut and filled to the roads and to
-        each lot's pad ([polygon, height]). Returns the export dict."""
+        each lot's pad ([polygon, height]). Returns the export dict.
+
+        Each road owns the ground within its shoulder and a cell more (the
+        nearest road's height, so no road's surface is mixed with another's);
+        past that its cut or fill fades into the ground over its bank, the
+        roads' heights blended where banks overlap. Over a tunnel or under a
+        bridge the ground is left alone."""
         x0, y0, x1, y1 = self.poly.bounds
         x0, y0 = math.floor(x0 / CELL) * CELL - CELL, math.floor(y0 / CELL) * CELL - CELL
         nx = int(math.ceil((x1 - x0) / CELL)) + 2
         ny = int(math.ceil((y1 - y0) / CELL)) + 2
         gx, gy = np.meshgrid(x0 + np.arange(nx) * CELL, y0 + np.arange(ny) * CELL)
-        xs, ys = gx.ravel(), gy.ravel()
-        h = self.raw(xs, ys)
+        h = self.raw(gx.ravel(), gy.ravel()).reshape(ny, nx)
         wsum = np.zeros_like(h)
         zsum = np.zeros_like(h)
         margin = np.zeros_like(h)
         reach = np.zeros_like(h)
-        for line, s, z, hw, bank in self.profiles:
-            coords = np.array(line.coords)
-            seg_s = np.concatenate([[0.0], np.cumsum(np.hypot(*np.diff(coords, axis=0).T))])
-            dmin = np.full_like(h, np.inf)
-            smin = np.zeros_like(h)
-            for k in range(len(coords) - 1):
-                (ax, ay), (bx, by) = coords[k], coords[k + 1]
-                dx, dy = bx - ax, by - ay
-                l2 = dx * dx + dy * dy
-                if l2 < 1e-9:
-                    continue
-                t = np.clip(((xs - ax) * dx + (ys - ay) * dy) / l2, 0.0, 1.0)
-                d = np.hypot(xs - (ax + dx * t), ys - (ay + dy * t))
-                closer = d < dmin
-                dmin = np.where(closer, d, dmin)
-                smin = np.where(closer, seg_s[k] + t * math.sqrt(l2), smin)
-            zr = np.interp(smin, s, z)
-            blend = np.interp(smin, s, bank)
+        dcore = np.full_like(h, np.inf)
+        zcore = np.zeros_like(h)
+
+        def window(geom, pad):
+            bx0, by0, bx1, by1 = geom.bounds
+            i0 = max(int(math.floor((bx0 - pad - x0) / CELL)), 0)
+            i1 = min(int(math.ceil((bx1 + pad - x0) / CELL)) + 1, nx)
+            j0 = max(int(math.floor((by0 - pad - y0) / CELL)), 0)
+            j1 = min(int(math.ceil((by1 + pad - y0) / CELL)) + 1, ny)
+            return slice(j0, j1), slice(i0, i1)
+
+        for line, s, z, hw, bank, spans in self.profiles:
             edge = hw + 2.0
-            w = 1.0 - _smooth(np.clip(dmin / (edge + blend), 0.0, 1.0))
-            wsum += w * w
-            zsum += w * w * zr
-            margin = np.maximum(margin, 1.0 - _smooth(np.clip((dmin - hw - 1.0) / CELL, 0.0, 1.0)))
-            reach = np.maximum(reach, 1.0 - _smooth(np.clip((dmin - edge) / blend, 0.0, 1.0)))
+            far = edge + float(np.max(bank))
+            win = window(line, far)
+            pts = shapely.points(gx[win].ravel(), gy[win].ravel())
+            d = shapely.distance(line, pts).reshape(gx[win].shape)
+            sp = shapely.line_locate_point(line, pts).reshape(d.shape)
+            ok = d < far
+            for a, b, _k in spans:
+                ok &= ~((sp > a) & (sp < b))
+            zr = np.interp(sp, s, z)
+            blend = np.interp(sp, s, bank)
+            w = np.where(ok, 1.0 - _smooth(np.clip(d / (edge + blend), 0.0, 1.0)), 0.0)
+            wsum[win] += w * w
+            zsum[win] += w * w * zr
+            margin[win] = np.maximum(margin[win], np.where(ok, 1.0 - _smooth(np.clip((d - hw - 1.0) / CELL, 0.0, 1.0)), 0.0))
+            reach[win] = np.maximum(reach[win], np.where(ok, 1.0 - _smooth(np.clip((d - edge) / blend, 0.0, 1.0)), 0.0))
+            core = ok & (d <= edge + CELL) & (d < dcore[win])
+            dcore[win] = np.where(core, d, dcore[win])
+            zcore[win] = np.where(core, zr, zcore[win])
         zroad = np.where(wsum > 1e-9, zsum / np.maximum(wsum, 1e-9), h)
+        zroad = np.where(np.isfinite(dcore), zcore, zroad)
         h = h * (1.0 - reach) + zroad * reach
-        pts = shapely.points(xs, ys)
+        h = np.where(np.isfinite(dcore), zcore, h)
         if pads:
             # Each node takes the height of the nearest pad, flat a cell past
             # the lot's edge (so the bilinear ground under the whole lot is
@@ -513,15 +503,16 @@ class Mountain:
             dbest = np.full_like(h, np.inf)
             hbest = np.zeros_like(h)
             for poly, ph in pads:
-                d = shapely.distance(pts, poly)
-                closer = d < dbest
-                dbest = np.where(closer, d, dbest)
-                hbest = np.where(closer, ph, hbest)
+                win = window(poly, CELL + 2.0 + PAD_BLEND)
+                d = shapely.distance(poly, shapely.points(gx[win].ravel(), gy[win].ravel())).reshape(gx[win].shape)
+                closer = d < dbest[win]
+                dbest[win] = np.where(closer, d, dbest[win])
+                hbest[win] = np.where(closer, ph, hbest[win])
             w = (1.0 - _smooth(np.clip((dbest - CELL - 2.0) / PAD_BLEND, 0.0, 1.0))) * (1.0 - margin)
             w = np.where(dbest <= 0.0, 1.0, w)  # under the lot itself, the pad
             h = h * (1.0 - w) + hbest * w
         h = np.clip(h, 0.0, MAX_H)
-        self.heights = h.reshape(ny, nx)
+        self.heights = h
         self.origin = (x0, y0)
         raw = np.round(self.heights * 10.0).astype("<u2").tobytes()
         return {"origin": [x0, y0], "cell": CELL, "size": [nx, ny], "dm": base64.b64encode(raw).decode("ascii")}
@@ -550,6 +541,12 @@ def _smax(a, b, k):
     k = np.minimum(k, np.maximum(np.minimum(a, b), 1e-6))
     h = np.maximum(k - np.abs(a - b), 0.0) / k
     return np.maximum(a, b) + h * h * k * 0.25
+
+
+def _smin(a, b, k):
+    """A min of a and b with the corner rounded over k."""
+    h = np.maximum(k - np.abs(a - b), 0.0) / k
+    return np.minimum(a, b) - h * h * k * 0.25
 
 
 def _smooth(t):

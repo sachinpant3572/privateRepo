@@ -31,11 +31,11 @@
     {"id": "sovereign_bay", "name": "Sovereign Bay", "type": "bay", "polygon": [[11800, 2700], [11700, 2850], [11450, 3150], [11000, 3250], [10400, 3280], [9800, 3150], [9450, 2800], [9600, 2400], [10200, 2250], [10900, 2350], [11500, 2550]]},
     {"id": "lake_corran", "name": "Lake Corran", "type": "lake", "polygon": [[6600, 0], [11200, 0], [11100, 500], [10400, 800], [9600, 850], [9000, 800], [8600, 880], [8200, 780], [7600, 900], [7000, 700], [6700, 400]]},
     {"id": "miravel", "name": "Lake Miravel", "type": "lake", "note": "reservoir behind Granite Gorge Dam, shrinking", "polygon": [[3900, 2300], [4500, 2150], [5000, 2350], [5100, 2900], [4700, 3300], [4300, 3350], [4000, 3000]]},
-    {"id": "morrow", "name": "Morrow River", "type": "river", "width": 160, "note": "Lake Corran at Steelhaven down to the Gulf at Bellerive", "line": [[7300, 780], [7300, 1500], [7250, 2100], [7200, 2700], [6600, 3400], [6100, 4200], [5800, 4800], [5700, 5300], [5500, 6000], [5350, 6700], [5400, 7300], [5800, 8023], [5950, 7946], [6100, 7884], [6250, 7836], [6400, 7800], [6550, 7775], [6700, 7762], [6850, 7761], [7000, 7770], [7150, 7790], [7300, 7822], [7450, 7867], [7700, 8650]]},
+    {"id": "morrow", "name": "Morrow River", "type": "river", "width": 160, "note": "Lake Corran at Steelhaven down to the Gulf at Bellerive", "line": [[7300, 780], [7300, 1500], [7250, 2000], [6950, 2130], [6550, 2170], [6050, 2350], [5600, 2750], [5300, 3300], [5250, 3800], [5350, 4350], [5550, 4850], [5700, 5300], [5500, 6000], [5350, 6700], [5400, 7300], [5800, 8023], [5950, 7946], [6100, 7884], [6250, 7836], [6400, 7800], [6550, 7775], [6700, 7762], [6850, 7761], [7000, 7770], [7150, 7790], [7300, 7822], [7450, 7867], [7700, 8650]]},
     {"id": "cinder_upper", "name": "Cinder River", "type": "river", "width": 60, "line": [[5400, 1100], [5100, 1600], [4800, 1950], [4600, 2200]]},
     {"id": "cinder_lower", "name": "Cinder River", "type": "river", "width": 70, "note": "below the dam, through Ember Canyon to the Saltgrass Glades", "line": [[4300, 3350], [4100, 4100], [3800, 5000], [3700, 6000], [3900, 7200], [4200, 8450]]},
     {"id": "silver_creek", "name": "Silver Creek", "type": "creek", "width": 24, "line": [[6300, 900], [6050, 1250], [5800, 1650], [5500, 1900], [4950, 1775]]},
-    {"id": "pine_creek", "name": "Pine Creek", "type": "creek", "width": 24, "line": [[6000, 2500], [6150, 3000], [6350, 3500], [6450, 3640]]},
+    {"id": "pine_creek", "name": "Pine Creek", "type": "creek", "width": 24, "line": [[6100, 1750], [6030, 2050], [5950, 2390]]},
     {"id": "black_bayou", "name": "Black Bayou", "type": "creek", "width": 34, "line": [[1800, 7150], [2600, 7400], [3200, 7900], [3500, 8380]]},
     {"id": "turtle_slough", "name": "Turtle Slough", "type": "creek", "width": 30, "line": [[4400, 7300], [4450, 7800], [4600, 8250], [4650, 8580]]},
     {"id": "bluegill_lake", "name": "Bluegill Lake", "type": "lake", "polygon": [[8450, 4800], [8700, 4750], [8800, 4900], [8650, 5050], [8450, 5000]]}
@@ -71,8 +71,8 @@
     {"id": "silverbell", "name": "Silverbell", "kind": "ghost", "pos": [5000, 1600], "region": "cinder_ridge", "phase": 3, "note": "Mining ghost town on the pass road"},
     {"id": "pinecrest", "name": "Pinecrest", "kind": "village", "pos": [6400, 1750], "region": "cinder_ridge", "phase": 3},
     {"id": "harlow", "name": "Harlow", "kind": "town", "pos": [5150, 2850], "region": "miravel_shores", "phase": 3},
-    {"id": "dellwood", "name": "Dellwood", "kind": "town", "pos": [6800, 3700], "region": "red_pine", "phase": 3},
-    {"id": "fernmoor", "name": "Fernmoor", "kind": "village", "pos": [7700, 3100], "region": "red_pine", "phase": 3},
+    {"id": "dellwood", "name": "Dellwood", "kind": "town", "pos": [6900, 1930], "region": "red_pine", "phase": 3, "note": "Sawmill town on the Morrow, at Mount Calder's north foot"},
+    {"id": "fernmoor", "name": "Fernmoor", "kind": "village", "pos": [7950, 2350], "region": "red_pine", "phase": 3},
     {"id": "port_ash", "name": "Port Ash", "kind": "ghost", "pos": [11000, 1100], "region": "corran", "phase": 4, "note": "Dying lake port; half the houses empty"},
     {"id": "haverly", "name": "Haverly", "kind": "town", "pos": [9000, 4600], "region": "sovereign", "phase": 4},
     {"id": "larkspur", "name": "Larkspur", "kind": "village", "pos": [8500, 5700], "region": "verdant_hills", "phase": 2},
@@ -240,7 +240,7 @@
     {"id": "ember_canyon", "name": "Ember Canyon drive", "type": "viewpoint", "pos": [3700, 4500]},
     {"id": "skyward_camp", "name": "Skyward Fellowship camp", "type": "cult", "pos": [2000, 1500]},
     {"id": "greenhold_commune", "name": "The Greenhold commune", "type": "cult", "pos": [5900, 3000]},
-    {"id": "dellwood_sawmill", "name": "Dellwood sawmill", "type": "ruin", "pos": [6950, 3550]},
+    {"id": "dellwood_sawmill", "name": "Dellwood sawmill", "type": "ruin", "pos": [6790, 1990]},
     {"id": "flats_airstrip", "name": "Golden Flats crop-duster strip", "type": "airport", "pos": [4900, 5600], "status": "rent planes here"},
     {"id": "ridley_diner", "name": "Ridley Crossing truck stop", "type": "eatery", "pos": [3950, 6150]},
     {"id": "sable_station", "name": "Sable Junction station", "type": "station", "pos": [3000, 5350]},
@@ -301,7 +301,7 @@
     {"id": "lakeshore_drive_cinder_upper_bridge", "name": "Cinder River bridge", "type": "bridge", "pos": [4677, 2103], "phase": 3, "route": "lakeshore_drive", "minor": true, "detail": true},
     {"id": "lumen_observatory", "name": "Lumen Observatory", "type": "viewpoint", "pos": [7200, 5741]},
     {"id": "hill_letters", "name": "Hillside Letters", "type": "monument", "pos": [7480, 5565]},
-    {"id": "calder_peak", "name": "Calder Peak", "type": "peak", "pos": [7250, 5395], "elev": 114}
+    {"id": "calder_peak", "name": "Mast Hill", "type": "peak", "pos": [7250, 5395], "elev": 280}
   ],
   "expansions": [
     {"id": "porto_brisa", "name": "Porto Brisa", "expansion": 1, "inspired_by": "Rio de Janeiro", "where": "south, across the Gulf of Solvera (off this map)", "theme": "Beach city between green mountains and the sea: hillside favelas, Praia Dourada, a cable car, the old port", "links": ["Gulf ferry from Ironwharf", "flights from Bellerive International and Sovereign International", "the smugglers' speedboat route from the Keys"], "factions": ["mare", "corvos"], "story": "Jules's past as a getaway driver; Lua Ferreira; the Sentinel's Light; the Maré and Corvos war at home"}
