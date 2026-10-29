@@ -1094,6 +1094,7 @@ class Country:
         self._settle()
         self._carry_on()
         self._grade_rest()
+        self._rail_finish()
 
     def _settle(self):
         """A suburb street left stopping on nothing (cut short by a zone's
@@ -1360,8 +1361,12 @@ class Country:
         into self.structures."""
         self.structures = []
         self.rail_pass = None
+        self._rail_state = None
         planned = mountain_lines()
-        self._rail_pass(planned["rail_pass"])
+        if "rail_pass" in planned:
+            self._rail_pass(planned["rail_pass"])
+        else:
+            print("WARNING: mountain_lines.json has no rail_pass (run mountain_plan.py rail_pass)")
         order = [v["name"] for v in planned.values() if v["tag"] == "route"]
         by_name = {v["name"]: v for v in planned.values() if v["tag"] == "route"}
         routes = [s for s in self.sources if s[3] == "route" and self.mtn.poly.distance(s[0]) <= 1.0]
@@ -1370,7 +1375,9 @@ class Country:
             v = by_name.get(s[2])
             spans = self._spans_on(s[0], self._span_ends(v["pts"], v["spans"])) if v else []
             spans = self._wet_only(s[0], spans)
-            gr = self.mtn.grade(s[0], s[1], spans=spans)
+            # Where it leaves the play area (barricaded) its end follows its grade.
+            loose = tuple(k for k in (0, -1) if self.A.exterior.distance(Point(s[0].coords[k])) < 2.0)
+            gr = self.mtn.grade(s[0], s[1], spans=spans, loose=loose)
             if gr > 0.0:
                 self.mtn_grades.append((s[2], round(gr, 3)))
             self._note_structures(s[0], s[1], s[2], spans)
@@ -1415,40 +1422,67 @@ class Country:
     def _rail_pass(self, plan):
         """The Morrow Freight Line over the range (world_map.json carries the
         planned line): graded at no more than 2.5% on its shelf, which is cut
-        and filled into the ground like a road; its tunnels and viaducts are
-        structures, the track drawn only where it runs on the ground."""
+        and filled into the ground like a road. The roads graded after it
+        meet it at grade or pass over or under it (mountain.RAIL_CLEAR);
+        _rail_finish then takes its tunnels, viaducts and those crossings out
+        of the track as structures."""
         name = plan["name"]
         ends = self._span_ends(plan["pts"], plan["spans"])
         a, b = Point(plan["pts"][0]), Point(plan["pts"][-1])
-        out = []
-        for rl in self.rails:
+        self._rail_state = None
+        for i, rl in enumerate(self.rails):
             if rl[2] != name or self.mtn.poly.distance(rl[0]) > 1.0:
-                out.append(rl)
                 continue
             line = rl[0]
             s0, s1 = sorted((line.project(a), line.project(b)))
+            if s1 - s0 < 100.0:
+                continue  # a scrap of the line by the range, not the pass
             spans = self._spans_on(line, ends)
             self.mtn.grade(line, "rail", spans=spans)
-            prof = self.mtn.profiles[-1]
-            self._note_structures(line, "rail", name, spans)
-            ss = [s0 + (s1 - s0) * k / max(1, math.ceil((s1 - s0) / 16.0)) for k in range(math.ceil((s1 - s0) / 16.0) + 1)]
-            zs = [float(np.interp(q, prof[1], prof[2])) for q in ss]
-            g = max(abs(z1 - z0) / max(q1 - q0, 0.1) for z0, z1, q0, q1 in zip(zs, zs[1:], ss, ss[1:]))
-            self.rail_pass = {"name": name, "pts": [[round(line.interpolate(q).coords[0][0], 2), round(line.interpolate(q).coords[0][1], 2),
-                                                     round(z, 2)] for q, z in zip(ss, zs)],
-                              "spans": [[round(x - s0, 1), round(y - s0, 1), k] for x, y, k in spans if s0 - 1 <= x and y <= s1 + 1],
-                              "grade": round(g, 4)}
-            self.mtn_grades.append((name, round(g, 4)))
-            s = 0.0
-            for x, y, _k in sorted(spans):
-                if x - s > 5.0:
-                    out.append([substring(line, s, x), rl[1], rl[2], rl[3]])
-                s = y
-            if line.length - s > 5.0:
-                out.append([substring(line, s, line.length), rl[1], rl[2], rl[3]])
-        self.rails = out
-        if self.rail_pass is None:
+            self._rail_state = (i, line, s0, s1, self.mtn.profiles[-1])
+        if self._rail_state is None:
             print("WARNING: the rail pass is not on the map")
+
+    def _rail_finish(self):
+        """Once every road is graded: the rail's spans (tunnels, viaducts, and
+        a bridge over or a cover under each road that crosses it out of
+        grade) leave its ground alone, go into structures and out of the
+        track; rail_pass carries the line, its heights and spans."""
+        self.rail_pass = None
+        if self._rail_state is None:
+            return
+        i, line, s0, s1, prof = self._rail_state
+        rl = self.rails[i]
+        name = rl[2]
+        spans = list(prof[5])
+        for other, so, kind, hw in self.mtn.rail_cross:
+            if other is not line:
+                continue
+            half = hw + (6.0 if kind == "b" else 10.0)
+            if any(a - 4.0 < so < b + 4.0 for a, b, _k in spans):
+                continue
+            spans.append((so - half, so + half, kind))
+        spans.sort()
+        prof[5][:] = spans  # the grid leaves the ground under them to the road
+        self._note_structures(line, "rail", name, spans, prof)
+        n = math.ceil((s1 - s0) / 16.0)
+        ss = [s0 + (s1 - s0) * k / max(1, n) for k in range(n + 1)]
+        zs = [float(np.interp(q, prof[1], prof[2])) for q in ss]
+        g = max(abs(z1 - z0) / max(q1 - q0, 0.1) for z0, z1, q0, q1 in zip(zs, zs[1:], ss, ss[1:]))
+        self.rail_pass = {"name": name, "pts": [[round(line.interpolate(q).coords[0][0], 2), round(line.interpolate(q).coords[0][1], 2),
+                                                 round(z, 2)] for q, z in zip(ss, zs)],
+                          "spans": [[round(x - s0, 1), round(y - s0, 1), k] for x, y, k in spans if s0 - 1 <= x and y <= s1 + 1],
+                          "grade": round(g, 4)}
+        self.mtn_grades.append((name, round(g, 4)))
+        out = []
+        s = 0.0
+        for x, y, _k in spans:
+            if x - s > 5.0:
+                out.append([substring(line, s, x), rl[1], rl[2], rl[3]])
+            s = max(s, y)
+        if line.length - s > 5.0:
+            out.append([substring(line, s, line.length), rl[1], rl[2], rl[3]])
+        self.rails = self.rails[:i] + out + self.rails[i + 1:]
 
     @staticmethod
     def _span_ends(pts, spans):
@@ -1499,10 +1533,12 @@ class Country:
                 out.append((sq - half, sq + half, "u"))
         return out
 
-    def _note_structures(self, line, cls, name, spans):
-        """Each span of the line just graded as a structure: {kind, tunnel |
-        under | bridge, way, cls, pts [[x, y, z]] every 8 m, portals}."""
-        prof = self.mtn.profiles[-1] if self.mtn.profiles and self.mtn.profiles[-1][0] is line else None
+    def _note_structures(self, line, cls, name, spans, prof=None):
+        """Each span of the line just graded (or of `prof`) as a structure:
+        {kind, tunnel | under | bridge, way, cls, pts [[x, y, z]] every 8 m,
+        portals}."""
+        if prof is None:
+            prof = self.mtn.profiles[-1] if self.mtn.profiles and self.mtn.profiles[-1][0] is line else None
         kinds = {"t": "tunnel", "u": "underpass", "b": "viaduct" if cls == "rail" else "bridge"}
         for a, b, k in spans:
             n = max(1, math.ceil((b - a) / 8.0))
@@ -1526,12 +1562,20 @@ class Country:
     def mountain_lots(self):
         """The observatory at the end of its road, the letters on the slope
         below Calder Peak facing the city, the masts on the summit."""
-        def site(x, y, kind, ident):
-            # Set where the design puts it: clear of the roads and lots, not
-            # squared to a road (none fronts the letters or the masts).
-            poly = lot_poly(x, y, south, *LOT[kind])
-            if self.road_prep.intersects(poly) or self.lot_grid.hits(poly):
-                print("  %s: %s" % (ident, "on a road" if self.road_prep.intersects(poly) else "on a lot"))
+        def site(x, y, kind, ident, search=0.0):
+            # Set where the design puts it, or (search) the nearest spot clear
+            # of the roads, lots and water within that far of it, where the
+            # range's re-laid ways cross it; not squared to a road (none
+            # fronts the letters or the masts).
+            spots = [(x, y)] + [(x + r * math.cos(a * math.pi / 8.0), y + r * math.sin(a * math.pi / 8.0))
+                                for r in np.arange(10.0, search + 1.0, 10.0) for a in range(16)]
+            for k, (x, y) in enumerate(spots):
+                poly = lot_poly(x, y, south, *LOT[kind])
+                if not (self.road_prep.intersects(poly.buffer(3.0) if k else poly) or self.lot_grid.hits(poly)
+                        or self.water_prep.intersects(poly) or not self.A_prep.contains(poly)):
+                    break
+            else:
+                print("  %s: no room within %.0f m" % (ident, search))
                 return False
             self.lot_grid.add(poly.buffer(1.5))
             self.lots.append({"x": x, "y": y, "yaw": south, "w": LOT[kind][0], "d": LOT[kind][1], "kind": kind,
@@ -1540,7 +1584,7 @@ class Country:
 
         south = yaw_facing(0.0, -1.0)
         placed = [site(OBSERVATORY[0], OBSERVATORY[1], "observatory", "lumen_observatory"),
-                  site(LETTERS[0], LETTERS[1], "hill_letters", "hill_letters")]
+                  site(LETTERS[0], LETTERS[1], "hill_letters", "hill_letters", 160.0)]
         if placed[0]:
             # Observatory Road ends a road shoulder short of the lot: a drive
             # carries on from its end up to the forecourt.
@@ -1548,7 +1592,7 @@ class Country:
             front = (end[0], OBSERVATORY[1] + OBSERVATORY_SIZE[1] * 0.5 - 1.0)
             self.paths.append([[round(front[0], 2), round(front[1], 2)], [round(end[0], 2), round(end[1], 2)]])
         for i, m in enumerate(MASTS):
-            placed.append(site(m[0], m[1], "radio_mast", "calder_mast_%d" % i))
+            placed.append(site(m[0], m[1], "radio_mast", "calder_mast_%d" % i, 120.0))
         if not all(placed):
             print("WARNING: mountain sites not all placed", placed)
 
@@ -2092,6 +2136,8 @@ class Country:
                     continue
                 if self.P.distance(p) < 3.0:
                     continue
+                if dist(end, OBSERVATORY_ROAD_END) < 3.0:
+                    continue  # its drive carries on to the observatory
                 touching = [j for j in tree.query(p.buffer(2.0)) if j != i and lines[j].distance(p) < 2.0]
                 if touching:
                     continue
@@ -2677,6 +2723,12 @@ class Country:
         c, yaw, n, poly = spot
         if not self._free(poly, yaw):
             return False
+        # Every home faces a road within reach of its front (lot_reach); on
+        # a curve (the mountain roads) a home off the middle can face away.
+        for _kind, x, z, size in lots:
+            if size is not None and not self.road_prep.intersects(LineString(
+                    [frame_point(c, yaw, x, z - size[1] * 0.5), frame_point(c, yaw, x, z - size[1] * 0.5 - REACH_MAX + 2.5)])):
+                return False
         deck.pop()
         self.home_sizes = sizes
         # Windbreak rows along the sides (not the front) that face north (-y) or west (-x).
@@ -2809,6 +2861,16 @@ class Country:
                         ha = self.mtn.profile_near(line.interpolate(s).coords[0], 1.0)
                         hb = self.mtn.profile_near(line.interpolate(min(s + LOT[kind][0], line.length)).coords[0], 1.0)
                         if ha is not None and hb is not None and abs(hb - ha) > 0.09 * LOT[kind][0]:
+                            s += 10.0
+                            continue
+                        # Nor between two legs of a switchback: another way
+                        # near the lot at another height cuts its pad.
+                        lw, ld = LOT[kind]
+                        mid = self._side_point(line, min(s + lw * 0.5, line.length), sgn, w * 0.5 + ld * 0.5 + 3.0)
+                        if ha is not None and any(
+                                got and abs(got[1] - ha) > 3.0 for got in
+                                (self.mtn._profile_z(pf, mid, lambda hw: hw + (lw + ld) * 0.5 + 12.0)
+                                 for pf in self.mtn.profiles)):
                             s += 10.0
                             continue
                     if kind == "condo_tower":

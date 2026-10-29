@@ -56,6 +56,10 @@ class Planner:
         self.slope = np.hypot(gxx, gyy)
         self.block = self.wet.copy()
 
+    def box(self):
+        from shapely.geometry import box
+        return box(self.x0 - self.cell, self.y0 - self.cell, self.x0 + self.nx * self.cell, self.y0 + self.ny * self.cell)
+
     def xy(self, c):
         j, i = divmod(c, self.nx)
         return (self.x0 + i * self.cell, self.y0 + j * self.cell)
@@ -78,7 +82,7 @@ class Planner:
 
     def plan(self, start, goal, gmax, hairpin_r=0.0, hairpin_cost=400.0, cut=4.0, pin_cut=8.0, cut_pen=2.0,
              turn_pen=0.25, slope_pen=1.2, tunnel=None, bridge=None, start_heading=None, goal_r=12.0, weight=1.15,
-             max_states=8_000_000, low=0.0, dry_bridges=False):
+             max_states=8_000_000, low=0.0, dry_bridges=False, wet_bridges=True, low_bridges=False):
         """Cells from start to goal: [(cell, kind, heading, road height)]
         where kind is 'n' (a step), 'h' (a hairpin onto this cell), 't' (a
         tunnel to it) or 'b' (a bridge to it).
@@ -88,7 +92,9 @@ class Planner:
         below the ground (fill and cut; `pin_cut` coming out of a hairpin,
         after which it must close back in). tunnel / bridge: (min, max, step,
         cost per metre, fixed cost) in cells, or None. low: extra cost per
-        metre climbed (keeps valley roads low)."""
+        metre climbed (keeps valley roads low). low_bridges: a bridge runs
+        at the water's level (LOW_DECK at most at either end), as the game
+        lays a road's deck over the water (the road comes down to it)."""
         nx, ny, cell = self.nx, self.ny, self.cell
         H = self.H.ravel()
         block = self.block.ravel().copy()
@@ -197,6 +203,8 @@ class Planner:
                     continue
                 if kind == "b" and not wet[a] and (not dry_bridges or z - H[a] < 4.0):
                     continue
+                if kind == "b" and low_bridges and z > LOW_DECK:
+                    continue
                 for nn in range(lo, hi + 1, step):
                     i2, j2 = i + di * nn, j + dj * nn
                     if not (0 <= i2 < nx and 0 <= j2 < ny):
@@ -206,6 +214,8 @@ class Planner:
                         continue
                     L = DLEN[k] * cell * nn
                     z2 = min(max(H[t], z - gmax * L), z + gmax * L)
+                    if kind == "b" and low_bridges and z2 > LOW_DECK:
+                        continue
                     ok = True
                     for q in range(1, nn):
                         zq = z + (z2 - z) * q / nn
@@ -213,7 +223,11 @@ class Planner:
                         if kind == "t" and gq - zq < (8.0 if q in (1, nn - 1) else 15.0):
                             ok = False
                             break
-                        if kind == "b" and zq - gq < (2.0 if q in (1, nn - 1) else 6.0):
+                        if kind == "b" and zq - gq < ((-1.0 if low_bridges else 2.0) if q in (1, nn - 1) else
+                                                      (-1.0 if low_bridges else 6.0)):
+                            ok = False
+                            break
+                        if kind == "b" and not wet_bridges and wet[(j + dj * q) * nx + i + di * q]:
                             ok = False
                             break
                     if ok:
@@ -307,15 +321,20 @@ def check(mtn, pts, cls, spans=()):
 # where it does.
 TUN = (6, 110, 2, 3.0, 300.0)  # tunnels up to 1.1 km
 BRIDGE = (3, 40, 1, 2.0, 80.0)  # bridges up to 400 m
+LOW_DECK = 4.0  # a low bridge's ends stand no higher than this (the water is at 0)
 SPECS = [
     # Route 9 River Road: along the Morrow's east bank under the range's
     # west wall, round its north foot to Route 7 (2100, -4050).
     dict(id="route_9", cls="highway", name="Route 9 River Road", tag="route", keep_head=[(200, -100)],
          way=[(100, -1150), (-480, -1950), (-700, -2400), (-720, -3250), (-400, -3850), (300, -4250), (900, -4300),
               (2100, -4050)], gmax=0.055, low=4.0, bridge=BRIDGE),
-    # Wheaton and Dam roads now end on Route 9, over the river.
+    # Wheaton and Dam roads now end on Route 9, over the river. Wheaton's
+    # bridge is in the play area, so it is a low one (the game lays a deck
+    # at the water's level); Dam Road's and Pinecrest's cross outside it
+    # (drawn, not driven).
     dict(id="wheaton_road", cls="road", name="Wheaton Road", tag="route", keep_head=[(-2250, -550), (-1550, -1750)],
-         way=[(-950, -2350), ("on", "route_9", (-700, -2350))], gmax=0.08, bridge=BRIDGE),
+         way=[(-950, -2350), ("on", "route_9", (-700, -2350))], gmax=0.08, bridge=BRIDGE, low_bridges=True,
+         hairpin_r=12.0),
     dict(id="dam_road", cls="road", name="Dam Road", tag="route",
          keep_head=[(-2750, -3350), (-2250, -3230), (-1850, -3270), (-1450, -3230), (-1150, -3400)],
          way=[(-950, -3650), ("on", "route_9", (-650, -3550))], gmax=0.08, bridge=BRIDGE),
@@ -358,20 +377,29 @@ SPECS = [
     # Forest trails: from the observatory up the south face to the summit
     # deck, and from Route 9 up past Hawk and Raven peaks.
     dict(id="calder_trail", cls="trail", name="Calder Trail", tag="trail",
-         way=[(M.OBSERVATORY[0] + 40.0, M.OBSERVATORY[1] - 10.0), (1080, -1600), M.SUMMIT_SITES["deck"][:2]],
+         # Out past the observatory's back corner before it turns up the
+         # face, so it does not cut across the lot.
+         way=[(M.OBSERVATORY[0] + 40.0, M.OBSERVATORY[1] - 10.0),
+              (M.OBSERVATORY[0] + 46.0, M.OBSERVATORY[1] - M.OBSERVATORY_SIZE[1] * 0.5 - 14.0),
+              (1080, -1600), M.SUMMIT_SITES["deck"][:2]],
          gmax=0.24, hairpin_r=5.0, hairpin_cost=60.0, cut=2.0, pin_cut=4.0),
     dict(id="raven_trail", cls="trail", name="Raven Trail", tag="trail",
          way=[("on", "route_9", (-700, -2700)), (60, -2470), (400, -3180), M.SUMMIT_SITES["deck"][:2]], gmax=0.24,
          hairpin_r=5.0, hairpin_cost=60.0, cut=2.0, pin_cut=4.0),
 ]
-# The rail pass (Morrow Freight Line over the range): a shelf up the
-# Morrow gorge's east wall, never steeper than 2.5 %, tunnelling through the
+# The rail pass (Morrow Freight Line round the range): a shelf on the
+# Morrow gorge's inner wall round the range's west and north foot (the river
+# loops round it; W-2), never steeper than 2.5 %, tunnelling through the
 # spurs and on viaducts over the gullies; planned on 30 m cells so its
 # curves stay wide, kept off the valley floor (shelf: extra cost below 25 m).
+# One leg: a waypoint fixes the line's height there (each leg starts on the
+# ground), which a 2.2 % line cannot keep to on the gorge wall.
 SPECS.append(dict(id="rail_pass", cls="rail", name="Morrow Freight Line", tag="rail",
-                  way=[(-50, -850), (-560, -2000), (-650, -3300), (1450, -5050)], gmax=0.022, cell=30.0,
-                  tunnel=(3, 40, 1, 2.5, 150.0), bridge=(2, 14, 1, 1.5, 60.0), turn_pen=1.5, shelf=25.0, dry_bridges=True))
-PLAN_KEYS = ("gmax", "hairpin_r", "hairpin_cost", "cut", "pin_cut", "low", "tunnel", "bridge", "turn_pen", "dry_bridges")
+                  way=[(-50, -850), (1500, -4930)], bbox=(-1000, -5400, 1900, -500), gmax=0.022, cell=30.0,
+                  tunnel=(3, 40, 1, 1.5, 60.0), bridge=(2, 14, 1, 1.5, 60.0), turn_pen=1.5, shelf=25.0, dry_bridges=True,
+                  inside=250.0, wet_bridges=False))
+PLAN_KEYS = ("gmax", "hairpin_r", "hairpin_cost", "cut", "pin_cut", "low", "tunnel", "bridge", "turn_pen", "dry_bridges",
+             "wet_bridges", "low_bridges")
 
 
 def _point(p, done):
@@ -394,6 +422,10 @@ def plan_line(mtn, spec, done, log=print):
         bbox = spec.get("bbox") or (min(a[0], b[0]) - pad, min(a[1], b[1]) - pad, max(a[0], b[0]) + pad, max(a[1], b[1]) + pad)
         P = Planner(mtn, bbox, cell=spec.get("cell", 10.0))
         P.mark(mtn.flat, reach=0.0)
+        if spec.get("inside"):
+            # Kept to the range's side of the river (and to its ends' ground).
+            keep = mtn.poly.union(shapely.union_all([Point(q).buffer(spec["inside"]) for q in (a, b)]))
+            P.mark(P.box().difference(keep), reach=0.0)
         if spec.get("shelf"):
             P.pen = np.where(P.H < spec["shelf"], 1.0, 0.0)
         for p in (a, b):

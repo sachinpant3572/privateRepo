@@ -73,6 +73,10 @@ func _run() -> void:
 		await _hills(game)
 		get_tree().quit()
 		return
+	if OS.get_environment("SHOTS") == "mountain":
+		await _mountain(game)
+		get_tree().quit()
+		return
 	if OS.get_environment("SHOTS") == "lights":
 		# Just headlights at night, flat and up and down the hills.
 		await _lights(game)
@@ -312,6 +316,67 @@ func _hills(game) -> void:
 	for i in 4:
 		await get_tree().process_frame
 	await _shot("47_bellerive_hills_map.png")
+	game.hud.full_map.close()
+
+
+## Mount Calder (world phase 2): where the range meets the city, the main
+## road's switchbacks, the forest half way up, the summit's pads, the
+## freight line's shelf at a tunnel portal and on a viaduct's approach, the
+## view down from the top with Look up, and the range on the full map
+## (mountain_1 to mountain_8).
+func _mountain(game) -> void:
+	var c = game.city.country
+	var m: Dictionary = c.mountain
+	var stops := [["mountain_1_city_edge", Vector2(0, -470), 260.0]]
+	# The switchbacks: Mount Calder Road's node nearest 500 m up.
+	var best := Vector2.ZERO
+	var off := INF
+	for rd in c.roads:
+		if rd.name == "Mount Calder Road":
+			for n in rd.nodes:
+				var p: Vector2 = c.node_pos[n]
+				var d := absf(Terrain.height(p.x, p.y) - 500.0)
+				if d < off:
+					off = d
+					best = p
+	stops.append(["mountain_2_switchbacks", best, 300.0])
+	stops.append(["mountain_3_forest", best + Vector2(-60, 40), 70.0])
+	var s: Dictionary = m.sites
+	stops.append(["mountain_4_summit", Vector2(float(s.car_park.x), float(s.car_park.y)), 200.0])
+	var rp: Dictionary = c.rail_pass
+	for sp in rp.get("spans", []):
+		var name: String = "mountain_5_rail_tunnel" if sp[2] == "t" else "mountain_6_rail_viaduct"
+		if stops.any(func(st): return st[0] == name):
+			continue
+		var k := clampi(int(float(sp[0]) / 16.0) - 2, 0, rp.pts.size() - 1)
+		stops.append([name, Vector2(rp.pts[k][0], rp.pts[k][1]), 160.0])
+	for stop in stops:
+		var at: Vector2 = stop[1]
+		var pos := Vector3(at.x, Terrain.height(at.x, at.y), at.y)
+		game.city.stream_now(pos)
+		game.player.global_position = pos
+		game.player.reset_physics_interpolation()
+		game.camera.fixed_focus = pos
+		game.camera.room_size = stop[2]
+		game.camera.snap()
+		await _frames(90)
+		await _shot(stop[0] + ".png")
+	game.camera.fixed_focus = null
+	game.camera.room_size = 0.0
+	# From the viewing deck, Look up toward the city.
+	var deck := Vector3(float(s.deck.x), float(s.deck.z), float(s.deck.y))
+	game.city.stream_now(deck)
+	game.player.global_position = deck
+	game.player.reset_physics_interpolation()
+	await _frames(30)
+	game.camera.set_look_up(true)
+	await _frames(60)
+	await _shot("mountain_7_view_from_top.png")
+	game.camera.set_look_up(false)
+	game.hud.full_map.open()
+	for i in 4:
+		await get_tree().process_frame
+	await _shot("mountain_8_map.png")
 	game.hud.full_map.close()
 
 

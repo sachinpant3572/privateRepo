@@ -130,6 +130,10 @@ BLEND = 22.0  # cut and fill fade out over this far beside a road's shoulder, or
 MAX_BANK = 0.4  # no cut or fill bank steeper than this (the camera looks down at 60 degrees)
 PAD_BLEND = 12.0
 UNDER_DROP = 6.5  # a trail's underpass runs this far below the road over it
+# A road meets the rail at grade when its own ground there is within half of
+# this of the rail; otherwise it passes under a rail bridge or over the rail
+# (in its cutting), this far apart (5.5 m clearance and the deck).
+RAIL_CLEAR = 7.0
 
 
 LINES = Path(__file__).resolve().parent / "mountain_lines.json"
@@ -189,6 +193,10 @@ class Mountain:
         self._cone_k = (k, kp, ka)
         self._water(world)
         self.profiles = []  # [LineString, s samples, z samples, half width, bank, spans]
+        self.rail_lines = []  # the graded rails' lines (profiles that are rails)
+        # Grade separations on the rails: (rail line, s on it, 'b' rail over the
+        # road | 't' road over the rail, the road's half width).
+        self.rail_cross = []
         self.poly = self._outline()
         self.boundary = self.poly.exterior
 
@@ -373,11 +381,13 @@ class Mountain:
             return None
         return d, float(np.interp(sp, s, z))
 
-    def profile_at(self, p):
+    def profile_at(self, p, skip=()):
         """The height of the nearest graded road at p, or None off them (or
-        over a tunnel or under a bridge)."""
+        over a tunnel or under a bridge); `skip` lines are left out."""
         best = None
         for prof in self.profiles:
+            if any(prof[0] is q for q in skip):
+                continue
             got = self._profile_z(prof, p, lambda hw: hw + 3.0)
             if got and (best is None or got[0] < best[0]):
                 best = got
@@ -393,12 +403,13 @@ class Mountain:
                 best = got
         return None if best is None else best[1]
 
-    def grade(self, line, cls, ends=None, spans=(), cap=None):
+    def grade(self, line, cls, ends=None, spans=(), cap=None, loose=()):
         """Grades a road: its height follows the ground, smoothed, no steeper
         than its class allows (or `cap`); ends on the flat or on an earlier
         road keep that height. spans [(s0, s1, kind)]: tunnels ('t') and
         bridges ('b') run straight between their ends, the ground left
-        alone; an underpass ('u') passes UNDER_DROP below the road it
+        alone; loose ends (0, -1) on no road are not held to the ground
+        (where a map route leaves the play area, barricaded); an underpass ('u') passes UNDER_DROP below the road it
         crosses there. Returns the max grade it reached."""
         if self.poly.distance(line) > 1.0:
             return 0.0
@@ -420,14 +431,21 @@ class Mountain:
         k = 15
         if len(z) > k:
             z = np.convolve(np.pad(z, k // 2, mode="edge"), np.ones(k) / k, mode="valid")
+        own = z.copy()
+        # A road does not end on the rail (it ends at the river or a road by it).
+        rails = self.rail_lines if cls != "rail" else ()
         pins = {}
-        for i in (0, len(s) - 1):
-            h = self.profile_at(tuple(pts[i]))
+        for e, i in ((0, 0), (-1, len(s) - 1)):
+            h = self.profile_at(tuple(pts[i]), rails)
+            if h is None and e in loose:
+                continue
             pins[i] = h if h is not None else float(ground[i])
         if ends:
             for i, h in ends.items():
                 pins[i if i >= 0 else len(s) + i] = h
         # Where it crosses an earlier road at grade, both share that height.
+        rail_x = []
+        src = {}  # pin index -> the road it meets there
         for other, os_, oz, _hw, _bank, ospans in self.profiles:
             for q in _points(line.intersection(other)):
                 sq = line.project(Point(q))
@@ -437,9 +455,53 @@ class Mountain:
                 under = any(a < sq < b and k == "u" for a, b, k in spans)
                 if any(a < sq < b for a, b, _k in spans) and not under:
                     continue
-                pins[int(round(sq / (line.length / n)))] = float(np.interp(so, os_, oz)) - (UNDER_DROP if under else 0.0)
+                i = int(round(sq / (line.length / n)))
+                h = float(np.interp(so, os_, oz))
+                if not under and any(other is r for r in rails):
+                    rail_x.append((i, h, other, so))
+                    continue
+                pins[i] = h - (UNDER_DROP if under else 0.0)
+                src[i] = id(other)
         g = cap if cap is not None else GRADE[cls]
         ds = line.length / n
+        # Where it crosses the rail: at grade, under a rail bridge or over the
+        # rail, whichever its other pins can reach at its grade and its own
+        # ground is nearest (at grade a little preferred). The crossings are
+        # chosen together, in order along the road (a road and rail sharing
+        # a gorge cross several times): each choice must be reachable at the
+        # grade from the one before.
+        free = []
+        for i, h, other, so in sorted(rail_x, key=lambda q: q[0]):
+            o = float(own[i])
+            if abs(o - h) >= RAIL_CLEAR:
+                self.rail_cross.append((other, so, "b" if h > o else "t", _HALF.get(cls, 4.0)))
+            else:
+                free.append((i, h, other, so, o))
+
+        def miss(v, i, j, hj):
+            return max(0.0, abs(v - hj) - g * ds * abs(i - j))
+        best = []  # per crossing, per option: (total cost, option, back pointer)
+        for c, (i, h, _other, _so, o) in enumerate(free):
+            row = []
+            for v, kind, extra in ((h, None, 0.0), (h - RAIL_CLEAR, "b", 2.0), (h + RAIL_CLEAR, "t", 2.0)):
+                cost = 10.0 * sum(miss(v, i, j, hj) for j, hj in pins.items()) + abs(v - o) + extra
+                back = None
+                if c:
+                    pi = free[c - 1][0]
+                    back, prev = min(((k, t[0] + 10.0 * miss(v, i, pi, t[1][0])) for k, t in enumerate(best[-1])),
+                                     key=lambda q: q[1])
+                    cost += prev
+                row.append((cost, (v, kind), back))
+            best.append(row)
+        if free:
+            k = min(range(3), key=lambda q: best[-1][q][0])
+            for c in range(len(free) - 1, -1, -1):
+                (v, kind), back = best[c][k][1], best[c][k][2]
+                i, _h, other, so, _o = free[c]
+                pins[i] = v
+                if kind:
+                    self.rail_cross.append((other, so, kind, _HALF.get(cls, 4.0)))
+                k = back
         for i, h in pins.items():
             z[i] = h
         # Pinned heights stay; the rest is pulled within the grade of them.
@@ -460,7 +522,20 @@ class Mountain:
         bank = np.maximum(BLEND, np.abs(ground - z) / MAX_BANK)
         bank[inside] = BLEND
         self.profiles.append([line, s, z, _HALF[cls], bank, [tuple(sp) for sp in spans]])
-        return float(np.max(np.abs(np.diff(z))) / ds)
+        if cls == "rail":
+            self.rail_lines.append(line)
+        # The way inside an underpass is not laid (it stops at the portals).
+        _dz = np.abs(np.diff(z)) / ds
+        mid = (s[:-1] + s[1:]) * 0.5
+        for a, b, kk in spans:
+            if kk == "u":
+                _dz[(mid > a) & (mid < b)] = 0.0
+        # Where it runs on an earlier road (pins on that road one after
+        # another) the grade is that road's, reported for it.
+        for i in range(len(_dz)):
+            if src.get(i) is not None and src.get(i) == src.get(i + 1):
+                _dz[i] = 0.0
+        return float(np.max(_dz))
 
     def cable(self):
         """The cable car: {stations: [{id, x, y, z}], towers: [{x, y, z, h}]}.
