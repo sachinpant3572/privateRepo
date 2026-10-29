@@ -2260,7 +2260,7 @@ const LOG_TEST_DIR := "user://test_logs"
 
 ## Every key a snapshot line carries in a running game (LOGGING.md).
 const SNAP_KEYS := ["clock", "fps", "fps_min", "ft_avg", "ft_max", "f33", "f50", "frames", "cpu", "phys",
-	"draws", "prims", "objs", "mem", "vmem", "nodes", "orphans", "bodies", "pairs", "paused",
+	"draws", "prims", "shd_prims", "objs", "mem", "vmem", "nodes", "orphans", "bodies", "pairs", "paused",
 	"cars", "cars30", "cars60", "moving", "people", "people30", "peds", "traffic", "cops", "copcars",
 	"lit_cars", "lit_lamps", "cells", "cell_job", "tiles", "game_time", "hour", "weather", "rain", "wet",
 	"clouds", "night", "pos", "head", "mode", "speed", "area", "area_kind", "region", "in_city", "road",

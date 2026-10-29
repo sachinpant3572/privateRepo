@@ -2,8 +2,11 @@ extends Node
 ## Render-cost probe for Sachin's 0.25.1 log (Ultra, night, driving fast in
 ## Floodline Wards). Parks a crossover there at 23:42, then frames it as
 ## parked and as at full speed (TopDownCamera.preview_drive) and prints what
-## each pass draws: the main view and the shadow maps. Needs a real renderer:
+## each pass draws: the main view and the shadow maps; then times the frames
+## after Settings closes. Needs a real renderer:
 ##   xvfb-run godot --rendering-driver opengl3 --resolution 1560x720 res://tests/perf_probe.tscn
+## With `-- <out_dir>` it instead shoots the shadows there by day, parked and
+## at speed, as 0.25.1 drew them (160 m, 4 cascades) and as fitted now.
 
 const MainScene = preload("res://main.tscn")
 const Vehicle = preload("res://scripts/vehicle.gd")
@@ -12,7 +15,13 @@ const Graphics = preload("res://scripts/graphics.gd")
 var game
 
 
+var out_dir := ""
+
+
 func _ready() -> void:
+	var args := OS.get_cmdline_user_args()
+	if not args.is_empty():
+		out_dir = args[0]
 	_run.call_deferred()
 
 
@@ -36,6 +45,10 @@ func _run() -> void:
 	game.add_child(car)
 	game.player.enter_vehicle(car)
 	await _frames(240)
+	if out_dir != "":
+		await _shadow_shots()
+		get_tree().quit()
+		return
 	await _sample("parked")
 	game.camera.preview_drive = true
 	await _frames(300)
@@ -71,6 +84,31 @@ func _run() -> void:
 		print(line)
 		await _frames(60)
 	get_tree().quit()
+
+
+func _shadow_shots() -> void:
+	var atmo = game.atmosphere
+	var sun: DirectionalLight3D = atmo.sun
+	atmo.minutes_per_second = 0.0
+	atmo.hour = 15.5
+	for fast in [false, true]:
+		game.camera.preview_drive = fast
+		await _frames(300)
+		for old in [true, false]:
+			atmo._perspective = not old
+			if old:
+				sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
+				sun.directional_shadow_max_distance = 160.0
+				sun.directional_shadow_split_1 = 0.3
+				sun.directional_shadow_split_2 = 0.5
+				sun.directional_shadow_split_3 = 0.75
+			else:
+				atmo.set_view(true)
+			await _frames(10)
+			var file := "shadow_%s_%s.png" % ["fast" if fast else "parked", "0251" if old else "fit"]
+			await RenderingServer.frame_post_draw
+			get_viewport().get_texture().get_image().save_png(out_dir.path_join(file))
+			print("saved ", file)
 
 
 func _sample(label: String) -> void:

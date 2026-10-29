@@ -416,6 +416,8 @@ func snapshot() -> Dictionary:
 	s["phys"] = Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
 	s["draws"] = int(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME))
 	s["prims"] = int(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME))
+	# Of those, the ones drawn into the shadow maps (0.25.1: most of them).
+	s["shd_prims"] = int(get_viewport().get_render_info(Viewport.RENDER_INFO_TYPE_SHADOW, Viewport.RENDER_INFO_PRIMITIVES_IN_FRAME)) if is_inside_tree() else 0
 	s["objs"] = int(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_OBJECTS_IN_FRAME))
 	s["mem"] = _mb(Performance.get_monitor(Performance.MEMORY_STATIC))
 	s["vmem"] = _mb(Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED))

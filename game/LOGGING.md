@@ -68,7 +68,8 @@ becomes `'`). Keys named `t` or `kind` in the data are written `x_t`/`x_kind`.
 | `ft_avg` `ft_max` | average and worst frame time, ms |
 | `f33` `f50` `frames` | frames over 33 ms and over 50 ms; frames this second |
 | `cpu` `phys` | engine process and physics time per frame, ms |
-| `draws` `prims` `objs` | draw calls, primitives, objects rendered last frame |
+| `draws` `prims` `objs` | draw calls, primitives, objects rendered last frame (all passes) |
+| `shd_prims` | of `prims`, those drawn into the shadow maps |
 | `mem` `vmem` | static and video memory, MB |
 | `nodes` `orphans` `bodies` `pairs` | node count, orphan nodes, active physics bodies, collision pairs |
 | `paused` | game paused (menus) |
