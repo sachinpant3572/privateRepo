@@ -5144,7 +5144,8 @@ func test_country_joins_the_city() -> void:
 	var ids: Array = city.landmarks().map(func(l): return l.id)
 	for id in ["deco_row", "bellerive_general", "hollis_farm", "union_station"]:
 		_check(id in ids, "landmark %s is on the maps" % id)
-	_check(city.landmark_front("deco_row") != Vector3.INF, "a country landmark has a front for missions and taxis")
+	_check(city.landmark_front("krewe_hall") != Vector3.INF, "a country landmark has a front for missions and taxis")
+	_check(city.landmark_front("deco_row") != Vector3.INF, "Deco Row, taken into the grown city, has a front on its block")
 
 
 ## Country tiles stream in round the player, as one mesh plus collisions,
@@ -5154,7 +5155,9 @@ func test_country_tiles_stream() -> void:
 	var city = game.city
 	var c = city.country
 	_check(city.get_node_or_null("Bounds") == null, "no walls round the window")
-	var at: Vector3 = city.landmark_front("deco_row")
+	# Krewe Hall: a bar out in the west suburbs (Deco Row, the old stop,
+	# is in the grown city now).
+	var at: Vector3 = city.landmark_front("krewe_hall")
 	_place_player_at(at)
 	await _frames(240)
 	var key: Vector2i = c.tile_key(at)
@@ -5168,7 +5171,7 @@ func test_country_tiles_stream() -> void:
 	var built := 0
 	for k in c.loaded_tiles():
 		built += c.tile_node(k).get_meta("buildings", 0)
-	_check(built > 0, "Brisa Beach has buildings, got %d" % built)
+	_check(built > 0, "the suburbs round Krewe Hall have buildings, got %d" % built)
 	_place_player_at(city.spawn_point)
 	await _frames(240)
 	_check(c.tile_node(key) == null, "far tiles are unloaded")

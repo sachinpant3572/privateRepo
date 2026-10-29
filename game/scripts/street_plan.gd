@@ -150,9 +150,10 @@ const GULF_DIR := Vector2(0.776, -0.630)
 const OCEAN_AT := Vector2(1402.8, 1941.8)
 const SEAGRAPE_AT := Vector2(1242.0, 1744.0)
 ## Serena Causeway (world_map's `overseas` highway) heads out over the Gulf
-## from (1586, 1400) to (2000, 1870), landing on a Brisa cross street's
-## junction with Ocean Drive (the line is set to meet it).
-const CAUSEWAY_FROM := Vector2(1586.0, 1400.0)
+## from (1654, 1545) through (1951, 1882), landing on a Brisa cross street's
+## junction with Ocean Drive (1753, 1657): the line runs on along that
+## street's axis, so the country's lead-in meets the exit square on.
+const CAUSEWAY_FROM := Vector2(1654.0, 1545.0)
 const CAUSEWAY_DIR := Vector2(0.6614, 0.7501)
 ## Curved roads through the grid (Sachin, 2026-10-29: "some curved roads
 ## too ... perfectly connecting straight to other roads, or stretching till

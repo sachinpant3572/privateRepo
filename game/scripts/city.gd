@@ -149,7 +149,8 @@ func build(seed_v: int) -> void:
 	plan = StreetPlan.new()
 	var spots: Array = []
 	for lm in _map_landmarks:
-		spots.append([lm.id, lm.local])
+		if lm.get("spot", true):
+			spots.append([lm.id, lm.local])
 	var river := PackedVector2Array()
 	for p in _river:
 		river.append(p - map_origin)
@@ -786,6 +787,12 @@ func _load_map() -> void:
 		var local := Vector2(lm.pos[0], lm.pos[1]) - map_origin
 		var entry := {"id": lm.id, "type": lm.type, "name": lm.name, "local": local}
 		if window.has_point(local) and int(lm.get("phase", 1)) == 1:
+			_map_landmarks.append(entry)
+		elif not core_outline.is_empty() and Geometry2D.is_point_in_polygon(local, core_outline):
+			# A later landmark the grown city took in (Deco Row on Ocean
+			# Drive): it goes on the block it falls in, without reshaping
+			# the plan round it.
+			entry["spot"] = false
 			_map_landmarks.append(entry)
 		elif not window.has_point(local) and lm.type != "peak":
 			# Peaks are names on the map, not places to go.

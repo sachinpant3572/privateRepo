@@ -78,10 +78,22 @@ helipad needs helicopters: task #82, not started (Sachin's word needed).
 - **Measured (2026-10-29)**: city land 4.22 km² (fill 0.63), on target
   (Las Venturas 4.1-4.3). Core outline bulges a block east of Tamarind
   (world (8060, 6690)) so the edge doesn't run straight 423 m.
-- **Waiting on the country regeneration** (after phase 2 merges): country
-  joins/tiles/estates/sidewalk-loop tests and the traffic every-kind test.
-  Stale country links tie downtown city nodes to old country nodes (a
-  tuk-tuk at (371,186) heads for country node 3450 through buildings).
+- **Integration with phase 2 (2026-10-29)**, after the first regeneration
+  left 37 plan exits unlinked:
+  - Core notch at Aurum (local x 1180-1500, y -120..190) removed: it cut
+    Aurum and the streets at y 15/75/140 into east/west exits facing a
+    225 m slot the country could not reach. North edge now steps: a
+    two-block bump to row y -166 at x 1235-1460, row -97 elsewhere, NE
+    corner pulled to y -80 (one-block bumps are spurs the trim drops; a
+    gap of one block between kept ones is a notch it fills). Longest
+    non-water edge run 310 m; land ~4.28 km².
+  - Serena Causeway: world_map `overseas` starts on the axis of its
+    Ocean Drive junction (local (1753,1657), dir (0.661,0.750)) and runs
+    on it 300 m before turning east; CAUSEWAY_FROM matches. A 44 m
+    sideways offset failed the lead-in's min radius.
+  - build_country.py: Verdant Hills sites try an estate first until one
+    house has turned to its view (`view_turns`); the coin toss alone left
+    none turned.
 
 ## Decided
 

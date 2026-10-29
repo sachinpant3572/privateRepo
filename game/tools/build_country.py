@@ -680,6 +680,7 @@ class Country:
         self.flats_rings = []  # the Heights' ring streets, inner first
         self.spine = None
         self.lead_fail = []  # roads that found no exit: (name, x, y)
+        self.view_turns = 0  # estate houses turned to a view
         self.mtn = Mountain()
         self.terrain = None
 
@@ -2709,6 +2710,8 @@ class Country:
         if not self._free(poly, yaw):
             return False
         turn = self._view_turn(c, yaw, W, D, sun)
+        if turn != 0.0:
+            self.view_turns += 1
         parts, house, gate = estate_layout(W, D, turn, style, self.rng, grand)
         k = self.add_plot(c, yaw, W, D, "estate", parts)
         h = frame_point(c, yaw, house[0], house[1])
@@ -3033,7 +3036,10 @@ class Country:
                                              ["shack", "stilt_house", "trailer_home"], "camp", reg)
                     gap = self.rng.uniform(220, 450)
                 elif reg == "verdant_hills":
-                    if self.rng.random() < 0.5:
+                    # Until one house turns to its view, every hillside site
+                    # tries an estate first (on the coin toss alone, a
+                    # regeneration could leave none turned).
+                    if self.view_turns == 0 or self.rng.random() < 0.5:
                         placed = self.estate_at(q, (84.0, 84.0), "", reg, 1, sun=True) or \
                             self.estate_at(q, (72.0, 80.0), "", reg, 1)
                     else:
