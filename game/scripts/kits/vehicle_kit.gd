@@ -303,7 +303,7 @@ const CABRIOLET_ST := [[-2.4, 0.9, 0.24, 0.72], [-2.22, 0.97, 0.21, 0.86], [-0.7
 	[1.6, 0.98, 0.22, 0.97], [2.2, 0.97, 0.24, 0.97], [2.4, 0.91, 0.3, 0.84]]
 
 ## Where a seated person's node goes in an open car (car space; their hips
-## sit 0.5 m above it at look height 1, Rig.SIT_LIFT). Seat 0 is the
+## sit 0.5 m above it whatever the body, Rig.SIT_LIFT). Seat 0 is the
 ## driver's, on the left.
 const SEATS := {
 	"roadster": [Vector3(-0.36, -0.17, 0.3), Vector3(0.36, -0.17, 0.3)],

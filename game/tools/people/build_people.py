@@ -201,7 +201,20 @@ def face_codes(v0, quads, wts, skel, W):
 	code[(code == 0) & (neck + jaw > 0.3) & (front > -0.075) & (rel[:, 1] > -0.12)] = 4
 	code[head & (brow > 0.3) & (rel[:, 1] > 0.02) & (rel[:, 1] < 0.04) & (np.abs(rel[:, 0]) > 0.015)] = 2
 	code[lips > 0.5] = 1
-	return code
+	# Smooth margins, positive inside each area, so the game can cut the
+	# border between two areas where it really runs (weights scaled by 0.05
+	# to sit near the distances' size). The signs give the codes above.
+	parts = np.delete(W, PARTS.index("Head"), axis=1)
+	m_head = (W[:, PARTS.index("Head")] - parts.max(axis=1)) * 0.05
+	m_lips = (lips - 0.5) * 0.05
+	m_scalp = np.minimum(rel[:, 1] - hair_y, m_head)
+	m_scalp[ear] = np.minimum(m_scalp[ear], -0.002)
+	m_side = np.minimum.reduce([front + 0.075, -0.045 - front, -rel[:, 1], rel[:, 1] + 0.06, np.abs(rel[:, 0]) - 0.055])
+	m_beard = np.maximum(np.minimum.reduce([(jaw + cheek - 0.3) * 0.05, beard_y - rel[:, 1], m_head]),
+		np.minimum.reduce([m_side, -m_scalp, m_head]))
+	m_neck = np.minimum.reduce([(neck + jaw - 0.3) * 0.05, front + 0.075, rel[:, 1] + 0.12, -m_scalp, -m_beard])
+	margin = np.stack([m_lips, m_beard, m_neck, m_scalp], axis=1)
+	return code, margin
 
 
 def importance(v, W, joints):
@@ -234,7 +247,7 @@ def main():
 	skel = mh.load_skeleton()
 	wts = mh.load_weights()
 	W = pose.our_weights(len(v0), wts)
-	face = face_codes(v0, quads, wts, skel, W)
+	face, face_m = face_codes(v0, quads, wts, skel, W)
 
 	shapes = {}
 	for gname, g in GENDERS:
@@ -259,6 +272,7 @@ def main():
 		blocks.append(arr)
 
 	meta = {"shapes": list(shapes), "joints": {}, "eyes": {}, "bones": pose.NAMES, "meshes": {}, "face_codes": FACE_CODES,
+		"face_margins": ["lips", "beard", "neck_beard", "scalp"],
 		"source": "MakeHuman 1.x base mesh, macro targets and default rig (CC0)"}
 	for key, (vf, joints, eyes) in shapes.items():
 		meta["joints"][key] = {k: [round(float(x), 5) for x in j] for k, j in joints.items()}
@@ -306,6 +320,7 @@ def main():
 		put(mesh + "/part", part, "i")
 		put(mesh + "/along", along, "f")
 		put(mesh + "/face", face[used], "i")
+		put(mesh + "/face_m", face_m[used], "f")
 	meta["layout"] = layout
 	os.makedirs(OUT, exist_ok=True)
 	with open(os.path.join(OUT, "body.bin"), "wb") as f:

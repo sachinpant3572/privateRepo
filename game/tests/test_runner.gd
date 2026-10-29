@@ -2637,7 +2637,7 @@ func test_body_kit_builds_bodies() -> void:
 		return w
 	_check(waist.call(fat) > waist.call(slim) * 1.3, "fat widens the waist (%.3f vs %.3f)" % [waist.call(fat), waist.call(slim)])
 	_check(tall.joints.Head.y > slim.joints.Head.y + 0.05, "tall raises the head (%.2f vs %.2f)" % [tall.joints.Head.y, slim.joints.Head.y])
-	_check(BodyKit.blend({"body": "female", "weight": 1.0}) == fat, "a blended look is cached")
+	_check(is_same(BodyKit.blend({"body": "female", "weight": 1.0}), fat), "a blended look is cached")
 
 ## Every outfit and the named cast build as one rigidly skinned mesh within
 ## the triangle budget; random looks vary; old look keys still work; a phone
@@ -6010,7 +6010,8 @@ func test_people_dress_for_their_kind() -> void:
 	plain_look.erase("stripes")
 	var plain := MeshBuilder.new()
 	CharKit.build(plain, plain_look)
-	_check(hero.triangle_count() < 12000 and hero.triangle_count() >= plain.triangle_count() + 60,
+	# The hero has the dense body mesh: over twice a crowd person's triangles.
+	_check(hero.triangle_count() < 12000 and hero.triangle_count() >= 2 * plain.triangle_count(),
 		"Jules is built finer than a plain look and stays in budget (%d against %d)" % [hero.triangle_count(), plain.triangle_count()])
 
 
@@ -6539,7 +6540,8 @@ func test_people_sit_on_benches() -> void:
 	var faces: float = ped.forward().dot(Vector3.LEFT)
 	_check(sat_at > 0 and sat_at < 150 and off < 0.15 and faces > 0.95,
 		"walks over and sits on the seat in %d frames, %.2f m off, facing out (%.2f)" % [sat_at, off, faces])
-	_check(ped.collision_mask & L.PROPS == 0 and _hips_height(ped) < 0.75,
+	# The pelvis lands 5 cm over the 0.45 m seat whatever the body's hip height.
+	_check(ped.collision_mask & L.PROPS == 0 and absf(_hips_height(ped) - 0.5) < 0.04,
 		"sitting, the body clears the bench collider and the hips are at seat height (%.2f m)" % _hips_height(ped))
 	var other = _street_ped(city, rng, o + Vector3(0, 0, 1.5), 0.0)
 	await _frames(2)
@@ -8401,11 +8403,12 @@ func test_convertible_occupants_show_with_roof_down() -> void:
 	await _frames(2)
 	p.enter_vehicle(car)
 	friend.mount(car)
-	await _frames(3)
+	await _frames(30)
 	var seat := func(who, i: int) -> float:
-		# The pelvis (the body's own hip joint, scaled by height) on the seat.
-		var h: float = who.look.get("height", 1.0)
-		return who.global_position.distance_to(car.global_transform * (VehicleKit.seat("cabriolet", i) + Vector3(0, 0.92 - CharKit.hip_height(who.look) * h, 0)))
+		# The pelvis (the skeleton's hip bone) 0.5 m over the seat point.
+		var skel: Skeleton3D = who.model
+		var hips: Vector3 = skel.global_transform * skel.get_bone_global_pose(0).origin
+		return hips.distance_to(car.global_transform * (VehicleKit.seat("cabriolet", i) + Vector3(0, 0.5, 0)))
 	_check(p.visible and p.sitting and p.anim.car == 2 and seat.call(p, 0) < 0.05,
 		"top down: Jules shows at the wheel (%.2f m off the seat)" % seat.call(p, 0))
 	_check(friend.visible and friend.sitting and friend.anim.car == 1 and seat.call(friend, 1) < 0.05,

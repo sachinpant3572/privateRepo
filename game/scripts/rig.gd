@@ -51,7 +51,9 @@ class State:
 	var idle := true # may play idle acts when standing with nothing to do
 	var idle_seed := 0 # varies idle acts and dead poses between people
 
-## Hip drop for sitting on a seat at InteriorKit.SEAT_Y.
+## Hip drop for sitting on a seat at InteriorKit.SEAT_Y, for hips that rest
+## 0.92 m up (other bodies make up the difference, so the pelvis always
+## lands on the seat).
 const SIT_LIFT := -0.42
 ## Pedal bike geometry (VehicleKit builds its bicycle to it): the rider's
 ## hip joints sit PEDAL_HIP_Y over the ground at the bike's origin, the
@@ -132,6 +134,10 @@ var _add_lift := 0.0
 var _add_tilt := 0.0
 var _add_roll := 0.0
 var _down_time := 0.0
+## Rest hip height and leg bone lengths at height 1 (set from the skeleton).
+var _hip := 0.92
+var _thigh := 0.4
+var _shin := 0.4
 var _step_phase := 0.0
 ## How much the body is walking (0 standing, 1 on the move).
 var _moving := 0.0
@@ -151,6 +157,11 @@ func _init(skel: Skeleton3D) -> void:
 		_bones.append(skel.find_bone(b[0]))
 		_rot.append(Vector3.ZERO)
 		_target.append(Vector3.ZERO)
+	# Body meshes have their own joints: the seat and ride lifts and the
+	# leg reach use the rest hip height and leg lengths (at height 1).
+	_hip = skel.get_bone_rest(_bones[HIPS]).origin.y
+	_thigh = skel.get_bone_rest(_bones[L_SHIN]).origin.length()
+	_shin = skel.get_bone_rest(_bones[L_FOOT]).origin.length()
 
 
 ## The current eased rotation of bone `i` (Euler, radians).
@@ -198,18 +209,18 @@ func pose(s: State, delta: float) -> void:
 		if s.ride:
 			if s.pedal >= 0.0:
 				_pedal(s.pedal, h)
-				lift = PEDAL_HIP_Y - 0.9 * h
+				lift = PEDAL_HIP_Y + 0.02 * h - _hip * h
 				rate = 60.0
 			else:
 				_ride()
-				lift = -0.28
+				lift = -0.28 + 0.92 - _hip * h
 			grounded = false
 			_idle(s, delta, false)
 		elif s.sit:
 			_sit()
 			if s.car > 0:
 				_car_seat(s.car == 2)
-			lift = SIT_LIFT
+			lift = SIT_LIFT + 0.92 - _hip * h
 			grounded = false
 			_idle(s, delta, false)
 			if s.gesture != "":
@@ -272,15 +283,15 @@ func pose(s: State, delta: float) -> void:
 
 
 ## How far the hips must drop for the lower foot to reach the ground, from
-## the eased leg angles (thigh and shin 0.4 m at height 1).
+## the eased leg angles (the rest leg lengths, at height 1).
 func _ground_drop() -> float:
 	var dl := _leg_drop(_rot[HIPS].x + _rot[L_LEG].x, _rot[L_SHIN].x, _rot[HIPS].z + _rot[L_LEG].z)
 	var dr := _leg_drop(_rot[HIPS].x + _rot[R_LEG].x, _rot[R_SHIN].x, _rot[HIPS].z + _rot[R_LEG].z)
 	return maxf(minf(dl, dr), 0.0)
 
 
-static func _leg_drop(a: float, b: float, z: float) -> float:
-	return 0.8 - (0.4 * cos(a) + 0.4 * cos(a + b)) * cos(z)
+func _leg_drop(a: float, b: float, z: float) -> float:
+	return _thigh + _shin - (_thigh * cos(a) + _shin * cos(a + b)) * cos(z)
 
 
 func _mix(bone: int, v: Vector3, w: float) -> void:
@@ -774,8 +785,9 @@ func _pedal(a: float, h: float) -> void:
 		var t: float = a + leg[3]
 		var fwd := PEDAL_CRANK.x + sin(t) * PEDAL_ARM
 		var down := PEDAL_HIP_Y - PEDAL_CRANK.y - cos(t) * PEDAL_ARM - 0.08 * h
-		var reach := minf(Vector2(fwd, down).length(), 0.79 * h)
-		var bend := acos(reach / (0.8 * h))
+		var span := (_thigh + _shin) * h
+		var reach := minf(Vector2(fwd, down).length(), 0.99 * span)
+		var bend := acos(reach / span)
 		var thigh := atan2(fwd, down) + bend
 		_target[leg[0]].x = thigh
 		_target[leg[1]].x = -2.0 * bend

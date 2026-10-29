@@ -136,8 +136,7 @@ func _physics_process(delta: float) -> void:
 		if p == null:
 			continue
 		_seated.append(p)
-		var h: float = p.look.get("height", 1.0)
-		p.global_position = global_transform * (VehicleKit.seat(car.kind, i) + Vector3(0, 0.92 - CharacterKit.hip_height(p.look) * h, 0))
+		p.global_position = global_transform * VehicleKit.seat(car.kind, i)
 		p.rotation = Vector3(0, yaw, 0)
 		p.visible = true
 		p.sitting = true
@@ -189,8 +188,7 @@ func _figure(i: int) -> Node3D:
 	var skel := CharacterKit.build_rig(look)
 	skel.get_node("Body").material_override = MeshBuilder.material()
 	var holder := Node3D.new()
-	var h: float = look.get("height", 1.0)
-	holder.position = VehicleKit.seat(car.kind, i) + Vector3(0, 0.92 - CharacterKit.hip_height(look) * h, 0)
+	holder.position = VehicleKit.seat(car.kind, i)
 	add_child(holder)
 	holder.add_child(skel)
 	var rig = Rig.new(skel)
