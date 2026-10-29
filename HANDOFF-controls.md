@@ -65,6 +65,16 @@ back to original places".
   the Controls tab cards + overlay, the editor (GAS moved, 130%), the game
   with the moved layout.
 
+## Review fixes
+
+- A thumb that slid off a pedal or arrow and comes back onto one (without
+  lifting) presses it again (`_slid_off`); tested.
+- The editor keeps controls below its 120 px bar (`top_margin`), which
+  also keeps them off the HUD's top buttons; tested.
+- The log copies the settings deeply, so layout edits show in device logs.
+- Not added: a save-file round trip of touch_layout through save_game
+  (the JSON round trip is tested).
+
 ## Traps
 
 - _new_game sets camera_turn "north": a test of the turning-camera stick

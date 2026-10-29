@@ -187,7 +187,7 @@ func log_event(kind: String, data := {}) -> void:
 func settings_applied(settings: Dictionary) -> void:
 	var want: bool = settings.get("log", true)
 	if not started:
-		_settings = settings.duplicate()
+		_settings = settings.duplicate(true)
 		enabled = want
 		if enabled:
 			_start()
@@ -202,7 +202,7 @@ func settings_applied(settings: Dictionary) -> void:
 	for k in _settings:
 		if not settings.has(k):
 			changed[k] = "(removed)"
-	_settings = settings.duplicate()
+	_settings = settings.duplicate(true)
 	if changed.is_empty():
 		return
 	if want and not enabled:

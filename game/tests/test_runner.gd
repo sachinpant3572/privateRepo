@@ -1670,6 +1670,9 @@ func test_look_up_at_the_sky() -> void:
 	_check(cam.looking_up and cam.look_up_amount() >= 1.0, "SKY rises into Look up")
 	_check(fwd.y > 0.45 and SkyDome.looks_at_sky(cam) and env.fog_enabled, "Look up faces the sky 35 degrees up, with the horizon haze on (forward y %.2f)" % fwd.y)
 	_check(cam.global_position.distance_to(game.player.global_position + Vector3.UP * 1.7) < 3.0, "the eye sits over the player's shoulder")
+	await _idle(2)
+	var reach: float = game.atmosphere.sun.directional_shadow_max_distance
+	_check(reach >= game.atmosphere.SHADOW_FAR, "looking up toward the horizon keeps the far shadows (%.0f m)" % reach)
 	var yaw_before: float = cam.look_yaw
 	var drag := InputEventScreenDrag.new()
 	drag.relative = Vector2(40, 30)
@@ -3312,7 +3315,11 @@ func test_touches_never_stick() -> void:
 	var wobble: bool = Input.is_action_pressed("gas")
 	slide.call(5, Vector2(760, 200))
 	_check(wobble and not Input.is_action_pressed("gas"), "a wobble keeps GAS (%s); sliding off onto the road lets go" % wobble)
-	hold.call(5, Vector2(760, 200), false)
+	# The thumb comes back onto GAS without lifting: it presses again.
+	slide.call(5, touch._center(gas))
+	_check(Input.is_action_pressed("gas"), "sliding back onto GAS presses it again")
+	hold.call(5, touch._center(gas), false)
+	_check(not Input.is_action_pressed("gas") and touch._slid_off.is_empty(), "lifting after sliding back lets go")
 	# Losing focus, or the controls hiding, lets go of everything.
 	hold.call(6, touch._center(gas), true)
 	hold.call(7, touch._center(stick), true)
@@ -3433,6 +3440,9 @@ func test_settings_controls_cards_and_layout_editor() -> void:
 	page._resize_picked(0.2)
 	var grown: bool = ed.size_percent(gas) == 120 and page._edit_size.text == "Size 120%"
 	_check(moved and grown, "dragging GAS moves it (%s); + makes it 120%% (%s)" % [moved, grown])
+	# Dragged up into the editor's bar it stops below it, where it can be grabbed.
+	ed.place(gas, Vector2(from.x, 0.0))
+	_check(ed._center(gas).y - ed._extent(gas).y >= ed.top_margin - 0.5 and ed.top_margin >= 100.0, "a control can't go under the editor's bar (top %.0f, bar %.0f)" % [ed._center(gas).y - ed._extent(gas).y, ed.top_margin])
 	_find_button(page.editor, "Reset").pressed.emit()
 	await _idle(1)
 	_check(ed._center(gas).distance_to(from) < 0.5 and not game.settings["touch_layout"].has("drive.gas"), "Reset puts GAS back")

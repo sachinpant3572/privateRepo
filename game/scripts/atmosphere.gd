@@ -14,6 +14,8 @@ const Birds = preload("res://scripts/birds.gd")
 ## The nearest the perspective shadows reach (m); a parked camera frames
 ## about 30 m of ground.
 const SHADOW_MIN := 40.0
+## Shadow reach while looking up or in a close-up (the reach before 0.25.2).
+const SHADOW_FAR := 160.0
 
 ## Sky colour, ambient colour and energy, sun colour and energy, by hour.
 const KEYS := [
@@ -84,10 +86,13 @@ func set_view(perspective: bool) -> void:
 	if perspective:
 		sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 		sun.directional_shadow_split_1 = 0.4
+		# Fade only over the last tenth, past the top of the screen.
+		sun.directional_shadow_fade_start = 0.9
 		_fit_shadows(true)
 	else:
 		sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
 		sun.directional_shadow_max_distance = 300.0
+		sun.directional_shadow_fade_start = 0.8
 		sun.directional_shadow_split_1 = 0.45
 		sun.directional_shadow_split_2 = 0.62
 		sun.directional_shadow_split_3 = 0.8
@@ -130,9 +135,10 @@ func _process(delta: float) -> void:
 
 ## In perspective the shadows reach past the ground at the top of the screen,
 ## which is about 1.4 times the camera's depth (TopDownCamera.view_depth). They
-## grow at once (with 10% to spare, so a camera backing out steadily doesn't
-## refit every frame) and shrink only once 25% too far, so the cascades
-## don't shimmer.
+## grow before the top of the screen nears the fade (set with 10% to spare,
+## so a camera backing out steadily doesn't refit every frame) and shrink
+## only once 25% too far, so the cascades don't shimmer. Look up and the
+## close-ups see toward the horizon, past view_depth: they keep the old reach.
 func _fit_shadows(force := false) -> void:
 	if not _perspective:
 		return
@@ -143,8 +149,10 @@ func _fit_shadows(force := false) -> void:
 			sun.directional_shadow_max_distance = 90.0
 		return
 	var want := maxf(SHADOW_MIN, depth * 1.4)
+	if cam.has_method("look_up_amount") and (cam.call("look_up_amount") > 0.0 or cam.call("close_up_amount") > 0.0):
+		want = maxf(want, SHADOW_FAR)
 	var now := sun.directional_shadow_max_distance
-	if force or want > now or want * 1.25 < now:
+	if force or want * 1.05 > now or want * 1.25 < now:
 		sun.directional_shadow_max_distance = want * 1.1
 
 

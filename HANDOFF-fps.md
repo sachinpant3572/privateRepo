@@ -44,6 +44,16 @@ Sachin, 2026-10-29, with a 0.25.1 device log (SM-S938B, Ultra, arrows):
 - Tests: test_perspective_camera checks 2 cascades and a reach of
   1.25-2x view_depth, and 4 cascades / 300 m in classic.
 
+## Review fixes
+
+- Look up and mission close-ups see toward the horizon, past view_depth:
+  while either is on, the reach is at least SHADOW_FAR (160 m).
+- Grows once want x 1.05 passes the reach (was want), and perspective
+  fades shadows over the last 10% (fade_start 0.9): the top strip of the
+  screen is never in the fade while the camera backs out.
+- Still open: looking downhill, ground past view_depth can sit outside the
+  reach (view_depth assumes level ground).
+
 ## Settings-close hitch (not changed)
 
 - One 61 ms frame on the frame Settings closed (paused -> playing), with

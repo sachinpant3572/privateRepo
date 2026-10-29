@@ -477,6 +477,7 @@ func _build_editor() -> void:
 	bar_bg.color = Color(0, 0, 0, 0.6)
 	bar_bg.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	bar_bg.offset_bottom = 120
+	edit_touch.top_margin = bar_bg.offset_bottom
 	bar_bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	editor.add_child(bar_bg)
 	var col := VBoxContainer.new()

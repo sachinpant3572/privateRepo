@@ -668,8 +668,8 @@ func _style(s: State, moving: float, run: float) -> void:
 			# Arms higher and looser, hunched, a look back now and then.
 			_target[L_ARM].z -= 0.3 * moving
 			_target[R_ARM].z += 0.3 * moving
-			_target[L_FORE].x = 0.9 + 0.3 * maxf(0.0, -sw)
-			_target[R_FORE].x = 0.9 + 0.3 * maxf(0.0, sw)
+			_target[L_FORE].x = 0.9 + 0.3 * maxf(0.0, -sw) * moving
+			_target[R_FORE].x = 0.9 + 0.3 * maxf(0.0, sw) * moving
 			_target[SPINE].x -= 0.1
 			var back := smoothstep(0.7, 0.95, sin(_time * 2.1))
 			_target[HEAD].y += 1.0 * back * (1.0 if fmod(floorf(_time * 2.1 / TAU), 2.0) == 0.0 else -1.0)

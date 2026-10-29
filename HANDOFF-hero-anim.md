@@ -53,6 +53,11 @@ same for his other actions."
 - Rejected: imported mocap clips. The skeleton has 17 bones and the
   network to fetch CC0 libraries is uncertain; retargeting is a project.
 
+## Review fixes
+
+- The panic style's forearm pump is scaled by `moving`: a panicked NPC
+  standing still (before it runs, or blocked) no longer pumps in place.
+
 ## Traps
 
 - Skeleton rest (hero): hip 1.006, knee 0.550, ankle 0.077 (sole -0.03),

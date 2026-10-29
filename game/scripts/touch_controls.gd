@@ -47,6 +47,9 @@ const MAX_SCALE := 1.6
 var labels := {}
 ## HUD controls (the minimap) whose taps the stick and buttons ignore.
 var exclusions: Array = []
+## The layout editor keeps placed controls below its top bar (and so clear
+## of the HUD's top buttons).
+var top_margin := 0.0
 ## Set by the HUD: in a car, and which driving layout.
 var driving := false
 var scheme := "stick"
@@ -65,6 +68,9 @@ var _stick_pos := Vector2.ZERO
 ## Floating arrows: -1 left, 0 none, 1 right.
 var _float_dir := 0
 var _button_touches := {}
+## Touches that slid off a button and are still down: sliding back onto one
+## presses it again.
+var _slid_off := {}
 var _pad := StyleBoxFlat.new()
 
 
@@ -134,6 +140,7 @@ func show_mode(in_car: bool, layout_name: String) -> void:
 func release_all() -> void:
 	for index in _button_touches.keys():
 		_release(index)
+	_slid_off.clear()
 	_let_go_stick()
 	queue_redraw()
 
@@ -184,6 +191,7 @@ func _input(event: InputEvent) -> void:
 			# A release this layer never saw: let that touch go first.
 			if _button_touches.has(event.index):
 				_release(event.index)
+			_slid_off.erase(event.index)
 			if event.index == _stick_touch:
 				_let_go_stick()
 			if exclusions.any(func(c): return c.is_visible_in_tree() and c.get_global_rect().has_point(event.position)):
@@ -199,6 +207,7 @@ func _input(event: InputEvent) -> void:
 		else:
 			if _button_touches.has(event.index):
 				_release(event.index)
+			_slid_off.erase(event.index)
 			if event.index == _stick_touch:
 				_let_go_stick()
 		queue_redraw()
@@ -223,6 +232,15 @@ func _input(event: InputEvent) -> void:
 			elif action == "" and not _near(_button_touches[event.index], event.position):
 				# Slid off onto empty screen: let go.
 				_release(event.index)
+				_slid_off[event.index] = true
+				queue_redraw()
+		elif _slid_off.has(event.index):
+			var action := _button_at(event.position)
+			if action != "":
+				# The thumb came back onto a pedal or arrow.
+				_slid_off.erase(event.index)
+				_button_touches[event.index] = action
+				Input.action_press(action)
 				queue_redraw()
 
 
@@ -350,7 +368,7 @@ func find_item(id: String) -> Dictionary:
 func place(b: Dictionary, pos: Vector2) -> void:
 	var e: Dictionary = layout.get(b.id, {})
 	var half := _extent(b)
-	pos = Vector2(clampf(pos.x, half.x, size.x - half.x), clampf(pos.y, half.y, size.y - half.y))
+	pos = Vector2(clampf(pos.x, half.x, size.x - half.x), clampf(pos.y, top_margin + half.y, size.y - half.y))
 	var off := pos - _corner(b)
 	e["x"] = off.x
 	e["y"] = off.y
