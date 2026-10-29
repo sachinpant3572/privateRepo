@@ -185,15 +185,14 @@ cut = bank.intersection(LineString([(FREIGHT_END_X, -100.0), (FREIGHT_END_X, 500
 b = bank.project(cut if cut.geom_type == "Point" else min(cut.geoms, key=lambda q: q.y))
 g = bank.project(Point(SPUR_GENTLE))
 pts = list(substring(bank, a, g).simplify(15.0).coords) + list(substring(bank, g, b).simplify(1.0).coords)[1:]
-pts = round_corners(pts, SPUR_R)
-pts = [tuple(h), SPUR_BEND] + pts
+pts = round_corners([tuple(h), SPUR_BEND] + pts, SPUR_R)
 spur = next((r for r in w["routes"] if r["id"] == "freight_docks"), None)
 if spur is None:
     spur = {"id": "freight_docks", "name": "Morrow Freight Line (docks spur)", "type": "rail", "phase": fr.get("phase", 3)}
     w["routes"].insert(w["routes"].index(fr) + 1, spur)
 spur["line"] = W(pts)
-print("freight spur: min radius %.0f m on the bank" % min_radius(pts[2:]))
-assert min_radius(pts[2:]) >= 170.0
+print("freight spur: min radius %.0f m" % min_radius(pts))
+assert min_radius(pts) >= 170.0
 routes["freight_docks"] = spur
 changed.append("freight_docks")
 
