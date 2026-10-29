@@ -50,18 +50,25 @@ func _init(vehicle) -> void:
 	_company = r.randf() < PASSENGER_CHANCE
 
 
-func _top(up: bool) -> MeshInstance3D:
-	var key := "%s|%s" % [car.kind, "up" if up else "down"]
+## Kind `kind`'s top, raised or folded: [fabric mesh, glass mesh or null],
+## built once (Vehicle.prewarm builds them all at load).
+static func top_meshes(kind: String, up: bool) -> Array:
+	var key := "%s|%s" % [kind, "up" if up else "down"]
 	if not _tops.has(key):
 		var mb := MeshBuilder.new()
 		var g := MeshBuilder.new()
-		VehicleKit.build_top(mb, car.kind, up, g)
+		VehicleKit.build_top(mb, kind, up, g)
 		_tops[key] = [mb.commit(), null if g.verts.is_empty() else g.commit()]
+	return _tops[key]
+
+
+func _top(up: bool) -> MeshInstance3D:
+	var meshes := top_meshes(car.kind, up)
 	var inst := MeshInstance3D.new()
-	inst.mesh = _tops[key][0]
-	if _tops[key][1] != null:
+	inst.mesh = meshes[0]
+	if meshes[1] != null:
 		var glass := MeshInstance3D.new()
-		glass.mesh = _tops[key][1]
+		glass.mesh = meshes[1]
 		inst.add_child(glass)
 	add_child(inst)
 	return inst

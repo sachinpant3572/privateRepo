@@ -12,9 +12,12 @@ const PED_COUNT := 18
 ## events and graphics quality).
 const TRAFFIC_COUNT := 8
 const PED_SPAWN := Vector2(30.0, 50.0)
-const CAR_SPAWN := Vector2(40.0, 70.0)
+## Traffic keeps to a ring just off screen (times reach()), so the budget's
+## cars are mostly on the streets round the player, not spread thin out of
+## sight: at 40-70 m and 95 m a rush hour's 11 cars left none within 50 m.
+const CAR_SPAWN := Vector2(30.0, 55.0)
 const PED_DESPAWN := 70.0
-const CAR_DESPAWN := 95.0
+const CAR_DESPAWN := 65.0
 const PARK_SPAWN := 90.0 # parked cars appear out of view within this range
 const PARK_DESPAWN := 120.0
 

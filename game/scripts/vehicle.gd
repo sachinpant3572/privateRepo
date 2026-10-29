@@ -556,6 +556,7 @@ func release_player() -> void:
 ## lane `in_lane`.
 func start_traffic(c, from: int, to: int, in_lane := 0) -> void:
 	city = c
+	_leave_junction()
 	driver = Driver.TRAFFIC
 	_prev_node = from
 	_next_node = to
@@ -577,6 +578,7 @@ func join_traffic_here() -> void:
 			if back.dot(-fwd) > best:
 				best = back.dot(-fwd)
 				behind = m
+	_leave_junction()
 	driver = Driver.TRAFFIC
 	_prev_node = behind
 	_next_node = ahead
@@ -900,6 +902,16 @@ func _find_traffic() -> void:
 	_traffic = get_tree().get_first_node_in_group("traffic")
 	if _traffic != null:
 		_seg = Vector2i(-2, -2)
+
+
+## Forgets an earlier stint in traffic (a taxi or police car rejoining,
+## maybe on the same street): gives up its all-way stop place, and the next
+## frame reads the street afresh, so an old release does not run a red.
+func _leave_junction() -> void:
+	if _queued >= 0 and _traffic != null:
+		_traffic.depart(_queued, self)
+	_queued = -1
+	_seg = Vector2i(-2, -2)
 
 
 ## On a new street: its limit, lane layout and the junction ahead's rule.
@@ -1588,9 +1600,11 @@ func _damage(amount: float, raw := false) -> void:
 	unload_all()
 	if is_in_group("xray"):
 		remove_from_group("xray") # nothing to show through walls any more
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.12, 0.11, 0.1)
-	_skin(mat, mat)
+	if _cls["class"] != "cycle":
+		# Burnt out. A bicycle never burns; it is just bent.
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(0.12, 0.11, 0.1)
+		_skin(mat, mat)
 	if driver == Driver.PLAYER and occupant != null:
 		occupant.exit_vehicle(true)
 	driver = Driver.NONE
@@ -1880,6 +1894,9 @@ static func prewarm() -> void:
 			kinds[k] = true
 	for k in kinds:
 		_prewarm_one(k, VehicleKit.PALETTES.get(k, VehicleKit.PAINTS))
+		if VehicleKit.KINDS.get(k, {}).get("convertible", false):
+			Convertible.top_meshes(k, true)
+			Convertible.top_meshes(k, false)
 	_prewarm_one("police", [DEFAULT_PAINT])
 
 
