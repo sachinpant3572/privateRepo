@@ -129,44 +129,19 @@ the Framerates?"
   frame budget; the far LOD is under half.
 - Cast looks set the body keys; convertible seats use `hip_height`.
 
-## Review fixes (10-29, review of 9d7ccca..7f7fe5d)
+## Review fixes (10-29)
 
-- Seats and rides: the rig's lifts assumed the old 0.92 m hip; now
-  `lift + (0.92 - hip) * h` with `hip` from `hip_height(look)` stored on the
-  Rig at build; `_leg_drop` takes the look's thigh and shin lengths.
-- Build time (crowd 2.8 -> 25-36 ms, hero 85 ms, on the main thread at
-  spawn): the region/cut work depends only on mesh, gender, the dress's
-  shape fields and which regions merge, so it is cached as a recipe
-  (output vertex = source a, b, t, region; skin mix; wound near/far
-  indices; per-vertex region mask for the push). A build only lerps.
-  fit() uses per-mesh edge and limb vertex lists instead of whole sweeps.
-  Measured (12 category looks, this container, ms): crowd add_body 21.1 ->
-  1.2 with the recipe cached, 12-13 for a new recipe (LRU of 64 dresses);
-  fit 5.8 -> 3.5 (results byte-identical); whole CharacterKit.build 25.5 ->
-  about 5. Hero add_body 4.1 cached / 32 new, whole build about 8-14 (was 85).
-- Hats: covering headwear sets the scalp thickness to 0 (no hair through).
-- T-junctions: three-region triangles split as a fan through a centre
-  point; whole-region triangles (hidden corner) take their neighbours'
-  cut points on cut edges, so no edge is cut on one side only.
-- Face lines: build_people.py exports a smooth margin per face code
-  (`face_m` block, 4 floats: lips, beard, neck beard, scalp); an edge
-  between two face codes is cut where the deciding code's margin is 0.
+Detail in HANDOFF-people-v2-archive.md. In short: seat and ride lifts use the
+look's hip height; cut work cached as recipes (crowd build 25.5 -> about 5 ms,
+hero 85 -> 8-14 ms); covering hats flatten the scalp; no T-junctions; face
+lines cut by exported margins; collars are 8-sided rings, so the neck warp
+circumscribes the neck (r / cos(pi/8)) and clears the top's cloth near the
+neckline (pokes were up to 12 mm; now 0 on most outfits, at most 8 mm at the
+back of a female blazer neck).
 
 ## Traps
 
 - `git ls-tree -l` on a blobless clone fetches every blob (use sparse);
   `pkill -f <pat>` kills its own shell if the pattern is in the command.
 
-## Hero systems (planned, after the kit integration)
-
-Sachin, 10-29: "We can also setup a skinny, muscular, fat system like in
-GTA for our Hero, and Hair + Beard growth mechanism like from RDR2."
-- Body: hero `fat` and `muscle` stats (0..1) drive the look's weight and
-  muscle blend. Eating (diner meals, store food, bag snacks) adds fat;
-  sprinting, walking and boxing at The Pit burn it; boxing and workouts
-  add muscle; going long without food loses both slowly. Saved with the
-  game; the hero mesh is rebuilt when a stat moves past a step.
-- Hair and beard: lengths grow with game days (hair slower than beard),
-  drawn as length steps of the kit's hair and beard; a barber place trims
-  or styles them for cash. Saved with the game.
-
+Hero systems (#97, planned): see HANDOFF-hero-systems.md.

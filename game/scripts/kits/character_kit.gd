@@ -1441,7 +1441,11 @@ static func _warp(mb, look: Dictionary, o: Dictionary, b: Dictionary, first_v: i
 				# a quarter lower under the jaw.
 				var th := atan2(p.z, p.x)
 				var yk := BodyKit.neckline_y(f.neckline, th) + (p.y - 1.465) * (1.0 - 0.25 * maxf(0.0, -sin(th)))
-				var r := _fit_r(rr / 0.07, BodyKit.slice_r(neck, yk, th) + WARP_GAP * 2.0, 0.07)
+				# Collars are 8-sided rings: their corners go out far enough
+				# that the flat sides between them clear the neck. Near the
+				# neckline they also clear the top's cloth on the shoulders.
+				var cloth: float = thick[BodyKit.TOP] * (1.0 - smoothstep(0.0, 0.03, yk - BodyKit.neckline_y(f.neckline, th)))
+				var r := _fit_r(rr / 0.07, BodyKit.slice_r(neck, yk, th) / cos(PI / 8.0) + cloth + WARP_GAP * 2.0, 0.07)
 				q = q.lerp(Vector3(cos(th) * r, yk, BodyKit.slice_cz(neck, yk) + sin(th) * r), an)
 		elif BodyKit.LIMBS.has(bone):
 			var seg: Array = OLD_LIMBS[bone]
