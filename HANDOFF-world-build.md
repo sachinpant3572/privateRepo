@@ -101,9 +101,11 @@ helipad needs helicopters: task #82, not started (Sachin's word needed).
     (within 61 m of the footprint) lead in to an exit (`_to_exit`); the
     Brisa cross streets start on the drive as cut (`drive_cut`), not on a
     lead-in (one ran inland past Palmetto Row's end, a dead end).
-  - Tests: the hill-drive check skips vertices where ground and pad lie
-    within 3 cm, and the tucked end's corners (ground + ROUTE_OUT_Y +
-    0.01). `_bend_routes` runs to reach - TUCK - 0.05 (`_route_out`'s edge).
+  - Tests: hill-drive check skips vertices with ground and pad within 3 cm
+    and the tucked end's corners; `_bend_routes` runs to reach - TUCK -
+    0.05. Grid-border and rail-shelf checks count only play-area cells (the
+    taper band outside it still rises); the suburb walk test stands on the
+    loop with the highest share of suburb sidewalk (framed loops hug the edge).
   - city.gd loads every world_map region for `district_at` (phase 3+ after
     1-2): the summit lies in Red Pine (phase 3) and read "Jade Gate".
   - Review fixes: freight_line keeps out of the city (pass foot → Morrow
@@ -138,12 +140,10 @@ helipad needs helicopters: task #82, not started (Sachin's word needed).
 
 ## Traps
 
-- Godot runs need `timeout`; gates per CLAUDE.md.
 - The field rotates near the river bend (x ~1000-1450, south bank): a line
   can swing onto the other family. The turn limits stop it; a long straight
   join jump (Morrow, 103 m) came from a join distance of art_sep*0.4, now
   ART_JOIN 45 m.
 - Cable Hill: a ring within ~75 m of the crest grazes Mirador and the hug
   check drops it whole (with the radials' inner ends).
-- Plan renders: /tmp/p1/view.py-style script on a `tests/plan_dump.gd`
-  dump; blue = no face (water or outside).
+- Plan renders: a view script on a `tests/plan_dump.gd` dump; blue = no face.
