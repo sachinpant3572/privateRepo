@@ -127,13 +127,16 @@ there run 100-130 m); lights forced with `_set_phase` and `go_end = 1e9`.
 - Probe (xvfb, opengl3, 11 cars): physics 3.0-3.4 ms a frame with the
   controller running, 2.8-4.1 paused: its cost is below the probe's
   noise. Lenses: one MultiMesh draw; no lights.
-- Finding, not changed (population's spawn ring, not this design): the
-  car bubble scales with the camera (`reach()` up to 2.1x), so at the
-  driving zoom cars spawn 40-145 m out and despawn past about 200 m. 11
-  cars over that disc leave 0-3 on screen even at the downtown rush, so
-  the shot doesn't read as busy; the counts in the log carry it. Fix:
-  a tighter ring for traffic (spawn just off screen, despawn sooner),
-  about an hour with test retunes.
+- Spawn ring (main session, after merge): traffic now spawns 30-55 m
+  out on foot, and a wider view moves the ring out by its edge
+  (30 * (reach - 1)) rather than scaling it; despawn 65 m plus the same.
+  Driving view: 30-88 m (was 40-147). The 8:00 rush shot went from 0 to 2
+  of 11 cars within 50 m. The rest is the budget: 11 cars can't fill a
+  downtown frame. Raising rush budgets is the next lever, but it needs a
+  phone frame-time check first (desktop probe: 3.3 ms physics for 11 cars).
+- Review fixes (main session): taxis and police rejoining traffic drop
+  their old all-way stop place and re-read the street (`_leave_junction`);
+  prewarm builds convertible tops; a wrecked bicycle isn't charred.
 
 ## Traps
 
