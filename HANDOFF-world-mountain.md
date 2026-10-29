@@ -83,6 +83,31 @@ Built by a sub-agent in worktree `.claude/worktrees/agent-a01c2f4e315ebd3c5`, br
   re-laid Wheaton Road left a cottage with no way in).
 - W-18 `tools/mountain_world_map.py <pre-range world_map.json>` writes the re-laid routes and bridge
   landmarks into world_map.json (orig: `git show b6e2e21:game/data/world_map.json`).
+- W-19 **Shared stretches** (`Mountain.grade`): where a road or track runs near-parallel (|cos| >=
+  0.7) within the two half widths + 16 m of an earlier non-trail, non-rail way, its points take that
+  way's height, kept only where every pin stays reachable at the class grade (without that check it
+  made new kinks: Canyon 0.17, Larkspur 0.5). This fixed Crest Drive and Summit Fire Road.
+- W-20 **Hairpin legs**: the A* has no path memory, so after a hairpin a leg can drift back to 9-14 m
+  of the leg below; the two cores at different heights share grid nodes and the grade spikes.
+  `separate()` (mountain_plan.py; `--separate ids` re-runs it on stored lines) pushes a line's own
+  near-parallel legs apart to 2hw + 10 m (at most 2r - 1), smoothed, ends fixed, <= 12 m; specs with
+  `separate=True` (calder 5.8 m, west_ridge_track 2.6 m). A spec's `apart` ids are ways it alone is
+  pushed off (hw + ohw + 10 m, not within 12 m of a joint/crossing); `apart` on Larkspur made
+  4.8 m kinks and was dropped. A blanket push off every earlier way was tried and dropped: Calder
+  rides on Observatory/Crest/Canyon for stretches (shared carriageway) and slid off (610 m). Lines
+  joining a moved line ("on" ends) are snapped back on (`_resnap`, 40 m taper).
+  The tracks' real trouble was their ends: West Ridge met Calder at (731,-2539) and then ran 760 m
+  more beside it to (860,-2620); Larkspur crossed Calder 8 times and shadowed Summit Fire Road 8 m
+  off. Both now end "on" Calder where they first meet it ((731,-2539); (1340,-1343)).
+- W-23 **join_ends** skips the summit car-park end of Mount Calder Road: it had tied it with a
+  straight 79 m 47% track to West Ridge Track's junction.
+- W-21 **Grid priority** (`Mountain.grid`): the rail core always owns a node (dk = d - 1000; Route 9
+  had creased the shelf), trails yield to any road (d + 1000) and a trail's margin no longer flattens
+  a pad (the deck). Partly-covered rail spans are clipped to the pass, not dropped (`_rail_finish`).
+  test_mount_calder skips rail points off the height grid (past the play area: drawn only).
+- W-22 **Summit**: sites moved clear of the spiral (SUMMIT_SITES comment: a box needs hw + 15 m from
+  a road); Mount Calder Road's last 60 m are level into the car park (`grade(flat_end=)`); the
+  restaurant sits on the car park's level (one terrace; it is 8 m away).
 
 ## Open issues
 

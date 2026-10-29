@@ -2142,6 +2142,8 @@ class Country:
                     continue
                 if dist(end, OBSERVATORY_ROAD_END) < 3.0:
                     continue  # its drive carries on to the observatory
+                if dist(end, SUMMIT_SITES["car_park"][:2]) < 3.0:
+                    continue  # Mount Calder Road ends in the summit car park (a link from there ran 47% down the top)
                 touching = [j for j in tree.query(p.buffer(2.0)) if j != i and lines[j].distance(p) < 2.0]
                 if touching:
                     continue

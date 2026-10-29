@@ -13,6 +13,7 @@ river). The cells it finds are smoothed into a polyline, the hairpins drawn
 as arcs. See HANDOFF-world-mountain.md (W-3).
 
 Usage: python3 game/tools/mountain_plan.py [name ...]   (default: all)
+       python3 game/tools/mountain_plan.py --separate name ...   (re-run separate() on stored lines)
 """
 
 import heapq
@@ -312,6 +313,88 @@ def check(mtn, pts, cls, spans=()):
     return g, cut, line.length
 
 
+def separate(pts, cls, hairpin_r, apart=(), gap=10.0, keep=40.0, joint=12.0, iters=120, max_move=12.0, log=print):
+    """Pushes a line's own converging legs apart, returning the moved points.
+
+    The A* has no memory of its own path, so after a hairpin a leg can drift
+    back to within 9-14 m of the leg below (W-20). Two road cores that close,
+    at different heights, leave the 8 m height grid no node between them to
+    grade the bank on, so each leg's edge takes the other's height and the
+    road's grade spikes. Every near-parallel pair of points (|cos| > 0.6)
+    more than a hairpin's bend apart along the line and closer than the
+    width plus `gap` (at most the hairpin's own 2r) is pushed apart, the push
+    smoothed along the line so the bends stay round. The ends (`keep` m) stay
+    put and no point moves more than `max_move` m. Runs beside other ways are
+    left alone (the grading pins a shared stretch to one height, W-19) except
+    the ways in `apart` ([(points, class)]), which this line alone is pushed
+    off, to the two half widths plus `gap`, but for `joint` m round where it
+    joins or crosses them (so a shallow crossing is opened out)."""
+    from scipy.spatial import cKDTree
+    P0 = np.asarray(pts, dtype=float)
+    n = len(P0)
+    s = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(P0, axis=0), axis=1))])
+    w = np.clip((np.minimum(s, s[-1] - s) - keep) / 30.0, 0.0, 1.0)
+    sep = 2.0 * M._HALF[cls] + gap
+    if hairpin_r > 0:
+        sep = min(sep, 2.0 * hairpin_r - 1.0)
+    win = math.pi * hairpin_r + 2.0 * sep  # a hairpin's own two legs, round its bend
+    me = LineString(P0)
+    obst = []
+    for opts, ocls in apart:
+        q = np.array(shapely.segmentize(LineString(opts), 2.0).coords)
+        touch = shapely.distance(shapely.points(q[:, 0], q[:, 1]), me) < 2.0
+        if touch.any():
+            tree = cKDTree(q[touch])
+            w[tree.query(P0, distance_upper_bound=joint)[0] < joint] = 0.0
+            q = q[tree.query(q, distance_upper_bound=joint)[0] >= joint]
+        if len(q) > 2:
+            qt = np.gradient(q, axis=0)
+            qt /= np.maximum(np.linalg.norm(qt, axis=1), 1e-9)[:, None]
+            obst.append((cKDTree(q), q, qt, M._HALF[cls] + M._HALF[ocls] + gap))
+    D = np.zeros_like(P0)
+    for it in range(iters):
+        P = P0 + D
+        t = np.gradient(P, axis=0)
+        t /= np.maximum(np.linalg.norm(t, axis=1), 1e-9)[:, None]
+        pairs = cKDTree(P).query_pairs(sep, output_type="ndarray")
+        worst = 0.0
+        if len(pairs):
+            i, j = pairs[:, 0], pairs[:, 1]
+            ok = (np.abs(s[i] - s[j]) > win) & (np.abs(np.sum(t[i] * t[j], axis=1)) > 0.6) & ((w[i] > 0) | (w[j] > 0))
+            pairs = pairs[ok]
+        F = np.zeros_like(P)
+        cnt = np.zeros(n)
+        if len(pairs):
+            i, j = pairs[:, 0], pairs[:, 1]
+            v = P[i] - P[j]
+            d = np.maximum(np.linalg.norm(v, axis=1), 1e-6)
+            worst = float(np.max(sep - d))
+            push = (v / d[:, None]) * ((sep - d) * 0.5)[:, None]
+            np.add.at(F, i, push)
+            np.add.at(F, j, -push)
+            np.add.at(cnt, i, 1.0)
+            np.add.at(cnt, j, 1.0)
+        for tree, q, qt, osep in obst:
+            d, k = tree.query(P, distance_upper_bound=osep)
+            hit = np.nonzero((k < len(q)) & (w > 0))[0]
+            hit = hit[np.abs(np.sum(t[hit] * qt[k[hit]], axis=1)) > 0.6]
+            if len(hit):
+                dd = np.maximum(d[hit], 1e-6)
+                worst = max(worst, float(np.max(osep - dd)))
+                F[hit] += ((P[hit] - q[k[hit]]) / dd[:, None]) * (0.5 * (osep - dd))[:, None]
+                cnt[hit] += 1.0
+        if worst < 0.2:
+            break
+        F /= np.maximum(cnt, 1.0)[:, None]
+        F = ndimage.gaussian_filter1d(F, 6.0, axis=0, mode="nearest") * 1.5
+        D += F * w[:, None]
+        mag = np.linalg.norm(D, axis=1)
+        D *= np.minimum(1.0, max_move / np.maximum(mag, 1e-9))[:, None]
+    log("  separate: %d rounds, moved up to %.1f m, still %.1f m short (of %.1f m)" % (
+        it + 1, float(np.max(np.linalg.norm(D, axis=1))), worst, sep))
+    return [tuple(p) for p in P0 + D]
+
+
 # --- The lines -------------------------------------------------------------------
 # Each: id, class, name, tag, way (points (x, y), or ("on", id, (x, y)) for
 # the point of an earlier line nearest (x, y)), head / tail (fixed points
@@ -363,16 +446,18 @@ SPECS = [
          way=[("on", "crest", (1110, -1388)), (1086, -1250)], gmax=0.18, hairpin_r=8.0),
     # Mount Calder Road: the main way up, off Observatory Road, to the
     # summit car park.
-    dict(id="calder", cls="road", name="Mount Calder Road", tag="calder",
+    dict(id="calder", separate=True, cls="road", name="Mount Calder Road", tag="calder",
          way=[("on", "observatory", (1015, -470)), M.SUMMIT_SITES["car_park"][:2]], gmax=0.10, hairpin_r=17.0,
          bbox=(300, -3000, 2000, -300)),  # the south face only: a wider box runs out of states
-    # The 4x4 shortcuts: up the West Ridge from the fire lookout, and up the
-    # east face from Old Post Road, each to the main road's upper loops.
-    dict(id="west_ridge_track", cls="track", name="West Ridge Track", tag="track",
-         way=[("on", "firebreak_road", (150, -4030)), (400, -3180), ("on", "calder", (860, -2620))], gmax=0.20,
+    # The 4x4 shortcuts: up the West Ridge from the fire lookout to the main
+    # road's upper loops, and up the east foot from Old Post Road to its lower
+    # loops (run on to the upper loops it crossed Calder 8 times and shadowed
+    # Summit Fire Road 8 m off; W-20).
+    dict(id="west_ridge_track", separate=True, apart=("calder",), cls="track", name="West Ridge Track", tag="track",
+         way=[("on", "firebreak_road", (150, -4030)), (400, -3180), ("on", "calder", (731, -2539))], gmax=0.20,
          hairpin_r=8.0, hairpin_cost=150.0),
-    dict(id="larkspur_track", cls="track", name="Larkspur Track", tag="track",
-         way=[("on", "old_post_road", (2450, -1500)), ("on", "calder", (1400, -2450))], gmax=0.20, hairpin_r=8.0,
+    dict(id="larkspur_track", separate=True, cls="track", name="Larkspur Track", tag="track",
+         way=[("on", "old_post_road", (2450, -1500)), ("on", "calder", (1340, -1343))], gmax=0.20, hairpin_r=8.0,
          hairpin_cost=150.0),
     # Forest trails: from the observatory up the south face to the summit
     # deck, and from Route 9 up past Hawk and Raven peaks.
@@ -446,12 +531,64 @@ def plan_line(mtn, spec, done, log=print):
             tuple(round(v) for v in a), tuple(round(v) for v in b), n, len(cells), sum(c[1] == "h" for c in cells),
             "".join(c[1] for c in cells if c[1] in "tb")))
     pts += [tuple(map(float, p)) for p in spec.get("tail", [])]
+    if spec.get("separate"):
+        pts = _separate(spec, pts, spans, done, log)
     g, cut, length = check(mtn, pts, spec["cls"], spans)
     log("%s: grade %.3f, cut/fill %.1f m, %.0f m, spans %s" % (
         spec["id"], g, cut, length, [(round(a), round(b), k) for a, b, k in spans]), flush=True)
     return {"cls": spec["cls"], "name": spec["name"], "tag": spec["tag"],
             "keep_head": [list(p) for p in spec.get("keep_head", [])],
             "pts": [[round(x, 1), round(y, 1)] for x, y in pts], "spans": [[round(a, 1), round(b, 1), k] for a, b, k in spans]}
+
+
+def _separate(spec, pts, spans, done, log=print):
+    """separate() for a spec (no spans: their arc lengths would shift)."""
+    if spans:
+        raise RuntimeError("separate: a line with tunnels or bridges is not moved")
+    apart = [(done[k]["pts"], done[k]["cls"]) for k in spec.get("apart", ())]
+    return separate(pts, spec["cls"], spec.get("hairpin_r", 0.0), apart, log=log)
+
+
+def _resnap(spec, pts, done):
+    """Moves an end that joins an earlier line ("on" in `way`) back onto it,
+    tapered over 40 m, after that line was moved by separate()."""
+    P = np.asarray(pts, dtype=float)
+    s = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(P, axis=0), axis=1))])
+    for end, idx in ((spec["way"][0], 0), (spec["way"][-1], -1)):
+        if not (isinstance(end, tuple) and len(end) == 3 and end[0] == "on"):
+            continue
+        line = LineString(done[end[1]]["pts"])
+        q = np.array(line.interpolate(line.project(Point(P[idx]))).coords[0])
+        off = q - P[idx]
+        far = s if idx == 0 else s[-1] - s
+        P += off[None, :] * np.clip(1.0 - far / 40.0, 0.0, 1.0)[:, None]
+    return [tuple(p) for p in P]
+
+
+def resep(names):
+    """Re-runs separate() on stored lines (no new A* search), for specs with
+    `separate`, then snaps the ends of lines that join them back on."""
+    mtn = M.Mountain()
+    done = json.loads(OUT.read_text())
+    moved = set()
+    for spec in SPECS:
+        sid = spec["id"]
+        if sid not in done:
+            continue
+        pts = [tuple(p) for p in done[sid]["pts"]]
+        joins = {e[1] for e in (spec["way"][0], spec["way"][-1]) if isinstance(e, tuple) and len(e) == 3 and e[0] == "on"}
+        if joins & moved:
+            pts = _resnap(spec, pts, done)
+        if sid in names and spec.get("separate"):
+            print(sid, flush=True)
+            pts = _separate(spec, pts, done[sid]["spans"], done)
+            g, cut, length = check(mtn, pts, spec["cls"], done[sid]["spans"])
+            print("%s: grade %.3f, cut/fill %.1f m, %.0f m" % (sid, g, cut, length), flush=True)
+            moved.add(sid)
+        elif not joins & moved:
+            continue
+        done[sid]["pts"] = [[round(x, 1), round(y, 1)] for x, y in pts]
+    OUT.write_text(json.dumps(done, separators=(",", ":")) + "\n")
 
 
 def main(names):
@@ -474,4 +611,7 @@ def main(names):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    if sys.argv[1:2] == ["--separate"]:
+        resep(sys.argv[2:])
+    else:
+        main(sys.argv[1:])
