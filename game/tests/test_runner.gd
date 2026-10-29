@@ -5189,8 +5189,10 @@ func test_people_walk_the_suburbs() -> void:
 	var c = city.country
 	var first: int = city.sidewalk_loops.size() - c.walks.size()
 	var at := Vector3.INF
+	# From z 100: the city grown to Las Venturas size took in the east
+	# side's blocks further south, and their loops with them.
 	for w in c.walks:
-		if w[0].x > 1700.0 and w[0].z > 200.0 and w[0].z < 900.0:
+		if w[0].x > 1700.0 and w[0].z > 100.0 and w[0].z < 900.0:
 			at = w[0]
 			break
 	_check(at != Vector3.INF, "an east side loop to stand on")
@@ -5239,8 +5241,10 @@ func test_suburb_home_cars_are_live() -> void:
 	var c = city.country
 	var first: int = city.parked_spots.size()
 	var at := Vector3.INF
+	# From z 100: the city grown to Las Venturas size took in the east
+	# side's blocks further south, and their loops with them.
 	for w in c.walks:
-		if w[0].x > 1700.0 and w[0].z > 200.0 and w[0].z < 900.0:
+		if w[0].x > 1700.0 and w[0].z > 100.0 and w[0].z < 900.0:
 			at = w[0]
 			break
 	_check(at != Vector3.INF, "an east side loop to stand on")
