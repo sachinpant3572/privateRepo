@@ -2148,7 +2148,10 @@ class Country:
         and strip fields on the farmland left clear, and each pivot's
         sprinkler spans as plots of their own."""
         for e in self.canal_ends:
-            if not self._place_near((e[0] - 30.0, e[1] - 20.0), "pump_house", "", "golden_flats", reach=90.0):
+            # North of the head first; the far side where that is taken (the
+            # freight line runs past one head).
+            if not any(self._place_near((e[0] - 30.0, e[1] + dy), "pump_house", "", "golden_flats", reach=90.0)
+                       for dy in (-20.0, 20.0)):
                 print("WARNING: no room for a pump house at", e)
         taken = [self.road_area.buffer(farmland.CLEAR), self.canal_area.buffer(3.0)]
         taken += [lot_poly(l["x"], l["y"], l["yaw"], l["w"], l["d"]).buffer(farmland.CLEAR) for l in self.lots]
