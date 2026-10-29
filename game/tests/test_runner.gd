@@ -6202,10 +6202,10 @@ func test_mount_calder() -> void:
 	var world: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/world_map.json"))
 	var in_strip := 0
 	var stray := []
-	for r in world.routes:
-		if not str(r.id).begins_with("freight"):
+	for route in world.routes:
+		if not str(route.id).begins_with("freight"):
 			continue
-		var line: Array = r.line
+		var line: Array = route.line
 		for k in range(1, line.size()):
 			var a := Vector2(line[k - 1][0], line[k - 1][1]) - game.city.map_origin
 			var b := Vector2(line[k][0], line[k][1]) - game.city.map_origin
