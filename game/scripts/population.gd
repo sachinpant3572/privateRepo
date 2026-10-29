@@ -12,9 +12,11 @@ const PED_COUNT := 18
 ## events and graphics quality).
 const TRAFFIC_COUNT := 8
 const PED_SPAWN := Vector2(30.0, 50.0)
-## Traffic keeps to a ring just off screen (times reach()), so the budget's
-## cars are mostly on the streets round the player, not spread thin out of
-## sight: at 40-70 m and 95 m a rush hour's 11 cars left none within 50 m.
+## Traffic keeps to a ring just off screen, so the budget's cars are mostly on
+## the streets round the player, not spread thin out of sight: at 40-70 m (and
+## 95 m) times reach() a rush hour's 11 cars left none within 50 m. A wider
+## view moves the ring out by its edge, CAR_SPAWN.x * (reach - 1), not by
+## scaling it, which spread them to 115 m in the driving view.
 const CAR_SPAWN := Vector2(30.0, 55.0)
 const PED_DESPAWN := 70.0
 const CAR_DESPAWN := 65.0
@@ -53,7 +55,7 @@ func _physics_process(delta: float) -> void:
 		if _gone(ped, center, PED_DESPAWN * r) or ped.dead_time > 20.0:
 			ped.queue_free()
 	for car in cars:
-		if car != game.player.vehicle and _gone(car, center, CAR_DESPAWN * r):
+		if car != game.player.vehicle and _gone(car, center, CAR_DESPAWN + _edge(r)):
 			car.queue_free()
 	if peds.size() < PED_COUNT:
 		var spot: Array = game.city.random_sidewalk_between(center, PED_SPAWN.x, PED_SPAWN.y * r, rng, out_of_view)
@@ -72,6 +74,11 @@ func reach() -> float:
 	if cam == null:
 		return 1.0
 	return clampf(cam.size / 30.0, 1.0, 2.1)
+
+
+## How far a wider view pushes the traffic ring out past its on-foot place.
+func _edge(r: float) -> float:
+	return CAR_SPAWN.x * (r - 1.0)
 
 
 ## Far enough to remove: beyond `dist` and off screen, or far beyond it.
@@ -106,7 +113,7 @@ func _spawn_traffic(center: Vector3, r: float) -> void:
 	var n := -1
 	var to := -1
 	for attempt in 2:
-		n = game.city.random_node_between(center, CAR_SPAWN.x, CAR_SPAWN.y * r, rng, out_of_view)
+		n = game.city.random_node_between(center, CAR_SPAWN.x, CAR_SPAWN.y + _edge(r), rng, out_of_view)
 		if n < 0:
 			return
 		var options: Array = game.city.next_nodes(n)
