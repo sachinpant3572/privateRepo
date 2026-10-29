@@ -5,7 +5,7 @@ extends Node3D
 ##   xvfb-run -a -s "-screen 0 1280x720x24" godot --rendering-driver opengl3 \
 ##     --resolution 1280x720 res://tests/char_shots.tscn -- <out_dir> [pages...]
 ## Pages: crowd (street camera distance), kinds_a, kinds_b, hero, gaits,
-## gestures, actions, faces. Each saved shot prints "saved <file>".
+## gestures, actions, faces, motion. Each saved shot prints "saved <file>".
 
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const CharacterKit = preload("res://scripts/kits/character_kit.gd")
@@ -13,7 +13,7 @@ const Rig = preload("res://scripts/rig.gd")
 const Player = preload("res://scripts/player.gd")
 const Cop = preload("res://scripts/cop.gd")
 
-const PAGES := ["crowd", "kinds_a", "kinds_b", "hero", "gaits", "gestures", "actions", "faces"]
+const PAGES := ["crowd", "kinds_a", "kinds_b", "hero", "gaits", "gestures", "actions", "faces", "motion"]
 ## The street camera's view height on foot (TopDownCamera.FOOT_SIZE).
 const STREET_VIEW := 26.0
 
@@ -229,6 +229,62 @@ func _prepare(r: Array, it: Array) -> void:
 			st.flinch = it[2]
 
 
+## The hero from the side as filmstrips, eight frames a row: char_10 his
+## walk, jog and sprint across one stride (rows top to bottom); char_11 a
+## punch, a kick, setting off into a jog and pulling up from one, each
+## stepped through in game time.
+func _page_motion() -> void:
+	var gaits := [[1.5, ""], [Player.JOG_SPEED, ""], [Player.SPRINT_SPEED, "sprint"]]
+	for row in gaits.size():
+		for col in 8:
+			var r := _person(Player.JULES, _strip_pos(row, col), "idle", false, PI * 0.5)
+			r[1].speed = gaits[row][0]
+			r[1].style = gaits[row][1]
+			r[1].idle = false
+			r[0].phase = TAU * col / 8.0
+	await _shoot_strip(gaits.size(), "char_10_gait.png", true)
+	var step := 1.0 / 60.0
+	var moves := [["punch", 0.4], ["kick", 0.6], ["start", 0.7], ["stop", 0.7]]
+	for row in moves.size():
+		for col in 8:
+			var r := _person(Player.JULES, _strip_pos(row, col), "idle", false, PI * 0.5)
+			var rig = r[0]
+			var st = r[1]
+			st.idle = false
+			var t_end: float = moves[row][1] * col / 7.0
+			var run_in: bool = moves[row][0] == "stop"
+			st.speed = Player.JOG_SPEED if run_in else 0.0
+			st.guard = moves[row][0] in ["punch", "kick"]
+			for f in 90:
+				rig.pose(st, step)
+			var t := 0.0
+			while t < t_end - 0.001:
+				match moves[row][0]:
+					"punch":
+						st.punch = t / 0.28 if t < 0.28 else -1.0
+					"kick":
+						st.kick = t / 0.45 if t < 0.45 else -1.0
+					"start":
+						st.speed = Player.JOG_SPEED
+					"stop":
+						st.speed = 0.0
+				rig.pose(st, step)
+				t += step
+	await _shoot_strip(moves.size(), "char_11_moves.png", false)
+
+
+func _strip_pos(row: int, col: int) -> Vector3:
+	return Vector3(-5.95 + col * 1.7, 0.0, -row * 6.0)
+
+
+## Side-on, a little from above, rows stacked up the frame; `settle` runs
+## the rigs 40 frames first (steady gaits), else they hold where they are.
+func _shoot_strip(rows: int, file: String, settle: bool) -> void:
+	camera.rotation_degrees = Vector3(-20.0, 0.0, 0.0)
+	await _shoot(Vector3(0.0, 0.9, -(rows - 1) * 3.0), maxf(2.1 * rows + 0.6, 7.8), file, settle)
+	camera.rotation_degrees = Vector3(-60.0, 0.0, 0.0)
+
+
 func _street_pose(i: int) -> String:
 	return ["walk", "idle", "walk", "text", "idle", "walk", "idle", "walk", "idle"][i % 9]
 
@@ -278,12 +334,12 @@ func _label(pos: Vector3, text: String) -> void:
 
 
 ## Runs the rigs 40 frames, shoots under the 60° camera, clears the page.
-func _shoot(center: Vector3, view: float, file: String) -> void:
+func _shoot(center: Vector3, view: float, file: String, settle := true) -> void:
 	var tris := 0
 	for r in _rigs:
 		var body: MeshInstance3D = r[0].skeleton.get_node("Body")
 		tris += body.mesh.get_faces().size() / 3
-	for frame in 40:
+	for frame in (40 if settle else 0):
 		for r in _rigs:
 			r[0].pose(r[1], 1.0 / 60.0)
 	camera.size = view
