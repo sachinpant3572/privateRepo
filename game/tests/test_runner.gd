@@ -155,9 +155,9 @@ func test_city_streams_cells() -> void:
 		land += 1 if city.block_land(f) and city.in_window(f) else 0
 	_check(city.sidewalk_loops.size() == land + city.country.walks.size(),
 		"one sidewalk loop per playable land block, then the suburbs' (%d)" % city.country.walks.size())
-	# 58 loops when this was set; the city grown to Las Venturas size has
-	# taken in most of the eastside and Brisa blocks that had them.
-	_check(city.country.walks.size() >= 5, "the suburbs have sidewalk loops, got %d" % city.country.walks.size())
+	# 76 loops at Las Venturas size (58 before it; roads linked to the
+	# city must reach its edge street or the blocks along it never close).
+	_check(city.country.walks.size() >= 30, "the suburbs have sidewalk loops, got %d" % city.country.walks.size())
 	# Teleport across the map: the old cells go, new ones stream in.
 	_place_player_at(city.hospital)
 	await _frames(240)
@@ -5187,10 +5187,8 @@ func test_people_walk_the_suburbs() -> void:
 	var c = city.country
 	var first: int = city.sidewalk_loops.size() - c.walks.size()
 	var at := Vector3.INF
-	# From z 100: the city grown to Las Venturas size took in the east
-	# side's blocks further south, and their loops with them.
 	for w in c.walks:
-		if w[0].x > 1700.0 and w[0].z > 100.0 and w[0].z < 900.0:
+		if w[0].x > 1700.0 and w[0].z > 200.0 and w[0].z < 900.0:
 			at = w[0]
 			break
 	_check(at != Vector3.INF, "an east side loop to stand on")
@@ -5239,10 +5237,8 @@ func test_suburb_home_cars_are_live() -> void:
 	var c = city.country
 	var first: int = city.parked_spots.size()
 	var at := Vector3.INF
-	# From z 100: the city grown to Las Venturas size took in the east
-	# side's blocks further south, and their loops with them.
 	for w in c.walks:
-		if w[0].x > 1700.0 and w[0].z > 100.0 and w[0].z < 900.0:
+		if w[0].x > 1700.0 and w[0].z > 200.0 and w[0].z < 900.0:
 			at = w[0]
 			break
 	_check(at != Vector3.INF, "an east side loop to stand on")
