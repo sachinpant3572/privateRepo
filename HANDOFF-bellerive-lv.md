@@ -87,9 +87,11 @@ planned size" rule for the city; #104 (organic outline) carries on inside it.
 - The trim's notch/spur rules: outline wiggles must be 2+ blocks to show.
 - Country package (agent, worktree) is generic over the core: rerun its
   generator after the core changes.
-- perf_probe on the trimmed city (2026-10-29): parked 123k triangles
-  (shadow 84k), fast 145k (shadow 88k), against 104k / 114k in 0.25.2.
-  To fix before the APK.
+- perf_probe, 0.25.2 (c2cc2c2) and HEAD run back to back on one machine
+  (2026-10-29): visible 31.3k/29.7k parked, 43.0k/34.3k fast; totals
+  106k/115k parked, 110k/118k fast, 108k/107k fast again, 99k/93k parked
+  fit 1.4. Only the shadow pass differs, both ways: no regression. (The
+  earlier 123k/145k was a lone run, not like for like.)
 
 ## Built (2026-10-29)
 
