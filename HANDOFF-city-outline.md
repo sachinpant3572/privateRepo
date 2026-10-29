@@ -80,3 +80,29 @@ This is now how ideal cities looks, even if they are fully architected."
 - Checks (`/tmp/co/edge.py` on a plan dump): plan4 land 2.42 km², bbox
   fill 0.61, longest straight edge run 380 m (+ a 407 m curved bank), 114
   exits.
+
+## Built since (2026-10-29, second pass)
+
+- `StreetPlan.in_city(p)` (inside an edge loop) and `edge_distance(p)`
+  (to the core outline) replace window tests: district_at, playable,
+  roadworks; `in_window` is true for every face once an outline exists.
+- Density falloff (`city_cells.gd`): EDGE_OPEN 90, EDGE_LOW 150 (was 260).
+  Downtown sits near the north-west edge, so a longer falloff flattened a
+  third of it. Measured: downtown/midtown buildings within 110 m of the
+  edge average 14 m against 22 m beyond 200 m.
+- Maps: the bake is clear past the city (state map shows through); the
+  minimap uses uv 0-1 of the whole bake; the full map draws the whole bake
+  with no window ring; the state map fills the urban area from the plan.
+- Bridge faces are kept in the trim. Rail routes that cross the country
+  (stale country.json links) are split into one line per city run.
+- Tests moved off the rectangle: grid bare-land check (edge loops),
+  state map (alpha outside / at the station), roadside props (box probe),
+  perspective camera (aimed at downtown towers). New
+  `test_city_outline_is_organic`: 2.62 km², fill 0.66, longest straight
+  380 m, 110 of 112 exits lead out, edge falloff 14 m vs 22 m.
+- Country package: a background agent regenerates `build_country.py`,
+  `country.json`, `country.gd`, `"urban"` in world_map.json and the
+  country tests against the new edge (exits, polygon cut, suburbs, Beltway).
+- Open until it lands: test_places_line_the_streets (Sunset Diner and
+  Crescent Grocery doorsteps sit under old country tiles); the frame/links
+  test and the traffic `plan.bounds` test belong to that package.
