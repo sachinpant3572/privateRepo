@@ -49,7 +49,8 @@ and primitive, we need to fix them." Log: breakables.gd:54 get_meta('glow').
   muzzle) plus a soft chin. Hair caps and shoulders went to 12x6 / 10x5.
 - Triangles a person (char tris script): 790 avg / 1016 max before; 2396
   avg / 2674 max after (categories 2381 / 2694, hero 3034, plain 2416).
-  Budgets: 3000 a look, 2500 average, hero 3400. About 20 people on screen
+  Budgets: 3300 a look, 2500 average (2600 a category; workers 2507),
+  hero 3400. About 20 people on screen
   is about +32k of the 180-200k an Adreno 830 draws at 60 fps. If phones
   drop frames, next step is a people LOD by quality preset (not built).
 

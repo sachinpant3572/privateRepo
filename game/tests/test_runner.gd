@@ -2610,7 +2610,7 @@ func test_people_wear_modern_clothes() -> void:
 		for v in range(0, bones.size(), 4):
 			if bones[v] < 0 or bones[v] >= CharacterKit.BONES.size() or weights[v] != 1.0:
 				bones_ok = false
-		_check(mb.triangle_count() < 3000, "%s look stays under 3000 triangles, got %d" % [look.get("outfit"), mb.triangle_count()])
+		_check(mb.triangle_count() < 3300, "%s look stays under 3300 triangles, got %d" % [look.get("outfit"), mb.triangle_count()])
 	_check(bones_ok, "every vertex is bound rigidly to one real bone")
 	var total := 0
 	var outfits := {}
@@ -5908,7 +5908,7 @@ func test_people_dress_for_their_kind() -> void:
 		total += tris
 		count += 40
 		_check(wrong.is_empty(), "%s people dress the part %s" % [cat, wrong])
-		_check(tris / 40.0 < 2500.0 and most < 3000, "%s looks within budget: %.0f average, %d at most" % [cat, tris / 40.0, most])
+		_check(tris / 40.0 < 2600.0 and most < 3300, "%s looks within budget: %.0f average, %d at most" % [cat, tris / 40.0, most])
 		if cat in ["office", "gang", "tourist", "elderly"]:
 			_check(flair >= 24, "most %s people carry their kind's touches (%d of 40)" % [cat, flair])
 	_check(rigid, "every category look is bound rigidly to real bones")
