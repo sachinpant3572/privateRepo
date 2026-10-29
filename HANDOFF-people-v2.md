@@ -56,9 +56,20 @@ the Framerates?"
   (head 2.6x, hands 1.5x, feet 0.6x since shoes cover them). One vertex
   buffer for every shape; far LOD = index subset of the same buffer.
   Result: 1502 v, near 3000 tris (head 1016, hand 229), far 1000.
-- Shapes per gender: base, heavy, thin, muscle, old (MH macros); the game
-  blends base + sum w*(shape - base). MH maxweight is mild (+8-10% waist),
-  so weights may extrapolate to 1.5.
+- Shapes per gender: base, heavy, thin, muscle, old, young, tall, short
+  (MH macros); the game blends base + sum w*(shape - base), joints too.
+  MH maxweight is mild (+8-10% waist), so weights may extrapolate (heavy to
+  2, thin to 1.3). Sachin, 10-29: "Build different models for different
+  heights, weight and muscles, some will be short, some skinny, some
+  muscular, some have huge height, some are fatty, some are normal, some
+  are young, some are old, some are mid aged, some are adults but just
+  crossed 18. We need to have several body types with a mix of these
+  properties." Axes: young = MH age 0.344 (18 yrs) kept at adult height;
+  mid-aged = old 0.25-0.45 (MH age is linear 25-90 yrs); tall/short = MH
+  height macro (full weight 2.5 m / 1.4 m, so looks use 0-0.4). Looks carry
+  body, weight (-1 thin..+2 heavy), muscle, age (-1 young..1 old), height
+  (-1 short..1 tall) and pick them from a body-type table (normal, skinny,
+  fat, muscular, short, very tall, teen-adult, mid-aged, old, mixes).
 - Mesh LOD works in gl_compatibility (tested: ArrayMesh lods dict, sphere
   switched 16640 -> 100 prims between 48 and 96 m for key 0.2). The far
   index array must hold the extras too (LOD swaps the whole surface).

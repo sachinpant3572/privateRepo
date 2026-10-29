@@ -5,7 +5,7 @@
 Writes game/assets/people/body.json (layout and per-shape joints) and
 body.bin (float32 / int32 blocks). One topology for every shape: the
 shapes are MakeHuman macro settings per gender (base, heavy, thin, muscle,
-old), each posed into our rest pose with MakeHuman's own proportions; its
+old, young, tall, short), each posed into our rest pose with MakeHuman's own proportions; its
 joints (our 17 bones) are written per shape, and the game blends shapes and
 joints per look. Indices: the near mesh, plus a far LOD that uses a subset
 of the same vertices. See HANDOFF-people-v2.md.
@@ -30,13 +30,26 @@ HAND_SCALE = 1.5
 # Toes sit under shoes: fewer triangles there.
 FOOT_SCALE = 0.6
 SHAPES = [
-	# name, gender, macro settings
+	# name, macro settings. The game blends base + sum w * (shape - base) per
+	# look, so these are the extremes of each body-type axis (Sachin, 10-29:
+	# short, skinny, muscular, very tall, fat, normal, young, old, mid-aged,
+	# just past 18). Mid-aged is about 0.3 of "old" (MakeHuman's own age
+	# blend is linear from 25 to 90 years).
 	("base", {}),
 	("heavy", {"weight": 1.0}),
 	("thin", {"weight": 0.0}),
 	("muscle", {"muscle": 1.0}),
 	("old", {"age": 1.0}),
+	# About 18 years (MakeHuman age 0.344); see SAME_HEIGHT.
+	("young", {"age": 0.344}),
+	# MakeHuman's height macro: longer legs and torso, not a uniform scale.
+	# Full weight is 2.5 m (tall) or 1.4 m (short); looks use part of it.
+	("tall", {"height": 1.0}),
+	("short", {"height": 0.0}),
 ]
+# MakeHuman's age 0.344 blends child and young targets, which leaves an
+# 18-year-old 0.19 m shorter than the adult; they stand at adult height.
+SAME_HEIGHT = {"young"}
 GENDERS = [("male", 1.0), ("female", 0.0)]
 # Standing height (m) of each gender's base shape; looks scale it further.
 HEIGHT = {"male": 1.76, "female": 1.65}
@@ -44,10 +57,10 @@ HEIGHT = {"male": 1.76, "female": 1.65}
 PARTS = pose.NAMES
 
 
-def shape(v0, faces, skel, wts, gender, height, **kw):
+def shape(v0, faces, skel, wts, gender, stature, **kw):
 	"""One body shape posed into our rest pose, keeping MakeHuman's own proportions.
 
-	Scaled as a whole so the gender's base shape stands `height` tall (None:
+	Scaled as a whole so the gender's base shape stands `stature` tall (None:
 	keep its size), with the sole on y = 0. Forcing the body onto fixed joint
 	heights squashed the neck and lifted the shoulders to the chin.
 	"""
@@ -59,7 +72,7 @@ def shape(v0, faces, skel, wts, gender, height, **kw):
 	pts = pose.mh_points({k: P.apply(J[k], k.split("____")[0]) for k in J})
 	eyes = [P.apply(J[e + "____head"], e) for e in ["eye.L", "eye.R"]]
 	sole = vp[body, 1].min()
-	k = 1.0 if height is None else height / (vp[body, 1].max() - sole)
+	k = 1.0 if stature is None else stature / (vp[body, 1].max() - sole)
 	lift = np.array([0.0, sole, 0.0])
 	vf = (vp - lift) * k
 	joints = {n: (pts[n] - lift) * k for n in pose.NAMES}
@@ -103,8 +116,9 @@ def main():
 		# One scale per gender (from its base shape), so the shape deltas stay MakeHuman's.
 		k = shape(v0, faces, skel, wts, g, HEIGHT[gname])[3]
 		for sname, kw in SHAPES:
-			vf, joints, eyes, _ = shape(v0, faces, skel, wts, g, None, **kw)
-			shapes[gname + "_" + sname] = (vf * k, {n: j * k for n, j in joints.items()}, [e * k for e in eyes])
+			vf, joints, eyes, ks = shape(v0, faces, skel, wts, g, HEIGHT[gname] if sname in SAME_HEIGHT else None, **kw)
+			ks = 1.0 if sname in SAME_HEIGHT else k
+			shapes[gname + "_" + sname] = (vf * ks, {n: j * ks for n, j in joints.items()}, [e * ks for e in eyes])
 			print("shape", gname, sname, flush=True)
 	ref, ref_j, _ = shapes["male_base"]
 
