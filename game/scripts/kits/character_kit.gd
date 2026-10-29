@@ -668,7 +668,10 @@ static func _hips(mb, look: Dictionary, o: Dictionary) -> void:
 	if o.outfit in ["suit", "polo", "uniform"] or (o.outfit == "blazer" and o.bottoms != "jeans"):
 		# Tucked in: belt and buckle.
 		var belt := Color(0.09, 0.09, 0.1) if o.outfit == "uniform" else Color(0.22, 0.15, 0.1)
-		_band(mb, 1.01, 0.188 * w, 0.132, 0.035, belt)
+		if o.body:
+			_ring(mb, 1.01, 0.035, _old_torso(1.01, o.bulk) * 1.06, belt)
+		else:
+			_band(mb, 1.01, 0.188 * w, 0.132, 0.035, belt)
 		mb.box(Vector3(0, 1.01, -0.135), Vector3(0.05, 0.04, 0.02), Color(0.78, 0.72, 0.5))
 	if o.outfit == "uniform":
 		# Duty belt: holster on the right, pouches, radio at the back.
@@ -783,7 +786,7 @@ static func _torso(mb, look: Dictionary, o: Dictionary) -> void:
 			# Open front showing the layer under it.
 			var inner := shirt
 			var vee := outfit in ["blazer", "suit", "cardigan"]
-			_panel(mb, 0.0, 1.47, 1.03, 0.075 if vee else 0.06, 0.03 if vee else 0.055, -1.0, inner, w, bulk, 3, 0.016, 3)
+			_panel(mb, 0.0, 1.47, 1.03, 0.075 if vee else 0.06, 0.03 if vee else 0.055, -1.0, inner, w, bulk, 3, 0.03, 3)
 			if outfit == "cardigan":
 				# Button band and buttons down the left front, shirt collar.
 				_surf_strip(mb, [Vector2(-0.07, 1.46), Vector2(-0.033, 1.25), Vector2(-0.03, 1.03)], -1.0, 0.016, w, bulk, 0.009, jacket.darkened(0.15))
@@ -1405,6 +1408,9 @@ static func _warp(mb, look: Dictionary, o: Dictionary, b: Dictionary, first_v: i
 			var yen := _knot(clampf(y, 0.5, 1.44), kn)
 			var cz := BodyKit.slice_cz(torso, yen)
 			var push := thick[BodyKit.TOP] if _knot(y, kn) > waist_y else thick[BodyKit.BOTTOMS]
+			# Over the hem (a belt on a tucked top): over whichever cloth is thicker.
+			if d.waist >= 0.0 and absf(_knot(y, kn) - waist_y) < 0.03:
+				push = maxf(thick[BodyKit.TOP], thick[BodyKit.BOTTOMS])
 			if bone != BodyKit.NECK:
 				var g := _old_torso(y, bulk)
 				var u := p.x / g.x
@@ -1523,9 +1529,27 @@ static func _warp(mb, look: Dictionary, o: Dictionary, b: Dictionary, first_v: i
 			cn = -cn
 		for v in [a, bb, c]:
 			acc[v] += cn
+	# Panels are built quad by quad, each with its own corners: share the
+	# normals of corners in the same place facing the same way, so a panel
+	# shades smoothly rather than in facets.
+	var at := {}
 	for v in range(first_v, n):
-		if acc[v].length_squared() > 1e-14:
-			nrm[v] = acc[v].normalized()
+		var key := Vector3i((pos[v] * 2000.0).round())
+		if at.has(key):
+			at[key].append(v)
+		else:
+			at[key] = [v]
+	var sm := acc.duplicate()
+	for group in at.values():
+		if group.size() < 2:
+			continue
+		for v in group:
+			for u in group:
+				if u != v and acc[u].dot(acc[v]) > 0.5 * acc[u].length() * acc[v].length():
+					sm[v] += acc[u]
+	for v in range(first_v, n):
+		if sm[v].length_squared() > 1e-14:
+			nrm[v] = sm[v].normalized()
 	mb.verts = pos
 	mb.normals = nrm
 	mb.indices = idx
@@ -1609,6 +1633,20 @@ static func _block(mb, center: Vector3, size: Vector3, color: Color) -> void:
 ## A thin ring round the body at height y: hems, belts, reflective bands.
 static func _band(mb, y: float, rx: float, rz: float, h: float, color: Color) -> void:
 	_ball(mb, Vector3(0, y, 0), Vector3(rx, h, rz), color, 8, 2)
+
+
+## A straight band `h` tall round the old torso at y, of radii `g`: on a body,
+## where the warp lays the whole of it over the cloth (a flat ball's rim
+## alone cleared it).
+static func _ring(mb, y: float, h: float, g: Vector2, color: Color, sides := 16) -> void:
+	for i in sides:
+		var a0 := TAU * i / sides
+		var a1 := TAU * (i + 1) / sides
+		var c0 := Vector3(cos(a0) * g.x, 0.0, sin(a0) * g.y)
+		var c1 := Vector3(cos(a1) * g.x, 0.0, sin(a1) * g.y)
+		var am := (a0 + a1) * 0.5
+		mb.quad(c0 + Vector3(0, y + h * 0.5, 0), c1 + Vector3(0, y + h * 0.5, 0), c1 + Vector3(0, y - h * 0.5, 0),
+			c0 + Vector3(0, y - h * 0.5, 0), Vector3(cos(am) / g.x, 0.0, sin(am) / g.y).normalized(), color)
 
 
 ## A flat strip along `pts` (2 tris per segment), facing away from `center`

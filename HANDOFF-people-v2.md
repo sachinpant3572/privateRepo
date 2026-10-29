@@ -107,8 +107,9 @@ the Framerates?"
   hidden feet are not cut. Cost: near crowd body 3000 -> about 3440 tris.
 - The waistband is a level line between the hip and spine joints
   (`_below_waist`, `waist` per outfit, none for dresses), not the bones'
-  ragged border. Under skirts and dresses the top 30% of the thighs takes
-  the skirt's colour (full thighs reach past the skirt shell).
+  ragged border; it runs over the thigh tops too (LEVEL_PARTS, bisected
+  across parts). Tucked tops end under the belt (0.9). Under skirts and
+  dresses the top 30% of the thighs takes the skirt's colour.
 - Neckline: `fit().neckline`, 16 angle bins, where the neck outline meets
   the chest (male front about 1.455, back about 1.52; women's back clamped
   to neck joint - 0.03). Collars map old heights over 1.465 onto it, a
@@ -118,19 +119,20 @@ the Framerates?"
   along the new bones; head by the head box; rigid groups (`rigid` tag)
   move whole. Normals after the warp take the side of the old normals
   (Godot winds front faces clockwise, so the cross product points in: it
-  had turned every warped detail dark).
+  had turned every warped detail dark); coincident corners facing alike
+  share normals. Details within 3 cm of the hem sit over the thicker cloth.
 - Body mode drops the kit's hem bands: the body's TOP/BOTTOMS border is the
-  hem. Open jacket fronts are 3x3 quads at 16 mm lift so the curve holds.
+  hem. Open fronts: 3x3 quads at 30 mm lift (16 z-fought the crowd chest).
+  Belts are a straight ring (`_ring`) at 1.06x the old torso.
 - Budgets (near LOD, measured): crowd average about 4230 tris (was 2440 on
   0.24), most about 4660; hero 11200. 20 people about 85k of the 180-200k
   frame budget; the far LOD is under half.
-- Cast looks set the body keys; convertible seats use the body's
-  `hip_height`.
+- Cast looks set the body keys; convertible seats use `hip_height`.
 
 ## Traps
 
-- `git ls-tree -l` on a blobless clone fetches every blob; use sparse.
-- `pkill -f <pat>` kills its own shell if the pattern is in the command.
+- `git ls-tree -l` on a blobless clone fetches every blob (use sparse);
+  `pkill -f <pat>` kills its own shell if the pattern is in the command.
 
 ## Hero systems (planned, after the kit integration)
 

@@ -33,6 +33,8 @@ const SPINE := 1
 const CHEST := 2
 const NECK := 3
 const HEAD := 4
+## The parts the waist line runs over: hips, spine and the tops of the thighs.
+const LEVEL_PARTS := [HIPS, SPINE, 11, 14]
 const BONE_NAMES := ["Hips", "Spine", "Chest", "Neck", "Head", "LeftUpperArm", "LeftLowerArm", "LeftHand",
 	"RightUpperArm", "RightLowerArm", "RightHand", "LeftUpperLeg", "LeftLowerLeg", "LeftFoot", "RightUpperLeg",
 	"RightLowerLeg", "RightFoot"]
@@ -229,7 +231,7 @@ static func _dress(look: Dictionary, o: Dictionary) -> Dictionary:
 	if outfit in ["jacket", "bomber", "puffer", "hoodie", "blazer", "suit", "denim", "cardigan", "delivery"]:
 		waist = 0.15
 	elif outfit in ["uniform", "polo"]:
-		waist = 0.6
+		waist = 0.9 # under the belt (1.01 between the old 0.92 hip and 1.02 spine)
 	if outfit == "dress" or bottoms == "dress":
 		waist = -1.0
 	return {"colors": colors, "thick": thick, "waist": waist, "sleeves": o.sleeves, "bottoms": bottoms,
@@ -274,6 +276,9 @@ static func _region(part: int, along: float, c: Vector3, code: int, cj: Dictiona
 		7, 10:  # hands
 			return SKIN
 		11, 14:  # thighs
+			# A long top's hem crosses the tops of the thighs at the sides.
+			if d.waist >= 0.0 and not _below_waist(c, cj, d):
+				return TOP
 			if d.bottoms in ["skirt", "dress"]:
 				# The skirt's own colour high on the thighs, where full thighs
 				# reach out past its shell.
@@ -373,7 +378,10 @@ static func add_body(mb, look: Dictionary, o: Dictionary, mesh := "crowd") -> Di
 		if cuts.has(key):
 			return cuts[key]
 		var t := 0.5
-		if face[a] == face[bb] and (part[a] == part[bb] or (part[a] <= SPINE and part[bb] <= SPINE)):
+		# Along one part, or across the parts the waist line runs over when
+		# it is the line that parts the two ends.
+		if face[a] == face[bb] and (part[a] == part[bb] or (part[a] in LEVEL_PARTS and part[bb] in LEVEL_PARTS
+				and same[_region(part[a], along[a], canon[bb], face[a], cj, d)] == rv[bb])):
 			var lo := 0.0
 			var hi := 1.0
 			for it in 6:

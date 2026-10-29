@@ -629,7 +629,9 @@ func test_city_runs_with_population() -> void:
 	var frames: float = counts[3]
 	print("  fast run: %.1f people alive, %.1f on screen, %.1f traffic on screen" % [counts[4] / frames, counts[5] / frames, counts[6] / frames])
 	get_window().size = window_size
-	await _frames(120) # let the bubble refill around wherever the drive ended
+	# Let the bubble refill: it adds a person every 0.25 s, so 3 s refills
+	# ten even when the drive left none of the earlier ones in range.
+	await _frames(180)
 	_check(game.population.peds.size() >= 10, "pedestrians spawned, got %d" % game.population.peds.size())
 	_check(game.population.cars.size() >= 5, "traffic spawned, got %d" % game.population.cars.size())
 	_check(fastest[0] > 15.0, "the run gets up to speed (%.1f m/s)" % fastest[0])
@@ -8401,8 +8403,9 @@ func test_convertible_occupants_show_with_roof_down() -> void:
 	friend.mount(car)
 	await _frames(3)
 	var seat := func(who, i: int) -> float:
+		# The pelvis (the body's own hip joint, scaled by height) on the seat.
 		var h: float = who.look.get("height", 1.0)
-		return who.global_position.distance_to(car.global_transform * (VehicleKit.seat("cabriolet", i) + Vector3(0, 0.92 * (1.0 - h), 0)))
+		return who.global_position.distance_to(car.global_transform * (VehicleKit.seat("cabriolet", i) + Vector3(0, 0.92 - CharKit.hip_height(who.look) * h, 0)))
 	_check(p.visible and p.sitting and p.anim.car == 2 and seat.call(p, 0) < 0.05,
 		"top down: Jules shows at the wheel (%.2f m off the seat)" % seat.call(p, 0))
 	_check(friend.visible and friend.sitting and friend.anim.car == 1 and seat.call(friend, 1) < 0.05,
