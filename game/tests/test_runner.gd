@@ -54,7 +54,7 @@ func _run() -> void:
 		"test_failed_mission_can_be_retried",
 		"test_empty_rooms_phone_and_clues",
 		"test_lantern_lights_ambush",
-		"test_people_wear_modern_clothes",
+		"test_body_kit_builds_bodies", "test_people_wear_modern_clothes",
 		"test_people_dress_for_their_kind", "test_reactions_by_kind_of_person", "test_reaction_starts_on_time",
 		"test_people_notice_by_sight_and_sound", "test_poses_stay_in_joint_limits", "test_crowd_reacts_to_a_punch",
 		"test_people_dodge_cars_and_get_up", "test_cops_investigate_off_duty", "test_people_sit_on_benches",
@@ -2584,6 +2584,58 @@ func _check(condition: bool, message: String) -> void:
 
 
 # --- People's clothes ----------------------------------------------------------
+
+## The MakeHuman body data loads; a blended body has outward normals, a near
+## and a far detail level within budget (the hero's denser), four-bone
+## skinning that sums to one, and shapes that change it (fat widens the
+## waist, tall raises the head); a cached look comes back unchanged.
+func test_body_kit_builds_bodies() -> void:
+	const BodyKit = preload("res://scripts/kits/body_kit.gd")
+	const MeshBuilder = preload("res://scripts/mesh_builder.gd")
+	var o := {"outfit": "tee", "bottoms": "jeans", "skin": Color(0.8, 0.6, 0.5), "top": Color(0.2, 0.3, 0.8),
+		"sleeve": Color(0.2, 0.3, 0.8), "pants": Color(0.2, 0.2, 0.3), "sleeves": "short", "shoe_style": "sneakers"}
+	var budget := {"crowd": [3000, 1200], "hero": [10000, 3500]}
+	for mesh in ["crowd", "hero"]:
+		var mb := MeshBuilder.new()
+		var b: Dictionary = BodyKit.add_body(mb, {"body": "male"}, o, mesh)
+		var li: Array = mb.lod_indices()
+		var near: int = li[0].size() / 3
+		var far: int = li[1].size() / 3
+		_check(near > 1500 and near <= budget[mesh][0] and far > 500 and far <= budget[mesh][1] and far < near / 2,
+			"%s body: %d near, %d far triangles" % [mesh, near, far])
+		var top := 0
+		var front := Vector3.ZERO
+		for i in b.pos.size():
+			if b.pos[i].y > b.pos[top].y:
+				top = i
+			if absf(b.pos[i].x) < 0.08 and absf(b.pos[i].y - 1.2) < 0.12 and b.pos[i].z < -0.05:
+				front += b.normals[i]
+		front = front.normalized()
+		_check(b.normals[top].y > 0.9 and front.z < -0.8 and absf(b.pos[top].y - 1.76) < 0.02,
+			"%s body: normals point out (crown %s, chest %s), 1.76 m tall" % [mesh, b.normals[top], front])
+		var m := mb.commit()
+		var arrays := m.surface_get_arrays(0)
+		var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
+		var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
+		var bad := 0
+		for v in mb.verts.size():
+			var s := weights[v * 4] + weights[v * 4 + 1] + weights[v * 4 + 2] + weights[v * 4 + 3]
+			if absf(s - 1.0) > 0.01 or bones[v * 4] < 0 or bones[v * 4] > 16:
+				bad += 1
+		_check(bad == 0 and mb.verts.size() > b.pos.size(), "%s body: %d skinned vertices, %d bad weights" % [mesh, mb.verts.size(), bad])
+		_check(m.surface_get_array_index_len(0) == li[0].size(), "%s body: the mesh draws the near level up close" % mesh)
+	var slim: Dictionary = BodyKit.blend({"body": "female"})
+	var fat: Dictionary = BodyKit.blend({"body": "female", "weight": 1.0})
+	var tall: Dictionary = BodyKit.blend({"body": "female", "stature": 0.4})
+	var waist := func(b: Dictionary) -> float:
+		var w := 0.0
+		for p: Vector3 in b.pos:
+			if absf(p.y - b.joints.Spine.y) < 0.03:
+				w = maxf(w, absf(p.x))
+		return w
+	_check(waist.call(fat) > waist.call(slim) * 1.3, "fat widens the waist (%.3f vs %.3f)" % [waist.call(fat), waist.call(slim)])
+	_check(tall.joints.Head.y > slim.joints.Head.y + 0.05, "tall raises the head (%.2f vs %.2f)" % [tall.joints.Head.y, slim.joints.Head.y])
+	_check(BodyKit.blend({"body": "female", "weight": 1.0}) == fat, "a blended look is cached")
 
 ## Every outfit and the named cast build as one rigidly skinned mesh within
 ## the triangle budget; random looks vary; old look keys still work; a phone

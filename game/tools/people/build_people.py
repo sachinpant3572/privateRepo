@@ -152,6 +152,58 @@ def arm_clearance(v, W, body):
 	return gap
 
 
+# Face areas per vertex (the `face` block): skin, lips, brows, beard (chin,
+# jaw, upper lip, sideburns), beard under the chin, scalp.
+FACE_CODES = ["skin", "lips", "brow", "beard", "neck_beard", "scalp"]
+
+
+def face_codes(v0, quads, wts, skel, W):
+	"""Face area of each source vertex, from the MakeHuman face bones' weights
+	(lips: oris; brows: oculi; beard: jaw, risorius, levator) and a hairline
+	measured from the eyes."""
+	n = len(v0)
+
+	def wsum(prefixes):
+		s = np.zeros(n)
+		for b, (idx, w) in wts.items():
+			if b.startswith(prefixes):
+				s[idx] += w
+		return s
+	lips = wsum(("oris",))
+	brow = wsum(("oculi",))
+	jaw = wsum(("jaw",))
+	cheek = wsum(("risorius", "levator", "special0"))
+	neck = wsum(("neck",))
+	V = pose.to_ours(v0)
+	J = mh.joint_positions(skel, v0)
+	eye = (pose.to_ours(J["eye.L____head"]) + pose.to_ours(J["eye.R____head"])) * 0.5
+	rel = V - eye
+	front = -rel[:, 2]  # metres in front of the eyes
+	head = np.argmax(W, axis=1) == PARTS.index("Head")
+	code = np.zeros(n, dtype=np.int32)
+	# Hairline: high on the forehead, down the sides to the nape; not the ears.
+	hair_y = np.interp(front, [-0.16, -0.10, -0.03, 0.0, 0.03], [-0.085, -0.05, -0.02, 0.045, 0.05])
+	# Ears: what stands out past the skull (about 0.075 m from the middle)
+	# beside the eyes' level, grown two edges over the rest of the ear.
+	box = (rel[:, 1] > -0.075) & (rel[:, 1] < 0.035) & (front > -0.16) & (front < -0.03) & (np.abs(rel[:, 0]) > 0.064)
+	ear = box & (np.abs(rel[:, 0]) > 0.078)
+	edges = np.concatenate([quads[:, [0, 1]], quads[:, [1, 2]], quads[:, [2, 3]], quads[:, [3, 0]]])
+	for _ in range(2):
+		grow = ear.copy()
+		hit = ear[edges[:, 0]] | ear[edges[:, 1]]
+		grow[edges[hit].reshape(-1)] = True
+		ear = grow & box
+	code[head & (rel[:, 1] > hair_y) & ~ear] = 5
+	beard_y = np.interp(front, [-0.09, -0.06, -0.02, 0.02], [0.0, -0.02, -0.04, -0.045])
+	code[head & (jaw + cheek > 0.3) & (rel[:, 1] < beard_y)] = 3
+	side = (front > -0.075) & (front < -0.045) & (rel[:, 1] < 0.0) & (rel[:, 1] > -0.06) & (np.abs(rel[:, 0]) > 0.055)
+	code[head & (code == 0) & side] = 3
+	code[(code == 0) & (neck + jaw > 0.3) & (front > -0.075) & (rel[:, 1] > -0.12)] = 4
+	code[head & (brow > 0.3) & (rel[:, 1] > 0.02) & (rel[:, 1] < 0.04) & (np.abs(rel[:, 0]) > 0.015)] = 2
+	code[lips > 0.5] = 1
+	return code
+
+
 def importance(v, W, joints):
 	"""Positions scaled up around the head and hands so they keep more detail."""
 	out = v.copy()
@@ -182,6 +234,7 @@ def main():
 	skel = mh.load_skeleton()
 	wts = mh.load_weights()
 	W = pose.our_weights(len(v0), wts)
+	face = face_codes(v0, quads, wts, skel, W)
 
 	shapes = {}
 	for gname, g in GENDERS:
@@ -205,7 +258,7 @@ def main():
 		layout[name] = {"offset": sum(b.nbytes for b in blocks), "count": int(arr.size), "kind": kind}
 		blocks.append(arr)
 
-	meta = {"shapes": list(shapes), "joints": {}, "eyes": {}, "bones": pose.NAMES, "meshes": {},
+	meta = {"shapes": list(shapes), "joints": {}, "eyes": {}, "bones": pose.NAMES, "meshes": {}, "face_codes": FACE_CODES,
 		"source": "MakeHuman 1.x base mesh, macro targets and default rig (CC0)"}
 	for key, (vf, joints, eyes) in shapes.items():
 		meta["joints"][key] = {k: [round(float(x), 5) for x in j] for k, j in joints.items()}
@@ -252,6 +305,7 @@ def main():
 		put(mesh + "/weights", bw, "f")
 		put(mesh + "/part", part, "i")
 		put(mesh + "/along", along, "f")
+		put(mesh + "/face", face[used], "i")
 	meta["layout"] = layout
 	os.makedirs(OUT, exist_ok=True)
 	with open(os.path.join(OUT, "body.bin"), "wb") as f:

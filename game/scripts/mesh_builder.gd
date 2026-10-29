@@ -457,6 +457,21 @@ var xform := Transform3D.IDENTITY
 ## [first vertex, bone] marks set by set_bone(): every vertex from the mark on
 ## is bound fully to that bone (rigid skinning, for code-built characters).
 var _bone_marks: Array = []
+## [first vertex, bones, weights] from skin(): vertices from the first on take
+## 4 bones and 4 weights each from the arrays, over the rigid marks.
+var _skins: Array = []
+## [first index, LOD] marks set by set_lod(): which detail levels the
+## triangles from the mark on are in (LOD_BOTH, LOD_NEAR or LOD_FAR).
+var _lod_marks: Array = []
+## The far detail level's key in the mesh's LOD table (commit()); Godot uses
+## it from about 30 m for a person.
+var far_lod := 0.2
+## [first vertex, tag] marks set by set_tag(): kits name what they add
+## (tag_ranges() gives the vertex ranges back), so a later pass can move it.
+var _tag_marks: Array = []
+const LOD_BOTH := 0
+const LOD_NEAR := 1
+const LOD_FAR := 2
 
 
 ## Where the arrays end now; rollback() cuts them back to it (undoing
@@ -476,6 +491,55 @@ func rollback(m: Array) -> void:
 ## Binds everything added from now on to skeleton bone `bone`.
 func set_bone(bone: int) -> void:
 	_bone_marks.append([verts.size(), bone])
+
+
+## Skins the vertices from `first` on: four bones and four weights each.
+func skin(first: int, bones: PackedInt32Array, weights: PackedFloat32Array) -> void:
+	_skins.append([first, bones, weights])
+
+
+## Puts the triangles added from now on in detail level `lod` (LOD_BOTH,
+## LOD_NEAR or LOD_FAR); the mesh switches to the far level at distance.
+func set_lod(lod: int) -> void:
+	_lod_marks.append([indices.size(), lod])
+
+
+## Tags everything added from now on with `tag` ("" for none).
+func set_tag(tag: String) -> void:
+	_tag_marks.append([verts.size(), tag])
+
+
+## Vertex ranges [start, end) tagged `tag`, flat.
+func tag_ranges(tag: String) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	for k in _tag_marks.size():
+		if _tag_marks[k][1] == tag:
+			out.append(_tag_marks[k][0])
+			out.append(verts.size() if k == _tag_marks.size() - 1 else _tag_marks[k + 1][0])
+	return out
+
+
+## The near and far index lists from the LOD marks: [near, far]. Without
+## marks both are the whole index list.
+func lod_indices() -> Array:
+	if _lod_marks.is_empty():
+		return [indices, indices]
+	var near := PackedInt32Array()
+	var far := PackedInt32Array()
+	var start := 0
+	var lod := LOD_BOTH
+	for k in _lod_marks.size() + 1:
+		var end: int = indices.size() if k == _lod_marks.size() else _lod_marks[k][0]
+		if end > start:
+			var part := indices.slice(start, end)
+			if lod != LOD_FAR:
+				near.append_array(part)
+			if lod != LOD_NEAR:
+				far.append_array(part)
+		if k < _lod_marks.size():
+			start = end
+			lod = _lod_marks[k][1]
+	return [near, far]
 
 
 ## The toon material every baked mesh uses; colour comes from the vertices.
@@ -950,9 +1014,12 @@ func prism(poly: PackedVector2Array, y0: float, y1: float, color: Color, side_co
 		quad(Vector3(a.x, y0, a.y), Vector3(b.x, y0, b.y), Vector3(b.x, y1, b.y), Vector3(a.x, y1, a.y), out, sc)
 
 
-## Number of triangles collected so far (for budgets and tests).
+## Number of triangles collected so far (for budgets and tests); with LOD
+## marks, those of the near level.
 func triangle_count() -> int:
-	return indices.size() / 3
+	if _lod_marks.is_empty():
+		return indices.size() / 3
+	return lod_indices()[0].size() / 3
 
 
 func primitive(mesh: PrimitiveMesh, xform: Transform3D, color: Color) -> void:
@@ -1002,7 +1069,13 @@ func commit() -> ArrayMesh:
 	arrays[Mesh.ARRAY_NORMAL] = normals
 	arrays[Mesh.ARRAY_COLOR] = colors
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
-	arrays[Mesh.ARRAY_INDEX] = indices
+	var lods := {}
+	if _lod_marks.is_empty():
+		arrays[Mesh.ARRAY_INDEX] = indices
+	else:
+		var split := lod_indices()
+		arrays[Mesh.ARRAY_INDEX] = split[0]
+		lods[far_lod] = split[1]
 	if not ground_ranges.is_empty():
 		var uv2 := PackedVector2Array()
 		uv2.resize(verts.size())
@@ -1010,7 +1083,7 @@ func commit() -> ArrayMesh:
 			for v in range(ground_ranges[k], mini(ground_ranges[k + 1], verts.size())):
 				uv2[v] = Vector2(1.0, 0.0)
 		arrays[Mesh.ARRAY_TEX_UV2] = uv2
-	if not _bone_marks.is_empty():
+	if not _bone_marks.is_empty() or not _skins.is_empty():
 		var bones := PackedInt32Array()
 		var weights := PackedFloat32Array()
 		bones.resize(verts.size() * 4)
@@ -1020,10 +1093,17 @@ func commit() -> ArrayMesh:
 			for v in range(_bone_marks[k][0], end):
 				bones[v * 4] = _bone_marks[k][1]
 				weights[v * 4] = 1.0
+		for sk in _skins:
+			var first: int = sk[0]
+			var sb: PackedInt32Array = sk[1]
+			var sw: PackedFloat32Array = sk[2]
+			for k in mini(sb.size(), (verts.size() - first) * 4):
+				bones[first * 4 + k] = sb[k]
+				weights[first * 4 + k] = sw[k]
 		arrays[Mesh.ARRAY_BONES] = bones
 		arrays[Mesh.ARRAY_WEIGHTS] = weights
 	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], lods)
 	return mesh
 
 
