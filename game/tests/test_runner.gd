@@ -7704,7 +7704,9 @@ func test_blood_melee_spurts_and_spatters() -> void:
 		var t: Transform3D = bw.mark_transform(i)
 		var off: Vector3 = t.origin - victim.global_position
 		near = near and Vector2(off.x, off.z).length() < 2.0
-		ahead += -off.z / punch_marks
+		# The last mark is the drip at their feet; the spatter runs on 0.2 m+.
+		if i < punch_marks - 1:
+			ahead += -off.z / (punch_marks - 1)
 		small = small and t.basis.x.length() <= 0.9 and t.basis.z.length() <= 1.3
 		ground = ground and absf(t.origin.y - (Terrain.height(t.origin.x, t.origin.z) + bw.LIFT)) < 0.01 and bw.kind(i) == bw.DROP
 	_check(near and ahead > 0.15 and small and ground,

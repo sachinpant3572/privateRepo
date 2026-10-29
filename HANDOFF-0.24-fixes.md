@@ -64,3 +64,7 @@ and primitive, we need to fix them." Log: breakables.gd:54 get_meta('glow').
 - `round` and `pass` are GDScript names; a variable called either fails
   to parse.
 - char_shots pages are separate args (`faces hero`), not comma-joined.
+- Blood's `_rng` is randomized, so its tests see different numbers each
+  run. test_blood_melee_spurts_and_spatters averaged the drip (at the feet)
+  into "ahead" and failed whenever the spatter rolled under 0.3 m; it now
+  averages the spatter marks only.
