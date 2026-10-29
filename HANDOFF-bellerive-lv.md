@@ -115,3 +115,22 @@ planned size" rule for the city; #104 (organic outline) carries on inside it.
   and "Sunrise Grocery" (1852,1510) now sit inside the grown core, so city
   colliders block their doorsteps. The country agent's regeneration clips
   country plots out of the core; rerun that test after merging it.
+- Street-plan exits come only from roads cut by the trim; a dead-end stub
+  is pruned before the trim, so it never makes one. The causeway's exit is
+  added after the trim (`_trim_to_outline`, the Ocean Drive junction nearest
+  the landing), and world_map's `overseas` line starts at (7736, 8050) so it
+  meets that junction square on (a 40 m sideways offset failed the lead-in's
+  min radius).
+- Country build order: the Golden Flats Expressway is routed right after the
+  Beltway (`_flats_expressway`); routed with the farm roads, the suburb
+  streets had already taken its west exits.
+
+## Country merge (2026-10-29)
+
+- Merged the country agent's branch (worktree adbfdb7): `--urban` redraft,
+  lead-ins to free exits, carry-on streets, tee snapping, looser test floors.
+- Urban footprint: **5.44 km² accepted** (fill 0.732). The agent's 4.72 km²
+  aim was the old city box, not a target Sachin set; city land (the
+  4.1-4.3 km² target) is measured on the street plan, not the footprint.
+- Self-check after the fixes: 0 highway ends off an exit, 0 unreached nodes,
+  112 of 158 exits used.
