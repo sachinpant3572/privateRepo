@@ -37,6 +37,15 @@ const CORNER_RADIUS := 5.0
 ## the nose, which _drive turns into full steer; seconds to reach it.
 const WHEEL_ANGLE := 0.5
 const STEER_IN := 0.16
+## Tyre scrub for the wheel schemes (arrows, tilt, on-screen wheel; 0.25.1,
+## Sachin: "the vehicle turns are still stiff"): with gas held through a
+## turn the car used to keep accelerating, and its circle grows with the
+## square of speed, so every held turn ran wide. Now a turn at full lock
+## holds the speed at which the tyres keep the car on a TURN_RADIUS circle
+## (wider at part lock), and above it the tyres scrub off up to SCRUB m/s²,
+## on or off the gas. The stick has the corner assist instead.
+const TURN_RADIUS := 9.0
+const SCRUB := 6.0
 ## The tightest circle (m) any vehicle turns on, however slow.
 const MIN_RADIUS := 3.2
 ## Seconds the player's car takes to build up (or shed) a turn, as a real
@@ -1261,6 +1270,7 @@ func _drive(delta: float) -> void:
 	var yaw := 0.0
 	var pace := absf(speed)
 	var corner := 0.0 # how much the corner assist brakes, 0..1
+	var scrub := 0.0 # how hard the tyres scrub in a wheel-steered turn, 0..1
 	var slide_to := 0.0
 	if drifting:
 		slide_to = 1.0 if _drift_brake > 0.05 else 0.75
@@ -1286,6 +1296,13 @@ func _drive(delta: float) -> void:
 				if assisted < target and assisted < pace:
 					corner = mix
 				target = minf(target, assisted)
+			if driver == Driver.PLAYER and _wheel and not handbrake and not drifting:
+				var lock := clampf(absf(angle) * 2.0, 0.0, 1.0)
+				if lock > 0.05:
+					var hold := sqrt(_spec.corner_g * _grip() * TURN_RADIUS / lock)
+					if hold < target or (_coast and hold < pace):
+						scrub = lock
+					target = minf(target, hold)
 		var grip_turn: float = clampf(pace / _spec.steer_low, 0.0, 1.0) * (1.0 - _spec.steer_fade * clampf(pace / max_speed, 0.0, 1.0))
 		steer = clampf(angle * 2.0, -1.0, 1.0)
 		var rate_want: float = steer * _turn_rate() * grip_turn * lerpf(1.0, 1.6, loose)
@@ -1312,14 +1329,14 @@ func _drive(delta: float) -> void:
 	var rate: float = accel * (1.0 - _spec.power_fade * clampf(pace / max_speed, 0.0, 1.0))
 	_hard_brake = false
 	if desired_dir == Vector3.ZERO or _coast:
-		rate = COAST
+		rate = maxf(COAST, SCRUB * scrub)
 	elif signf(target) != signf(speed) and pace > 0.5:
 		rate = _brake_rate()
 		_hard_brake = pace > 9.0
 	elif corner > 0.0:
 		rate = _brake_rate()
 	elif absf(target) < pace:
-		rate = COAST * 2.0
+		rate = SCRUB * scrub if scrub > 0.0 else COAST * 2.0
 	if drifting:
 		# Sliding: the throttle holds the drift, the brake scrubs it off,
 		# and the sideways tyres bleed speed either way.

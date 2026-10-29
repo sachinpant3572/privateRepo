@@ -46,6 +46,9 @@ var run_speed := 5.0
 var punch_damage := 12.0
 ## Clothes, skin and hair; see CharacterKit.build().
 var look := {}
+## The body already prepared off the main thread (CharacterKit.prepare,
+## PeopleBuilder), if any; _build_model() uses it instead of building.
+var made := {}
 ## Silhouette colour shown through buildings; transparent means none.
 var xray_color := Color(0, 0, 0, 0)
 ## Whether the silhouette is drawn now (see show_xray).
@@ -407,7 +410,8 @@ func _set_standing_layers() -> void:
 
 
 func _build_model() -> void:
-	model = CharacterKit.build_rig(look)
+	model = CharacterKit.assemble(made) if not made.is_empty() else CharacterKit.build_rig(look)
+	made = {}
 	body_mesh = model.get_node("Body")
 	add_child(model)
 	rig = Rig.new(model)

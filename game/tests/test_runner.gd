@@ -16,6 +16,8 @@ const PedScript = preload("res://scripts/pedestrian.gd")
 const CharKit = preload("res://scripts/kits/character_kit.gd")
 const RigScript = preload("res://scripts/rig.gd")
 const GameLog = preload("res://scripts/game_log.gd")
+const PeopleBuilder = preload("res://scripts/people_builder.gd")
+const KIT_TESTS := ["test_body_kit_builds_bodies", "test_body_seams_hats_and_build_time", "test_people_wear_modern_clothes"]
 
 var game
 var passed := 0
@@ -55,6 +57,7 @@ func _run() -> void:
 		"test_empty_rooms_phone_and_clues",
 		"test_lantern_lights_ambush",
 		"test_body_kit_builds_bodies", "test_body_seams_hats_and_build_time", "test_people_wear_modern_clothes",
+		"test_crowd_bodies_build_off_the_main_thread",
 		"test_people_dress_for_their_kind", "test_reactions_by_kind_of_person", "test_reaction_starts_on_time",
 		"test_people_notice_by_sight_and_sound", "test_poses_stay_in_joint_limits", "test_crowd_reacts_to_a_punch",
 		"test_people_dodge_cars_and_get_up", "test_cops_investigate_off_duty", "test_people_sit_on_benches",
@@ -62,7 +65,7 @@ func _run() -> void:
 		"test_vehicle_speed_ranks",
 		"test_player_driving_assists",
 		"test_driving_layouts",
-		"test_brake_and_steer_drifts", "test_classes_brake_and_corner_apart", "test_movers_stand_on_hill_ground",
+		"test_brake_and_steer_drifts", "test_classes_brake_and_corner_apart", "test_held_gas_turns_stay_tight", "test_movers_stand_on_hill_ground",
 		"test_touch_driving_layouts",
 		"test_scripted_car_gets_unstuck", "test_heavy_vehicle_pushes_harder", "test_spawns_need_room", "test_overlap_resolves", "test_heavy_pushes_parked", "test_pinned_car_holds_still", "test_xray_only_when_hidden", "test_cars_prewarmed", "test_hero_seen_under_roofs", "test_cab_stop_skips_parked_car",
 		"test_vehicle_classes_cover_every_kind", "test_suspension_bounces_and_settles", "test_side_hit_spins_and_dents", "test_hard_crash_throws_panel", "test_crash_throws_rider", "test_car_fire_then_explodes",
@@ -111,7 +114,15 @@ func _run() -> void:
 		tests = tests.filter(func(t): return t in only.split(","))
 	for name in tests:
 		var before := failed
+		# These build bodies straight from the kits on this thread: hold the
+		# lock a background crowd build (PeopleBuilder) takes, so neither
+		# touches BodyKit's caches while the other does.
+		var kit_test: bool = name in KIT_TESTS
+		if kit_test:
+			CharKit.lock.lock()
 		await call(name)
+		if kit_test:
+			CharKit.lock.unlock()
 		print("%s %s" % ["PASS" if failed == before else "FAIL", name])
 	await _free_game()
 	print("\n%d checks passed, %d failed" % [passed, failed])
@@ -630,8 +641,10 @@ func test_city_runs_with_population() -> void:
 	print("  fast run: %.1f people alive, %.1f on screen, %.1f traffic on screen" % [counts[4] / frames, counts[5] / frames, counts[6] / frames])
 	get_window().size = window_size
 	# Let the bubble refill: it adds a person every 0.25 s, so 3 s refills
-	# ten even when the drive left none of the earlier ones in range.
+	# ten even when the drive left none of the earlier ones in range. The
+	# bodies build in real time (PeopleBuilder), faster than these frames run.
 	await _frames(180)
+	await _within(func(): return game.population.peds.size() >= 10, 5.0)
 	_check(game.population.peds.size() >= 10, "pedestrians spawned, got %d" % game.population.peds.size())
 	_check(game.population.cars.size() >= 5, "traffic spawned, got %d" % game.population.cars.size())
 	_check(fastest[0] > 15.0, "the run gets up to speed (%.1f m/s)" % fastest[0])
@@ -2566,6 +2579,15 @@ func _press(action: String) -> void:
 	await _frames(2)
 
 
+## Waits (physics frames) until `done` returns true or `seconds` of real
+## time pass: background work runs in real time, and headless test frames
+## run faster than that.
+func _within(done: Callable, seconds: float) -> void:
+	var end := Time.get_ticks_msec() + int(seconds * 1000.0)
+	while not done.call() and Time.get_ticks_msec() < end:
+		await get_tree().physics_frame
+
+
 func _frames(n: int) -> void:
 	for i in n:
 		await get_tree().physics_frame
@@ -2685,6 +2707,44 @@ func test_body_seams_hats_and_build_time() -> void:
 	var ms := (Time.get_ticks_usec() - t0) / 5000.0
 	_check(BodyKit._recipes.keys() == seen, "body shapes reuse the dress's cut recipe")
 	_check(ms < 12.0, "a crowd body with a seen dress builds in %.1f ms" % ms)
+
+## People are built on worker threads (PeopleBuilder) and a spawn only puts
+## the finished body together: in 0.25 each new person was built inside the
+## population's physics tick, 40-50 ms a person on a phone (Sachin's log,
+## 2026-10-29), and fast driving churns people all the time.
+func test_crowd_bodies_build_off_the_main_thread() -> void:
+	var rand := RandomNumberGenerator.new()
+	rand.seed = 11
+	var look: Dictionary = CharKit.category_look(rand, "office")
+	var direct: Skeleton3D = CharKit.build_rig(look)
+	var t = PeopleBuilder.request(look)
+	await _within(func(): return PeopleBuilder.ready(t), 3.0)
+	_check(t.done, "a body ordered from PeopleBuilder is built within three seconds")
+	var t0 := Time.get_ticks_usec()
+	var made: Skeleton3D = CharKit.assemble(t.made)
+	var ms := (Time.get_ticks_usec() - t0) / 1000.0
+	var a: ArrayMesh = direct.get_node("Body").mesh
+	var b: ArrayMesh = made.get_node("Body").mesh
+	_check(a.surface_get_array_len(0) == b.surface_get_array_len(0) and a.surface_get_array_index_len(0) == b.surface_get_array_index_len(0)
+		and direct.get_bone_rest(5).origin.is_equal_approx(made.get_bone_rest(5).origin) and direct.scale == made.scale,
+		"a body built off the main thread matches one built in place")
+	_check(ms < 3.0, "putting a built body together takes %.2f ms on the main thread" % ms)
+	direct.free()
+	made.free()
+	await _new_game(true)
+	var pop = game.population
+	await _within(func(): return pop._body_ready(), 3.0)
+	_check(pop._body_ready(), "the population has bodies built ahead")
+	t0 = Time.get_ticks_usec()
+	var ped = pop.spawn_ped_at(game.player.global_position + Vector3(6, 0, 0))
+	ms = (Time.get_ticks_usec() - t0) / 1000.0
+	_check(ped.model != null and ped.made.is_empty(), "the spawned person wears the built body")
+	_check(ms < 5.0, "a spawn takes %.2f ms on the main thread" % ms)
+	await _frames(20)
+	_check(pop._coming.size() == Population.BODIES_AHEAD, "and the next bodies are ordered (%d)" % pop._coming.size())
+	PeopleBuilder.drain()
+	_check(PeopleBuilder.busy() == 0, "no build is left running after a drain")
+
 
 ## Every outfit and the named cast build as one rigidly skinned mesh within
 ## the triangle budget; random looks vary; old look keys still work; a phone
@@ -3222,6 +3282,44 @@ func test_movers_stand_on_hill_ground() -> void:
 	_check(absf(car.global_position.y - ground) < 0.03, "a car parked on the hillside sits on the drawn ground (%.2f m, ground %.2f m)" % [car.global_position.y, ground])
 	_check(absf(feet.y - under) < 0.03 and Terrain.drop(feet.x, feet.z) > 0.1, "a person on the hillside stands on the drawn ground (%.2f m, ground %.2f m)" % [feet.y, under])
 	car.queue_free()
+
+
+## 0.25.1, Sachin: "the vehicle turns are still stiff". With the arrows,
+## gas held through a turn kept the car accelerating, so a 90-degree turn
+## at 72 km/h in the crossover he drove took 2.6 s on a 42 m circle. The
+## tyres now scrub it to the speed its grip holds at full lock (TURN_RADIUS).
+func test_held_gas_turns_stay_tight() -> void:
+	await _free_game()
+	Controls.camera = null
+	Controls.scheme = "arrows"
+	var turns := {}
+	for kind in ["crossover", "sports"]:
+		var car = _player_car(kind, Vector3(150.0, 0, 150.0), 20.0)
+		await get_tree().physics_frame
+		var p0: Vector3 = car.global_position
+		var yaw0: float = car.rotation.y
+		Input.action_press("gas")
+		Input.action_press("steer_left")
+		var n := 0
+		while n < 300 and absf(wrapf(car.rotation.y - yaw0, -PI, PI)) < PI / 2.0:
+			await get_tree().physics_frame
+			n += 1
+		var radius: float = (car.global_position - p0).length() / sqrt(2.0)
+		var hold: float = sqrt(car._spec.corner_g * car._grip() * Vehicle.TURN_RADIUS)
+		turns[kind] = [n / 60.0, radius, car.speed]
+		_check(car.speed <= 20.0 and car.speed < hold + 1.0, "gas held at full lock, the %s scrubs to the speed its tyres hold (%.1f m/s, holds %.1f)" % [kind, car.speed, hold])
+		# Straightening up, the gas pulls again.
+		Input.action_release("steer_left")
+		var slow: float = car.speed
+		await _frames(60)
+		_check(car.speed > slow + 3.0, "out of the turn the %s speeds up again (%.1f -> %.1f m/s)" % [kind, slow, car.speed])
+		Input.action_release("gas")
+		car.queue_free()
+		await get_tree().physics_frame
+	print("  90-degree turns from 72 km/h, gas held [s, radius m, end m/s]: %s" % [turns])
+	_check(turns.crossover[0] < 1.8 and turns.crossover[1] < 20.0, "the crossover turns 90 degrees from 72 km/h in under 1.8 s on a circle under 20 m (%.2f s, %.1f m)" % [turns.crossover[0], turns.crossover[1]])
+	_check(turns.sports[0] < 1.2 and turns.sports[1] < 14.0, "the sports car turns 90 degrees from 72 km/h in under 1.2 s on a circle under 14 m (%.2f s, %.1f m)" % [turns.sports[0], turns.sports[1]])
+	Controls.scheme = "stick"
 
 
 func _player_car(kind: String, pos: Vector3, speed: float, yaw := 0.0):
@@ -4622,6 +4720,9 @@ func test_people_walk_the_suburbs() -> void:
 	for p in pop.peds:
 		if p.global_position.distance_to(at) < 120.0:
 			road = minf(road, c.road_distance(Vector2(p.global_position.x, p.global_position.z), 40.0))
+			var dd: float = c.road_distance(Vector2(p.global_position.x, p.global_position.z), 40.0)
+			if dd < 0.5:
+				print("DIAG ped %s state=%d pause=%s cat=%s loop=%d pt=%d detour=%.2f stuck=%.2f hp=%s" % [p.global_position, p.state, p.pause_kind, p.category, p.loop_index, p.point_index, p._detour, p._stuck, p.get("health")])
 	_check(road > 0.5, "no one walks in the road (closest %.1f m from the asphalt's middle-line)" % road)
 
 
@@ -8487,8 +8588,10 @@ func test_convertible_occupants_show_with_roof_down() -> void:
 	ai.position = at + Vector3(0, 0, 12)
 	game.add_child(ai)
 	ai.driver = Vehicle.Driver.SCRIPT
-	await _frames(2)
 	var crew: Array = ai.convertible._crew
+	# The driver is built off the main thread (PeopleBuilder): a few frames.
+	await _within(func(): return crew[0] != null, 3.0)
+	await _frames(1)
 	_check(crew[0] != null and crew[0].visible, "an AI-driven open car shows its driver")
 	ai.convertible.set_roof(true, false)
 	await _frames(2)
@@ -9415,3 +9518,4 @@ func test_zebra_styles_match_city_cells() -> void:
 	var TP = preload("res://scripts/traffic_plan.gd")
 	var CityCells = preload("res://scripts/city_cells.gd")
 	_check(TP.ZEBRA_STYLES == CityCells.ZEBRA_STYLES, "TrafficPlan.ZEBRA_STYLES matches CityCells.ZEBRA_STYLES")
+

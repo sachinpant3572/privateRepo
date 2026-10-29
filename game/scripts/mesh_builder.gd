@@ -1063,6 +1063,12 @@ func mark_ground(start: int) -> void:
 
 
 func commit() -> ArrayMesh:
+	return mesh_from(surface())
+
+
+## The mesh's arrays and LODs, [arrays, lods], for mesh_from(). Builds no
+## resource, so it is safe on a worker thread.
+func surface() -> Array:
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = verts
@@ -1102,8 +1108,13 @@ func commit() -> ArrayMesh:
 				weights[first * 4 + k] = sw[k]
 		arrays[Mesh.ARRAY_BONES] = bones
 		arrays[Mesh.ARRAY_WEIGHTS] = weights
+	return [arrays, lods]
+
+
+## An ArrayMesh from surface()'s result (main thread: it uploads the mesh).
+static func mesh_from(s: Array) -> ArrayMesh:
 	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], lods)
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, s[0], [], s[1])
 	return mesh
 
 

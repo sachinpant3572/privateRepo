@@ -6,6 +6,8 @@ const Pedestrian = preload("res://scripts/pedestrian.gd")
 const Vehicle = preload("res://scripts/vehicle.gd")
 const VehicleKit = preload("res://scripts/kits/vehicle_kit.gd")
 const Traffic = preload("res://scripts/traffic.gd")
+const CharacterKit = preload("res://scripts/kits/character_kit.gd")
+const PeopleBuilder = preload("res://scripts/people_builder.gd")
 
 const PED_COUNT := 18
 ## The old fixed traffic count; Traffic.budget() sets it now (district, hour,
@@ -19,6 +21,9 @@ const PED_SPAWN := Vector2(30.0, 50.0)
 ## scaling it, which spread them to 115 m in the driving view.
 const CAR_SPAWN := Vector2(30.0, 55.0)
 const PED_DESPAWN := 70.0
+## People ordered ahead from PeopleBuilder, so a spawn never builds a body
+## in the physics tick (40-50 ms on a phone).
+const BODIES_AHEAD := 3
 const CAR_DESPAWN := 65.0
 const PARK_SPAWN := 90.0 # parked cars appear out of view within this range
 const PARK_DESPAWN := 120.0
@@ -31,6 +36,8 @@ var rng := RandomNumberGenerator.new()
 var _tick := 0.0
 var _parked := {} # parked spot index -> car spawned there
 var _first_pass := true
+## [PeopleBuilder ticket, category] per body on order, oldest first.
+var _coming: Array = []
 ## Junction controls, speed limits, demand and the district mix (Traffic).
 var traffic
 
@@ -40,6 +47,12 @@ func _ready() -> void:
 	traffic.name = "Traffic"
 	traffic.game = game
 	add_child(traffic)
+
+
+## Bodies still building finish before the game goes (their tasks are
+## waited on, not left running).
+func _exit_tree() -> void:
+	PeopleBuilder.drain()
 
 
 func _physics_process(delta: float) -> void:
@@ -57,10 +70,11 @@ func _physics_process(delta: float) -> void:
 	for car in cars:
 		if car != game.player.vehicle and _gone(car, center, CAR_DESPAWN + _edge(r)):
 			car.queue_free()
-	if peds.size() < PED_COUNT:
+	if peds.size() < PED_COUNT and _body_ready():
 		var spot: Array = game.city.random_sidewalk_between(center, PED_SPAWN.x, PED_SPAWN.y * r, rng, out_of_view)
 		if not spot.is_empty():
-			_add_ped(spot[0], spot[1])
+			_add_ped(spot[0], spot[1], _take_body())
+	_order_bodies()
 	if cars.size() < traffic.budget():
 		_spawn_traffic(center, r)
 	_update_parked(center)
@@ -91,20 +105,40 @@ func out_of_view(pos: Vector3) -> bool:
 	return not _in_view(pos)
 
 
+## A person here now (a mission's or a test's): one built ahead if ready,
+## else built on the spot.
 func spawn_ped_at(pos: Vector3):
 	var spot: Array = game.city.nearest_sidewalk(pos)
-	var ped = _add_ped(spot[0], spot[1])
+	var ped = _add_ped(spot[0], spot[1], _take_body() if _body_ready() else {})
 	ped.position = Vector3(pos.x, 0.0, pos.z)
 	return ped
 
 
-func _add_ped(loop: int, point: int):
+func _add_ped(loop: int, point: int, body := {}):
 	var ped = Pedestrian.new()
-	ped.setup(game.city, rng, loop, point)
+	ped.setup(game.city, rng, loop, point, body)
 	ped.position = game.city.sidewalk_loops[loop][point]
 	game.add_child(ped)
 	peds.append(ped)
 	return ped
+
+
+func _body_ready() -> bool:
+	return not _coming.is_empty() and PeopleBuilder.ready(_coming[0][0])
+
+
+## The oldest finished body, for Pedestrian.setup().
+func _take_body() -> Dictionary:
+	var next: Array = _coming.pop_front()
+	return {"category": next[1], "made": next[0].made}
+
+
+## Keeps BODIES_AHEAD people building or built, picked like the crowd
+## (Pedestrian's category mix and CharacterKit.category_look).
+func _order_bodies() -> void:
+	while _coming.size() < BODIES_AHEAD:
+		var category := Pedestrian._pick_category(rng)
+		_coming.append([PeopleBuilder.request(CharacterKit.category_look(rng, category)), category])
 
 
 ## Sets a car off out of view, more often on the arterials than the side

@@ -74,16 +74,24 @@ var _noticed := {}
 var _seen_bodies := {}
 
 
-func setup(c, rand: RandomNumberGenerator, loop: int, point: int) -> void:
+## `body`: a person already built off the main thread (Population's
+## PeopleBuilder ticket: its category and CharacterKit.prepare() result).
+func setup(c, rand: RandomNumberGenerator, loop: int, point: int, body := {}) -> void:
 	city = c
 	loop_index = loop
 	point_index = point
 	step = 1 if rand.randf() < 0.5 else -1
 	_rng.seed = rand.randi()
-	category = _pick_category(rand)
+	category = body.get("category", "")
+	if category == "":
+		category = _pick_category(rand)
 	personality = _pick_personality(rand, category)
 	brave = personality == "brave"
-	look = CharacterKit.category_look(rand, category)
+	if body.has("made"):
+		made = body.made
+		look = made.look
+	else:
+		look = CharacterKit.category_look(rand, category)
 	# A "general" look can come out as scrubs, hi-vis or a suit: act the part.
 	category = look.get("category", category)
 	max_health = 40.0

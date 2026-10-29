@@ -507,12 +507,35 @@ static func _weighted(rng: RandomNumberGenerator, table: Array, col: int) -> Str
 ## A posable person: a Skeleton3D with the body as its one skinned child
 ## mesh ("Body"). Scale it by look.height.
 static func build_rig(look: Dictionary) -> Skeleton3D:
-	var skel := Skeleton3D.new()
-	var skin := Skin.new()
-	# A BodyKit body has its own joints (blended for the look).
+	return assemble(prepare(look))
+
+
+## Every build holds this: BodyKit's caches are shared, and crowd people
+## are prepared on worker threads (PeopleBuilder).
+static var lock := Mutex.new()
+
+
+## The slow half of build_rig, with no nodes or GPU work, so it is safe on
+## any thread: the bone joints (a BodyKit body has its own, blended for the
+## look) and the body's surface arrays.
+static func prepare(look: Dictionary) -> Dictionary:
+	lock.lock()
 	var at := {}
 	if BODY:
-		at = BodyKit.blend(look, body_mesh(look)).joints
+		at = BodyKit.blend(look, body_mesh(look)).joints.duplicate()
+	var mb := MeshBuilder.new()
+	build(mb, look)
+	var surface: Array = mb.surface()
+	lock.unlock()
+	return {"look": look, "joints": at, "surface": surface}
+
+
+## The main-thread half of build_rig: the skeleton, its skin and the mesh
+## from prepare()'s result.
+static func assemble(made: Dictionary) -> Skeleton3D:
+	var skel := Skeleton3D.new()
+	var skin := Skin.new()
+	var at: Dictionary = made.joints
 	for i in BONES.size():
 		var b: Array = BONES[i]
 		skel.add_bone(b[0])
@@ -525,15 +548,13 @@ static func build_rig(look: Dictionary) -> Skeleton3D:
 		skel.set_bone_rest(i, Transform3D(Basis(), offset))
 		skin.add_bind(i, Transform3D(Basis(), -joint))
 	skel.reset_bone_poses()
-	var mb := MeshBuilder.new()
-	build(mb, look)
 	var body := MeshInstance3D.new()
 	body.name = "Body"
-	body.mesh = mb.commit()
+	body.mesh = MeshBuilder.mesh_from(made.surface)
 	body.skin = skin
 	skel.add_child(body)
 	body.skeleton = NodePath("..")
-	var h: float = look.get("height", 1.0)
+	var h: float = made.look.get("height", 1.0)
 	skel.scale = Vector3(h, h, h)
 	return skel
 

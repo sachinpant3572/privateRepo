@@ -12,6 +12,7 @@ const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 const VehicleKit = preload("res://scripts/kits/vehicle_kit.gd")
 const CharacterKit = preload("res://scripts/kits/character_kit.gd")
 const Rig = preload("res://scripts/rig.gd")
+const PeopleBuilder = preload("res://scripts/people_builder.gd")
 
 ## Seconds to raise or fold the top.
 const FOLD_TIME := 0.7
@@ -31,6 +32,8 @@ var _raised: MeshInstance3D
 var _folded: MeshInstance3D
 ## The AI driver's and passenger's figures (built when first shown).
 var _crew: Array = [null, null]
+## PeopleBuilder tickets for seated strangers still being built.
+var _orders: Array = [null, null]
 ## Whether an AI driver has company (PASSENGER_CHANCE, fixed per car).
 var _company := false
 var _seated: Array = []
@@ -179,13 +182,19 @@ func _unseat(p) -> void:
 		p.visible = false
 
 
-## A seated stranger for seat `i`, posed once (they don't move).
+## A seated stranger for seat `i`, posed once (they don't move): ordered
+## from PeopleBuilder, so null for the few frames until built.
 func _figure(i: int) -> Node3D:
-	var r := RandomNumberGenerator.new()
-	r.seed = car.get_instance_id() * 31 + i
-	var look := CharacterKit.random_look(r)
-	look.erase("bag")  # in the footwell, not hanging through the seat
-	var skel := CharacterKit.build_rig(look)
+	if _orders[i] == null:
+		var r := RandomNumberGenerator.new()
+		r.seed = car.get_instance_id() * 31 + i
+		var look := CharacterKit.random_look(r)
+		look.erase("bag")  # in the footwell, not hanging through the seat
+		_orders[i] = PeopleBuilder.request(look)
+	if not PeopleBuilder.ready(_orders[i]):
+		return null
+	var skel := CharacterKit.assemble(_orders[i].made)
+	_orders[i] = null
 	skel.get_node("Body").material_override = MeshBuilder.material()
 	var holder := Node3D.new()
 	holder.position = VehicleKit.seat(car.kind, i)
