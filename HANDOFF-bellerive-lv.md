@@ -146,5 +146,4 @@ variations: reference/world/mix_options_sketch.png (game/tools/mix_sketch.py).
 Waiting for his pick of 1-4. In the sketch, field arterials don't always meet
 the roundabouts; in the build, put roundabouts where field arterials cross.
 - Drafted, never run (street_plan.gd): CURVES (Mirador, Canyon) and BOWS
-  (amp*sin(pi*t) row bends); superseded by the mix once Sachin picks.
-- Map (#107): vector map after the curves settle.
+  (amp*sin(pi*t) row bends); superseded by the mix. Map (#107) comes after.
