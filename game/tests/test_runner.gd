@@ -1641,8 +1641,11 @@ func test_settings_page_tabs_and_preview() -> void:
 	game.settings["zoom"] = 1.3
 	game.apply_settings()
 	page._preview_driving(true)
+	# Cells build on a worker thread in real time, and headless frames run
+	# uncapped, so the wait is a time limit rather than a frame count.
 	var missing := -1
-	for i in 60:
+	var t0 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t0 < 15000:
 		await _idle(10)
 		missing = 0
 		for c in game.city._cells_near(cam.stream_point(), game.city.get_script().LOAD_RADIUS):
