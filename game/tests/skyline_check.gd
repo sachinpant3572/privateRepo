@@ -88,7 +88,7 @@ func _check_colliders(out: Array, size: Vector2, where: String) -> int:
 	var grounded := false
 	for i in out.size():
 		var c: Array = out[i]
-		if c.size() < 2 or c.size() > 3:
+		if c.size() < 2 or c.size() > 4 or (c.size() == 4 and not c[3] is Dictionary):
 			print("  FAIL %s: collider %d has %d fields" % [where, i, c.size()])
 			bad += 1
 			continue

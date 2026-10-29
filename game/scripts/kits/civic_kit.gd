@@ -29,9 +29,9 @@ const LANDMARKS := [
 ## Suburban government buildings (the outskirts).
 const SUBURBAN := ["fire_station", "post_office", "dmv_office", "sheriff_station", "public_school"]
 ## Homes: rows and houses.
-const HOMES := ["brownstone_row", "painted_lady_row", "rowhouse_row", "cape_house"]
-## Attractions.
-const ATTRACTIONS := ["pier_rides"]
+const HOMES := ["brownstone_row", "painted_lady_row", "rowhouse_row", "cape_house", "chinatown_row", "havana_row"]
+## Attractions and resort hotels.
+const ATTRACTIONS := ["pier_rides", "deco_hotel"]
 
 ## Default lot of each kind: x along the front, y deep, metres.
 const SIZES := {
@@ -47,6 +47,7 @@ const SIZES := {
 	"brownstone_row": Vector2(36, 14), "painted_lady_row": Vector2(36, 14),
 	"rowhouse_row": Vector2(36, 12), "cape_house": Vector2(11, 9),
 	"pier_rides": Vector2(60, 140),
+	"chinatown_row": Vector2(35, 14), "havana_row": Vector2(36, 14), "deco_hotel": Vector2(36, 26),
 }
 
 const LIMESTONE := Color(0.87, 0.84, 0.77)
@@ -97,6 +98,16 @@ const ROW_FRONTS := [
 	[Color(0.84, 0.7, 0.52), 0.8125],
 ]
 const CAPE_SIDINGS := [Color(0.94, 0.93, 0.88), Color(0.78, 0.82, 0.84), Color(0.95, 0.88, 0.66), Color(0.7, 0.8, 0.72), Color(0.86, 0.74, 0.66), Color(0.62, 0.7, 0.8)]
+## Chinatown shophouse fronts (SF Grant Avenue): cream, ochre, jade,
+## brick and grey, with red and jade balconies and green tile eaves.
+const CHINA_FRONTS := [Color(0.9, 0.85, 0.72), Color(0.82, 0.66, 0.42), Color(0.62, 0.74, 0.64), Color(0.66, 0.34, 0.27), Color(0.72, 0.72, 0.7), Color(0.88, 0.78, 0.6)]
+const CHINA_RED := Color(0.72, 0.1, 0.1)
+const JADE := Color(0.16, 0.48, 0.38)
+## Little Havana stucco: coral, mint, lemon, sky, peach and lilac.
+const HAVANA := [Color(0.96, 0.6, 0.52), Color(0.6, 0.86, 0.74), Color(0.98, 0.88, 0.5), Color(0.56, 0.78, 0.92), Color(0.98, 0.74, 0.58), Color(0.82, 0.7, 0.9)]
+## Ocean Drive Deco: white and pastel bodies, brighter accent bands.
+const DECO_BODIES := [Color(0.97, 0.96, 0.93), Color(0.98, 0.86, 0.82), Color(0.84, 0.94, 0.9), Color(0.99, 0.93, 0.76), Color(0.86, 0.9, 0.98)]
+const DECO_ACCENTS := [Color(0.95, 0.45, 0.55), Color(0.2, 0.7, 0.72), Color(0.98, 0.7, 0.25), Color(0.45, 0.55, 0.9), Color(0.6, 0.85, 0.4)]
 const SHUTTERS := [Color(0.12, 0.22, 0.36), Color(0.16, 0.34, 0.24), Color(0.5, 0.16, 0.14), Color(0.15, 0.15, 0.16), Color(0.3, 0.45, 0.5)]
 
 
@@ -146,6 +157,9 @@ static func build(kind: String, mb, out: Array, size: Vector2, rng: RandomNumber
 		"rowhouse_row": rowhouse_row(mb, out, w, d, rng)
 		"cape_house": cape_house(mb, out, w, d, rng)
 		"pier_rides": pier_rides(mb, out, w, d, rng)
+		"chinatown_row": chinatown_row(mb, out, w, d, rng)
+		"havana_row": havana_row(mb, out, w, d, rng)
+		"deco_hotel": deco_hotel(mb, out, w, d, rng)
 		_:
 			# Unknown kind: a plain magenta block, so a typo shows instead of a hole.
 			Kit._solid(mb, out, Vector3(0, 2.0, 0), Vector3(w * 0.6, 4.0, d * 0.6), Color(1.0, 0.0, 1.0))
@@ -2071,3 +2085,164 @@ static func pier_rides(mb, out: Array, w: float, d: float, rng: RandomNumberGene
 		var z := lerpf(zn0 + 4.0, zw0 - 3.0, (k + 0.5) / 2.0)
 		Props.bench(mb, out, Vector3(-nw * 0.5 + 0.9, DY, z), -PI * 0.5)
 		Props.bench(mb, out, Vector3(nw * 0.5 - 0.9, DY, z), PI * 0.5)
+
+
+## Runs Buildings._shopfront (drawn about x = 0) centred on x = cx.
+static func _shop_at(mb, cx: float, w: float, front: float, rng: RandomNumberGenerator) -> void:
+	var saved: Transform3D = mb.xform
+	mb.xform = saved * Transform3D(Basis(), Vector3(cx, 0, 0))
+	Buildings._shopfront(mb, w, front, rng)
+	mb.xform = saved
+
+
+## Chinatown shophouses (SF Grant Avenue): attached three-storey fronts
+## about 7 m wide straight onto the sidewalk, a shop with an awning below,
+## a balcony on each upper floor with red or jade rails, a flared green
+## tile eave with red corner tips, a blade sign now and then and a string
+## of red lanterns along the front.
+static func chinatown_row(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator) -> void:
+	var n := maxi(1, roundi(w / 7.0))
+	var uw := w / n
+	var hf := -d * 0.5 + 0.6
+	var hb := minf(hf + clampf(d * 0.75, 6.0, 14.0), d * 0.5 - 0.4)
+	var hd := hb - hf
+	const FH := Buildings.FLOOR
+	var tile := MeshBuilder.glow(JADE.darkened(0.15), MeshBuilder.SEAM_ROOF)
+	var red := MeshBuilder.glow(CHINA_RED, MeshBuilder.GLOSS)
+	var start := rng.randi() % CHINA_FRONTS.size()
+	var hmax := 0.0
+	Kit._pad(mb, -w * 0.5, w * 0.5, -d * 0.5, hf, MeshBuilder.glow(CONCRETE.darkened(0.05), MeshBuilder.CONCRETE))
+	for i in n:
+		var x0 := -w * 0.5 + i * uw
+		var cx := x0 + uw * 0.5
+		var floors := 3 if rng.randf() < 0.7 else 4
+		var H := FH * floors + 0.6
+		hmax = maxf(hmax, H)
+		var col: Color = CHINA_FRONTS[(start + i * 2) % CHINA_FRONTS.size()]
+		var face := MeshBuilder.glow(col.lightened(rng.randf() * 0.05), MeshBuilder.BRICK if col.r > col.g * 1.6 else MeshBuilder.CONCRETE)
+		mb.box(Vector3(cx, H * 0.5, (hf + hb) * 0.5), Vector3(uw, H, hd), face)
+		mb.box(Vector3(cx, H + 0.02, (hf + hb) * 0.5), Vector3(uw - 0.2, 0.04, hd - 0.2), MeshBuilder.glow(ROOF_GREY, MeshBuilder.ROOF))
+		_shop_at(mb, cx, uw - 0.6, hf - 0.04, rng)
+		var rail := red if i % 2 == 0 else MeshBuilder.glow(JADE, MeshBuilder.GLOSS)
+		for f in range(1, floors):
+			var y := f * FH
+			Kit._windows(mb, Vector3(x0 + 0.6, y + 1.5, hf), Vector3(x0 + uw - 0.6, y + 1.5, hf), 2, Vector2(1.3, 1.9), rng, Vector3.FORWARD, 0.5)
+			mb.box(Vector3(cx, y + 0.08, hf - 0.6), Vector3(uw - 0.8, 0.16, 1.2), face.darkened(0.1))
+			mb.box(Vector3(cx, y + 0.6, hf - 1.17), Vector3(uw - 0.8, 0.9, 0.06), rail)
+			for s: float in [-1.0, 1.0]:
+				mb.box(Vector3(cx + s * (uw * 0.5 - 0.43), y + 0.6, hf - 0.6), Vector3(0.06, 0.9, 1.2), rail)
+		# Flared eave: a deep green tile band out over the street, red tips up at the ends.
+		mb.box(Vector3(cx, H - 0.15, hf - 0.55), Vector3(uw, 0.3, 1.3), tile)
+		mb.box(Vector3(cx, H + 0.2, hf - 0.2), Vector3(uw, 0.4, 0.6), tile)
+		for s: float in [-1.0, 1.0]:
+			mb.box(Vector3(cx + s * (uw * 0.5 - 0.15), H + 0.15, hf - 1.1), Vector3(0.3, 0.5, 0.3), red)
+		if i % 2 == 1 or rng.randf() < 0.3:
+			var sx := x0 + 0.5
+			mb.box(Vector3(sx, FH + 2.4, hf - 0.8), Vector3(0.14, 3.2, 1.0), red.darkened(0.2))
+			for k in 3:
+				mb.box(Vector3(sx, FH + 1.4 + k * 0.95, hf - 0.8), Vector3(0.18, 0.6, 0.6), MeshBuilder.glow(Color(1.0, 0.82, 0.3), MeshBuilder.GLOW_NEON))
+		Kit._windows(mb, Vector3(x0 + 0.6, FH + 1.5, hb), Vector3(x0 + uw - 0.6, FH + 1.5, hb), 2, Vector2(1.0, 1.6), rng, Vector3.BACK, 0.4)
+	# Lanterns strung along the front under the first balconies.
+	var lamp := MeshBuilder.glow(Color(1.0, 0.25, 0.15), MeshBuilder.GLOW_LAMP)
+	var x := -w * 0.5 + 1.0
+	while x < w * 0.5 - 0.5:
+		mb.box(Vector3(x, FH - 0.3, hf - 1.0), Vector3(0.04, 0.3, 0.04), Color(0.1, 0.1, 0.1))
+		mb.ball(Vector3(x, FH - 0.75, hf - 1.0), Vector3(0.28, 0.34, 0.28), lamp, 6, 3)
+		x += 2.2
+	Kit._col(out, Vector3(0, hmax * 0.5, (hf + hb) * 0.5), Vector3(w, hmax, hd))
+
+
+## Little Havana (Calle Ocho): low stucco shopfronts in bright pastels,
+## one or two storeys with a stepped parapet, striped awnings, shutters
+## and iron balconies upstairs, and a café table or two on the sidewalk.
+static func havana_row(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator) -> void:
+	var n := maxi(1, roundi(w / 9.0))
+	var uw := w / n
+	var hf := -d * 0.5 + 1.6
+	var hb := minf(hf + clampf(d * 0.7, 6.0, 13.0), d * 0.5 - 0.6)
+	var hd := hb - hf
+	const FH := Buildings.FLOOR
+	var iron := MeshBuilder.glow(IRON, MeshBuilder.GLOSS)
+	var start := rng.randi() % HAVANA.size()
+	var hmax := 0.0
+	Kit._pad(mb, -w * 0.5, w * 0.5, -d * 0.5, hf, MeshBuilder.glow(Color(0.86, 0.8, 0.7), MeshBuilder.PAVING))
+	Kit._pad(mb, -w * 0.5, w * 0.5, hb, d * 0.5, _grass(), 0.03)
+	for i in n:
+		var x0 := -w * 0.5 + i * uw
+		var cx := x0 + uw * 0.5
+		var two := rng.randf() < 0.45
+		var H := FH * (2.0 if two else 1.0) + 0.9
+		hmax = maxf(hmax, H + 0.9)
+		var paint: Color = HAVANA[(start + i * 2) % HAVANA.size()]
+		var body := MeshBuilder.glow(paint, MeshBuilder.CONCRETE)
+		var trim := MeshBuilder.glow(TRIM, MeshBuilder.GLOSS)
+		mb.box(Vector3(cx, H * 0.5, (hf + hb) * 0.5), Vector3(uw - 0.1, H, hd), body)
+		_parapet_roof(mb, cx, (hf + hb) * 0.5, uw - 0.1, hd, H, body.darkened(0.08), 0.6)
+		# Stepped centre of the parapet and a trim band under it.
+		mb.box(Vector3(cx, H + 0.75, hf + 0.18), Vector3(uw * 0.4, 0.9, 0.35), body)
+		mb.box(Vector3(cx, H + 1.25, hf + 0.18), Vector3(uw * 0.4 + 0.2, 0.12, 0.45), trim)
+		mb.box(Vector3(cx, H - 0.3, hf - 0.08), Vector3(uw - 0.1, 0.18, 0.16), trim)
+		_shop_at(mb, cx, uw - 0.8, hf - 0.04, rng)
+		if two:
+			for k: float in [-0.25, 0.25]:
+				var wx := cx + k * uw
+				Kit._windows(mb, Vector3(wx, FH + 1.6, hf), Vector3(wx, FH + 1.6, hf), 1, Vector2(1.2, 2.0), rng, Vector3.FORWARD, 0.5, SHUTTERS[(i + 1) % SHUTTERS.size()].lightened(0.25))
+				mb.box(Vector3(wx, FH + 0.6, hf - 0.45), Vector3(1.8, 0.1, 0.9), body.darkened(0.15))
+				mb.box(Vector3(wx, FH + 1.1, hf - 0.88), Vector3(1.8, 0.9, 0.04), iron)
+		if rng.randf() < 0.5:
+			var parasol: Color = DECO_ACCENTS[rng.randi() % DECO_ACCENTS.size()]
+			Props.cafe_table(mb, out, Vector3(cx + rng.randf_range(-uw * 0.2, uw * 0.2), 0, -d * 0.5 + 0.8), parasol)
+	Kit._col(out, Vector3(0, hmax * 0.5, (hf + hb) * 0.5), Vector3(w, hmax, hd))
+
+
+## Ocean Drive Deco hotel (Miami Beach): a three- or four-storey white or
+## pastel block with eyebrow ledges over every floor's windows, coloured
+## bands, rounded front corners, a centre fin rising over the parapet with
+## a neon edge, and a raised front terrace of café tables under parasols.
+static func deco_hotel(mb, out: Array, w: float, d: float, rng: RandomNumberGenerator) -> void:
+	var floors := 3 if rng.randf() < 0.55 else 4
+	const FH := 3.2
+	var H := FH * floors + 0.8
+	var terrace := clampf(d * 0.25, 3.0, 6.0)
+	var hf := -d * 0.5 + terrace
+	var hb := d * 0.5 - 1.0
+	var hd := hb - hf
+	var bw := w - 1.0
+	var pick := rng.randi()
+	var body := MeshBuilder.glow(DECO_BODIES[pick % DECO_BODIES.size()], MeshBuilder.CONCRETE)
+	var accent: Color = DECO_ACCENTS[(pick >> 3) % DECO_ACCENTS.size()]
+	var band := MeshBuilder.glow(accent, MeshBuilder.GLOSS)
+	var neon := MeshBuilder.glow(accent.lightened(0.3), MeshBuilder.GLOW_NEON)
+	var trim := MeshBuilder.glow(TRIM, MeshBuilder.GLOSS)
+	mb.box(Vector3(0, H * 0.5, (hf + hb) * 0.5), Vector3(bw - 2.4, H, hd), body)
+	mb.box(Vector3(0, H * 0.5, (hf + hb) * 0.5 + 1.2), Vector3(bw, H, hd - 2.4), body)
+	for s: float in [-1.0, 1.0]:
+		mb.cylinder(Vector3(s * (bw * 0.5 - 1.2), 0, hf + 1.2), 1.2, H, body, 10)
+	_parapet_roof(mb, 0, (hf + hb) * 0.5, bw, hd, H, body, 0.7)
+	# Ground floor: a glazed lobby, a neon band over it.
+	var glass := MeshBuilder.glow(Buildings.SHOP_GLASS, MeshBuilder.GLOW_WINDOW)
+	mb.box(Vector3(0, 1.6, hf - 0.03), Vector3(bw - 4.0, 2.6, 0.06), glass)
+	mb.box(Vector3(0, 3.0, hf - 0.1), Vector3(bw - 3.0, 0.3, 0.14), neon)
+	# Upper floors: windows under eyebrow ledges, a colour band per floor.
+	for f in range(1, floors):
+		var y := f * FH + 0.4
+		Kit._windows(mb, Vector3(-bw * 0.5 + 2.0, y + 1.4, hf), Vector3(bw * 0.5 - 2.0, y + 1.4, hf), maxi(2, int((bw - 4.0) / 2.4)), Vector2(1.5, 1.5), rng, Vector3.FORWARD, 0.55)
+		mb.box(Vector3(0, y + 2.4, hf - 0.4), Vector3(bw - 2.0, 0.12, 0.8), trim)
+		mb.box(Vector3(0, y + 0.1, hf - 0.04), Vector3(bw - 2.4, 0.22, 0.1), band)
+		Kit._windows(mb, Vector3(-bw * 0.5 + 1.5, y + 1.4, hb), Vector3(bw * 0.5 - 1.5, y + 1.4, hb), maxi(2, int(bw / 3.0)), Vector2(1.2, 1.4), rng, Vector3.BACK, 0.45)
+	# Centre fin over the entrance with neon down both edges.
+	var fin_h := H + rng.randf_range(3.0, 5.0)
+	mb.box(Vector3(0, fin_h * 0.5 + 1.5, hf - 0.5), Vector3(0.5, fin_h - 3.0, 1.2), band)
+	for s: float in [-1.0, 1.0]:
+		mb.box(Vector3(s * 0.28, fin_h * 0.5 + 1.5, hf - 0.6), Vector3(0.06, fin_h - 3.2, 0.9), neon)
+	# Terrace: a low deck with a white rail, café tables under parasols, palms at the ends.
+	Kit._pad(mb, -w * 0.5, w * 0.5, -d * 0.5, hf, MeshBuilder.glow(Color(0.88, 0.84, 0.76), MeshBuilder.PAVING))
+	mb.box(Vector3(0, 0.2, (-d * 0.5 + 0.4 + hf) * 0.5), Vector3(bw - 1.0, 0.4, hf + d * 0.5 - 0.4), MeshBuilder.glow(Color(0.82, 0.78, 0.7), MeshBuilder.PAVING))
+	mb.box(Vector3(0, 0.75, -d * 0.5 + 0.45), Vector3(bw - 1.0, 0.7, 0.08), trim)
+	var tables := maxi(1, int((bw - 6.0) / 3.5))
+	for k in tables:
+		var tx := -bw * 0.5 + 3.0 + (k + 0.5) * (bw - 6.0) / tables
+		Props.cafe_table(mb, out, Vector3(tx, 0.4, (-d * 0.5 + hf) * 0.5 + 0.2), accent if k % 2 == 0 else Color(0.97, 0.96, 0.93))
+	for s: float in [-1.0, 1.0]:
+		_palm(mb, out, Vector3(s * (w * 0.5 - 2.5), 0.4, -d * 0.5 + 1.5), rng)
+	Kit._col(out, Vector3(0, H * 0.5, (hf + hb) * 0.5), Vector3(bw, H, hd))

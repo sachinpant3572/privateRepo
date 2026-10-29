@@ -29,7 +29,7 @@ const CITY_ID := "bellerive"
 const STYLE_LIGHT := {
 	"downtown": 1.0, "midtown": 1.0, "financial": 1.0, "strip": 1.0,
 	"quarter": 0.85, "civic": 0.8, "waterfront": 0.8, "docks": 0.75,
-	"market": 0.7, "oldtown": 0.7, "brownstone": 0.6, "rowhouse": 0.6,
+	"market": 0.7, "oldtown": 0.7, "chinatown": 0.85, "havana": 0.65, "painted": 0.5, "brownstone": 0.6, "rowhouse": 0.6,
 	"industrial": 0.6, "wards": 0.55, "beach": 0.55, "revival": 0.5,
 	"heights": 0.4, "hills": 0.4, "suburb": 0.4, "enclave": 0.4,
 	"park": 0.3, "bayou": 0.2, "prairie": 0.15,

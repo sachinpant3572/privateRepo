@@ -135,7 +135,7 @@ const GEARS := 5.0
 const GEARS_DIESEL := 8.0
 const SLIDE_MARK := 2.5
 const MARK_STEP := 0.45
-const POOR := {"wards": 0.8, "bayou": 0.6, "docks": 0.5, "brownstone": 0.35, "quarter": 0.3, "midtown": 0.15, "downtown": 0.1, "heights": 0.0}
+const POOR := {"wards": 0.8, "bayou": 0.6, "docks": 0.5, "brownstone": 0.35, "quarter": 0.3, "havana": 0.35, "chinatown": 0.3, "painted": 0.1, "beach": 0.05, "midtown": 0.15, "downtown": 0.1, "heights": 0.0}
 ## Impacts this hard throw a body panel off.
 const PANEL_IMPACT := 12.0
 ## Dents reach this far (m) from the contact point.

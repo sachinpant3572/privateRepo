@@ -22,6 +22,10 @@ const STYLE_COLORS := {
 	"docks": Color(0.72, 0.66, 0.58),
 	"heights": Color(0.8, 0.85, 0.7),
 	"bayou": Color(0.5, 0.62, 0.45),
+	"painted": Color(0.86, 0.72, 0.78),
+	"chinatown": Color(0.9, 0.58, 0.52),
+	"havana": Color(0.95, 0.8, 0.6),
+	"beach": Color(0.6, 0.85, 0.82),
 }
 const LANDMARK_COLORS := {
 	"park": Color(0.45, 0.72, 0.4),

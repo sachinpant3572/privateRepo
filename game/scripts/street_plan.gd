@@ -453,11 +453,17 @@ func sea_front(p: Vector2) -> bool:
 
 
 ## Distance from local point p to the city's edge (the core outline; the
-## river through the city is not an edge). INF without an outline.
-func edge_distance(p: Vector2) -> float:
+## river through the city is not an edge). INF without an outline. With
+## `inland`, the sea front (sea_front) is not an edge either: the hotels
+## on Ocean Drive face the beach at full height.
+func edge_distance(p: Vector2, inland := false) -> float:
 	var best := INF
 	for k in outline.size():
-		best = minf(best, Geometry2D.get_closest_point_to_segment(p, outline[k], outline[(k + 1) % outline.size()]).distance_to(p))
+		var a := outline[k]
+		var b := outline[(k + 1) % outline.size()]
+		if inland and sea_front((a + b) * 0.5):
+			continue
+		best = minf(best, Geometry2D.get_closest_point_to_segment(p, a, b).distance_to(p))
 	return best
 
 

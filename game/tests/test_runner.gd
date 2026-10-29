@@ -362,6 +362,22 @@ func test_city_outline_is_organic() -> void:
 		"downtown is lower near the edge: %.0f m on average within 110 m (%d), %.0f m past 200 m (%d)" % [mean.call(near), near.size(), mean.call(far), far.size()])
 
 
+## Even-odd point-in-polygon on a ray along +x, half-open at the vertices.
+## Geometry2D.is_point_in_polygon casts its ray towards a skewed far point
+## and counts both edges when the ray grazes a vertex (a point 290 m outside
+## the city read as inside, 2026-10-29), so the sampling tests use this.
+func _in_polygon(p: Vector2, poly: PackedVector2Array) -> bool:
+	var inside := false
+	var j := poly.size() - 1
+	for i in poly.size():
+		var a := poly[i]
+		var b := poly[j]
+		if (a.y > p.y) != (b.y > p.y) and p.x < a.x + (p.y - a.y) * (b.x - a.x) / (b.y - a.y):
+			inside = not inside
+		j = i
+	return inside
+
+
 func test_street_plan_is_a_california_grid() -> void:
 	await _new_game(false)
 	var city = game.city
@@ -505,7 +521,7 @@ func test_street_plan_is_a_california_grid() -> void:
 		var x: float = plan.bounds.position.x + 4.0
 		while x < plan.bounds.end.x:
 			var p := Vector2(x, y)
-			var inside: bool = plan.edge_loops.any(func(l): return Geometry2D.is_point_in_polygon(p, l))
+			var inside: bool = plan.edge_loops.any(func(l): return _in_polygon(p, l))
 			if inside and plan.face_of(p) < 0 and plan.river_distance(p) > plan._river_half + 25.0 and plan.edge_distance(p) > 8.0:
 				bare.append(p)
 			x += 10.0

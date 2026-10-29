@@ -76,10 +76,11 @@ const PROFILES := {
 	"freight": [0.6, 0.55, 0.55, 0.55, 0.6, 0.7, 0.85, 0.95, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65],
 }
 const PROFILE_OF := {"quarter": "night", "strip": "night", "docks": "port", "industrial": "port", "market": "port",
-	"beach": "leisure", "park": "leisure", "truck_stop": "freight"}
+	"chinatown": "night", "beach": "leisure", "park": "leisure", "truck_stop": "freight"}
 ## How busy each district's roads are at their peak hour (share of the cap).
 const LEVELS := {
 	"downtown": 0.9, "midtown": 0.85, "financial": 0.85, "civic": 0.75, "quarter": 0.7, "strip": 0.7,
+	"chinatown": 0.7, "havana": 0.55, "painted": 0.5,
 	"docks": 0.6, "market": 0.6, "waterfront": 0.55, "oldtown": 0.55, "industrial": 0.55, "wards": 0.55,
 	"brownstone": 0.55, "rowhouse": 0.5, "revival": 0.5, "heights": 0.5, "beach": 0.5, "suburb": 0.45,
 	"enclave": 0.4, "hills": 0.4, "park": 0.35, "prairie": 0.35, "bayou": 0.3,
@@ -124,6 +125,7 @@ const MIX_OF := {
 	"docks": "freight", "industrial": "freight", "downtown": "cbd", "financial": "cbd", "midtown": "town_centre",
 	"civic": "town_centre", "heights": "wealthy", "enclave": "wealthy", "hills": "wealthy", "wards": "working",
 	"rowhouse": "working", "bayou": "working", "quarter": "nightlife", "strip": "nightlife", "market": "market",
+	"chinatown": "market", "havana": "working", "painted": "wealthy",
 	"prairie": "rural", "village": "rural", "town": "rural", "ghost": "rural", "truck_stop": "truck_stop",
 	"suburb": "suburb",
 }

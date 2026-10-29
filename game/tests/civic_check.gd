@@ -4,7 +4,8 @@ extends SceneTree
 ## counts, and checks the kit's contract:
 ##   - triangles > 0 and within budget (the budget holds at the default lot
 ##     and smaller; at 1.3x it may grow with the scale, budget * 1.3);
-##   - at least one collider, every collider finite, with a positive size,
+##   - at least one collider ([centre, size], an optional yaw and an optional
+##     breakable Dictionary, as city.gd reads them), every collider finite, with a positive size,
 ##     its centre inside the lot + 1.5 m;
 ##   - no NaN vertex, and every vertex inside the lot (1.05 m slack past the
 ##     front edge for flagpoles, lamps and steps), none below the ground
@@ -71,7 +72,7 @@ func _check_colliders(out: Array, size: Vector2, where: String) -> int:
 	var hz := size.y * 0.5 + 1.5
 	for i in out.size():
 		var c: Array = out[i]
-		if c.size() < 2 or c.size() > 3:
+		if c.size() < 2 or c.size() > 4 or (c.size() == 4 and not c[3] is Dictionary):
 			print("  FAIL %s: collider %d has %d fields" % [where, i, c.size()])
 			bad += 1
 			continue

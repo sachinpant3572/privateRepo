@@ -120,6 +120,7 @@ const WORKS_DIRT := Color(0.45, 0.36, 0.26)
 const PARCEL_MAX := {
 	"downtown": Vector2(58, 50), "midtown": Vector2(52, 50), "quarter": Vector2(46, 42), "wards": Vector2(110, 32),
 	"docks": Vector2(84, 64), "brownstone": Vector2(40, 34), "painted": Vector2(44, 32),
+	"chinatown": Vector2(36, 30), "havana": Vector2(40, 34), "beach": Vector2(44, 40),
 }
 const PARCEL_DEFAULT := Vector2(50, 44)
 ## Towers reach full height this far in from the city's edge; nearer it
@@ -136,6 +137,7 @@ const LANDMARK_PARCEL := {"moreau_house": Vector2(40, 30), "teo_apartment": Vect
 const LOT_GROUND := {
 	"quarter": Color(0.55, 0.53, 0.49), "wards": Color(0.32, 0.53, 0.27), "downtown": PLAZA, "midtown": PLAZA,
 	"docks": YARD, "green": Color(0.36, 0.58, 0.3), "brownstone": Color(0.32, 0.53, 0.27), "painted": Color(0.32, 0.53, 0.27),
+	"chinatown": PAVEMENT, "havana": Color(0.84, 0.79, 0.68), "beach": Color(0.86, 0.81, 0.68),
 }
 ## Map landmarks built by the civic kit: landmark id -> kit kind.
 const CIVIC_LANDMARKS := {
@@ -967,7 +969,7 @@ static func _land_block(ctx: Ctx, style: String) -> void:
 	if district == "wards" and city.faces_square(ctx.face):
 		district = "painted"
 	var grounds: bool = ctx.plan.set_piece(ctx.face) == "grounds"
-	ctx.edge = ctx.plan.edge_distance(ctx.plan.faces[ctx.face].center)
+	ctx.edge = ctx.plan.edge_distance(ctx.plan.faces[ctx.face].center, true)
 	var lawn: bool = style in LAWNS or grounds
 	_flat_in_front(ctx, ctx.ff, ctx.lot, KERB + 0.01, _paved(LOT_GROUND.green if lawn else LOT_GROUND.get(district, PAVEMENT)))
 	if style in LAWNS:
@@ -1141,6 +1143,35 @@ static func _district_parcel(ctx: Ctx, district: String) -> void:
 				_rows(ctx, "brownstone_row", 14.0)
 		"painted":
 			_rows(ctx, "painted_lady_row", 14.0)
+		"chinatown":
+			if roll < 0.06:
+				_pocket_park(ctx)
+			else:
+				_rows(ctx, "chinatown_row", 14.0, PAVEMENT)
+		"havana":
+			if ctx.front_cls in ["avenue", "boulevard"] or roll < 0.4:
+				_rows(ctx, "havana_row", 14.0, Color(0.84, 0.79, 0.68), true)
+			elif roll < 0.46:
+				_pocket_park(ctx)
+			elif roll < 0.72:
+				_bungalows(ctx)
+			else:
+				_downtown(ctx, 0.4)
+		"beach":
+			# Deco hotels face the sea along Ocean Drive; condo towers and
+			# lower apartment blocks stand behind.
+			var front := Vector2(ctx.frame.origin.x, ctx.frame.origin.z) + Vector2(ctx.frame.basis.z.x, ctx.frame.basis.z.z) * ctx.hz
+			var seaward := Vector2(-StreetPlan.GULF_DIR.y, StreetPlan.GULF_DIR.x)
+			if ctx.plan.sea_front(front) and Vector2(ctx.frame.basis.z.x, ctx.frame.basis.z.z).dot(seaward) > 0.5:
+				_kit(ctx, Civic, "deco_hotel", PLAZA, 1.0)
+			elif roll < 0.08:
+				_pocket_park(ctx)
+			elif roll < 0.4 * low and ctx.hx >= 15.0 and ctx.hz >= 15.0:
+				_kit(ctx, Skyline, "highrise_mid", PLAZA)
+			elif roll < 0.7:
+				_kit(ctx, Civic, "deco_hotel", PLAZA, 1.0)
+			else:
+				_downtown(ctx, lerpf(0.4, 0.8, low))
 		"downtown":
 			if roll < 0.1:
 				_plaza(ctx)
@@ -1226,6 +1257,12 @@ static func _filler(ctx: Ctx, district: String) -> void:
 				"wards":
 					if rng.randf() < 0.5:
 						Props.oak(ctx.mb, props, at, rng)
+				"beach", "havana":
+					if rng.randf() < 0.5:
+						Props.palm(ctx.mb, props, at, rng)
+				"chinatown":
+					if rng.randf() < 0.25:
+						Props.planter(ctx.mb, props, at)
 				_:
 					if rng.randf() < 0.35:
 						Props.crepe_myrtle(ctx.mb, props, at, rng)
@@ -1846,10 +1883,10 @@ static func _civic(ctx: Ctx, kind: String, ground: Color) -> void:
 ## Rows of terraced houses (`kind`, a civic kit row) along the parcel's
 ## street sides, each `depth` deep, with the gardens behind them meeting in
 ## a green core.
-static func _rows(ctx: Ctx, kind: String, depth: float) -> void:
+static func _rows(ctx: Ctx, kind: String, depth: float, ground := GRASS, palms := false) -> void:
 	var hx := ctx.hx
 	var hz := ctx.hz
-	_ground(ctx, GRASS)
+	_ground(ctx, ground)
 	var d := minf(depth, hz - 1.0)
 	for side in [1.0, -1.0]:
 		if not ctx.open["+z" if side > 0 else "-z"] or (side < 0 and hz < depth + 4.0):
@@ -1866,7 +1903,11 @@ static func _rows(ctx: Ctx, kind: String, depth: float) -> void:
 	var props := _at(ctx, Vector3(0, KERB, 0), 0.0)
 	for k in int(hx / 9.0):
 		if ctx.rng.randf() < 0.6:
-			Props.oak(ctx.mb, props, Vector3(-hx + 6.0 + k * 18.0, 0, ctx.rng.randf_range(-1.5, 1.5)), ctx.rng)
+			var at := Vector3(-hx + 6.0 + k * 18.0, 0, ctx.rng.randf_range(-1.5, 1.5))
+			if palms:
+				Props.palm(ctx.mb, props, at, ctx.rng)
+			else:
+				Props.oak(ctx.mb, props, at, ctx.rng)
 	_done(ctx, props, false, ctx.props)
 
 
