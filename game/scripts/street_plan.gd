@@ -188,6 +188,9 @@ var exits: Array[Dictionary] = []
 ## The plan's outer edge along the street centre lines, one loop per piece
 ## of the street graph.
 var edge_loops: Array[PackedVector2Array] = []
+## How far past the edge street's centreline the city reaches (its outer
+## half, sidewalk and a verge).
+const EDGE_PAD := 24.0
 ## The window plus the margin ring of scenery.
 var bounds := Rect2()
 var seed_value := 0
@@ -387,6 +390,24 @@ func clearance(n: int, e: int) -> float:
 		var s := maxf(sqrt(maxf(1.0 - c * c, 0.0)), 0.3)
 		best = maxf(best, minf(edge_width(e2) * 0.5 / s + w * absf(c) / s, 30.0))
 	return best
+
+
+## Whether local point p is in the city: on a block, on a street round
+## it (the edge street's outer half and sidewalk too, EDGE_PAD from its
+## centreline) or on the river inside the core outline. Without an outline,
+## the plan's bounds.
+func in_city(p: Vector2) -> bool:
+	if outline.is_empty():
+		return bounds.has_point(p)
+	if not bounds.has_point(p):
+		return false
+	if face_of(p) >= 0:
+		return true
+	for loop in edge_loops:
+		for k in loop.size():
+			if Geometry2D.get_closest_point_to_segment(p, loop[k], loop[(k + 1) % loop.size()]).distance_squared_to(p) < EDGE_PAD * EDGE_PAD:
+				return true
+	return is_water_point(p) and Geometry2D.is_point_in_polygon(p, outline)
 
 
 ## Block containing local point p, or -1 (river, edge of the map).
@@ -1808,6 +1829,8 @@ func _trim_to_outline(pins: Array) -> void:
 			break
 	var cut: Array = []
 	for e in edge_a.size():
+		if edge_cls[e] == "bridge": # borders no block; _prune drops it if a bank went
+			continue
 		var s := edge_face[e]
 		if not ((s.x >= 0 and keep[s.x] == 1) or (s.y >= 0 and keep[s.y] == 1)):
 			cut.append(e)
