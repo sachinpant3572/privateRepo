@@ -143,7 +143,7 @@ reference/world/curve_options_sketch.png (game/tools/curve_options_sketch.py
 on a plan dump). Sachin then chose a mix: C's tensor field, B for Cable Hill,
 A's 1-2 curved roads, roundabouts and the hand-placed set pieces. Four mix
 variations: reference/world/mix_options_sketch.png (game/tools/mix_sketch.py).
-Waiting for his pick of 1-4. In the sketch, field arterials don't always meet
-the roundabouts; in the build, put roundabouts where field arterials cross.
-- Drafted, never run (street_plan.gd): CURVES (Mirador, Canyon) and BOWS
-  (amp*sin(pi*t) row bends); superseded by the mix. Map (#107) comes after.
+Sachin picked variation 2 (2026-10-29); the build is in
+HANDOFF-world-build.md (phase 1).
+- CURVES (Mirador, Canyon) are live; BOWS were removed in phase 1. Map
+  (#107) comes after.

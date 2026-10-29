@@ -38,6 +38,10 @@ const MERGE := 8.0
 const STEP := 26.0
 ## The River Road and Levee Road run this far out from the water's edge.
 const RIVER_ROAD := 10.0
+## On the north bank the River Road stands this much further back, leaving a
+## strip along the water for the freight line (world build phase 4: double
+## track, ~4.5 m apart, with clearance each side).
+const FREIGHT_STRIP := 16.0
 const QUAY_SET := 6.0 # the quay's centreline back from the water
 ## Founders Circle's ring (centreline radius), the City Hall grounds (snapped
 ## to two rows of the Gilt grid; the Esplanade runs east from them between
@@ -215,10 +219,11 @@ const PATCHES := [
 	# streets carry on south through Gilt and Midtown.
 	# Cable Hill is the rich hill: contour streets in rings round the crest
 	# (wobbling, squashed north-south) and radials up it (Bel Air and SF's
-	# Twin Peaks), instead of the grid.
+	# Twin Peaks), instead of the grid. The crest inside the first ring is one
+	# block of estates: a smaller ring would graze Mirador and be dropped.
 	{"id": "hill_n", "bank": "north", "seed": Vector2(0, -350), "angle": 0.0,
-		"contour": {"crest": Vector2(10, -430), "rings": [65.0, 130.0, 200.0, 270.0], "squash": 0.85,
-			"radials": [10.0, 70.0, 135.0, 200.0, 255.0, 320.0]},
+		"contour": {"crest": Vector2(10, -430), "rings": [130.0, 200.0, 270.0], "squash": 0.85,
+			"radials": [10.0, 55.0, 100.0, 145.0, 190.0, 235.0, 280.0, 325.0]},
 		"su": [70.0, 70.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
 	{"id": "china_n", "bank": "north", "seed": Vector2(500, -350), "grid": [3, 6], "angle": 0.0,
 		"su": [120.0, 120.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.08, "max": [0.0, 0.0, 0.0]},
@@ -613,7 +618,7 @@ func _layout(src: Array) -> void:
 	var box := _rect_poly(bounds)
 	var band80 := _band(_river_half)
 	var band89 := _band(_river_half + RIVER_ROAD)
-	var road_line := _extend(_chain(band89, box, true), 3.0)
+	var road_line := _extend(_chain(_band(_river_half + RIVER_ROAD + FREIGHT_STRIP), box, true), 3.0)
 	var levee := _extend(_chain(band89, box, false), 3.0)
 	# The quay: a road along the water the docks streets end on, so none of
 	# them stops dead at the wharf.

@@ -71,6 +71,7 @@ const RAIL_WHITE := Color(0.88, 0.88, 0.86)
 const MOREAU := Color(0.55, 0.2, 0.24)
 const CONCRETE := Color(0.62, 0.61, 0.58)
 const STEEL := Color(0.3, 0.36, 0.4)
+const BALLAST := Color(0.44, 0.41, 0.37)
 ## District banners on downtown street lights.
 const BANNERS := [Color(0.85, 0.62, 0.18), Color(0.12, 0.5, 0.58), Color(0.7, 0.16, 0.22)]
 const ZEBRA_STYLES := ["downtown", "quarter", "station", "tower", "police", "hospital", "park", "club"]
@@ -864,10 +865,18 @@ static func _open_sides(ctx: Ctx, e: int, cls: String) -> void:
 		var outer := w + 1.2
 		var strip := PackedVector2Array([a - dir * ext0, b + dir * ext1, b + dir * ext1 + side * outer, a - dir * ext0 + side * outer])
 		ctx.mb.prism(strip, -SLAB, 0.0, MeshBuilder.glow(ASPHALT, MeshBuilder.ASPHALT), CONCRETE.darkened(0.3))
+		var reach := outer
 		if not plan.is_water_point(mid + side * (w + 6.0)):
-			continue
-		var r0: Vector2 = a + dir * (t0 if t0 >= 0.0 else -ext0) + side * (outer - 0.3)
-		var r1: Vector2 = b - dir * (t1 if t1 >= 0.0 else -ext1) + side * (outer - 0.3)
+			var bank: float = StreetPlan.RIVER_ROAD + StreetPlan.FREIGHT_STRIP
+			if cls != "river" or not plan.is_water_point(mid + side * (bank + 4.0)):
+				continue
+			# The north River Road stands back from the water: ballast out to
+			# the bank for the freight line (world build phase 4), the
+			# railing at the water.
+			reach = bank
+			ctx.mb.prism(PackedVector2Array([strip[3], strip[2], b + dir * ext1 + side * reach, a - dir * ext0 + side * reach]), -SLAB, -0.02, BALLAST, CONCRETE.darkened(0.3))
+		var r0: Vector2 = a + dir * (t0 if t0 >= 0.0 else -ext0) + side * (reach - 0.3)
+		var r1: Vector2 = b - dir * (t1 if t1 >= 0.0 else -ext1) + side * (reach - 0.3)
 		if (r1 - r0).dot(dir) < 1.0:
 			continue
 		Props.fence(ctx.mb, [], _v3(r0, 0.0), _v3(r1, 0.0), RAIL_WHITE, 0.9)

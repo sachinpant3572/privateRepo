@@ -45,30 +45,35 @@ on the street plan that phase 1 rewrites.
 Total ~135-205 h. Milestone APKs after phases 2, 4 and 6. Flying from the
 helipad needs helicopters: task #82, not started (Sachin's word needed).
 
-## Phase 1 approach (written before the code edits)
+## Phase 1 approach (as built)
 
-- **Offline field generator** `game/tools/street_field.py` (ports
-  tools/mix_sketch.py's tensor-field tracer, variation 2 numbers, 4's water
-  pull). Input: a plan dump with the field off (`FIELD=0` env read by
-  StreetPlan). Output: `game/data/street_field.json`: per-patch field
-  streets `{patch, fam, cls, pts}`, field arterials (named, patch "") and
-  roundabout centres where field arterials cross. Runtime stays fast; the
-  traced lines are data, like country.json.
+- **Street field**: `game/tools/street_field.py` (numpy, offline) sums a
+  tensor field from the downtown grid (450,300) w1 s650, the Gulf coast
+  (-39 deg) w1.6 s480, the Morrow w2.0 s230 (4's water pull) and Mirador,
+  Canyon, Liberty (s70 w1.2) into `game/data/street_field.json` (u8 angles,
+  20 m grid). Rerun it on a plan dump when those roads move:
+  `python3 tools/street_field.py /tmp/plan.json`.
+- **Tracing at build time** (street_plan.gd "The street field", ~1 s whole
+  plan): RK2, 8 m steps, per-family spatial hash. A trace joins a line
+  ahead within the join distance, stops beside one, carries on past one
+  behind; it stops past a turn limit (ART_TURN 80, STREET_TURN 100 deg),
+  which keeps lines off the field's singularities.
 - **Which streets where** (class divide in the pattern itself):
-  - field: havana_e (Calle Luna), brisa_e, point_w, point_e (river edge and
-    coast; water pull river 230 / w 2.0, coast 480);
-  - contour (B): hill_n (Cable Hill), rings round the crest, radials,
-    cul-de-sac lanes;
-  - grid kept: gilt_w, midtown (downtown), quarter_w, quarter_e, wards,
-    wards_n, docks (poor/working flat grid), china_n (Jade Gate: SF's
-    Chinatown is a grid);
-  - Mirador and Canyon (CURVES) stay; BOWS go where the field replaces them.
-- **Arterials**: straight ARTERIALS clip out of field regions (as brisa
-  today); field arterials start where they end, so the main roads carry on.
-  Malls keep the straight crossings in the grid districts.
-- **Rail reserve (phase 4)**: passenger line in a rail median along Aurum
-  Blvd (Union Station) and the loop through every district; freight on a
-  strip between River Road and the water (RIVER_ROAD widened), docks spur.
+  - field: havana_e (Calle Luna), brisa_e, point_w, point_e;
+  - contour: hill_n (Cable Hill), rings 130/200/270 m round the crest and
+    8 radials; the crest inside the first ring is one block of estates;
+  - grid kept: gilt_w, midtown, quarter_w/e, wards, wards_n, docks, china_n.
+- **Arterials**: city arterials end at a field region's edge as entries; the
+  field arterial carries each on along the field (so the main roads go
+  through), new field arterials fill the gaps; roundabouts where field
+  arterials of different families cross (>= 220 m apart). Grid crossings
+  stay for malls. Mirador and Canyon (CURVES) stay; BOWS removed.
+- No cul-de-sacs: the plan prunes dead ends (exits come from the trim).
+- **Rail reserve**: freight on a 16 m strip between the north River Road
+  and the water (`FREIGHT_STRIP`, north bank only; city_cells draws ballast
+  and moves the railing to the water). Passenger line: elevated over
+  boulevard medians (Aurum past Union Station (390,166)), own viaduct
+  elsewhere; built in phase 4 on phase 3's decks.
 
 ## Decided
 
@@ -94,3 +99,11 @@ helipad needs helicopters: task #82, not started (Sachin's word needed).
 ## Traps
 
 - Godot runs need `timeout`; gates per CLAUDE.md.
+- The field rotates near the river bend (x ~1000-1450, south bank): a line
+  can swing onto the other family. The turn limits stop it; a long straight
+  join jump (Morrow, 103 m) came from a join distance of art_sep*0.4, now
+  ART_JOIN 45 m.
+- Cable Hill: a ring within ~75 m of the crest grazes Mirador and the hug
+  check drops it whole (with the radials' inner ends).
+- Plan renders: /tmp/p1/view.py-style script on a `tests/plan_dump.gd`
+  dump; blue = no face (water or outside).
