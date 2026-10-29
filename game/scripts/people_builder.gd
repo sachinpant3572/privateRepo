@@ -17,16 +17,21 @@ class Ticket:
 	var _task := -1
 
 
-## Tasks not yet waited on: every one is, even if its owner is gone.
-static var _open: Array = []
+## The running build's ticket (null when idle) and the tickets waiting
+## their turn. One build runs at a time: builds hold CharacterKit.lock, so
+## a second would only sit on a worker thread waiting for it. It runs at
+## high priority so it doesn't take the low-priority threads that stream
+## city cells, country tiles and interiors (a phone gets few of them).
+static var _running: Ticket = null
+static var _queue: Array = []
 
 
-## Starts building `look` on a worker thread.
+## Queues `look` for building on a worker thread.
 static func request(look: Dictionary) -> Ticket:
 	var t := Ticket.new()
 	t.look = look
-	t._task = WorkerThreadPool.add_task(_prepare.bind(t), false, "person")
-	_open.append(t)
+	_queue.append(t)
+	_collect(false)
 	return t
 
 
@@ -40,23 +45,28 @@ static func ready(t: Ticket) -> bool:
 	return t.done
 
 
-## How many builds are still running.
+## How many builds are running or waiting.
 static func busy() -> int:
 	_collect(false)
-	return _open.size()
+	return _queue.size() + (0 if _running == null else 1)
 
 
-## Waits for every running build (tests that time or check the caches).
+## Waits for every queued build (tests that time or check the caches).
 static func drain() -> void:
 	_collect(true)
 
 
+## Finishes the running build if it is done (or, waiting, anyway) and
+## starts the next; each task is waited on once.
 static func _collect(wait_all: bool) -> void:
-	var still: Array = []
-	for t in _open:
-		if wait_all or WorkerThreadPool.is_task_completed(t._task):
-			WorkerThreadPool.wait_for_task_completion(t._task)
-			t.done = true
-		else:
-			still.append(t)
-	_open = still
+	while true:
+		if _running != null:
+			if not wait_all and not WorkerThreadPool.is_task_completed(_running._task):
+				return
+			WorkerThreadPool.wait_for_task_completion(_running._task)
+			_running.done = true
+			_running = null
+		if _queue.is_empty():
+			return
+		_running = _queue.pop_front()
+		_running._task = WorkerThreadPool.add_task(_prepare.bind(_running), true, "person")

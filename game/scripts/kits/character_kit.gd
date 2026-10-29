@@ -520,13 +520,19 @@ static var lock := Mutex.new()
 ## look) and the body's surface arrays.
 static func prepare(look: Dictionary) -> Dictionary:
 	lock.lock()
+	# In a helper so a script error in the build still unlocks.
+	var made = _prepare(look)
+	lock.unlock()
+	return made
+
+
+static func _prepare(look: Dictionary) -> Dictionary:
 	var at := {}
 	if BODY:
 		at = BodyKit.blend(look, body_mesh(look)).joints.duplicate()
 	var mb := MeshBuilder.new()
 	build(mb, look)
 	var surface: Array = mb.surface()
-	lock.unlock()
 	return {"look": look, "joints": at, "surface": surface}
 
 

@@ -37,13 +37,15 @@ const CORNER_RADIUS := 5.0
 ## the nose, which _drive turns into full steer; seconds to reach it.
 const WHEEL_ANGLE := 0.5
 const STEER_IN := 0.16
-## Tyre scrub for the wheel schemes (arrows, tilt, on-screen wheel; 0.25.1,
+## Tyre scrub for the wheel schemes (arrows, tilt, on-screen wheel, and the
+## stick when the view turns behind the car, which steers like one; 0.25.1,
 ## Sachin: "the vehicle turns are still stiff"): with gas held through a
 ## turn the car used to keep accelerating, and its circle grows with the
 ## square of speed, so every held turn ran wide. Now a turn at full lock
 ## holds the speed at which the tyres keep the car on a TURN_RADIUS circle
 ## (wider at part lock), and above it the tyres scrub off up to SCRUB m/s²,
-## on or off the gas. The stick has the corner assist instead.
+## on or off the gas. The stick pointing where to go (fixed view) has the
+## corner assist instead.
 const TURN_RADIUS := 9.0
 const SCRUB := 6.0
 ## The tightest circle (m) any vehicle turns on, however slow.

@@ -65,6 +65,17 @@ the vehicle turns are still stiff."
 - Rejected: a fourth grip raise. Lateral grip is already 1.65g
   (crossover) to 3.4g (sports); held gas, not grip, made the turns wide.
 
+## Review (one run)
+
+- Fixed:
+  - **The crowd test missed the sidewalk refill.** Reverting the refill to an inline build still passed. It now checks the refill takes the oldest built body, and fails on the revert.
+  - **People builds queued behind city streaming.** Godot gives low-priority tasks about one thread on 4 CPUs, and builds that wait on the lock blocked city streaming. PeopleBuilder now runs one build at a time, at high priority.
+  - **The kit lock stayed locked after a script error.** prepare() now unlocks after a helper call, so an error can't leave it locked.
+  - **The stick steering through a turning view counts as a wheel scheme.** It always skipped the corner assist, so it gets the tyre scrub. The comment is fixed and the test now has a stick case.
+- Open, minor:
+  - **Foot cops, interior patrons and mission NPCs still build on the main thread.** That was already true before 0.25.1. They may now also wait up to one worker build for the lock.
+  - **Population._exit_tree drains up to 3 builds.** This only happens at quit.
+
 ## Traps
 
 - A test that times or checks BodyKit's caches must not race a background

@@ -2742,6 +2742,21 @@ func test_crowd_bodies_build_off_the_main_thread() -> void:
 	_check(ms < 5.0, "a spawn takes %.2f ms on the main thread" % ms)
 	await _frames(20)
 	_check(pop._coming.size() == Population.BODIES_AHEAD, "and the next bodies are ordered (%d)" % pop._coming.size())
+	# The crowd's own sidewalk refill (the churn in the log) takes the
+	# oldest built body too, rather than building a new look in the tick.
+	for p in pop.peds:
+		p.queue_free()
+	pop.peds.clear()
+	await _within(func(): return pop._body_ready(), 3.0)
+	var want: Dictionary = pop._coming[0][0].look
+	var took := false
+	for i in 12:
+		pop._tick = 0.0
+		await _frames(2)
+		took = pop.peds.any(func(p): return is_instance_valid(p) and is_same(p.look, want))
+		if took:
+			break
+	_check(took, "the sidewalk refill spawns the oldest body built ahead")
 	PeopleBuilder.drain()
 	_check(PeopleBuilder.busy() == 0, "no build is left running after a drain")
 
@@ -3288,38 +3303,50 @@ func test_movers_stand_on_hill_ground() -> void:
 ## gas held through a turn kept the car accelerating, so a 90-degree turn
 ## at 72 km/h in the crossover he drove took 2.6 s on a 42 m circle. The
 ## tyres now scrub it to the speed its grip holds at full lock (TURN_RADIUS).
+## The stick, with the view turning behind the car (the default), steers
+## like a wheel too and scrubs the same way.
 func test_held_gas_turns_stay_tight() -> void:
 	await _free_game()
-	Controls.camera = null
-	Controls.scheme = "arrows"
-	var turns := {}
-	for kind in ["crossover", "sports"]:
-		var car = _player_car(kind, Vector3(150.0, 0, 150.0), 20.0)
-		await get_tree().physics_frame
-		var p0: Vector3 = car.global_position
-		var yaw0: float = car.rotation.y
-		Input.action_press("gas")
-		Input.action_press("steer_left")
-		var n := 0
-		while n < 300 and absf(wrapf(car.rotation.y - yaw0, -PI, PI)) < PI / 2.0:
+	var turning := GDScript.new()
+	turning.source_code = "extends Camera3D\nfunc turns() -> bool:\n\treturn true\n"
+	turning.reload()
+	var cam := Camera3D.new()
+	cam.set_script(turning)
+	add_child(cam)
+	for scheme in ["arrows", "stick"]:
+		Controls.scheme = scheme
+		Controls.camera = cam if scheme == "stick" else null
+		_check(Controls.stick_steers() == (scheme == "stick"), "the %s steers like a wheel" % scheme)
+		var turns := {}
+		for kind in ["crossover", "sports"]:
+			var car = _player_car(kind, Vector3(150.0, 0, 150.0), 20.0)
 			await get_tree().physics_frame
-			n += 1
-		var radius: float = (car.global_position - p0).length() / sqrt(2.0)
-		var hold: float = sqrt(car._spec.corner_g * car._grip() * Vehicle.TURN_RADIUS)
-		turns[kind] = [n / 60.0, radius, car.speed]
-		_check(car.speed <= 20.0 and car.speed < hold + 1.0, "gas held at full lock, the %s scrubs to the speed its tyres hold (%.1f m/s, holds %.1f)" % [kind, car.speed, hold])
-		# Straightening up, the gas pulls again.
-		Input.action_release("steer_left")
-		var slow: float = car.speed
-		await _frames(60)
-		_check(car.speed > slow + 3.0, "out of the turn the %s speeds up again (%.1f -> %.1f m/s)" % [kind, slow, car.speed])
-		Input.action_release("gas")
-		car.queue_free()
-		await get_tree().physics_frame
-	print("  90-degree turns from 72 km/h, gas held [s, radius m, end m/s]: %s" % [turns])
-	_check(turns.crossover[0] < 1.8 and turns.crossover[1] < 20.0, "the crossover turns 90 degrees from 72 km/h in under 1.8 s on a circle under 20 m (%.2f s, %.1f m)" % [turns.crossover[0], turns.crossover[1]])
-	_check(turns.sports[0] < 1.2 and turns.sports[1] < 14.0, "the sports car turns 90 degrees from 72 km/h in under 1.2 s on a circle under 14 m (%.2f s, %.1f m)" % [turns.sports[0], turns.sports[1]])
+			var p0: Vector3 = car.global_position
+			var yaw0: float = car.rotation.y
+			Input.action_press("gas")
+			Input.action_press("steer_left")
+			var n := 0
+			while n < 300 and absf(wrapf(car.rotation.y - yaw0, -PI, PI)) < PI / 2.0:
+				await get_tree().physics_frame
+				n += 1
+			var radius: float = (car.global_position - p0).length() / sqrt(2.0)
+			var hold: float = sqrt(car._spec.corner_g * car._grip() * Vehicle.TURN_RADIUS)
+			turns[kind] = [n / 60.0, radius, car.speed]
+			_check(car.speed <= 20.0 and car.speed < hold + 1.0, "%s, gas held at full lock, the %s scrubs to the speed its tyres hold (%.1f m/s, holds %.1f)" % [scheme, kind, car.speed, hold])
+			# Straightening up, the gas pulls again.
+			Input.action_release("steer_left")
+			var slow: float = car.speed
+			await _frames(60)
+			_check(car.speed > slow + 3.0, "%s, out of the turn the %s speeds up again (%.1f -> %.1f m/s)" % [scheme, kind, slow, car.speed])
+			Input.action_release("gas")
+			car.queue_free()
+			await get_tree().physics_frame
+		print("  %s: 90-degree turns from 72 km/h, gas held [s, radius m, end m/s]: %s" % [scheme, turns])
+		_check(turns.crossover[0] < 1.8 and turns.crossover[1] < 20.0, "%s: the crossover turns 90 degrees from 72 km/h in under 1.8 s on a circle under 20 m (%.2f s, %.1f m)" % [scheme, turns.crossover[0], turns.crossover[1]])
+		_check(turns.sports[0] < 1.2 and turns.sports[1] < 14.0, "%s: the sports car turns 90 degrees from 72 km/h in under 1.2 s on a circle under 14 m (%.2f s, %.1f m)" % [scheme, turns.sports[0], turns.sports[1]])
 	Controls.scheme = "stick"
+	Controls.camera = null
+	cam.queue_free()
 
 
 func _player_car(kind: String, pos: Vector3, speed: float, yaw := 0.0):
