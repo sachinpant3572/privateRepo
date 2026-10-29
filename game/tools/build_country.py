@@ -1402,7 +1402,9 @@ class Country:
             if ident != "letters_trail":
                 if cls == "trail":
                     spans = sorted(spans + self._underpasses(line, spans))
-                self.mtn_grades.append((name, round(self.mtn.grade(line, cls, spans=spans), 3)))
+                # Mount Calder Road ends level in the summit car park.
+                flat = 60.0 if ident == "calder" else 0.0
+                self.mtn_grades.append((name, round(self.mtn.grade(line, cls, spans=spans, flat_end=flat), 3)))
             self._note_structures(line, cls, name, spans)
             # A tunnel's or underpass's stretch is not laid on the ground: the
             # way stops at its portals (a tunnel's with a barricade).
@@ -1471,7 +1473,7 @@ class Country:
         g = max(abs(z1 - z0) / max(q1 - q0, 0.1) for z0, z1, q0, q1 in zip(zs, zs[1:], ss, ss[1:]))
         self.rail_pass = {"name": name, "pts": [[round(line.interpolate(q).coords[0][0], 2), round(line.interpolate(q).coords[0][1], 2),
                                                  round(z, 2)] for q, z in zip(ss, zs)],
-                          "spans": [[round(x - s0, 1), round(y - s0, 1), k] for x, y, k in spans if s0 - 1 <= x and y <= s1 + 1],
+                          "spans": [[round(max(x, s0) - s0, 1), round(min(y, s1) - s0, 1), k] for x, y, k in spans if y > s0 and x < s1],
                           "grade": round(g, 4)}
         self.mtn_grades.append((name, round(g, 4)))
         out = []
@@ -1630,6 +1632,8 @@ class Country:
         self.mtn_sites = {}
         for k, (x, y, sw, sd) in SUMMIT_SITES.items():
             h = self.mtn.profile_near((x, y), 20.0) if k == "car_park" else None
+            if k == "restaurant":  # beside the car park, on its level (one terrace)
+                h = self.mtn_sites["car_park"]["z"]
             h = h if h is not None else self.mtn.raw_at((x, y))
             self.mtn_sites[k] = {"x": x, "y": y, "w": sw, "d": sd, "z": round(h, 2)}
         mx, my = CABLE["mid"]

@@ -106,9 +106,13 @@ PEAKS = {"mount_calder": SUMMIT, "raven_peak": (400, -3180), "east_peak": (1760,
 # The summit plateau's sites (x, y, w, d): the car park Mount Calder Road
 # ends in, the restaurant, the helipad, the viewing deck the trails end at
 # and the cable car's top station, each on a flat pad round the summit's rim.
-SUMMIT_SITES = {"car_park": (930.0, -2735.0, 36.0, 24.0), "restaurant": (870.0, -2735.0, 40.0, 30.0),
-                "helipad": (1025.0, -2735.0, 30.0, 30.0), "deck": (985.0, -2668.0, 24.0, 14.0),
-                "cable_top": (915.0, -2665.0, 26.0, 16.0)}
+# Each is at least the road's half width + 15 m clear of every road and track
+# (so a road's shoulder keeps its own grading); the summit loop of Mount
+# Calder Road leaves room inside it for the restaurant and between its
+# turns for the cable top and the helipad.
+SUMMIT_SITES = {"car_park": (930.0, -2735.0, 36.0, 24.0), "restaurant": (955.0, -2770.0, 40.0, 30.0),
+                "helipad": (1035.0, -2740.0, 30.0, 30.0), "deck": (985.0, -2668.0, 24.0, 14.0),
+                "cable_top": (950.0, -2690.0, 26.0, 16.0)}
 CREST_ROUND = 35.0  # crests are rounded over this far
 CREST_STEEP = 0.6  # a crest's sides are this much steeper at 1000 m than at the foot
 SMAX = 40.0  # crests and cone blend over this height difference
@@ -403,14 +407,14 @@ class Mountain:
                 best = got
         return None if best is None else best[1]
 
-    def grade(self, line, cls, ends=None, spans=(), cap=None, loose=()):
+    def grade(self, line, cls, ends=None, spans=(), cap=None, loose=(), flat_end=0.0):
         """Grades a road: its height follows the ground, smoothed, no steeper
         than its class allows (or `cap`); ends on the flat or on an earlier
         road keep that height. spans [(s0, s1, kind)]: tunnels ('t') and
         bridges ('b') run straight between their ends, the ground left
         alone; loose ends (0, -1) on no road are not held to the ground
         (where a map route leaves the play area, barricaded); an underpass ('u') passes UNDER_DROP below the road it
-        crosses there. Returns the max grade it reached."""
+        crosses there; the last `flat_end` metres are level (into a car park). Returns the max grade it reached."""
         if self.poly.distance(line) > 1.0:
             return 0.0
         n = max(2, math.ceil(line.length / 4.0))
@@ -464,6 +468,39 @@ class Mountain:
                 src[i] = id(other)
         g = cap if cap is not None else GRADE[cls]
         ds = line.length / n
+        # Where it runs alongside an earlier road (within about a 45 degree
+        # angle of it) so close that their graded ground would meet in a
+        # crease under one of them, it takes that road's height: the two
+        # read as one wider road there, merging and parting. Only where that
+        # height is in reach of its other pins at its grade (else a kink).
+        if cls not in ("trail", "rail"):
+            share = {}
+            P = shapely.points(pts[:, 0], pts[:, 1])
+            tan = np.gradient(pts, axis=0)
+            tan /= np.maximum(np.linalg.norm(tan, axis=1), 1e-9)[:, None]
+            for other, os_, oz, ohw, _bank, ospans in self.profiles:
+                reach = _HALF[cls] + ohw + 2.0 * CELL
+                if ohw <= _HALF["trail"] or any(other is r for r in self.rail_lines) or other.distance(line) >= reach:
+                    continue
+                for i in np.nonzero(shapely.distance(other, P) < reach)[0]:
+                    if i in pins or inside[i]:
+                        continue
+                    so = other.project(Point(pts[i]))
+                    if any(a < so < b for a, b, _k in ospans):
+                        continue
+                    qa = other.interpolate(max(so - 2.0, 0.0)).coords[0]
+                    qb = other.interpolate(min(so + 2.0, other.length)).coords[0]
+                    ot = np.subtract(qb, qa)
+                    if abs(float(np.dot(tan[i], ot))) < 0.7 * float(np.linalg.norm(ot)):
+                        continue
+                    share.setdefault(int(i), (float(np.interp(so, os_, oz)), id(other)))
+            for i, (v, who) in sorted(share.items()):
+                if all(abs(v - hj) <= g * ds * abs(i - j) + 0.05 for j, hj in pins.items()):
+                    pins[i] = v
+                    src[i] = who
+        if flat_end > 0.0 and len(s) - 1 in pins:
+            for i in np.nonzero(s >= s[-1] - flat_end)[0]:
+                pins[int(i)] = pins[len(s) - 1]
         # Where it crosses the rail: at grade, under a rail bridge or over the
         # rail, whichever its other pins can reach at its grade and its own
         # ground is nearest (at grade a little preferred). The crossings are
@@ -624,10 +661,15 @@ class Mountain:
             w = np.where(ok, 1.0 - _smooth(np.clip(d / (edge + blend), 0.0, 1.0)), 0.0)
             wsum[win] += w * w
             zsum[win] += w * w * zr
-            margin[win] = np.maximum(margin[win], np.where(ok, 1.0 - _smooth(np.clip((d - hw - 1.0) / CELL, 0.0, 1.0)), 0.0))
+            if hw > _HALF["trail"]:  # a trail runs onto a pad (the deck) at its height
+                margin[win] = np.maximum(margin[win], np.where(ok, 1.0 - _smooth(np.clip((d - hw - 1.0) / CELL, 0.0, 1.0)), 0.0))
             reach[win] = np.maximum(reach[win], np.where(ok, 1.0 - _smooth(np.clip((d - edge) / blend, 0.0, 1.0)), 0.0))
-            core = ok & (d <= edge + CELL) & (d < dcore[win])
-            dcore[win] = np.where(core, d, dcore[win])
+            # The rail's shelf is rigid (laid at its own heights): within its
+            # reach it owns the ground over any road (roads drape over it);
+            # a trail owns only ground no road reaches (it drapes on theirs).
+            dk = d - 1000.0 if any(line is r for r in self.rail_lines) else d + 1000.0 if hw <= _HALF["trail"] else d
+            core = ok & (d <= edge + CELL) & (dk < dcore[win])
+            dcore[win] = np.where(core, dk, dcore[win])
             zcore[win] = np.where(core, zr, zcore[win])
         zroad = np.where(wsum > 1e-9, zsum / np.maximum(wsum, 1e-9), h)
         zroad = np.where(np.isfinite(dcore), zcore, zroad)

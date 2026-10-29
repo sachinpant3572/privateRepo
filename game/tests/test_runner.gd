@@ -6154,7 +6154,8 @@ func test_mount_calder() -> void:
 			var b := Vector2(pts[k][0], pts[k][1])
 			steep = maxf(steep, absf(float(pts[k][2]) - float(pts[k - 1][2])) / a.distance_to(b))
 			along += a.distance_to(b)
-			var on_ground := true
+			# Off the height grid (past the play area) the line is only drawn far off.
+			var on_ground := Terrain.bounds.has_point(b)
 			for sp in rp.spans:
 				if along > float(sp[0]) - 30.0 and along < float(sp[1]) + 30.0:
 					on_ground = false

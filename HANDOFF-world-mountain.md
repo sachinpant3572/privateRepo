@@ -65,9 +65,11 @@ Built by a sub-agent in worktree `.claude/worktrees/agent-a01c2f4e315ebd3c5`, br
   fillets rails at r 300 m; spans are found again on the built line within 8 m (`_spans_on`).
 - W-13 **Rail crossings** (`Mountain.grade`, `_rail_finish`): the rail is graded first; a road
   crossing it where their own heights differ by >= RAIL_CLEAR (7 m) passes over or under it as is;
-  otherwise it takes at grade, under (h-7, rail bridge) or over (h+7, rail cover), whichever its
-  other pins can reach at its grade (cost = 10 x miss + |v - own|, at grade preferred by 2). Each
+  the other crossings are chosen together along the road by a small DP (a road and the rail sharing
+  a gorge cross several times): at grade, under (h-7, rail bridge) or over (h+7, rail cover), cost
+  10 x miss against every pin and the previous choice + |v - own| (+2 for a separation). Each
   separation becomes a rail span (half hw+6 'b', hw+10 't') and a data-only `structures` entry.
+  The reported grade leaves out steps between two pins on the same earlier road (shared stretch).
 - W-14 **Wheaton Road** re-planned with `low_bridges` (deck no higher than LOW_DECK 4 m over 0,
   clearance -1): a wet-only high bridge left a 10 m step at the bank. Dam Road and Pinecrest bridges
   are outside the play area (render only) and keep their planned bridges.
