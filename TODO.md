@@ -106,6 +106,155 @@ Design rules to adopt:
 - Next: turn these rules into build tasks (the driving ones are code: auto-accelerate, alignment
   assist, resizable layout).
 
+## Thursday, Oct 29, 2026: launch-readiness rework checklist
+
+Status: **checklist only, nothing started**. From a read-only review of the
+code on 2026-10-29 (this branch at 92409f3), comparing the prototype with
+what a big studio would ship. Asked by Sachin: "Add this as a checklist in
+both repos' TODOs". Per CLAUDE.md, an item here is not a request on its own:
+each one waits on his word. Efforts are rough, for one developer with AI
+agents. Paths are under `game/`.
+
+### Must fix before launch
+- [ ] **Audio, from scratch**: no AudioStreamPlayer, AudioServer or sound
+  file exists. Engines, crashes, sirens, hits, ambience, UI, music; mixer
+  buses, 3D attenuation, voice limits, ducking, streamed music, AI-music
+  rights records (GANGSTAR_CONCEPT.md risk 7). 4-8 weeks.
+- [ ] **Ads, billing, analytics, crash reporting, remote config, cloud
+  save**: none exist. MVP_DESIGN.md commits to F2P (rewarded ads, premium
+  currency, season track) and "Analytics from build one". game_log.gd is
+  local only and can't catch native crashes. Plus a consent layer (Google
+  UMP for GDPR, iOS ATT). 3-6 weeks.
+- [ ] **Core crime loop** (missing content more than rework):
+  `MAX_LEVEL := 2` in scripts/wanted.gd ("the prototype stops at two");
+  police are cop.gd + police_manager.gd (about 250 lines), no roadblocks,
+  helicopters or spike strips; no guns or aiming (inventory.gd: weapons
+  "in later phases"); 3 missions of 50+. Months.
+- [ ] **Store-ready build** (export_presets.cfg): `use_gradle_build=false`
+  means APK only; Play needs an AAB, and Billing, ads, Firebase and Play
+  Asset Delivery need the Gradle build. Package id `com.solvera.prototype`
+  can't change after the first upload. No release keystore
+  (setup_cloud.sh makes a fresh debug keystore per container). No iOS
+  preset (needs a Mac). About 1 week Android, 1-2 weeks iOS.
+- [ ] **Release defaults**: scripts/main.gd line 44 ships `show_fps`,
+  `log`, `log_button` (the BUG button) on, `quality: "high"` and
+  `fps_limit: 120`, with no device-tier detection, so a min-spec phone
+  starts on High. 2-4 days.
+- [ ] **Save hardening** (scripts/missions/mission_manager.gd
+  `save_game`/`load_game`): writes in place with no write-then-rename or
+  backup; a corrupt file silently becomes a new game and the next save
+  overwrites it; plain JSON with cash in clear text (a problem once premium
+  currency exists); settings share the file with progress; one
+  `version >= 2` migration; nothing saves on Android pause (only
+  game_log.gd handles NOTIFICATION_APPLICATION_PAUSED). About 1 week.
+- [ ] **Loading screen and boot**: startup is one blocking call in
+  main.gd (street plan, 4.05 MB country.json parsed on the main thread,
+  places, sidewalks, every vehicle model and paint prewarmed). No loading
+  screen or main menu; a long black screen on a cheap phone risks an ANR
+  kill (unverified). Record `boot_ms` from a real phone. Seed is
+  hard-coded (`city.build(1234)`). 1-2 weeks.
+- [ ] **Safe area / notches**: no `get_display_safe_area` with
+  `immersive_mode=true`; HUD corners may sit under cutouts (check on a
+  device). 2-3 days.
+- [ ] **Localization**: no `tr()` or TranslationServer; about 160+ English
+  strings inline (HUD, phone, settings, mission dialogue such as
+  m01_homecoming.gd). Only Godot's default font: no brand font, no
+  Devanagari or CJK. 2-3 weeks, more per language.
+- [ ] **Licences screen**: Godot's MIT licence and third-party notices
+  must ship in the app. (MakeHuman use is fine: CC0 data only, no AGPL
+  code, per HANDOFF-people-v2.md.) 1 day.
+- [ ] **Re-measure on the min-spec phone**: the 30 fps low-end result
+  predates people at about 2.4k triangles (from about 790 in 0.24), the
+  country and the flora. Each pedestrian builds its own skinned mesh on
+  the main thread when it spawns (humanoid.gd -> build_rig).
+
+### Should fix
+- [ ] **City generator is Bellerive-only**: street_plan.gd (2,243 lines)
+  hard-codes names and coordinates (59 Bellerive references; 32 in
+  city_cells.gd); city.gd `CITY_ID := "bellerive"`; one city loads. Four
+  cities plus country plus island need a general generator or baked
+  sectors. 4-8 weeks.
+- [ ] **One world pipeline**: the city is generated at runtime in
+  GDScript, the country is baked by about 6.5k lines of untested Python
+  (build_country.py, farmland.py, mountain.py) into one JSON read whole at
+  boot (about 35 km², 3,516 tiles, 4 MB; the full state would be roughly
+  15-20 MB, unverified). Stream baked binary sectors instead.
+- [ ] **Parallel streaming**: one worker task at a time for city cells
+  (city.gd) and country tiles (country.gd); node and physics-shape assembly
+  on the main thread; hill tiles take 67-76 ms each on desktop
+  (HANDOFF-0.23-flora.md). Freeway speed on a phone could outrun it and pop
+  in (unverified). 1-2 weeks.
+- [ ] **God files and no scenes**: country_kit.gd is 5,098 lines (134
+  static functions), shady_kit.gd 2,549; one main.tscn, no .tres, no UI
+  Theme, so designers and artists can't iterate without a programmer.
+- [ ] **World stability**: the world exists only as code, so any kit
+  change moves it (the plan-dump baseline test guards this); layout depends
+  on `hash()` of arrays (city_cells.gd), which could change between Godot
+  versions (unverified).
+- [ ] **Art ceiling**: no textures; every surface is vertex colour plus one
+  uber-shader keyed by vertex-alpha codes (mesh_builder.gd). Great for draw
+  calls, but caps quality below authored, textured assets.
+- [ ] **Authored characters and animation**: 17 bones (character_kit.gd,
+  no fingers, toes, shoulders or jaw), all animation procedural in rig.gd
+  (no AnimationPlayer/AnimationTree, no mocap). Swapping in modelled
+  characters needs retargeting and a new outfit system: weeks.
+- [ ] **Mission tooling for 50+ missions**: missions are coroutine scripts
+  with dialogue and positions inline; data/missions_act1.json isn't read by
+  the game (only tools/render_map.py). Add dialogue tables (localization,
+  voice-over), checkpoints and a mission skip/debug tool. About 2 weeks.
+- [ ] **CI and tests**: no CI (.github missing); no device, performance
+  regression, save-corruption or lifecycle tests. Blood RNG was flaky
+  (6ac03ef). test_country_kit_builds_every_kind was recorded failing
+  (farmhouse_big overlap, HANDOFF-0.23-traffic.md); current status
+  unverified.
+- [ ] **Accessibility and controls**: no colour-blind, text-size or
+  subtitle options, no haptics; touch controls can't be moved or resized
+  (this TODO lists that as a must for touch driving).
+- [ ] **Compliance**: 17+ / IARC rating (blood on by default); privacy
+  policy and Data Safety form once SDKs land (game_log.gd records device
+  model, CPU and locale locally).
+
+### Nice to have
+- [ ] Per-frame allocations (police_manager.gd filters two arrays every
+  physics frame).
+- [ ] Neighbour scans over whole groups (humanoid.gd, vehicle.gd,
+  pedestrian.gd): fine at 18 pedestrians and 8-18 cars, won't scale to
+  GTA-level density.
+- [ ] LOD for city cells (people already have it, body_kit.gd).
+- [ ] Precompile shaders (mesh_builder.gd compiles at runtime; possible
+  first-use hitch, unverified).
+
+### Known gaps the repo's own notes admit
+- Milestone 2: random-event set and a playtest (MVP_DESIGN.md).
+- Tilt steering untested on a phone (HANDOFF-world-v3.md).
+- Ultra stutter fix inferred, not measured (PR_DESCRIPTION.md).
+- Traffic density needs a phone frame-time check (HANDOFF-0.23-traffic.md).
+- People LOD by quality preset and the mesh-cache prewarm (HANDOFF-0.24).
+
+### Already solid (no rework needed)
+- Cell streaming: worker-threaded, distance-based, 105 m load and 150 m
+  unload radii.
+- About one draw call per cell, car or person; MultiMesh for lenses,
+  blood, fx, birds and puffs.
+- Seeded, deterministic generation per cell; no global RNG.
+- Code quality: about 8.3k typed variables against 273 untyped.
+- Traffic signals, IDM following and siren yielding, each with tests; 137
+  headless integration tests in all.
+- Arcade vehicle model per class; four quality presets with resolution
+  scale; per-finger multi-touch and gamepad mapping (controls.gd); a good
+  in-game logger with hitch snapshots.
+- About 6 MB of assets and data (no Play Asset Delivery needed yet); no
+  brand or licensing problems found; no committed secrets.
+
+### Suggested order
+1. Release defaults, save hardening, safe area, store-ready build,
+   licences screen, min-spec re-measure.
+2. Loading screen and boot, parallel streaming.
+3. Audio.
+4. Ads, billing, analytics, crash reporting, cloud save, consent.
+5. Generalize the city generator and the world pipeline (before city 2).
+6. Mission tooling and localization, then the core crime loop content.
+
 ## Wednesday, Oct 28, 2026: NPC interactions, conversations and daily routines
 
 Status: **not started** (later; Sachin: "Add this to todo as it is not important as of now").
