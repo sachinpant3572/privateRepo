@@ -45,6 +45,31 @@ on the street plan that phase 1 rewrites.
 Total ~135-205 h. Milestone APKs after phases 2, 4 and 6. Flying from the
 helipad needs helicopters: task #82, not started (Sachin's word needed).
 
+## Phase 1 approach (written before the code edits)
+
+- **Offline field generator** `game/tools/street_field.py` (ports
+  tools/mix_sketch.py's tensor-field tracer, variation 2 numbers, 4's water
+  pull). Input: a plan dump with the field off (`FIELD=0` env read by
+  StreetPlan). Output: `game/data/street_field.json`: per-patch field
+  streets `{patch, fam, cls, pts}`, field arterials (named, patch "") and
+  roundabout centres where field arterials cross. Runtime stays fast; the
+  traced lines are data, like country.json.
+- **Which streets where** (class divide in the pattern itself):
+  - field: havana_e (Calle Luna), brisa_e, point_w, point_e (river edge and
+    coast; water pull river 230 / w 2.0, coast 480);
+  - contour (B): hill_n (Cable Hill), rings round the crest, radials,
+    cul-de-sac lanes;
+  - grid kept: gilt_w, midtown (downtown), quarter_w, quarter_e, wards,
+    wards_n, docks (poor/working flat grid), china_n (Jade Gate: SF's
+    Chinatown is a grid);
+  - Mirador and Canyon (CURVES) stay; BOWS go where the field replaces them.
+- **Arterials**: straight ARTERIALS clip out of field regions (as brisa
+  today); field arterials start where they end, so the main roads carry on.
+  Malls keep the straight crossings in the grid districts.
+- **Rail reserve (phase 4)**: passenger line in a rail median along Aurum
+  Blvd (Union Station) and the loop through every district; freight on a
+  strip between River Road and the water (RIVER_ROAD widened), docks spur.
+
 ## Decided
 
 - **1000 m geometry [M].** A 1000 m peak needs a base of ~2-3 km to the city

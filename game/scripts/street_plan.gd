@@ -123,6 +123,10 @@ const ROAD_NAMES := {
 	"presidio": "Presidio Avenue", "gulfview": "Gulfview Avenue", "pelican": "Pelican Avenue",
 	"seagrape": "Seagrape Avenue", "ocean": "Ocean Drive", "causeway": "Serena Causeway",
 	"mirador": "Mirador Boulevard", "canyon": "Canyon Drive",
+	"calle_sol": "Calle Sol", "calle_mar": "Calle Mar", "paseo_luna": "Paseo Luna", "coral_way": "Coral Way",
+	"plaza_luna": "Plaza Luna", "plaza_sol": "Plaza del Sol", "dune_ave": "Dune Avenue", "sandpiper": "Sandpiper Drive",
+	"palm_circle": "Palm Circle", "bayou_drive": "Bayou Drive", "willow_way": "Willow Way", "heron_circle": "Heron Circle",
+	"shoreline": "Shoreline Drive", "cane_row": "Cane Row", "point_circle": "Point Circle",
 }
 
 ## The citywide arterial grid (California: the boulevards run straight
@@ -160,18 +164,6 @@ const CURVES := [
 	# Canyon Drive: off Hibiscus Avenue, swinging north out of the north-east.
 	["canyon", "avenue", [Vector2(1460, 100), Vector2(1540, 60), Vector2(1600, 0), Vector2(1640, -90),
 			Vector2(1660, -180), Vector2(1665, -280)]],
-]
-## Bowed districts: the east-west lines (district rows and arterials) of
-## `bank` with x in [x0, x1] and y in [y0, y1] move amp * sin(pi * t) in y,
-## t = (x - x0) / (x1 - x0), so a group of streets curves together and stays
-## parallel, and carries on straight past the span's ends. Below y0 the bow
-## grows from 0 to full over `ramp` metres.
-const BOWS := [
-	# Morrow Point: its rows and boulevards bow north with the river bank.
-	{"bank": "south", "x": [-80.0, 690.0], "y": [1100.0, 2100.0], "amp": -70.0, "ramp": 0.0},
-	# Calle Luna: its streets bow out towards the sea, starting straight at
-	# Crescent Boulevard.
-	{"bank": "north", "x": [1460.0, 2230.0], "y": [500.0, 1900.0], "amp": 60.0, "ramp": 150.0},
 ]
 ## A point inside Brisa Beach (between Seagrape and Ocean Drive).
 const BRISA_SEED := Vector2(1634, 1593)
@@ -221,25 +213,37 @@ const PATCHES := [
 	# Cable Hill (San Francisco's painted rows) and Jade Gate (its
 	# Chinatown), north of Presidio Avenue at the foot of the hills. Their
 	# streets carry on south through Gilt and Midtown.
-	{"id": "hill_n", "bank": "north", "seed": Vector2(0, -350), "grid": [4, 6], "angle": 0.0,
-		"su": [90.0, 90.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
+	# Cable Hill is the rich hill: contour streets in rings round the crest
+	# (wobbling, squashed north-south) and radials up it (Bel Air and SF's
+	# Twin Peaks), instead of the grid.
+	{"id": "hill_n", "bank": "north", "seed": Vector2(0, -350), "angle": 0.0,
+		"contour": {"crest": Vector2(10, -430), "rings": [65.0, 130.0, 200.0, 270.0], "squash": 0.85,
+			"radials": [10.0, 70.0, 135.0, 200.0, 255.0, 320.0]},
+		"su": [70.0, 70.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
 	{"id": "china_n", "bank": "north", "seed": Vector2(500, -350), "grid": [3, 6], "angle": 0.0,
 		"su": [120.0, 120.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.08, "max": [0.0, 0.0, 0.0]},
-	# Calle Luna (Miami's Little Havana): the city grid, low pastel shops.
-	{"id": "havana_e", "bank": "north", "seed": Vector2(1700, 800), "grid": [4, 6], "angle": 0.0,
-		"su": [90.0, 90.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
-	# Brisa Beach (Miami Beach): its grid squares up to the coast, cross
-	# streets down to Ocean Drive, long blocks along it.
-	{"id": "brisa_e", "bank": "north", "seed": BRISA_SEED, "angle": -39.0, "origin": OCEAN_AT, "bend": 0.0,
-		"su": [92.0, 104.0], "sv": [80.0, 90.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
+	# Calle Luna (Miami's Little Havana) and Brisa Beach (Miami Beach): the
+	# Florida coast curves. Their streets follow the street field (the
+	# coast, the river mouth, Liberty Avenue); the arterials that reach them
+	# carry on along it, new ones fill in, and a roundabout sits where two
+	# cross. Brisa's streets square up to Ocean Drive as the coast pulls.
+	{"id": "havana_e", "bank": "north", "seed": Vector2(1700, 800), "angle": 0.0,
+		"field": {"dsep": [270.0, 74.0], "roads": ["calle_sol", "calle_mar", "paseo_luna", "coral_way"], "circles": ["plaza_luna", "plaza_sol"]},
+		"su": [74.0, 74.0], "sv": [74.0, 74.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
+	{"id": "brisa_e", "bank": "north", "seed": BRISA_SEED, "angle": -39.0,
+		"field": {"dsep": [270.0, 80.0], "roads": ["dune_ave", "sandpiper"], "circles": ["palm_circle"]},
+		"su": [80.0, 80.0], "sv": [80.0, 80.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
 	# Ironwharf: big industrial lots, a few streets dropped for yards.
 	{"id": "docks", "bank": "north", "seed": Vector2(1000, 960), "grid": [4, 3], "angle": 0.0,
 		"su": [90.0, 90.0], "sv": [120.0, 120.0], "fam": "uv", "cls": "street", "cut": [0.12, 0.1], "lane": 0.0, "max": [190.0, 250.0, 40000.0]},
-	# Morrow Point: a suburban grid over the bridge.
-	{"id": "point_w", "bank": "south", "seed": Vector2(150, 1420), "grid": [5, 3], "angle": 0.0,
-		"su": [72.0, 72.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
-	{"id": "point_e", "bank": "south", "seed": Vector2(800, 1400), "grid": [5, 3], "angle": 0.0,
-		"su": [72.0, 72.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
+	# Morrow Point: the suburbs over the bridge, on the river edge: its
+	# streets follow the river's bend (the street field's water pull).
+	{"id": "point_w", "bank": "south", "seed": Vector2(150, 1420), "angle": 0.0,
+		"field": {"dsep": [270.0, 74.0], "roads": ["bayou_drive", "willow_way"], "circles": ["heron_circle"]},
+		"su": [74.0, 74.0], "sv": [74.0, 74.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
+	{"id": "point_e", "bank": "south", "seed": Vector2(800, 1400), "angle": 0.0,
+		"field": {"dsep": [270.0, 74.0], "roads": ["shoreline", "cane_row"], "circles": ["point_circle"]},
+		"su": [74.0, 74.0], "sv": [74.0, 74.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
 ]
 
 var window := Rect2()
@@ -686,8 +690,21 @@ func _layout(src: Array) -> void:
 	var north_parts: Array = [north]
 	for seam in [lantern, crescent, rampart, road_cut, wharf, presidio, hibiscus, seagrape, ocean]:
 		north_parts = _cut(north_parts, seam)
-	var brisa := _piece(north_parts, BRISA_SEED)
 	var beach := _piece(north_parts, OCEAN_AT + GULF_DIR * 500.0 + Vector2(-GULF_DIR.y, GULF_DIR.x) * 40.0)
+	var south_parts := _cut([south], PackedVector2Array([b1 - Vector2(0, 5), Vector2(b1.x, bottom)]))
+	# The field districts (their streets follow the street field): no
+	# straight arterial runs through them; each one that reaches them
+	# carries on there along the field (_field_lines), from where it
+	# enters, or from a traffic circle it would have run through.
+	var zones: Array = [] # [region, patch]
+	_field_entries = {}
+	_field_circles = []
+	for k in PATCHES.size():
+		if PATCHES[k].has("field"):
+			var zone := _piece(north_parts if PATCHES[k].bank == "north" else south_parts, PATCHES[k].seed)
+			if not zone.is_empty():
+				zones.append([zone, k])
+				_field_entries[k] = []
 	var roads: Array = [[lantern, "boulevard", "lantern"], [crescent, "boulevard", "crescent"], [rampart, "avenue", "rampart"],
 			[liberty, "avenue", "liberty"], [magnolia, "avenue", "magnolia"], [wharf, "avenue", "wharf"], [river_road, "river", "river_road"],
 			[levee, "river", "levee"], [quay, "quay", "quay"], [PackedVector2Array([b0, b1]), "bridge", "bridge"],
@@ -708,17 +725,17 @@ func _layout(src: Array) -> void:
 	# (and out of Brisa Beach, which has its own grid).
 	for a in ARTERIALS:
 		var line := PackedVector2Array([Vector2(a.x, top), Vector2(a.x, bottom)]) if a.has("x") else PackedVector2Array([Vector2(a.get("from", west), a.y), Vector2(a.get("to", east), a.y)])
-		if a.has("y"):
-			line = _bowed(line, a.bank)
 		for piece in Geometry2D.intersect_polyline_with_polygon(line, north if a.bank == "north" else south):
 			var parts: Array[PackedVector2Array] = [piece]
-			for zone in [brisa, beach]:
-				if a.bank != "north" or zone.is_empty():
+			for zone in [[beach, -1]] + zones:
+				if zone[0].is_empty() or (zone[1] < 0 and a.bank != "north") or (zone[1] >= 0 and PATCHES[zone[1]].bank != a.bank):
 					continue
 				var next: Array[PackedVector2Array] = []
 				for part in parts:
-					next.append_array(Geometry2D.clip_polyline_with_polygon(part, zone))
+					next.append_array(Geometry2D.clip_polyline_with_polygon(part, zone[0]))
 				parts = next
+				if zone[1] >= 0:
+					_add_entries(piece, zone, cut_out, a)
 			for part in parts:
 				roads.append([part, a.cls, a.road])
 	for r in roads:
@@ -733,7 +750,6 @@ func _layout(src: Array) -> void:
 		for piece in pieces:
 			if _length(piece) > 10.0:
 				src.append({"pts": _resample(piece, STEP), "cls": r[1], "road": r[2], "patch": -1, "fam": -1})
-	var south_parts := _cut([south], PackedVector2Array([b1 - Vector2(0, 5), Vector2(b1.x, bottom)]))
 	# A street round the edge of the scenery closes off the outermost blocks.
 	var frame := _rect_poly(bounds.grow(-4.0))
 	for k in 4:
@@ -845,6 +861,12 @@ static func _point_at_y(line: PackedVector2Array, y: float) -> Vector2:
 
 func _patch_lines(src: Array, k: int, region: PackedVector2Array) -> void:
 	var p: Dictionary = PATCHES[k]
+	if p.has("field"):
+		_field_lines(src, k, region)
+		return
+	if p.has("contour"):
+		_contour_lines(src, k, region)
+		return
 	if p.has("grid"):
 		_grid_lines(src, k, region)
 		return
@@ -919,6 +941,336 @@ func _patch_lines(src: Array, k: int, region: PackedVector2Array) -> void:
 			_add_pieces(src, _v_line(o, u_dir, v_dir, bend, v, tilt, start, hi.x + spare), region, gap, k, 1)
 
 
+# --- The street field ------------------------------------------------------------
+
+## The street field (data/street_field.json, from tools/street_field.py):
+## the direction the curved districts' streets follow, as an angle 0..pi
+## (0..255) per 20 m cell, summed from the downtown grid, the Gulf coast,
+## the Morrow and the curved roads. Streets are traced along it (family 0)
+## or across it (family 1).
+const SF_PATH := "res://data/street_field.json"
+static var _sf_angle := PackedByteArray()
+static var _sf_origin := Vector2.ZERO
+static var _sf_cell := 20.0
+static var _sf_size := Vector2i.ZERO
+## Tracing step, and the cell of the hash the traced lines are kept in.
+const SF_STEP := 8.0
+const SF_CELL := 40.0
+## How far a traced arterial or street may turn from its first heading.
+const ART_TURN := deg_to_rad(80.0)
+## How near a traced arterial joins another (further apart, the join would
+## be a long straight jump).
+const ART_JOIN := 45.0
+const STREET_TURN := deg_to_rad(100.0)
+## Field district -> [where, inward direction, road, class] of each
+## arterial that reaches it (set in _layout).
+var _field_entries := {}
+## The traffic circles the field arterials made (all districts).
+var _field_circles: Array = []
+## Per family, cell -> Array of Vector3(x, y, line id); id 0 is a fixed road.
+var _sf_grid: Array = []
+
+
+static func _load_field() -> void:
+	if not _sf_angle.is_empty():
+		return
+	var f := FileAccess.open(SF_PATH, FileAccess.READ)
+	var d: Dictionary = JSON.parse_string(f.get_as_text())
+	_sf_origin = Vector2(d.origin[0], d.origin[1])
+	_sf_cell = d.cell
+	_sf_size = Vector2i(int(d.size[0]), int(d.size[1]))
+	_sf_angle = Marshalls.base64_to_raw(d.angle)
+
+
+## The field's direction at q: along it (fam 0) or across it (fam 1). The
+## sign is arbitrary; tracing keeps its own.
+static func _field_dir(q: Vector2, fam: int) -> Vector2:
+	var g := (q - _sf_origin) / _sf_cell
+	var i := clampi(floori(g.x), 0, _sf_size.x - 2)
+	var j := clampi(floori(g.y), 0, _sf_size.y - 2)
+	var fx := clampf(g.x - i, 0.0, 1.0)
+	var fy := clampf(g.y - j, 0.0, 1.0)
+	var t := Vector2.ZERO
+	for c in [[0, 0, (1.0 - fx) * (1.0 - fy)], [1, 0, fx * (1.0 - fy)], [0, 1, (1.0 - fx) * fy], [1, 1, fx * fy]]:
+		# The cells hold the doubled angle's direction, so opposite signs
+		# average instead of cancelling.
+		var a: float = _sf_angle[(j + c[1]) * _sf_size.x + i + c[0]] * PI / 128.0
+		t += Vector2(cos(a), sin(a)) * float(c[2])
+	var th := 0.5 * atan2(t.y, t.x) + (PI * 0.5 if fam == 1 else 0.0)
+	return Vector2(cos(th), sin(th))
+
+
+## Records where each arterial reaching field district zone[1] meets it:
+## the ends of its pieces inside, out of the traffic circles' disks.
+func _add_entries(piece: PackedVector2Array, zone: Array, cut_out: Array, a: Dictionary) -> void:
+	var parts: Array[PackedVector2Array] = []
+	parts.assign(Geometry2D.intersect_polyline_with_polygon(piece, zone[0]))
+	for disk in cut_out:
+		var next: Array[PackedVector2Array] = []
+		for part in parts:
+			next.append_array(Geometry2D.clip_polyline_with_polygon(part, disk))
+		parts = next
+	for part in parts:
+		if _length(part) < 40.0:
+			continue
+		var n := part.size()
+		_field_entries[zone[1]].append([part[0], (part[1] - part[0]).normalized(), a.road, a.cls])
+		_field_entries[zone[1]].append([part[n - 1], (part[n - 2] - part[n - 1]).normalized(), a.road, a.cls])
+
+
+func _sf_stamp(pts: PackedVector2Array, fam: int, id: int) -> void:
+	var line := _resample(pts, SF_STEP) if _length(pts) > SF_STEP else pts
+	for q in line:
+		var key := Vector2i(floori(q.x / SF_CELL), floori(q.y / SF_CELL))
+		if not _sf_grid[fam].has(key):
+			_sf_grid[fam][key] = []
+		_sf_grid[fam][key].append(Vector3(q.x, q.y, id))
+
+
+## A fixed road (or edge) as a line both families may meet: each stretch
+## under the family it runs along (both when it is diagonal to the field).
+func _sf_fix(pts: PackedVector2Array) -> void:
+	if _length(pts) < 1.0:
+		return
+	var line := _resample(pts, SF_STEP)
+	for k in line.size() - 1:
+		var d := (line[k + 1] - line[k]).normalized()
+		for fam in 2:
+			if absf(d.dot(_field_dir(line[k], fam))) > 0.38:
+				_sf_grid[fam].get_or_add(Vector2i(floori(line[k].x / SF_CELL), floori(line[k].y / SF_CELL)), []).append(Vector3(line[k].x, line[k].y, 0))
+
+
+## The nearest point of a family-`fam` line within r of q (fixed roads
+## left out if `traced_only`); Vector2.INF if none.
+func _sf_near(q: Vector2, fam: int, r: float, traced_only := false) -> Vector2:
+	var best := Vector2.INF
+	var best_d := r * r
+	var c := Vector2i(floori(q.x / SF_CELL), floori(q.y / SF_CELL))
+	var reach := ceili(r / SF_CELL)
+	for dx in range(-reach, reach + 1):
+		for dy in range(-reach, reach + 1):
+			for p in _sf_grid[fam].get(c + Vector2i(dx, dy), []):
+				if traced_only and p.z < 0.5:
+					continue
+				var d := Vector2(p.x, p.y).distance_squared_to(q)
+				if d < best_d:
+					best_d = d
+					best = Vector2(p.x, p.y)
+	return best
+
+
+## Inside a set piece the traced streets stop at (a park, a traffic
+## circle; not the thin strips of the curved roads, which they cross).
+func _in_void(q: Vector2) -> bool:
+	for poly in _voids:
+		if Geometry2D.is_point_in_polygon(q, poly):
+			return true
+	for poly in _holes:
+		var box := _bbox(poly)
+		if box.size.x < 120.0 and box.size.y < 120.0 and box.has_point(q) and Geometry2D.is_point_in_polygon(q, poly):
+			return true
+	return false
+
+
+## A street traced along family `fam` of the field from s, both ways (or
+## only along `dir` when given), until it leaves `region`, runs into a set
+## piece, or comes within `join` of a line of its own family: it joins that
+## line when it lies ahead, stops short when it lies alongside and goes on
+## when it lies behind. It also stops once it has turned `max_turn` from
+## where it set off: near the field's knots (where the river's pull and the
+## grid's balance) a line along it would swing round onto the other family.
+func _sf_trace(s: Vector2, fam: int, region: PackedVector2Array, join: float, max_turn: float, dir := Vector2.ZERO) -> PackedVector2Array:
+	var halves: Array[PackedVector2Array] = []
+	for sgn in ([1.0] if dir != Vector2.ZERO else [1.0, -1.0]):
+		var pts := PackedVector2Array()
+		var q := s
+		var d: Vector2 = dir if dir != Vector2.ZERO else _field_dir(s, fam) * sgn
+		var d0 := d
+		for step in 700:
+			var f1 := _field_dir(q, fam)
+			if f1.dot(d) < 0.0:
+				f1 = -f1
+			var f2 := _field_dir(q + f1 * SF_STEP * 0.5, fam)
+			if f2.dot(f1) < 0.0:
+				f2 = -f2
+			var nq := q + f2 * SF_STEP
+			d = f2
+			pts.append(nq)
+			if not Geometry2D.is_point_in_polygon(nq, region) or _in_void(nq) or d.dot(d0) < cos(max_turn):
+				break
+			if step >= 3:
+				var near := _sf_near(nq, fam, join)
+				if near != Vector2.INF:
+					var ahead := (near - nq).dot(d) / maxf(near.distance_to(nq), 0.01)
+					if ahead > 0.5:
+						pts.append(near)
+						break
+					if ahead > -0.2:
+						break
+			q = nq
+		halves.append(pts)
+	var out := PackedVector2Array()
+	if halves.size() == 2:
+		out = halves[1].duplicate()
+		out.reverse()
+	out.append(s)
+	out.append_array(halves[0])
+	return out
+
+
+## Seeds every sep/2 over the region, nearest downtown first.
+static func _sf_seeds(region: PackedVector2Array, sep: float) -> Array:
+	var box := _bbox(region)
+	var out: Array = []
+	var y := box.position.y + sep * 0.25
+	while y < box.end.y:
+		var x := box.position.x + sep * 0.25
+		while x < box.end.x:
+			var q := Vector2(x, y)
+			if Geometry2D.is_point_in_polygon(q, region):
+				out.append(q)
+			x += sep * 0.5
+		y += sep * 0.5
+	out.sort_custom(func(a, b): return a.distance_squared_to(Vector2(450, 300)) < b.distance_squared_to(Vector2(450, 300)))
+	return out
+
+
+## A field district (variation 2 of the mix, reference/world/
+## mix_options_sketch.png): its streets are traced along the street field
+## and across it, `dsep` [arterials, streets] apart. The arterials that
+## reach it carry on along the field from where they enter (same name and
+## class), new ones (named from `roads`) fill the gaps, and a traffic
+## circle (named from `circles`) sits where two cross.
+func _field_lines(src: Array, k: int, region: PackedVector2Array) -> void:
+	_load_field()
+	var p: Dictionary = PATCHES[k]
+	var spec: Dictionary = p.field
+	var art_sep: float = spec.dsep[0]
+	var sep: float = spec.dsep[1]
+	var gap := sep * 0.45
+	_inner = Geometry2D.offset_polygon(region, -gap * 0.5)
+	_sf_grid = [{}, {}]
+	# Fixed: the district's edge, the set pieces by it and the named roads
+	# inside it (Liberty Avenue through Calle Luna).
+	var ring := region.duplicate()
+	ring.append(region[0])
+	_sf_fix(ring)
+	var near_box := _bbox(region).grow(60.0)
+	for poly in _holes + _voids:
+		if near_box.intersects(_bbox(poly)):
+			var closed := poly.duplicate()
+			closed.append(poly[0])
+			_sf_fix(closed)
+	for e in src:
+		if e.patch == -1 and near_box.intersects(_bbox(e.pts)):
+			for piece in Geometry2D.intersect_polyline_with_polygon(e.pts, region):
+				_sf_fix(piece)
+	# Arterials: those entering carry on first, then new ones.
+	var arts: Array = [] # [line, fam, road, cls]
+	var names: Array = spec.get("roads", []).duplicate()
+	for en in _field_entries.get(k, []):
+		var at: Vector2 = en[0]
+		var dir: Vector2 = en[1]
+		var fam := 0 if absf(dir.dot(_field_dir(at, 0))) >= absf(dir.dot(_field_dir(at, 1))) else 1
+		# Skip it when an arterial traced already runs where it would go
+		# (the line in from the other end of the same road).
+		if _sf_near(at + dir * art_sep * 0.3, fam, art_sep * 0.3, true) != Vector2.INF:
+			continue
+		var line := _sf_trace(at + dir * 2.0, fam, region, ART_JOIN, ART_TURN, dir)
+		line[0] = at
+		if _length(line) < art_sep * 0.3:
+			continue
+		arts.append([line, fam, en[2], en[3]])
+		_sf_stamp(line, fam, arts.size())
+	for fam in 2:
+		for s in _sf_seeds(region, art_sep):
+			if names.is_empty():
+				break
+			if _sf_near(s, fam, art_sep * 0.9) != Vector2.INF:
+				continue
+			var line := _sf_trace(s, fam, region, ART_JOIN, ART_TURN)
+			if _length(line) < art_sep:
+				continue
+			arts.append([line, fam, names.pop_front(), "avenue"])
+			_sf_stamp(line, fam, arts.size())
+	# Traffic circles where two of them cross, well inside the district
+	# and clear of the other circles.
+	var cut: Array[PackedVector2Array] = []
+	var circles: Array = spec.get("circles", []).duplicate()
+	var deep := Geometry2D.offset_polygon(region, -70.0)
+	var taken: Array = [circle_at]
+	for rb in ROUNDABOUTS:
+		taken.append(rb[1])
+	taken.append_array(_field_circles)
+	for i in arts.size():
+		for j in range(i + 1, arts.size()):
+			if arts[i][1] == arts[j][1] or circles.is_empty():
+				continue
+			var a: PackedVector2Array = arts[i][0]
+			var b: PackedVector2Array = arts[j][0]
+			for m in a.size() - 1:
+				for n in b.size() - 1:
+					var hit = Geometry2D.segment_intersects_segment(a[m], a[m + 1], b[n], b[n + 1])
+					if hit == null or circles.is_empty():
+						continue
+					var inside := false
+					for poly in deep:
+						inside = inside or Geometry2D.is_point_in_polygon(hit, poly)
+					var clear := true
+					for t in taken:
+						clear = clear and hit.distance_to(t) >= 220.0
+					if inside and clear:
+						cut.append(_roundabout(src, circles.pop_front(), hit, 26.0))
+						taken.append(hit)
+						_field_circles.append(hit)
+	for art in arts:
+		var pieces: Array[PackedVector2Array] = []
+		pieces.assign(Geometry2D.intersect_polyline_with_polygon(art[0], region))
+		for hole in cut + _voids:
+			var next: Array[PackedVector2Array] = []
+			for piece in pieces:
+				next.append_array(Geometry2D.clip_polyline_with_polygon(piece, hole))
+			pieces = next
+		for piece in pieces:
+			if _length(piece) > 20.0:
+				src.append({"pts": _resample(_extend(piece, 1.5), STEP), "cls": art[3], "road": art[2], "patch": -1, "fam": -1})
+	# Streets, along the field, then across it.
+	for fam in 2:
+		for s in _sf_seeds(region, sep):
+			if _sf_near(s, fam, sep * 0.9) != Vector2.INF:
+				continue
+			var line := _sf_trace(s, fam, region, sep * 0.5, STREET_TURN)
+			if line.size() < 4 or _length(line) < sep * 0.5:
+				continue
+			_sf_stamp(line, fam, 1000 + src.size())
+			_add_pieces(src, _resample(line, STEP), region, gap, k, fam)
+
+
+## Cable Hill (B of the mix): contour streets in rings round the crest,
+## wobbling and squashed north-south, and radials up it (Bel Air, Twin
+## Peaks). The curved roads crossing it cut the rings, which meet them.
+## (No cul-de-sacs: the plan prunes dead ends.)
+func _contour_lines(src: Array, k: int, region: PackedVector2Array) -> void:
+	var p: Dictionary = PATCHES[k]
+	var spec: Dictionary = p.contour
+	var crest: Vector2 = spec.crest
+	var squash: float = spec.squash
+	var gap: float = p.su[0] * 0.45
+	_inner = Geometry2D.offset_polygon(region, -gap * 0.5)
+	for r0 in spec.rings:
+		var rr: float = r0
+		var ring := PackedVector2Array()
+		for i in 91:
+			var th := TAU * i / 90.0
+			var r := rr * (1.0 + 0.10 * sin(3.0 * th + rr / 40.0) + 0.05 * sin(5.0 * th))
+			ring.append(crest + Vector2(r * cos(th), squash * r * sin(th)))
+		_add_pieces(src, ring, region, gap, k, 0)
+	var r_in: float = spec.rings[0]
+	for deg in spec.radials:
+		var d := Vector2(cos(deg_to_rad(deg)), squash * sin(deg_to_rad(deg)))
+		_add_pieces(src, _resample(PackedVector2Array([crest + d * r_in, crest + d * 420.0]), STEP), region, gap, k, 1)
+
+
 ## A straight grid: each superblock of the arterial grid split into
 ## p.grid[0] by p.grid[1] blocks. The arterials themselves are laid out
 ## citywide in _layout. Every street runs right across the district, and a
@@ -942,23 +1294,7 @@ func _grid_lines(src: Array, k: int, region: PackedVector2Array) -> void:
 	for s in _splits(ART_X, p.grid[0], lo.x, hi.x, "x" + p.bank):
 		_add_pieces(src, PackedVector2Array([Vector2(s[0], lo.y), Vector2(s[0], hi.y)]), region, gap, k, 0, "avenue" if s[1] else "")
 	for s in _splits(art_y, p.grid[1], lo.y, hi.y, "y" + p.bank):
-		_add_pieces(src, _bowed(PackedVector2Array([Vector2(lo.x, s[0]), Vector2(hi.x, s[0])]), p.bank), region, gap, k, 1, "avenue" if s[1] else "")
-
-
-## An east-west line bent by the BOWS of `bank` it runs through.
-static func _bowed(line: PackedVector2Array, bank: String) -> PackedVector2Array:
-	var bows := BOWS.filter(func(b): return b.bank == bank and line[0].y >= b.y[0] and line[0].y <= b.y[1])
-	if bows.is_empty():
-		return line
-	var out := _resample(line, STEP * 0.5)
-	for i in out.size():
-		var q := out[i]
-		for b in bows:
-			var t: float = (q.x - b.x[0]) / (b.x[1] - b.x[0])
-			if t > 0.0 and t < 1.0:
-				var w: float = clampf((q.y - b.y[0]) / b.ramp, 0.0, 1.0) if b.ramp > 0.0 else 1.0
-				out[i].y += b.amp * sin(PI * t) * w
-	return out
+		_add_pieces(src, PackedVector2Array([Vector2(lo.x, s[0]), Vector2(hi.x, s[0])]), region, gap, k, 1, "avenue" if s[1] else "")
 
 
 ## The points that split each interval of `arts` into n parts, between lo
