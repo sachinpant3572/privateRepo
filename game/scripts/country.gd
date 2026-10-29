@@ -83,6 +83,16 @@ var suburbs: Array = []
 ## every 6 m at most, in game metres on the ground.
 var walks: Array[PackedVector3Array] = []
 var plan_bounds := Rect2()
+## The range's tunnels, bridges, rail viaducts and trail underpasses, as data
+## for a later pass to build (tools/build_country.py _note_structures):
+## [{kind, way, cls, length, pts [[x, y, z]] every 8 m, portals [a, b]}].
+var structures: Array = []
+## The Morrow Freight Line's shelf over the range: {name, pts [[x, y, z]]
+## every 16 m, spans [[from, to, "t" | "b"]] along it, grade}; {} if none.
+var rail_pass: Dictionary = {}
+## Mount Calder: {peaks {id: [x, y, height]}, sites {id: {x, y, z, w, d}}
+## (summit pads, cable mid-station), cable {stations, towers}}.
+var mountain: Dictionary = {}
 ## Every tile's data: Vector2i -> {g, r, l, w, b, p, t, x, f}.
 var tiles := {}
 ## Bridge edges: edge -> true (parapets instead of bank walls).
@@ -164,6 +174,10 @@ func load_data(seed_v := 1234) -> void:
 	rails = d.rails
 	far_roads = d.far_roads
 	pivots = d.get("pivots", [])
+	structures = d.get("structures", [])
+	var rp = d.get("rail_pass")
+	rail_pass = rp if rp is Dictionary else {}
+	mountain = d.get("mountain", {})
 	towns = d.towns
 	suburbs = d.suburbs
 	for w in d.get("walks", []):

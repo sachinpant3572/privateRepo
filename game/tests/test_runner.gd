@@ -99,7 +99,7 @@ func _run() -> void:
 		"test_traffic_drives_into_the_country", "test_traffic_turns_round_at_barricades",
 		"test_country_kit_builds_every_kind",
 		"test_country_plots_square_to_their_roads", "test_estates_and_clusters", "test_grounds_kit_builds_every_part",
-		"test_bellerive_hills", "test_golden_flats_farmland", "test_every_home_has_a_way_in", "test_homes_by_wealth",
+		"test_bellerive_hills", "test_mount_calder", "test_golden_flats_farmland", "test_every_home_has_a_way_in", "test_homes_by_wealth",
 		"test_new_home_kinds_and_live_cars", "test_people_walk_the_suburbs", "test_suburb_home_cars_are_live",
 		"test_road_surfaces_and_roadworks", "test_traffic_flows_past_roadworks", "test_boundaries_vary_by_household",
 		"test_game_log_file_and_rotation", "test_game_log_snapshot_and_events", "test_game_log_report_copy_and_off",
@@ -2100,7 +2100,9 @@ func test_birds_by_day_not_at_night() -> void:
 	atm.weather_changes = false
 	atm.set_weather("clear", true)
 	var birds = atm.birds
-	var places := {"city": Vector2(300, 250), "beach": Vector2(-2033, 1791), "bayou": Vector2(-966, 366), "hills": Vector2(1200, -1300), "farm": Vector2(584, -1824)}
+	# The farm sample is the Golden Flats west of the range ((584, -1824) is
+	# up Mount Calder's flank since phase 2).
+	var places := {"city": Vector2(300, 250), "beach": Vector2(-2033, 1791), "bayou": Vector2(-966, 366), "hills": Vector2(1200, -1300), "farm": Vector2(-900, -1100)}
 	var wrong := []
 	for h in places:
 		var got: String = birds.habitat_at(places[h])
@@ -2710,7 +2712,11 @@ func _surface_top(country, p: Vector2) -> float:
 				if p.x < minf(a.x, minf(b.x, cc.x)) or p.x > maxf(a.x, maxf(b.x, cc.x)) or p.y < minf(a.z, minf(b.z, cc.z)) or p.y > maxf(a.z, maxf(b.z, cc.z)):
 					continue
 				var bc := Geometry3D.get_triangle_barycentric_coords(Vector3(p.x, 0, p.y), Vector3(a.x, 0, a.z), Vector3(b.x, 0, b.z), Vector3(cc.x, 0, cc.z))
-				if bc.x < 0.0 or bc.y < 0.0 or bc.z < 0.0:
+				# A hair of slack: on the hills a road strip is halved down to
+				# HILL_PIECE, so a sample a quarter of the way across lies right
+				# on a triangle edge, and float32 vertices can put it outside
+				# both triangles (a hole that is not there).
+				if bc.x < -1e-4 or bc.y < -1e-4 or bc.z < -1e-4:
 					continue
 				var y := a.y * bc.x + b.y * bc.y + cc.y * bc.z
 				if y <= cap:
@@ -5590,7 +5596,8 @@ func _turn_off_road(c, l: Array) -> float:
 ## plots are sold parallely"); buildings turned off their plot stand only in
 ## estates and clusters; a plot's lots stay inside it.
 ## The counts are loose floors: the urban outline (2026-10-29) sets how much
-## suburb there is.
+## suburb there is, and Mount Calder's range (phase 2) took the hill vineyards
+## and orchards up its flank (603 fields before it, 177 after).
 func test_country_plots_square_to_their_roads() -> void:
 	await _new_game(false)
 	var c = game.city.country
@@ -5598,7 +5605,7 @@ func test_country_plots_square_to_their_roads() -> void:
 	for p: Array in c.plots:
 		var ty: String = c.plot_types[int(p[5])]
 		counts[ty] = counts.get(ty, 0) + 1
-	_check(counts.get("estate", 0) >= 3 and counts.get("cluster", 0) >= 20 and counts.get("farmyard", 0) >= 10 and counts.get("field", 0) >= 500,
+	_check(counts.get("estate", 0) >= 3 and counts.get("cluster", 0) >= 20 and counts.get("farmyard", 0) >= 10 and counts.get("field", 0) >= 150,
 			"the country has estates, clusters, farmyards and fields, got %s" % counts)
 	var worst_lot := 0.0
 	var fronting := 0
@@ -5932,7 +5939,7 @@ func test_bellerive_hills() -> void:
 	var peak := 0.0
 	for h in Terrain.heights:
 		peak = maxf(peak, h)
-	_check(peak > 100.0 and peak < 150.0, "Calder Peak tops out at %.0f m" % peak)
+	_check(peak >= 950.0 and peak < 1100.0, "Mount Calder tops out at %.0f m" % peak)
 	_check(Terrain.height(0.0, 0.0) == 0.0 and Terrain.height(1200.0, 900.0) == 0.0, "the city stays flat")
 	for id in ["lumen_observatory", "hill_letters", "calder_mast_0", "calder_mast_1"]:
 		_check(not c.landmark(id).is_empty(), "%s has its lot" % id)
@@ -6051,6 +6058,138 @@ func test_bellerive_hills() -> void:
 	_check(crept < 0.02 and car.velocity == Vector3.ZERO, "a car left on the slope stays put (%.3f m in 3 s)" % crept)
 	car.queue_free()
 	await _frames(2)
+
+
+## Sachin: "Mountain should be raised to 1000mtrs, with several small mountains
+## around it, and continuing mountain line, seemlessly mering with the city
+## and around it" and "the mountain should have multiple ways to reach,
+## either by main road, by the forest itself, or by shortcuts, through
+## underpasses etc." Mount Calder stands about 1000 m with lesser peaks
+## round it; the city stays at 0 m; the roads up keep to their grade caps
+## (tools/mountain.py GRADE); the summit's pads are flat; the freight line
+## crosses the range at 2.5% at most, through a tunnel and over a viaduct;
+## the cable car climbs from the city to the top.
+func test_mount_calder() -> void:
+	await _new_game(false)
+	var c = game.city.country
+	var plan = game.city.plan
+	var m: Dictionary = c.mountain
+	_check(not m.is_empty(), "country.json describes the mountain")
+	if m.is_empty():
+		return
+	var top: Array = m.peaks.get("mount_calder", [0, 0, 0])
+	_check(float(top[2]) >= 950.0, "Mount Calder's top is %.0f m up" % float(top[2]))
+	_check(Terrain.height(float(top[0]), float(top[1])) >= 940.0, "the ground there is %.0f m up" % Terrain.height(float(top[0]), float(top[1])))
+	var lesser := 0
+	for k in m.peaks:
+		var h := float(m.peaks[k][2])
+		if k != "mount_calder" and h >= 380.0 and h <= 780.0:
+			lesser += 1
+	_check(lesser >= 4, "%d lesser peaks of 400-750 m round it" % lesser)
+	# The city stays flat: every street junction, and the ground on a 40 m
+	# grid inside the city's outline.
+	var worst := 0.0
+	for n in plan.node_count():
+		var p: Vector2 = plan.pos(n)
+		worst = maxf(worst, absf(Terrain.height(p.x, p.y)))
+	var r: Rect2 = c.plan_bounds
+	var inside := 0
+	for gx in range(int(r.position.x), int(r.end.x), 40):
+		for gy in range(int(r.position.y), int(r.end.y), 40):
+			if plan.in_city(Vector2(gx, gy)):
+				inside += 1
+				worst = maxf(worst, absf(Terrain.height(gx, gy)))
+	_check(inside > 500 and worst == 0.0, "the ground in the city is at 0 m (%d points, worst %.2f m)" % [inside, worst])
+	# The roads up keep to their grade caps, measured over 32 m of road on
+	# the 8 m height grid (a little slack for its smoothing); bridges aside.
+	var caps := {"highway": 0.075, "road": 0.13, "lane": 0.14, "track": 0.25}
+	var over: Array = []
+	var climbs := 0
+	for rd in c.roads:
+		if not rd.name in ["Mount Calder Road", "Crest Drive", "Canyon Freeway", "Coyote Canyon Road", "Observatory Road", "Summit Fire Road", "West Ridge Track", "Larkspur Track"]:
+			continue
+		var nodes: PackedInt32Array = rd.nodes
+		var s: Array[float] = [0.0]
+		for k in range(1, nodes.size()):
+			s.append(s[-1] + c.node_pos[nodes[k]].distance_to(c.node_pos[nodes[k - 1]]))
+		var j := 0
+		for k in nodes.size():
+			while j < nodes.size() - 1 and s[j] - s[k] < 32.0:
+				j += 1
+			if s[j] - s[k] < 32.0:
+				break
+			var e: int = int(rd.e0) + k
+			if c.bridge_edges.has(e):
+				continue
+			var a: Vector2 = c.node_pos[nodes[k]]
+			var b: Vector2 = c.node_pos[nodes[j]]
+			var g: float = absf(Terrain.height(b.x, b.y) - Terrain.height(a.x, a.y)) / (s[j] - s[k])
+			var cap: float = caps.get(c.edge_class(e), 0.3)
+			if Terrain.height(a.x, a.y) > 300.0:
+				climbs += 1
+			if g > cap + 0.015:
+				over.append("%s %.3f at (%.0f, %.0f)" % [rd.name, g, a.x, a.y])
+	_check(climbs > 50, "the roads climb the range (%d stretches above 300 m)" % climbs)
+	_check(over.is_empty(), "the roads up keep to their grade caps (%d over: %s)" % [over.size(), over.slice(0, 4)])
+	var main_top := 0.0
+	for rd in c.roads:
+		if rd.name == "Mount Calder Road":
+			for n in rd.nodes:
+				main_top = maxf(main_top, Terrain.height(c.node_pos[n].x, c.node_pos[n].y))
+	_check(main_top > 900.0, "Mount Calder Road reaches the top (%.0f m)" % main_top)
+	# The summit's pads are flat.
+	for id in ["restaurant", "helipad", "deck", "cable_top", "car_park", "cable_mid"]:
+		var site: Dictionary = m.sites.get(id, {})
+		_check(not site.is_empty(), "the %s has its pad" % id)
+		if site.is_empty():
+			continue
+		var lo := INF
+		var hi := -INF
+		for i in 5:
+			for k in 5:
+				var x := float(site.x) + (float(site.w) * 0.5 - 2.0) * (i / 2.0 - 1.0)
+				var y := float(site.y) + (float(site.d) * 0.5 - 2.0) * (k / 2.0 - 1.0)
+				var h := Terrain.height(x, y)
+				lo = minf(lo, h)
+				hi = maxf(hi, h)
+		_check(hi - lo < 0.3 and absf(lo - float(site.z)) < 0.3, "the %s's pad is flat at %.1f m (%.2f m across)" % [id, float(site.z), hi - lo])
+	_check(float(m.sites.restaurant.w) >= 40.0 and float(m.sites.restaurant.d) >= 30.0 and float(m.sites.helipad.w) >= 30.0, "the restaurant's pad is 40 x 30 m and the helipad's 30 x 30 m")
+	# The freight line's shelf over the range.
+	var rp: Dictionary = c.rail_pass
+	_check(not rp.is_empty(), "the freight line crosses the range")
+	if not rp.is_empty():
+		var kinds := {}
+		for sp in rp.spans:
+			kinds[sp[2]] = true
+		_check(kinds.has("t") and kinds.has("b"), "it runs through a tunnel and over a viaduct (%s)" % [kinds.keys()])
+		var steep := 0.0
+		var off := 0.0
+		var pts: Array = rp.pts
+		var along := 0.0
+		for k in range(1, pts.size()):
+			var a := Vector2(pts[k - 1][0], pts[k - 1][1])
+			var b := Vector2(pts[k][0], pts[k][1])
+			steep = maxf(steep, absf(float(pts[k][2]) - float(pts[k - 1][2])) / a.distance_to(b))
+			along += a.distance_to(b)
+			# Off the height grid (past the play area) the line is only drawn far off.
+			var on_ground := Terrain.bounds.has_point(b)
+			for sp in rp.spans:
+				if along > float(sp[0]) - 30.0 and along < float(sp[1]) + 30.0:
+					on_ground = false
+			if on_ground:
+				off = maxf(off, absf(Terrain.height(b.x, b.y) - float(pts[k][2])))
+		_check(steep <= 0.0255, "its grade is %.2f%% at most" % (steep * 100.0))
+		_check(off < 0.5, "its shelf is graded into the ground (worst %.2f m off)" % off)
+	var tunnels := 0
+	var viaducts := 0
+	for st in c.structures:
+		if st.cls == "rail":
+			tunnels += 1 if st.kind == "tunnel" else 0
+			viaducts += 1 if st.kind == "viaduct" else 0
+	_check(tunnels >= 1 and viaducts >= 1, "the rail tunnel(s) and viaduct(s) are in the data (%d, %d)" % [tunnels, viaducts])
+	# The cable car: from the city's north edge, by a mid-station, to the top.
+	var st: Array = m.cable.stations
+	_check(st.size() == 3 and float(st[0].z) < 5.0 and float(st[2].z) > 900.0, "the cable car climbs from the city to the top (%s)" % [st])
 
 
 ## Sachin: "Ensure there are routes leading to all houses from the street or
@@ -6194,7 +6333,10 @@ func test_every_home_has_a_way_in() -> void:
 			var lv := to_local * Vector3(v.x, 0.0, v.z)
 			if absf(lv.x) > float(l[3]) * 0.5:
 				continue
-			var z_edge := -float(l[4]) * 0.5 - (Kit._reach_at(lv.x, float(l[3])) - 0.6)
+			# Where _route_out puts the road's edge (ze): ROUTE_TUCK + 0.05 in
+			# from the route's far end. With 0.6 the vertices sat exactly on
+			# the 0.05 window's edge and float32 put them in or out by lot.
+			var z_edge: float = -float(l[4]) * 0.5 - (Kit._reach_at(lv.x, float(l[3])) - Kit.ROUTE_TUCK - 0.05)
 			if absf(lv.z - z_edge) > 0.05:
 				continue
 			if absf(v.y - (Terrain.height(v.x, v.z) + 0.05)) < 0.01:

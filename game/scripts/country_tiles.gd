@@ -486,7 +486,7 @@ static func _hill_shade(c: Color, n: Vector3, h: float, at := Vector3.ZERO, wild
 		return Color(rgb.r * lit, rgb.g * lit, rgb.b * lit, c.a)
 	rgb = rgb.lerp(HILL_SCRUB, clampf(-n.z * 2.5, 0.0, 0.55))
 	rgb = rgb.lerp(HILL_GOLD, clampf(n.z * 2.5, 0.0, 0.35))
-	rgb = rgb.lerp(HILL_ROCK, clampf((h - 70.0) / 60.0, 0.0, 0.4))
+	rgb = rgb.lerp(HILL_ROCK, clampf((h - 650.0) / 150.0, 0.0, 0.5))
 	return Color(rgb.r * lit, rgb.g * lit, rgb.b * lit, c.a)
 
 
