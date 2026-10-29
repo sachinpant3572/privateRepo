@@ -4720,9 +4720,6 @@ func test_people_walk_the_suburbs() -> void:
 	for p in pop.peds:
 		if p.global_position.distance_to(at) < 120.0:
 			road = minf(road, c.road_distance(Vector2(p.global_position.x, p.global_position.z), 40.0))
-			var dd: float = c.road_distance(Vector2(p.global_position.x, p.global_position.z), 40.0)
-			if dd < 0.5:
-				print("DIAG ped %s state=%d pause=%s cat=%s loop=%d pt=%d detour=%.2f stuck=%.2f hp=%s" % [p.global_position, p.state, p.pause_kind, p.category, p.loop_index, p.point_index, p._detour, p._stuck, p.get("health")])
 	_check(road > 0.5, "no one walks in the road (closest %.1f m from the asphalt's middle-line)" % road)
 
 
