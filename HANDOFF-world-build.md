@@ -108,12 +108,12 @@ helipad needs helicopters: task #82, not started (Sachin's word needed).
     phase 3's Red Pine, read "Jade Gate"). Review: `walks_out` carries road
     ends FRAME_IN 4 m on; mountain.py `grid()` pads 7 cells tapering to 0.
   - Freight (mountain_world_map.py, second review): the main line leaves
-    the pass 700 m short of its city-facing foot (south on x -340), turns
-    west at (-340,-1000) over the Morrow, runs between County Roads 14 and
-    12 square to the range roads. Docks spur: a turnout there, down the east
-    bank 92 m off the river, into FREIGHT_STRIP. `walls()` drops a bridge
-    run's bank segment a rail crosses (level crossing on land).
-    test_freight_line_crosses_cleanly checks it.
+    the pass 740 m short of its city-facing foot (start of the x -340
+    straight) on a 200 m arc west over the Morrow, and runs west at y ~-1220
+    between County Roads 14 and 12; at the top it runs on straight. Docks
+    spur: a turnout there, down the east bank 92 m off the river (corners on
+    200 m arcs, `round_corners`), into FREIGHT_STRIP. `walls()` drops a bridge
+    run's bank segment a rail crosses (land crossing); a test checks it.
 
 ## Decided
 
