@@ -318,7 +318,7 @@ Real Dimez, Raul Bautista. verified [75][76]
 |---|---|---|---|---|---|
 | Vice City (2002) | 9.11 km² | 5.62 km² | 1 | Almost none: city islands, beach, docks | single [1] |
 | San Andreas (2004) | 38.2 km² | 31.55 km² | **3** (LS, San Fierro, Las Venturas) | Forest, desert and mountain between the cities; share not measured | single [1]; ratio gap |
-| GTA IV (2008) | not measured here | — | 1 (Liberty City, with Alderney) | Almost none | V ≈ 3× Liberty City single [6] |
+| GTA IV (2008) | 16.14 km² | 8.06 km² (8.08 km² water; KeWiS via Sportskeeda, searched 2026-10-29) | 1 (Liberty City, with Alderney) | Almost none | V ≈ 3× Liberty City single [6] |
 | GTA V (2013) | 75.84 km² | 48.15 km² | 1 + small towns | **About 75 %** of land not city | inferred [1][13][14] |
 | GTA VI (2026) | ~2× V (~150 km²) | — | 1 big city + towns + Keys | Six regions, one urban; "11× built-up outside the city" | [82][87]; ratio inferred |
 
