@@ -58,3 +58,18 @@ same for his other actions."
 - Skeleton rest (hero): hip 1.006, knee 0.550, ankle 0.077 (sole -0.03),
   toe tip 0.22 ahead of the ankle, heel 0.08 behind; all bone bases are
   identity (y along the bone), +x on a leg swings it forward (-z).
+- Final numbers (rig.gd _locomotion): arm centre lerp(-0.08,-0.26,g)+0.08
+  sprint, amplitude lerp(0.27,0.52,g)+0.38 sprint, elbow up to 1.7, bend
+  lerp(0.12,0.3,g)+0.1 sprint. Swing tangent at touchdown and lift-off:
+  all of the ground speed in a walk, 0.88 in a run (lower slipped 4-5 cm
+  per sprint contact). Player ACCEL 18, DECEL 26 m/s². Punch/kick ease rate
+  42. Fight poses: _guard, _fight_legs, _punch (right cross, left hook),
+  _kick (chamber, thrust, re-chamber).
+- Euler order YXZ: abducting the upper arm (z) and flexing the elbow sends
+  the forearm up; aim the forearm with its .y twist instead (L_FORE.y + is
+  toward the midline).
+- Tests run only if listed in the array near the top of test_runner.gd.
+  Bone poses for measurement need the skeleton in the tree plus
+  force_update_all_bone_transforms().
+- Skate test measures slip per contact (sum of |v - s|/60), < 3.5 cm,
+  median speed within 5%; per-frame edge speeds are naturally off.
