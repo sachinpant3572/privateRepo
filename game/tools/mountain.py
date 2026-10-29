@@ -33,6 +33,8 @@ FOOTHILLS = [(270, -430), (235, -800), (200, -1110), (165, -1260), (230, -1400),
 FALLOFF = 220.0  # the foothills fade in over this far inside their outline
 CELL = 8.0
 MAX_H = 1100.0
+GRID_PAD = 7  # cells round the range's outline (its city and east sides reach ~0 within 6)
+GRID_TAPER = 6.0  # outer cells easing what is left down to 0 at the grid's edge
 
 # Mount Calder (HANDOFF-world-mountain.md W-1): the massif north of the city,
 # its summit 2.2 km from the city's north edge. A cone with a rounded summit
@@ -626,9 +628,10 @@ class Mountain:
         roads' heights blended where banks overlap. Over a tunnel or under a
         bridge the ground is left alone."""
         x0, y0, x1, y1 = self.poly.bounds
-        x0, y0 = math.floor(x0 / CELL) * CELL - CELL, math.floor(y0 / CELL) * CELL - CELL
-        nx = int(math.ceil((x1 - x0) / CELL)) + 2
-        ny = int(math.ceil((y1 - y0) / CELL)) + 2
+        pad = GRID_PAD * CELL
+        x0, y0 = math.floor(x0 / CELL) * CELL - pad, math.floor(y0 / CELL) * CELL - pad
+        nx = int(math.ceil((x1 + pad - x0) / CELL)) + 1
+        ny = int(math.ceil((y1 + pad - y0) / CELL)) + 1
         gx, gy = np.meshgrid(x0 + np.arange(nx) * CELL, y0 + np.arange(ny) * CELL)
         h = self.raw(gx.ravel(), gy.ravel()).reshape(ny, nx)
         wsum = np.zeros_like(h)
@@ -692,6 +695,11 @@ class Mountain:
             w = np.where(dbest <= 0.0, 1.0, w)  # under the lot itself, the pad
             h = h * (1.0 - w) + hbest * w
         h = np.clip(h, 0.0, MAX_H)
+        # Past the grid the game reads 0: the outer GRID_TAPER cells ease the
+        # ground down to it (the range's outline leaves up to ~5 m there).
+        ramp = _smooth(np.clip(np.arange(max(nx, ny)) / GRID_TAPER, 0.0, 1.0))
+        h = h * np.minimum(ramp[np.minimum(np.arange(nx), np.arange(nx)[::-1])][None, :],
+                           ramp[np.minimum(np.arange(ny), np.arange(ny)[::-1])][:, None])
         self.heights = h
         self.origin = (x0, y0)
         raw = np.round(self.heights * 10.0).astype("<u2").tobytes()

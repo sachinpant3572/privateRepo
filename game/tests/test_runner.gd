@@ -5105,10 +5105,8 @@ func test_country_joins_the_city() -> void:
 		linked_to[c.links[n]] = true
 	var outward := 0
 	var carried := 0
-	# An exit with the Gulf within 120 m ahead (the grown city's south
-	# lobe reaches the beach) has no room for a country road to carry on.
 	for x in plan.exits:
-		if x.cls == "river" or not c.in_play_area(plan.pos(x.node) + Vector2(x.dir) * 120.0):
+		if x.cls == "river" or not c.in_play_area(plan.pos(x.node) + Vector2(x.dir) * 30.0):
 			continue
 		outward += 1
 		carried += 1 if linked_to.has(x.node) else 0
@@ -6151,6 +6149,14 @@ func test_mount_calder() -> void:
 	# The HUD names the summit after its county, not the nearest district.
 	var at_top: Dictionary = game.city.district_at(Vector3(float(top[0]), 0.0, float(top[1])))
 	_check(str(at_top.get("id", "")) == "red_pine", "the summit lies in Red Pine County (%s)" % str(at_top.get("name", "")))
+	# The grid eases to 0 at its border, where height() goes flat: the two
+	# outer rings of cells hold no step to drive or walk off.
+	var rim := 0.0
+	for i in Terrain.nx:
+		for j in Terrain.ny:
+			if mini(mini(i, Terrain.nx - 1 - i), mini(j, Terrain.ny - 1 - j)) <= 1:
+				rim = maxf(rim, Terrain.heights[j * Terrain.nx + i])
+	_check(rim <= 0.3, "the terrain grid's border lies at 0 (%.2f m)" % rim)
 	# The summit's pads are flat.
 	for id in ["restaurant", "helipad", "deck", "cable_top", "car_park", "cable_mid"]:
 		var site: Dictionary = m.sites.get(id, {})
@@ -6194,6 +6200,30 @@ func test_mount_calder() -> void:
 				off = maxf(off, absf(Terrain.height(b.x, b.y) - float(pts[k][2])))
 		_check(steep <= 0.0255, "its grade is %.2f%% at most" % (steep * 100.0))
 		_check(off < 0.5, "its shelf is graded into the ground (worst %.2f m off)" % off)
+	# The freight line keeps out of the city but for the strip reserved for it
+	# on the Morrow's north bank (between the water and the River Road), which
+	# its docks spur runs along to Rampart Avenue.
+	var world: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/world_map.json"))
+	var in_strip := 0
+	var stray := []
+	for r in world.routes:
+		if not str(r.id).begins_with("freight"):
+			continue
+		var line: Array = r.line
+		for k in range(1, line.size()):
+			var a := Vector2(line[k - 1][0], line[k - 1][1]) - game.city.map_origin
+			var b := Vector2(line[k][0], line[k][1]) - game.city.map_origin
+			for i in int(ceilf(a.distance_to(b) / 10.0)) + 1:
+				var q := a.lerp(b, minf(i * 10.0 / maxf(a.distance_to(b), 0.01), 1.0))
+				if not plan.in_city(q):
+					continue
+				var d: float = plan.river_distance(q)
+				if d > plan._river_half and d < plan._river_half + StreetPlan.RIVER_ROAD + StreetPlan.FREIGHT_STRIP - 4.0:
+					in_strip += 1
+				elif stray.size() < 4:
+					stray.append(q.round())
+	_check(stray.is_empty(), "the freight line stays out of the city but for its strip (strays %s)" % str(stray))
+	_check(in_strip >= 60, "its docks spur runs %d m along the strip" % (in_strip * 10))
 	var tunnels := 0
 	var viaducts := 0
 	for st in c.structures:

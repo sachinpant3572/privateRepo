@@ -101,14 +101,19 @@ helipad needs helicopters: task #82, not started (Sachin's word needed).
     (within 61 m of the footprint) lead in to an exit (`_to_exit`); the
     Brisa cross streets start on the drive as cut (`drive_cut`), not on a
     lead-in (one ran inland past Palmetto Row's end, a dead end).
-  - Tests: exits count when the point 120 m ahead lies in the play area
-    (the south lobe's exits face the beach); walks floor 5 (58 loops
-    before the city took in the eastside and Brisa blocks); the hill-drive
-    check skips vertices where ground and pad lie within 3 cm, and the
-    tucked end's corners (ground + ROUTE_OUT_Y + 0.01). `_bend_routes`
-    runs to reach - TUCK - 0.05, the road edge `_route_out` draws.
+  - Tests: the hill-drive check skips vertices where ground and pad lie
+    within 3 cm, and the tucked end's corners (ground + ROUTE_OUT_Y +
+    0.01). `_bend_routes` runs to reach - TUCK - 0.05 (`_route_out`'s edge).
   - city.gd loads every world_map region for `district_at` (phase 3+ after
     1-2): the summit lies in Red Pine (phase 3) and read "Jade Gate".
+  - Review fixes: freight_line keeps out of the city (pass foot → Morrow
+    east bank (-545,-615) → Golden Flats); `freight_docks` spur runs 92 m
+    off the river's centre into the FREIGHT_STRIP to Rampart; east of it
+    the docks and Ironwharf get street running in the quay street (phase
+    4). `walks_out` carries linked road ends the FRAME_IN 4 m on to the
+    edge street (unclosed faces had cut the walks). mountain.py `grid()`
+    pads 7 cells and tapers the outer 6 to 0 (the border stepped 4.5 m).
+    Exits test stays at 30 m ahead (120 m hid 7 unlinked exits).
 
 ## Decided
 

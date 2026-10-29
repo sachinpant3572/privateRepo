@@ -13,7 +13,8 @@ import sys
 from pathlib import Path
 
 import mountain as M
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Point
+import numpy as np
 
 P = Path(__file__).resolve().parent.parent / "data" / "world_map.json"
 
@@ -72,8 +73,32 @@ fr = routes["freight_line"]
 o = [(x - OX, y - OY) for x, y in orig_routes["freight_line"]["line"]]
 rp = simp([tuple(p) for p in lines["rail_pass"]["pts"]], 1.0)
 assert abs(rp[0][0] - o[4][0]) < 1 and abs(rp[0][1] - o[4][1]) < 1, (rp[0], o[4])
-fr["line"] = W([o[0]] + rp[::-1] + o[5:])
+# From the pass's foot it keeps out of the city (the sketch ran it over Cable
+# Hill's crest and the cable car's bottom station): west to the Morrow's east
+# bank at FREIGHT_JUNCTION, then over the river to Golden Flats as before.
+# The docks spur runs down the bank FREIGHT_BANK m off the river's centreline
+# into the city's freight strip on the north bank (street_plan.gd
+# FREIGHT_STRIP: water's edge 80 m, River Road 106 m), along it to Rampart
+# Avenue; past Rampart the docks and Ironwharf take it in the quay street.
+FREIGHT_JUNCTION = (-545.0, -615.0)
+FREIGHT_BANK = 92.0
+FREIGHT_END_X = 680.0
+fr["line"] = W([o[0]] + rp[::-1] + [(-300.0, -760.0), FREIGHT_JUNCTION] + o[6:])
 changed.append("freight_line")
+river = LineString([(x - OX, y - OY) for x, y in next(t for t in w["water"] if t["id"] == "morrow")["line"]])
+bank = river.offset_curve(-FREIGHT_BANK, join_style=1)
+if bank.distance(Point(450.0, 1125.0 - FREIGHT_BANK)) > 5.0:
+    bank = river.offset_curve(FREIGHT_BANK, join_style=1)
+a = bank.project(Point(FREIGHT_JUNCTION))
+pts = [bank.interpolate(s).coords[0] for s in np.arange(a + 60.0, bank.length, 20.0)]
+pts = [FREIGHT_JUNCTION] + [p for p in pts if p[0] <= FREIGHT_END_X or p[1] < -100.0]
+spur = next((r for r in w["routes"] if r["id"] == "freight_docks"), None)
+if spur is None:
+    spur = {"id": "freight_docks", "name": "Morrow Freight Line (docks spur)", "type": "rail", "phase": fr.get("phase", 3)}
+    w["routes"].insert(w["routes"].index(fr) + 1, spur)
+spur["line"] = W(simp(pts, 1.0))
+routes["freight_docks"] = spur
+changed.append("freight_docks")
 
 # Bridge landmarks of the changed routes, found again where each crosses a river or creek.
 water = [(wt["id"], wt["name"], LineString([(x - OX, y - OY) for x, y in wt["line"]]))

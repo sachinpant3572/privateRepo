@@ -3736,6 +3736,17 @@ class Country:
         # The city's edge streets (the plan's edge loops).
         frame = [LineString(list(lp) + [lp[0]]) for lp in self.plan["edge_loops"]]
         lines = [LineString(pc["pts"]) for pc in self.pieces] + frame
+        # Roads linked to the city stop FRAME_IN short of its edge street:
+        # carry each such end on to it, or the blocks along the city never
+        # close.
+        frames = unary_union(frame)
+        for pc in self.pieces:
+            for q in (pc["pts"][0], pc["pts"][-1]):
+                d = frames.distance(Point(q))
+                if 1e-3 < d < FRAME_IN + 2.0:
+                    n = nearest_points(frames, Point(q))[0]
+                    t = (d + 0.5) / d  # a little past it, so the union nodes them
+                    lines.append(LineString([q, (q[0] + (n.x - q[0]) * t, q[1] + (n.y - q[1]) * t)]))
         cut = unary_union([LineString(pc["pts"]).buffer(CLASSES[pc["cls"]]["w"] * 0.5 + WALK_MID, join_style=2)
                            for pc in self.pieces] +
                           [f.buffer(CITY_STREET_W * 0.5 + WALK_MID, join_style=2) for f in frame])

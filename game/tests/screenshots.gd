@@ -327,7 +327,12 @@ func _hills(game) -> void:
 func _mountain(game) -> void:
 	var c = game.city.country
 	var m: Dictionary = c.mountain
-	var stops := [["mountain_1_city_edge", Vector2(0, -470), 260.0]]
+	# The city's north edge above the cable car's bottom station: the first
+	# point out of the city, 60 m on, where the foothills begin.
+	var edge := Vector2(0, -430)
+	while game.city.plan.in_city(edge) and edge.y > -1500.0:
+		edge.y -= 10.0
+	var stops := [["mountain_1_city_edge", edge + Vector2(0, -60), 260.0]]
 	# The switchbacks: Mount Calder Road's node nearest 500 m up.
 	var best := Vector2.ZERO
 	var off := INF
@@ -343,12 +348,19 @@ func _mountain(game) -> void:
 	stops.append(["mountain_3_forest", best + Vector2(-60, 40), 70.0])
 	var s: Dictionary = m.sites
 	stops.append(["mountain_4_summit", Vector2(float(s.car_park.x), float(s.car_park.y)), 200.0])
+	# The longest tunnel and the longest viaduct, each from a little before
+	# its start.
 	var rp: Dictionary = c.rail_pass
+	var longest := {}
 	for sp in rp.get("spans", []):
-		var name: String = "mountain_5_rail_tunnel" if sp[2] == "t" else "mountain_6_rail_viaduct"
-		if stops.any(func(st): return st[0] == name):
+		var t: String = sp[2]
+		if not longest.has(t) or float(sp[1]) - float(sp[0]) > float(longest[t][1]) - float(longest[t][0]):
+			longest[t] = sp
+	for t in ["t", "b"]:
+		if not longest.has(t):
 			continue
-		var k := clampi(int(float(sp[0]) / 16.0) - 2, 0, rp.pts.size() - 1)
+		var name: String = "mountain_5_rail_tunnel" if t == "t" else "mountain_6_rail_viaduct"
+		var k := clampi(int(float(longest[t][0]) / 16.0) - 2, 0, rp.pts.size() - 1)
 		stops.append([name, Vector2(rp.pts[k][0], rp.pts[k][1]), 160.0])
 	for stop in stops:
 		var at: Vector2 = stop[1]
