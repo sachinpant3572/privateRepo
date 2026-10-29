@@ -53,3 +53,23 @@ back to original places".
 - Chosen: all of the above, about 3-4 h.
 - Not now: opacity slider, per-button visibility, pinch-to-resize (the -/+
   buttons are easier to hit and test).
+
+## Results (2026-10-29)
+
+- Built as decided. New tests (all pass): test_floating_arrows_steer_where_
+  the_thumb_lands, test_stick_is_the_wheel_only, test_touches_never_stick,
+  test_touch_layout_moves_resizes_and_resets, test_settings_controls_cards_
+  and_layout_editor. Updated: test_camera_turns_with_car (GAS/BRAKE drive,
+  the stick only steers), the two settings-tab tests (no Driving slider).
+- Shots (control_shots.tscn, 13): every layout incl. floating arrows held,
+  the Controls tab cards + overlay, the editor (GAS moved, 130%), the game
+  with the moved layout.
+
+## Traps
+
+- _new_game sets camera_turn "north": a test of the turning-camera stick
+  must set "car" itself (and put it back).
+- The theme's default Button style barely shows over the editor's dark bar:
+  its buttons get an explicit StyleBoxFlat.
+- touch_controls.gd has no class_name: tests find previews by script.
+- Background shot runs from agents may share /tmp/shots.log: use own names.

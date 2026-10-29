@@ -518,6 +518,18 @@ func _build_editor() -> void:
 	var done: Button = phone._button("Done", close_editor)
 	done.custom_minimum_size = Vector2(120, 56)
 	bar.add_child(done)
+	# Solid buttons, so they read over any part of the game view.
+	var flat := StyleBoxFlat.new()
+	flat.bg_color = Color(0.22, 0.24, 0.28, 0.95)
+	flat.set_corner_radius_all(8)
+	var lit: StyleBoxFlat = flat.duplicate()
+	lit.bg_color = Color(0.85, 0.62, 0.16)
+	for b in bar.get_children():
+		if b is Button:
+			b.add_theme_stylebox_override("normal", flat)
+			b.add_theme_stylebox_override("hover", flat)
+			b.add_theme_stylebox_override("pressed", lit)
+			b.add_theme_stylebox_override("hover_pressed", lit)
 	col.add_child(phone._text("Drag a control to move it. Tap one, then - / + to resize it. Reset puts this page back as it was.", 16, HINT))
 	editor.gui_input.connect(_editor_input)
 

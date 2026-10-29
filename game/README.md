@@ -56,8 +56,9 @@ phone.
   shake Off-100% in 10% steps (default 50%; 100% is the shake before 0.23;
   letting go shakes the preview once), reset. Graphics: Quality (Low, Medium, High,
   Ultra) and its effects one by one (bloom, smooth edges, vivid colour, real
-  lights), detail high/low, shadows, FPS limit (30, 60, 75, 90, 120), FPS counter. Controls: driving
-  layout (Stick, Arrows or Tilt). Game: weather (Auto, Clear, Rain, Storm), skip time, new game.
+  lights), detail high/low, shadows, FPS limit (30, 60, 75, 90, 120), FPS counter. Controls: a card per
+  driving layout, each drawn, the picked one shown over the preview; a layout editor to move
+  and resize every control, and resets. Game: weather (Auto, Clear, Rain, Storm), skip time, new game.
   A swipe that starts on a slider and scrolls the list puts the setting back.
 - **Minimap and full map**: round north-up minimap with landmark icons,
   mission blips (on the rim when off the map), police while wanted and the
@@ -347,8 +348,8 @@ phone.
 
 | Action | Touch | Keyboard | Gamepad |
 |---|---|---|---|
-| Move / steer (stick layout in a car with the camera turning: left/right steer, up gas, down brake and reverse) | Left half of screen (floating stick) | WASD / arrows | Left stick |
-| Gas / brake (held at a stop: reverse) | GAS / BRAKE pedals | W / S (arrows and tilt layouts) | RT / LT |
+| Move / steer (stick layout in a car with the camera turning: its sideways lean is the wheel) | Left half of screen (floating stick) | WASD / arrows | Left stick |
+| Gas / brake (held at a stop: reverse) | GAS / BRAKE pedals | W / S | RT / LT |
 | Punch | PUNCH | Space / J | X |
 | Run / handbrake | RUN / DRIFT | Shift | A |
 | Get in / out, search, go into a place, shop | ENTER / EXIT / SEARCH / BUY / ORDER | E / F | Y |
@@ -363,18 +364,34 @@ phone.
 
 Tab toggles the on-screen controls on desktop.
 
-Driving has three layouts, picked in Settings > Controls and saved:
+Driving has four layouts, picked from drawn cards in Settings > Controls
+and saved; the picked one shows over the live preview:
 
-- **Stick + pedals** (default): the car heads where the stick points, as on
-  foot, with a corner assist that slows for tight turns. GAS alone drives
-  straight on; BRAKE stops, then reverses.
+- **Stick + pedals** (default): with the camera turning behind the car the
+  stick is the wheel only: lean it left or right (a small dead zone, full
+  lock just short of the rim); GAS and BRAKE drive, BRAKE at a stop
+  reverses. With North up or the step camera the car heads where the
+  stick points, as on foot, with a corner assist for tight turns.
 - **Arrows + pedals**: two arrow buttons on the left turn the wheel, the
   pedals on the right drive, as in most phone racers. A thumb can slide
   from one arrow or pedal to the other. Off the pedals the car rolls on.
   On a keyboard this is W/S gas and brake, A/D steer.
+- **Floating arrows + pedals** (a "floating" or "dynamic" joystick, here
+  left/right only): put a thumb down anywhere on the left half and the
+  arrows appear under it; slide right or left of that point to steer.
+  A long slide drags the point along, so a short slide back turns the
+  other way.
 - **Tilt + pedals**: turn the phone like a wheel (full lock at about 25
   degrees, a small dead zone near level); a gauge on the left shows the
   wheel.
+
+**Edit layout** (Settings > Controls, on foot or driving): the controls at
+their real size over the game view. Drag any button, pedal, the stick or
+the arrows to move it; tap one and use - / + to resize it (60% to 160%).
+Reset puts that page back as it was; Done saves. "Reset all controls" puts
+every control back. A stick or arrows moved to the right half take their
+touches there (left-handed layouts). Touches let go when the game pauses,
+loses focus or a thumb slides off a pedal, so nothing stays held.
 
 ## Play it on Android
 
@@ -416,7 +433,7 @@ up, from nearly overhead and from the driving camera's distance), and with
 dialogue, with `res://tests/place_shots.tscn` the storefronts by day
 and night, the rooms, the shop menu, a diner meal and the Places app, and
 with `res://tests/control_shots.tscn` the touch controls on foot and in
-each driving layout and every Settings tab, and with `res://tests/map_shots.tscn` the full map
+each driving layout and every Settings tab, the layout editor and a moved layout, and with `res://tests/map_shots.tscn` the full map
 zoomed out to the state and on the countryside, a tap on a closed place,
 and the minimap past the city's edge, with `res://tests/country_shots.tscn`
 the country (suburbs, Brisa Beach, towns, farms, bridges, barricades, the
