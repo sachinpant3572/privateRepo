@@ -58,7 +58,7 @@ const CACHE_MAX := 48
 ## Cut recipes by mesh, gender, dress shape and merged regions, newest last
 ## (_recipe()).
 static var _recipes := {}
-const RECIPES_MAX := 64
+const RECIPES_MAX := 256
 ## Face codes' rank (the higher one's border decides a cut between two) and
 ## column in the face_m block of margins (-1: none).
 const FACE_RANK := [0, 5, 4, 3, 1, 2]

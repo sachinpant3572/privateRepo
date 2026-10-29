@@ -2677,11 +2677,13 @@ func test_body_seams_hats_and_build_time() -> void:
 	_check(BodyKit._dress({"hair": "afro"}, o).thick[BodyKit.SCALP] > 0.01, "an afro stands off the head")
 	var look := {"body": "male", "weight": 0.3, "beard": true}
 	BodyKit.add_body(MeshBuilder.new(), look, o)
+	var seen: Array = BodyKit._recipes.keys()
 	var t0 := Time.get_ticks_usec()
 	for i in 5:
 		look["muscle"] = 0.1 * i
 		BodyKit.add_body(MeshBuilder.new(), look, o)
 	var ms := (Time.get_ticks_usec() - t0) / 5000.0
+	_check(BodyKit._recipes.keys() == seen, "body shapes reuse the dress's cut recipe")
 	_check(ms < 12.0, "a crowd body with a seen dress builds in %.1f ms" % ms)
 
 ## Every outfit and the named cast build as one rigidly skinned mesh within

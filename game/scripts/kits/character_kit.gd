@@ -601,14 +601,6 @@ static func body_mesh(look: Dictionary) -> String:
 	return "hero" if look.get("hero", false) else "crowd"
 
 
-## Height of the hip joint at rest (before look.height): where a seated
-## person's pelvis sits.
-static func hip_height(look: Dictionary) -> float:
-	if not BODY:
-		return BONES[0][2].y
-	return BodyKit.blend(look, body_mesh(look)).joints.Hips.y
-
-
 ## Colours and cut shared by the body parts.
 static func _spec(look: Dictionary) -> Dictionary:
 	var outfit: String = look.get("outfit", "tee")

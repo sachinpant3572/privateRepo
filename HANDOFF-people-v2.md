@@ -127,13 +127,15 @@ the Framerates?"
 - Budgets (near LOD, measured): crowd average about 4230 tris (was 2440 on
   0.24), most about 4660; hero 11200. 20 people about 85k of the 180-200k
   frame budget; the far LOD is under half.
-- Cast looks set the body keys; convertible seats use `hip_height`.
+- Cast looks set the body keys; seats and rides lift by the rig's own hip
+  joint (`Rig._hip`), so every body sits and rides at the same pelvis height.
 
 ## Review fixes (10-29)
 
 Detail in HANDOFF-people-v2-archive.md. In short: seat and ride lifts use the
 look's hip height; cut work cached as recipes (crowd build 25.5 -> about 5 ms,
-hero 85 -> 8-14 ms); covering hats flatten the scalp; no T-junctions; face
+hero 85 -> 8-14 ms; LRU of 256 recipes: 400 random crowd looks
+make 107 keys, so 64 missed 30% of spawns at 12-13 ms each); covering hats flatten the scalp; no T-junctions; face
 lines cut by exported margins; collars are 8-sided rings, so the neck warp
 circumscribes the neck (r / cos(pi/8)) and clears the top's cloth near the
 neckline (pokes were up to 12 mm; now 0 on most outfits, at most 8 mm at the
