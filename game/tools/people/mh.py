@@ -105,6 +105,15 @@ def macro_offsets(n_verts, gender=0.5, age=0.5, muscle=0.5, weight=0.5, height=0
 	return out
 
 
+def detail_offsets(n_verts, details):
+	"""Sum of MakeHuman detail targets {path under targets/: weight}."""
+	out = np.zeros((n_verts, 3))
+	for rel, w in (details or {}).items():
+		i, o = load_target(rel)
+		out[i] += o * w
+	return out
+
+
 def load_skeleton():
 	with open(os.path.join(MH_DATA, "rigs/default.mhskel")) as f:
 		return json.load(f)

@@ -158,21 +158,24 @@ class Posed:
 		return out
 
 
-def pose_rest(skel, J, curl=0.35):
+def pose_rest(skel, J, curl=0.35, spread=0.0):
 	"""Arms down and straight with palms in, fingers curled a little, legs straight.
 
-	J in our axes (metres). Returns the Posed transforms.
+	J in our axes (metres). `spread` (radians) turns the arms further out from
+	the body, so they clear a heavy body's hips. Returns the Posed transforms.
 	"""
 	P = Posed(skel, J)
 	for m, sgn in [(".L", -1.0), (".R", 1.0)]:
 		# Upper arm: elbow straight under the shoulder, a touch out (our rig: 0.03 m over 0.28).
 		sh = P.head("upperarm01" + m)
 		el = P.head("lowerarm01" + m)
-		want = np.array([sgn * 0.03, -0.28, 0.0])
+		a = np.arctan2(0.03, 0.28) + spread
+		want = np.array([sgn * np.sin(a), -np.cos(a), 0.0])
 		P.rotate("upperarm01" + m, rot_between(el - sh, want))
 		el = P.head("lowerarm01" + m)
 		wr = P.head("wrist" + m)
-		want = np.array([sgn * 0.01, -0.25, 0.0])
+		a = np.arctan2(0.01, 0.25) + spread
+		want = np.array([sgn * np.sin(a), -np.cos(a), 0.0])
 		P.rotate("lowerarm01" + m, rot_between(wr - el, want))
 		# Hand: in line with the forearm.
 		wr = P.head("wrist" + m)

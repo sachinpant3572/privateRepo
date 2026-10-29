@@ -4,7 +4,7 @@
 
 Writes game/assets/people/body.json (layout and per-shape joints) and
 body.bin (float32 / int32 blocks). One topology for every shape: the
-shapes are MakeHuman macro settings per gender (base, heavy, thin, muscle,
+shapes are MakeHuman macro settings per gender (base, fat, thin, muscle,
 old, young, tall, short), each posed into our rest pose with MakeHuman's own proportions; its
 joints (our 17 bones) are written per shape, and the game blends shapes and
 joints per look. Indices: the near mesh, plus a far LOD that uses a subset
@@ -29,6 +29,40 @@ HEAD_SCALE = 2.6
 HAND_SCALE = 1.5
 # Toes sit under shoes: fewer triangles there.
 FOOT_SCALE = 0.6
+# Fat (Sachin, 10-29: "a bit chubby, then fatty, and then super fat, in all
+# different heights and both genders"). MakeHuman's weight macro alone adds
+# under 10% to the waist, so the "fat" shape adds its detail targets for the
+# belly, waist, hips, thighs, arms, neck and cheeks, pushed past their own
+# range: the shape is super fat, and looks use about 0.25 for chubby and 0.55
+# for fatty.
+FAT_SCALE = 1.7
+FAT = {
+	"stomach/stomach-pregnant-incr.target": 0.45,
+	"measure/measure-waist-circ-incr.target": 1.2,
+	"measure/measure-hips-circ-incr.target": 0.6,
+	"measure/measure-bust-circ-incr.target": 0.5,
+	"measure/measure-underbust-circ-incr.target": 0.7,
+	"measure/measure-thigh-circ-incr.target": 0.9,
+	"measure/measure-neck-circ-incr.target": 0.8,
+	"measure/measure-upperarm-circ-incr.target": 0.8,
+	"measure/measure-calf-circ-incr.target": 0.5,
+	"buttocks/buttocks-volume-incr.target": 0.7,
+	"torso/torso-scale-depth-incr.target": 0.4,
+}
+for _s in "lr":
+	for _n, _w in [("upperarm-fat-incr", 1.0), ("lowerarm-fat-incr", 0.6), ("upperleg-fat-incr", 0.8), ("lowerleg-fat-incr", 0.5)]:
+		FAT["armslegs/%s-%s.target" % (_s, _n)] = _w
+	FAT["cheek/%s-cheek-volume-incr.target" % _s] = 0.8
+	FAT["cheek/%s-cheek-inner-incr.target" % _s] = 0.4
+# The face fills out with the body (Sachin, 10-29: "Fat should be visible on
+# some of their faces too, based on how much bodyfat do they have"): rounder
+# head, wider jaw, double chin.
+FAT["head/head-fat-incr.target"] = 0.8
+FAT["neck/neck-double-incr.target"] = 0.9
+FAT["chin/chin-width-incr.target"] = 0.3
+FAT = {k: w * FAT_SCALE for k, w in FAT.items()}
+# Gap (m) the arms keep from the body at rest: wider bodies turn them out.
+ARM_GAP = 0.012
 SHAPES = [
 	# name, macro settings. The game blends base + sum w * (shape - base) per
 	# look, so these are the extremes of each body-type axis (Sachin, 10-29:
@@ -36,7 +70,7 @@ SHAPES = [
 	# just past 18). Mid-aged is about 0.3 of "old" (MakeHuman's own age
 	# blend is linear from 25 to 90 years).
 	("base", {}),
-	("heavy", {"weight": 1.0}),
+	("fat", {"weight": 1.0, "details": FAT}),
 	("thin", {"weight": 0.0}),
 	("muscle", {"muscle": 1.0}),
 	("old", {"age": 1.0}),
@@ -57,18 +91,25 @@ HEIGHT = {"male": 1.76, "female": 1.65}
 PARTS = pose.NAMES
 
 
-def shape(v0, faces, skel, wts, gender, stature, **kw):
+def shape(v0, faces, skel, wts, W, gender, stature, details=None, **kw):
 	"""One body shape posed into our rest pose, keeping MakeHuman's own proportions.
 
 	Scaled as a whole so the gender's base shape stands `stature` tall (None:
 	keep its size), with the sole on y = 0. Forcing the body onto fixed joint
-	heights squashed the neck and lifted the shoulders to the chin.
+	heights squashed the neck and lifted the shoulders to the chin. The arms
+	turn out as far as a wide body needs to keep ARM_GAP from it.
 	"""
-	v = pose.to_ours(v0 + mh.macro_offsets(len(v0), gender=gender, **kw))
+	v = pose.to_ours(v0 + mh.macro_offsets(len(v0), gender=gender, **kw) + mh.detail_offsets(len(v0), details))
 	body = np.unique(faces)
+	body = body[body >= 0]
 	J = mh.joint_positions(skel, v)
-	P = pose.pose_rest(skel, J)
-	vp = pose.skin_lbs(P, v, wts)
+	spread = 0.0
+	while True:
+		P = pose.pose_rest(skel, J, spread=spread)
+		vp = pose.skin_lbs(P, v, wts)
+		if spread >= 0.6 or arm_clearance(vp, W, body) >= ARM_GAP:
+			break
+		spread += 0.02
 	pts = pose.mh_points({k: P.apply(J[k], k.split("____")[0]) for k in J})
 	eyes = [P.apply(J[e + "____head"], e) for e in ["eye.L", "eye.R"]]
 	sole = vp[body, 1].min()
@@ -78,6 +119,33 @@ def shape(v0, faces, skel, wts, gender, stature, **kw):
 	joints = {n: (pts[n] - lift) * k for n in pose.NAMES}
 	eyes = [(e - lift) * k for e in eyes]
 	return vf, joints, eyes, k
+
+
+def arm_clearance(v, W, body):
+	"""Smallest side gap (m) between the forearm and the torso or thighs
+	beside it, in 2 cm slices (the hands may touch the thighs). The upper arm
+	of a fat body rests on its side, as people's do."""
+	part = np.argmax(W, axis=1)
+	trunk = [PARTS.index(n) for n in ["Hips", "Spine", "Chest", "LeftUpperLeg", "RightUpperLeg"]]
+	gap = 1.0
+	for s, sgn in [("Left", -1.0), ("Right", 1.0)]:
+		arm = part == PARTS.index(s + "LowerArm")
+		arm = np.intersect1d(np.nonzero(arm)[0], body)
+		near = np.intersect1d(np.nonzero(np.isin(part, trunk))[0], body)
+		a = v[arm]
+		t = v[near]
+		t = t[t[:, 0] * sgn > 0.0]
+		top = a[:, 1].max()
+		for y in np.arange(a[:, 1].min(), top, 0.02):
+			sa = a[np.abs(a[:, 1] - y) < 0.01]
+			if len(sa) == 0:
+				continue
+			z0, z1 = sa[:, 2].min(), sa[:, 2].max()
+			st = t[(np.abs(t[:, 1] - y) < 0.01) & (t[:, 2] > z0) & (t[:, 2] < z1)]
+			if len(st) == 0:
+				continue
+			gap = min(gap, np.abs(sa[:, 0]).min() - np.abs(st[:, 0]).max())
+	return gap
 
 
 def importance(v, W, joints):
@@ -114,16 +182,19 @@ def main():
 	shapes = {}
 	for gname, g in GENDERS:
 		# One scale per gender (from its base shape), so the shape deltas stay MakeHuman's.
-		k = shape(v0, faces, skel, wts, g, HEIGHT[gname])[3]
+		k = shape(v0, faces, skel, wts, W, g, HEIGHT[gname])[3]
 		for sname, kw in SHAPES:
-			vf, joints, eyes, ks = shape(v0, faces, skel, wts, g, HEIGHT[gname] if sname in SAME_HEIGHT else None, **kw)
+			vf, joints, eyes, ks = shape(v0, faces, skel, wts, W, g, HEIGHT[gname] if sname in SAME_HEIGHT else None, **kw)
 			ks = 1.0 if sname in SAME_HEIGHT else k
 			shapes[gname + "_" + sname] = (vf * ks, {n: j * ks for n, j in joints.items()}, [e * ks for e in eyes])
 			print("shape", gname, sname, flush=True)
 	ref, ref_j, _ = shapes["male_base"]
 
-	near = simplify(tris.reshape(-1), importance(ref, W, ref_j), NEAR_TRIS)
-	far = simplify(near, importance(ref, W, ref_j), FAR_TRIS)
+	# Simplify on a body half way to fat, so the triangles follow the belly,
+	# hips and back rolls too, not only the slim base.
+	simp = importance((ref + shapes["male_fat"][0]) * 0.5, W, ref_j)
+	near = simplify(tris.reshape(-1), simp, NEAR_TRIS)
+	far = simplify(near, simp, FAR_TRIS)
 	used = np.unique(near)
 	remap = -np.ones(len(v0), dtype=np.int64)
 	remap[used] = np.arange(len(used))

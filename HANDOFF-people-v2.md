@@ -56,32 +56,59 @@ the Framerates?"
   (head 2.6x, hands 1.5x, feet 0.6x since shoes cover them). One vertex
   buffer for every shape; far LOD = index subset of the same buffer.
   Result: 1502 v, near 3000 tris (head 1016, hand 229), far 1000.
-- Shapes per gender: base, heavy, thin, muscle, old, young, tall, short
+- Shapes per gender: base, fat, thin, muscle, old, young, tall, short
   (MH macros); the game blends base + sum w*(shape - base), joints too.
-  MH maxweight is mild (+8-10% waist), so weights may extrapolate (heavy to
-  2, thin to 1.3). Sachin, 10-29: "Build different models for different
-  heights, weight and muscles, some will be short, some skinny, some
-  muscular, some have huge height, some are fatty, some are normal, some
-  are young, some are old, some are mid aged, some are adults but just
-  crossed 18. We need to have several body types with a mix of these
-  properties." Axes: young = MH age 0.344 (18 yrs) kept at adult height;
-  mid-aged = old 0.25-0.45 (MH age is linear 25-90 yrs); tall/short = MH
-  height macro (full weight 2.5 m / 1.4 m, so looks use 0-0.4). Looks carry
-  body, weight (-1 thin..+2 heavy), muscle, age (-1 young..1 old), height
-  (-1 short..1 tall) and pick them from a body-type table (normal, skinny,
-  fat, muscular, short, very tall, teen-adult, mid-aged, old, mixes).
+  Sachin, 10-29: "Build different models for different heights, weight and
+  muscles, some will be short, some skinny, some muscular, some have huge
+  height, some are fatty, some are normal, some are young, some are old,
+  some are mid aged, some are adults but just crossed 18. We need to have
+  several body types with a mix of these properties." Axes: young = MH age
+  0.344 (18 yrs) kept at adult height; mid-aged = old 0.25-0.45 (MH age is
+  linear 25-90 yrs); tall/short = MH height macro (full weight 2.5 m /
+  1.4 m, so looks use 0-0.4); thin to 1.3.
+- Fat (Sachin, 10-29: "I dont see fat body types, a bit chubby, then fatty,
+  and then super fat, in all different heights and both genders"). MH
+  weight 1 adds under 10% to the waist, so `fat` = weight 1 + MH detail
+  targets (FAT in build_people.py: pregnant belly, waist/hips/bust/thigh/
+  neck/arm/calf circ, buttocks, torso depth, limb fat, cheeks) x 1.7: the
+  shape is super fat. Looks: about 0.25 chubby, 0.55 fatty, 1.0 super fat,
+  any stature, both genders (checked front and back on a 24-body render).
+  Faces fill out with it (Sachin, 10-29: "Fat should be visible on some of
+  their faces too, based on how much bodyfat do they have"): head-fat,
+  neck-double, chin width and inner cheeks are in FAT. The mesh is
+  simplified on a body half way to fat so bellies and hips keep triangles. Wide shapes turn
+  the arms out (`pose_rest(spread=)`) until the forearm clears the body by
+  ARM_GAP (male fat 0.18 rad, female fat 0.26; slim shapes 0-0.06). The
+  upper arm of a fat body rests on its side. Joints blend linearly, so a
+  chubby look gets a part spread.
+- Look keys: body (male/female), weight (-1 thin..1 fat), muscle, age (-1
+  young..1 old), stature (-1 short..1 tall); `height` stays a uniform
+  scale. A body-type table in the kit (normal, skinny, chubby, fatty,
+  super fat, muscular, short, very tall, teen-adult, mid-aged, old, mixes)
+  picks them.
 - Mesh LOD works in gl_compatibility (tested: ArrayMesh lods dict, sphere
   switched 16640 -> 100 prims between 48 and 96 m for key 0.2). The far
   index array must hold the extras too (LOD swaps the whole surface).
-- Clothes: offline the decimated mesh is cut along fixed rest-height levels
-  (hems, cuffs, sock and shoe tops) per part group, so every hem is a clean
-  edge loop; runtime picks a region per face from its part and rest height,
-  splits vertices at region borders, pushes cloth out by its thickness and
-  joins the two edges with a lip strip. Hair is a scalp-region shell.
-- Old kit details (shoes, skirts, hats, bags, phone, prints, panels, belts,
-  collars) are kept and re-seated: `_surf`/`_girth` read a per-look torso
-  table from the blended body instead of the old ellipse profile. The old
-  torso loft, limbs, hands and head are replaced by the body.
+- Clothes (revised, no offline cuts): the kit computes fit tables at
+  runtime from the blended verts (torso slices: half width and front/back
+  depth on a height grid, shoulder-top silhouette; neck ellipse; limb radii;
+  foot and head boxes). Regions per face from its part and canonical
+  centroid (skin, top, sleeve, cuff, bottoms, socks, hidden feet, scoop,
+  beard); vertices split at region borders with shared positions; cloth
+  offset = max of adjacent regions (tee ~0.004, puffer ~0.036). Offline
+  adds only a per-vertex face attribute (lips, brows, beard areas).
+- Old kit extras are kept and warped onto the body by a post-pass, chosen
+  by bone mark or a MeshBuilder `tags` entry: torso (level by joint knots,
+  x/z remapped to the body's half width and depth, shoulder-top remap
+  above 1.40), skirt (radial), neck (collars, necklace, hood), head (affine
+  from the kit head, c = (0, 1.69, 0), to the body head box), arm/leg
+  (segment frames between joints), foot (shoe box to foot box), hand items
+  (moved by the hand joint delta). Removed in body mode: torso loft,
+  shoulder balls, limb tubes, `_hand`, neck tube, head loft and face parts,
+  beard ball. Body extras: eyeballs with irises at the blended eye centres.
+- MeshBuilder needs: multi-bone skinned ranges, a lods dict in commit
+  (`{0.2: far_indices}` including extras), a near-only flag, tags.
+  build_rig uses the blended joints.
 - Gender: look.body "male"/"female" (random looks: col 1 male, col 2
   female; named looks set it). Shape weights from build, category
   (athlete muscle, elderly old).
