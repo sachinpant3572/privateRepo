@@ -33,6 +33,7 @@ func _run() -> void:
 		"test_city_streams_cells",
 		"test_city_follows_world_map",
 		"test_street_plan_is_a_california_grid",
+		"test_city_outline_is_organic",
 		"test_bellerive_borrows_dc_ny_and_california",
 		"test_wanted_level_decays_out_of_sight",
 		"test_player_walks",
@@ -276,6 +277,89 @@ func test_city_follows_world_map() -> void:
 ## north-south/east-west grid, boulevards running right through it on a
 ## regular pitch, few diagonals, mostly rectangular blocks. The old warped
 ## plan failed every one of these (17% of streets on the compass).
+func test_city_outline_is_organic() -> void:
+	# Sachin: "Belleriv looks like a perfectly squared/rectangle city. This
+	# is now how ideal cities looks, even if they are fully architected."
+	# The city keeps its planned size (2026-10-28).
+	await _new_game(false)
+	var city = game.city
+	var plan = city.plan
+	_check(not plan.outline.is_empty() and not plan.edge_loops.is_empty() and plan.exits.size() >= 40,
+		"the city ends on its own outline, with streets going on out at %d exits" % plan.exits.size())
+	# Area and bbox fill, sampled every 20 m.
+	var box := Rect2(plan.edge_loops[0][0], Vector2.ZERO)
+	for loop in plan.edge_loops:
+		for q in loop:
+			box = box.expand(q)
+	var land := 0
+	var y: float = box.position.y + 10.0
+	while y < box.end.y:
+		var x: float = box.position.x + 10.0
+		while x < box.end.x:
+			var q := Vector2(x, y)
+			if plan.in_city(q) and not plan.is_water_point(q):
+				land += 1
+			x += 20.0
+		y += 20.0
+	var km2 := land * 400.0 / 1e6
+	var fill := land * 400.0 / box.get_area()
+	_check(km2 > 2.2 and km2 < 2.8, "the city keeps its size: %.2f km2 of land" % km2)
+	_check(fill < 0.8, "the outline is no box: the land fills %.0f%% of its bounding box" % (fill * 100.0))
+	# No long straight edge (a river bank may run on; it follows the river).
+	var longest := 0.0
+	for loop in plan.edge_loops:
+		var run := 0.0
+		var dir := Vector2.ZERO
+		for k in loop.size():
+			var a: Vector2 = loop[k]
+			var b: Vector2 = loop[(k + 1) % loop.size()]
+			if a.distance_to(b) < 0.1:
+				continue
+			var d := (b - a).normalized()
+			if plan.river_distance((a + b) * 0.5) < plan._river_half + 30.0:
+				run = 0.0
+			elif d.dot(dir) > cos(deg_to_rad(8.0)):
+				run += a.distance_to(b)
+			else:
+				run = a.distance_to(b)
+			dir = d
+			longest = maxf(longest, run)
+	_check(longest < 420.0, "no straight edge runs on: the longest is %.0f m" % longest)
+	# What is in the city and what is not.
+	var station: Vector3 = city.landmark_front("union_station")
+	_check(plan.in_city(Vector2(station.x, station.z)) and not plan.in_city(plan.bounds.position + Vector2(5, 5)) and not plan.in_city(plan.bounds.end + Vector2(5, 5)),
+		"Union Station is in the city, the corners of the plan's box are not")
+	var outside := 0
+	for e in plan.exits:
+		var q: Vector2 = plan.pos(e.node) + e.dir * 60.0
+		outside += 0 if plan.in_city(q) else 1
+	_check(outside >= plan.exits.size() * 0.8, "60 m out past an exit is out of the city at %d of %d exits" % [outside, plan.exits.size()])
+	# Toward the edge the towers thin out: downtown's buildings near the
+	# edge are lower than those in from it.
+	for cx in range(50, 650, 100):
+		for cz in range(50, 500, 100):
+			city.stream_now(Vector3(cx, 0, cz))
+	var near := []
+	var far := []
+	for cell in city.get_children():
+		for body in cell.get_children():
+			if not body is StaticBody3D:
+				continue
+			for c in body.get_children():
+				if c is CollisionShape3D and c.shape is BoxShape3D and c.shape.size.y > 8.0:
+					var t: Vector3 = c.global_position
+					if not str(city.district_at(t).get("id", "")) in ["gilt_district", "midtown"]:
+						continue
+					var d: float = plan.edge_distance(Vector2(t.x, t.z))
+					if d < 110.0:
+						near.append(c.shape.size.y)
+					elif d > 200.0:
+						far.append(c.shape.size.y)
+	var mean := func(a: Array) -> float: return a.reduce(func(s, v): return s + v, 0.0) / maxf(a.size(), 1)
+	_check(near.size() >= 5 and far.size() >= 20 and mean.call(near) < mean.call(far) * 0.8,
+		"downtown is lower near the edge: %.0f m on average within 110 m (%d), %.0f m past 200 m (%d)" % [mean.call(near), near.size(), mean.call(far), far.size()])
+
+
 func test_street_plan_is_a_california_grid() -> void:
 	await _new_game(false)
 	var city = game.city
