@@ -34,6 +34,7 @@ import random
 import sys
 from pathlib import Path
 
+import shapely
 from shapely import constrained_delaunay_triangles
 from shapely.geometry import LineString, MultiLineString, Point, Polygon, box
 from shapely.geometry.polygon import orient
@@ -1382,6 +1383,8 @@ class Country:
                 self.mtn_grades.append((s[2], round(gr, 3)))
             self._note_structures(s[0], s[1], s[2], spans)
 
+        # Ways laid so far that a later one may ride on (a shared carriageway).
+        earlier = [(s[0], CLASSES[s[1]]["w"] * 0.5) for s in routes if CLASSES[s[1]]["graph"]]
         for ident, pts, cls, name, tag, spans in mountain_roads():
             ends = self._span_ends(pts, spans)
             pts = list(pts)
@@ -1406,10 +1409,16 @@ class Country:
                 flat = 60.0 if ident == "calder" else 0.0
                 self.mtn_grades.append((name, round(self.mtn.grade(line, cls, spans=spans, flat_end=flat), 3)))
             self._note_structures(line, cls, name, spans)
+            # Where it rides on an earlier way, that way alone is laid (two
+            # near-copies noded into a tangle of scraps and left dead ends).
+            cuts = []
+            if CLASSES[cls]["graph"]:
+                cuts = self._shared_cuts(line, cls, spans, earlier)
+                earlier.append((line, CLASSES[cls]["w"] * 0.5))
             # A tunnel's or underpass's stretch is not laid on the ground: the
             # way stops at its portals (a tunnel's with a barricade).
             s = 0.0
-            for a, b, k in sorted(sp for sp in spans if sp[2] in "tu"):
+            for a, b, k in sorted([sp for sp in spans if sp[2] in "tu"] + cuts):
                 if a - s > 1.0:
                     self.add(list(substring(line, s, a).coords), cls, name, tag)
                 if k == "t":
@@ -1420,6 +1429,47 @@ class Country:
                 s = b
             if line.length - s > 1.0:
                 self.add(list(substring(line, s, line.length).coords), cls, name, tag)
+
+    def _shared_cuts(self, line, cls, spans, earlier):
+        """The stretches (a, b, "x") where line rides on an earlier way: a run
+        of 16 m or more within half the two widths + 1 m of it, cut from the
+        first to the last of its points within 2 m (so the ends left meet that
+        way's side and snap to it as tees). Runs over a span are kept."""
+        hw = CLASSES[cls]["w"] * 0.5
+        n = max(1, math.ceil(line.length / 2.0))
+        ss = np.linspace(0.0, line.length, n + 1)
+        pts = shapely.points([line.interpolate(q).coords[0] for q in ss])
+        cuts = []
+        for other, ohw in earlier:
+            near = 0.5 * (hw + ohw) + 1.0
+            if other.distance(line) >= near:
+                continue
+            ds = shapely.distance(other, pts)
+            k = 0
+            while k < len(ss):
+                if ds[k] >= near:
+                    k += 1
+                    continue
+                j = k
+                while j + 1 < len(ss) and ds[j + 1] < near:
+                    j += 1
+                close = [i for i in range(k, j + 1) if ds[i] < 2.0]
+                if ss[j] - ss[k] >= 16.0 and close and ss[close[-1]] - ss[close[0]] >= 8.0:
+                    a, b = float(ss[close[0]]), float(ss[close[-1]])
+                    if not any(x < b + 4.0 and y > a - 4.0 for x, y, _k in spans):
+                        cuts.append([a, b])
+                k = j + 1
+        cuts.sort()
+        out = []
+        for a, b in cuts:
+            if out and a <= out[-1][1] + 4.0:
+                out[-1][1] = max(out[-1][1], b)
+            else:
+                out.append([a, b])
+        for a, b in out:
+            p, q = line.interpolate(a).coords[0], line.interpolate(b).coords[0]
+            print(f"shared: cut {b - a:.0f} m of a {cls} from ({p[0]:.0f},{p[1]:.0f}) to ({q[0]:.0f},{q[1]:.0f})")
+        return [(a, b, "x") for a, b in out]
 
     def _rail_pass(self, plan):
         """The Morrow Freight Line over the range (world_map.json carries the

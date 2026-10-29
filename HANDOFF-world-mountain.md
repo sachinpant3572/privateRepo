@@ -111,6 +111,15 @@ Built by a sub-agent in worktree `.claude/worktrees/agent-a01c2f4e315ebd3c5`, br
 - W-22 **Summit**: sites moved clear of the spiral (SUMMIT_SITES comment: a box needs hw + 15 m from
   a road); Mount Calder Road's last 60 m are level into the car park (`grade(flat_end=)`); the
   restaurant sits on the car park's level (one terrace; it is 8 m away).
+- W-25 **Shared carriageways in the graph** (`_shared_cuts`, build_country.py): Canyon on Crest
+  (176 m), Calder on Crest/Observatory, Summit Fire Road on Crest ran 1-6 m apart; the noding cut
+  them into scraps and two Crest Drive pieces were dropped as spurs, leaving dead ends at (723,-1230)
+  and (1330,-1284) (test_country_joins_the_city). A later way's run within half the two widths
+  + 1 m of an earlier one (>= 16 m) is now not laid between its first and last points within 2 m;
+  the ends snap on as tees. Runs over a span are kept.
+- W-26 **Range over farmland**: mtn.poly takes 1.95 km2 of the Golden Flats and the hill
+  vineyards (fields 603 -> 177, pivots 60 -> 36, farmyards 43 -> 34). test_country_plots_square's
+  field floor is 150 and test_birds' farm sample moved to (-900,-1100) ((584,-1824) is up the flank).
 
 ## Open issues
 

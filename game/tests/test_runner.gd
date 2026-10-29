@@ -2092,7 +2092,9 @@ func test_birds_by_day_not_at_night() -> void:
 	atm.weather_changes = false
 	atm.set_weather("clear", true)
 	var birds = atm.birds
-	var places := {"city": Vector2(300, 250), "beach": Vector2(-2033, 1791), "bayou": Vector2(-966, 366), "hills": Vector2(1200, -1300), "farm": Vector2(584, -1824)}
+	# The farm sample is the Golden Flats west of the range ((584, -1824) is
+	# up Mount Calder's flank since phase 2).
+	var places := {"city": Vector2(300, 250), "beach": Vector2(-2033, 1791), "bayou": Vector2(-966, 366), "hills": Vector2(1200, -1300), "farm": Vector2(-900, -1100)}
 	var wrong := []
 	for h in places:
 		var got: String = birds.habitat_at(places[h])
@@ -5584,7 +5586,8 @@ func _turn_off_road(c, l: Array) -> float:
 ## plots are sold parallely"); buildings turned off their plot stand only in
 ## estates and clusters; a plot's lots stay inside it.
 ## The counts are loose floors: the urban outline (2026-10-29) sets how much
-## suburb there is.
+## suburb there is, and Mount Calder's range (phase 2) took the hill vineyards
+## and orchards up its flank (603 fields before it, 177 after).
 func test_country_plots_square_to_their_roads() -> void:
 	await _new_game(false)
 	var c = game.city.country
@@ -5592,7 +5595,7 @@ func test_country_plots_square_to_their_roads() -> void:
 	for p: Array in c.plots:
 		var ty: String = c.plot_types[int(p[5])]
 		counts[ty] = counts.get(ty, 0) + 1
-	_check(counts.get("estate", 0) >= 3 and counts.get("cluster", 0) >= 20 and counts.get("farmyard", 0) >= 10 and counts.get("field", 0) >= 500,
+	_check(counts.get("estate", 0) >= 3 and counts.get("cluster", 0) >= 20 and counts.get("farmyard", 0) >= 10 and counts.get("field", 0) >= 150,
 			"the country has estates, clusters, farmyards and fields, got %s" % counts)
 	var worst_lot := 0.0
 	var fronting := 0
