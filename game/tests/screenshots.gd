@@ -518,7 +518,17 @@ func _routes(game) -> void:
 			continue
 		seen[key] = true
 		stops.append(["73_%02d_%s" % [stops.size(), key.replace("@", "_in_")], Vector2(l[0], l[1]), 34.0 if kind != "rowhouse_row" else 50.0])
-	stops.append(["73_%02d_rowhouse_city_edge" % stops.size(), Vector2(391, -121), 60.0])
+	# The first rowhouse row with the city within 40 m of it.
+	for l: Array in c.lots:
+		var p := Vector2(l[0], l[1])
+		if c.kinds[int(l[5])] != "rowhouse_row" or game.city.plan.in_city(p):
+			continue
+		var near := false
+		for d in [Vector2(40, 0), Vector2(-40, 0), Vector2(0, 40), Vector2(0, -40)]:
+			near = near or game.city.plan.in_city(p + d)
+		if near:
+			stops.append(["73_%02d_rowhouse_city_edge" % stops.size(), p, 60.0])
+			break
 	for stop in stops:
 		var at: Vector2 = stop[1]
 		var pos := Vector3(at.x, Terrain.height(at.x, at.y), at.y)
