@@ -5186,11 +5186,22 @@ func test_people_walk_the_suburbs() -> void:
 	var city = game.city
 	var c = city.country
 	var first: int = city.sidewalk_loops.size() - c.walks.size()
+	# The east side loop with the most suburb sidewalk round it: most of
+	# them close blocks along the city's edge street, by its own sidewalks.
 	var at := Vector3.INF
+	var share := -1.0
 	for w in c.walks:
-		if w[0].x > 1700.0 and w[0].z > 200.0 and w[0].z < 900.0:
-			at = w[0]
-			break
+		if w[0].x > 1700.0 and w[0].z > 100.0 and w[0].z < 900.0:
+			var mine := 0
+			var all := 0
+			for li in city.sidewalk_loops.size():
+				for q in city.sidewalk_loops[li]:
+					if q.distance_to(w[0]) < 120.0:
+						all += 1
+						mine += 1 if li >= first else 0
+			if all > 0 and float(mine) / all > share:
+				share = float(mine) / all
+				at = w[0]
 	_check(at != Vector3.INF, "an east side loop to stand on")
 	if at == Vector3.INF:
 		return
@@ -6145,14 +6156,16 @@ func test_mount_calder() -> void:
 	# The HUD names the summit after its county, not the nearest district.
 	var at_top: Dictionary = game.city.district_at(Vector3(float(top[0]), 0.0, float(top[1])))
 	_check(str(at_top.get("id", "")) == "red_pine", "the summit lies in Red Pine County (%s)" % str(at_top.get("name", "")))
-	# The grid eases to 0 at its border, where height() goes flat: the two
-	# outer rings of cells hold no step to drive or walk off.
-	var rim := 0.0
+	# The grid eases to 0 at its border, where height() goes flat: in the
+	# play area its outer cells lie at 0 and the next ones near it, so
+	# there is no step to drive or walk off.
+	var rim := [0.0, 0.0]
 	for i in Terrain.nx:
 		for j in Terrain.ny:
-			if mini(mini(i, Terrain.nx - 1 - i), mini(j, Terrain.ny - 1 - j)) <= 1:
-				rim = maxf(rim, Terrain.heights[j * Terrain.nx + i])
-	_check(rim <= 0.3, "the terrain grid's border lies at 0 (%.2f m)" % rim)
+			var ring := mini(mini(i, Terrain.nx - 1 - i), mini(j, Terrain.ny - 1 - j))
+			if ring <= 1 and c.in_play_area(Terrain.origin + Vector2(i, j) * Terrain.cell):
+				rim[ring] = maxf(rim[ring], Terrain.heights[j * Terrain.nx + i])
+	_check(rim[0] <= 0.05 and rim[1] <= 1.0, "the terrain grid's border lies at 0 (%.2f m, %.2f m a cell in)" % rim)
 	# The summit's pads are flat.
 	for id in ["restaurant", "helipad", "deck", "cable_top", "car_park", "cable_mid"]:
 		var site: Dictionary = m.sites.get(id, {})
@@ -6187,8 +6200,9 @@ func test_mount_calder() -> void:
 			var b := Vector2(pts[k][0], pts[k][1])
 			steep = maxf(steep, absf(float(pts[k][2]) - float(pts[k - 1][2])) / a.distance_to(b))
 			along += a.distance_to(b)
-			# Off the height grid (past the play area) the line is only drawn far off.
-			var on_ground := Terrain.bounds.has_point(b)
+			# Past the play area the line is only drawn far off (and the
+			# grid's outer cells ease the ground down to 0).
+			var on_ground: bool = Terrain.bounds.has_point(b) and c.in_play_area(b)
 			for sp in rp.spans:
 				if along > float(sp[0]) - 30.0 and along < float(sp[1]) + 30.0:
 					on_ground = false
