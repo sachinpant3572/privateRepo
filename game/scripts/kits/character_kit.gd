@@ -1,9 +1,11 @@
 extends RefCounted
 ## Cartoon people on a humanoid skeleton, built at the feet (y = 0), facing -Z.
-## Proportions are a little chunky (big head, broad shoulders) so people read
-## from above. Every body part is bound rigidly to one bone, so a whole person
-## is one skinned mesh (one draw call) that animates by turning bones
-## (see rig.gd). Bone names follow Godot's SkeletonProfileHumanoid, so a
+## The body is a blended MakeHuman body (BodyKit, skinned with four bones a
+## vertex) with skin, hair and clothes as coloured regions of it; the kit
+## adds the clothes' details, hats, bags and shoes, made for its old
+## block body, and _warp fits them onto the body. Details are bound rigidly
+## to one bone. A whole person is one skinned mesh (one draw call) that
+## animates by turning bones (see rig.gd). Bone names follow Godot's SkeletonProfileHumanoid, so a
 ## modelled character with a standard rig can replace the code-built one
 ## later without touching the animation code.
 ##
@@ -12,6 +14,9 @@ extends RefCounted
 ## carry the variety, with hems, cuffs and soles as clear colour breaks.
 
 const MeshBuilder = preload("res://scripts/mesh_builder.gd")
+const BodyKit = preload("res://scripts/kits/body_kit.gd")
+## People are BodyKit bodies; false brings back the old block bodies.
+const BODY := true
 
 const SKIN := [Color(0.98, 0.82, 0.68), Color(0.92, 0.72, 0.56), Color(0.85, 0.64, 0.45), Color(0.6, 0.42, 0.28),
 	Color(0.48, 0.32, 0.21), Color(0.38, 0.25, 0.17)]
@@ -164,7 +169,63 @@ static func random_look(rng: RandomNumberGenerator, outfit := "") -> Dictionary:
 	if col == 2 and rng.randf() < 0.3:
 		look["necklace"] = Color(0.9, 0.75, 0.35) if rng.randf() < 0.6 else Color(0.8, 0.8, 0.82)
 	_fit_outfit(rng, look, col)
+	_body_type(look, col)
 	return look
+
+
+## Body types for random looks: name, weight for col 1 (men) and col 2
+## (women). A quarter of people mix in a second type.
+const BODY_TYPES := [["normal", 28, 28], ["skinny", 9, 10], ["chubby", 14, 14], ["fatty", 8, 8],
+	["super_fat", 3, 3], ["muscular", 8, 4], ["short", 7, 7], ["tall", 8, 5], ["teen", 8, 8],
+	["mid_aged", 12, 12], ["old", 6, 6]]
+
+
+## A random look's body (look keys body, weight, muscle, age, stature; see
+## BodyKit.shape_weights). It draws from its own generator seeded by the
+## look, so the looks a seed gives are the same as before body types.
+static func _body_type(look: Dictionary, col: int) -> void:
+	look["body"] = "male" if col == 1 else "female"
+	if not BODY:
+		return
+	# The body's shape carries the height now.
+	look.height = 1.0
+	var rng := _body_rng(look, 0)
+	var kinds := [_weighted(rng, BODY_TYPES, col)]
+	if rng.randf() < 0.25:
+		kinds.append(_weighted(rng, BODY_TYPES, col))
+	for kind in kinds:
+		match kind:
+			"normal":
+				for k: String in ["weight", "muscle", "age", "stature"]:
+					if not look.has(k):
+						look[k] = rng.randf_range(0.0, 0.3) if k == "muscle" else rng.randf_range(-0.15, 0.15)
+			"skinny":
+				look.weight = rng.randf_range(-1.0, -0.5)
+			"chubby":
+				look.weight = rng.randf_range(0.2, 0.32)
+			"fatty":
+				look.weight = rng.randf_range(0.45, 0.65)
+			"super_fat":
+				look.weight = rng.randf_range(0.85, 1.0)
+			"muscular":
+				look.muscle = rng.randf_range(0.6, 1.0)
+			"short":
+				look.stature = rng.randf_range(-0.4, -0.25)
+			"tall":
+				look.stature = rng.randf_range(0.25, 0.4)
+			"teen":
+				look.age = rng.randf_range(-1.0, -0.7)
+			"mid_aged":
+				look.age = rng.randf_range(0.25, 0.45)
+				look.weight = maxf(look.get("weight", 0.0), rng.randf_range(0.0, 0.3))
+			"old":
+				look.age = rng.randf_range(0.6, 1.0)
+
+
+static func _body_rng(look: Dictionary, salt: int) -> RandomNumberGenerator:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([look.shirt, look.skin, look.hair_color, look.jacket, salt])
+	return rng
 
 
 ## A random look for a kind of person (CATEGORIES), dressed so the kind reads
@@ -243,7 +304,10 @@ static func category_look(rng: RandomNumberGenerator, cat := "general") -> Dicti
 				look.pants = _pick(rng, [NEUTRALS[2], NEUTRALS[3], NEUTRALS[6], NEUTRALS[9], NEUTRALS[12]])
 			look.shoe_style = "dress" if rng.randf() < 0.5 else "sneakers"
 			look.shoes = _pick(rng, [NEUTRALS[0], NEUTRALS[9], NEUTRALS[4], NEUTRALS[6]])
-			look.height = look.height * 0.96
+			if BODY:
+				look.age = _body_rng(look, 1).randf_range(0.65, 1.0)
+			else:
+				look.height = look.height * 0.96
 			if look.headwear in ["cap_back", "beanie"]:
 				look.headwear = ""
 			if rng.randf() < 0.5:
@@ -295,6 +359,14 @@ static func category_look(rng: RandomNumberGenerator, cat := "general") -> Dicti
 					cat = "worker"
 				"suit":
 					cat = "office"
+	if BODY:
+		var brng := _body_rng(look, 2)
+		match cat:
+			"athlete":
+				look.muscle = brng.randf_range(0.5, 0.9)
+				look.weight = minf(look.get("weight", 0.0), 0.0)
+			"worker":
+				look.muscle = minf(look.get("muscle", 0.0) + 0.2, 1.0)
 	look["category"] = cat
 	return look
 
@@ -437,16 +509,21 @@ static func _weighted(rng: RandomNumberGenerator, table: Array, col: int) -> Str
 static func build_rig(look: Dictionary) -> Skeleton3D:
 	var skel := Skeleton3D.new()
 	var skin := Skin.new()
+	# A BodyKit body has its own joints (blended for the look).
+	var at := {}
+	if BODY:
+		at = BodyKit.blend(look, body_mesh(look)).joints
 	for i in BONES.size():
 		var b: Array = BONES[i]
 		skel.add_bone(b[0])
 		var parent := bone_index(b[1])
-		var offset: Vector3 = b[2]
+		var joint: Vector3 = at.get(b[0], b[2])
+		var offset := joint
 		if parent >= 0:
 			skel.set_bone_parent(i, parent)
-			offset -= BONES[parent][2]
+			offset -= at.get(b[1], BONES[parent][2])
 		skel.set_bone_rest(i, Transform3D(Basis(), offset))
-		skin.add_bind(i, Transform3D(Basis(), -b[2]))
+		skin.add_bind(i, Transform3D(Basis(), -joint))
 	skel.reset_bone_poses()
 	var mb := MeshBuilder.new()
 	build(mb, look)
@@ -491,17 +568,45 @@ static func build_rig(look: Dictionary) -> Skeleton3D:
 ##   back, so the hero reads from above.
 static func build(mb, look: Dictionary) -> void:
 	var o := _spec(look)
+	var b := {}
+	var first_v: int = mb.verts.size()
+	var first_i: int = mb.indices.size()
+	if o.body:
+		# The blended body carries skin, face, hair and clothes as regions;
+		# the kit adds the clothes' details on top and _warp fits them to it.
+		b = BodyKit.add_body(mb, look, o, body_mesh(look))
+		mb.set_bone(bone_index("Head"))
+		BodyKit.add_eyes(mb, look, b, look.get("hero", false))
+		first_v = mb.verts.size()
+		first_i = mb.indices.size()
 	_hips(mb, look, o)
 	_torso(mb, look, o)
 	_extras(mb, look, o)
 	mb.set_bone(bone_index("Neck"))
-	_tube(mb, Vector3(0, 1.42, 0), Vector3(0, 1.58, 0), 0.07, 0.065, o.skin)
+	if not o.body:
+		_tube(mb, Vector3(0, 1.42, 0), Vector3(0, 1.58, 0), 0.07, 0.065, o.skin)
 	if look.has("necklace"):
-		_tube(mb, Vector3(0, 1.455, 0), Vector3(0, 1.47, 0), 0.079, 0.077, look.necklace)
+		var y := 1.49 if o.body else 1.455
+		_tube(mb, Vector3(0, y, 0), Vector3(0, y + 0.015, 0), 0.079, 0.077, look.necklace)
 	mb.set_bone(bone_index("Head"))
 	_head(mb, look, o)
 	_arms(mb, look, o)
 	_legs(mb, look, o)
+	if o.body:
+		_warp(mb, look, o, b, first_v, first_i)
+
+
+## Which body mesh a look uses: the denser hero mesh for the player.
+static func body_mesh(look: Dictionary) -> String:
+	return "hero" if look.get("hero", false) else "crowd"
+
+
+## Height of the hip joint at rest (before look.height): where a seated
+## person's pelvis sits.
+static func hip_height(look: Dictionary) -> float:
+	if not BODY:
+		return BONES[0][2].y
+	return BodyKit.blend(look, body_mesh(look)).joints.Hips.y
 
 
 ## Colours and cut shared by the body parts.
@@ -533,8 +638,9 @@ static func _spec(look: Dictionary) -> Dictionary:
 		"pants": look.get("pants", Color(0.2, 0.22, 0.3)),
 		"bottoms": bottoms,
 		"accent": look.get("accent", Color(0.92, 0.91, 0.88)),
-		"w": look.get("build", 1.0),
+		"w": 1.0 if BODY else look.get("build", 1.0),
 		"bulk": bulk,
+		"body": BODY,
 		"shoe_style": look.get("shoe_style", "dress" if outfit == "suit" else ("boots" if outfit == "uniform" else "sneakers")),
 		"sides": 12 if look.get("hero", false) else 8,
 	}
@@ -551,7 +657,8 @@ static func _hips(mb, look: Dictionary, o: Dictionary) -> void:
 		mb.limb(Vector3(0, 1.04, 0), Vector3(0, hem, 0), 0.17 * w, flare, o.shirt, 8)
 		_tube(mb, Vector3(0, hem + 0.035, 0), Vector3(0, hem - 0.002, 0), flare * 0.96, flare * 1.01, o.shirt.darkened(0.2), 8)
 		return
-	_ball(mb, Vector3(0, 0.95, 0), Vector3(0.19 * w, 0.13, 0.13), pants, 8, 3)
+	if not o.body:
+		_ball(mb, Vector3(0, 0.95, 0), Vector3(0.19 * w, 0.13, 0.13), pants, 8, 3)
 	if o.bottoms == "skirt":
 		mb.limb(Vector3(0, 1.02, 0), Vector3(0, 0.64, 0), 0.18 * w, 0.24 * w, pants, 8)
 		_tube(mb, Vector3(0, 0.67, 0), Vector3(0, 0.638, 0), 0.232 * w, 0.242 * w, pants.darkened(0.2), 8)
@@ -566,11 +673,14 @@ static func _hips(mb, look: Dictionary, o: Dictionary) -> void:
 	if o.outfit == "uniform":
 		# Duty belt: holster on the right, pouches, radio at the back.
 		var black := Color(0.08, 0.08, 0.09)
-		_block(mb, Vector3(0.2 * w, 0.93, 0.01), Vector3(0.06, 0.17, 0.11), black)
-		_block(mb, Vector3(0.2 * w, 1.02, 0.03), Vector3(0.05, 0.05, 0.04), Color(0.25, 0.25, 0.27))
-		_block(mb, Vector3(-0.12 * w, 0.99, -0.13), Vector3(0.07, 0.07, 0.04), black)
-		_block(mb, Vector3(-0.19 * w, 0.99, -0.05), Vector3(0.04, 0.07, 0.07), black)
-		_block(mb, Vector3(0.08 * w, 0.99, 0.135), Vector3(0.07, 0.09, 0.04), black)
+		for blk in [[Vector3(0.2 * w, 0.93, 0.01), Vector3(0.06, 0.17, 0.11), black],
+				[Vector3(0.2 * w, 1.02, 0.03), Vector3(0.05, 0.05, 0.04), Color(0.25, 0.25, 0.27)],
+				[Vector3(-0.12 * w, 0.99, -0.13), Vector3(0.07, 0.07, 0.04), black],
+				[Vector3(-0.19 * w, 0.99, -0.05), Vector3(0.04, 0.07, 0.07), black],
+				[Vector3(0.08 * w, 0.99, 0.135), Vector3(0.07, 0.09, 0.04), black]]:
+			mb.set_tag("rigid")
+			_block(mb, blk[0], blk[1], blk[2])
+			mb.set_tag("")
 
 
 ## Torso layers: base shape, hem, collar and the outfit's details, then the bag.
@@ -592,7 +702,7 @@ static func _torso(mb, look: Dictionary, o: Dictionary) -> void:
 	mb.set_bone(bone_index("Spine"))
 	if quilted:
 		_quilt(mb, [[1.08, 0.215, 0.15], [0.98, 0.2, 0.145]], w, top)
-	else:
+	elif not o.body:
 		# One lofted body from the waist up to the shoulders (0.24: two
 		# overlapping balls creased where they met), the rings above 1.2
 		# bound to the chest.
@@ -620,7 +730,7 @@ static func _torso(mb, look: Dictionary, o: Dictionary) -> void:
 	if quilted:
 		_quilt(mb, [[1.44, 0.23, 0.14], [1.32, 0.27, 0.17], [1.2, 0.255, 0.165]], w, top)
 	var sleeve: Color = o.sleeve if o.sleeves != "none" else skin
-	for side in [-1.0, 1.0]:
+	for side in [-1.0, 1.0] if not o.body else []:
 		_ball(mb, Vector3(side * 0.24 * w, 1.39, 0), Vector3(0.09, 0.08, 0.09) * (1.08 if quilted and outfit == "puffer" else 1.0), sleeve, 8, 4)
 
 	match outfit:
@@ -640,10 +750,11 @@ static func _torso(mb, look: Dictionary, o: Dictionary) -> void:
 			elif look.has("print") and outfit != "hivis":
 				_print(mb, look, w, bulk)
 			if outfit == "hivis":
-				_hivis(mb, w, jacket)
+				_hivis(mb, w, jacket, o.body)
 		"tank":
 			# Scoop neck front and back, and the straps.
-			_ball(mb, Vector3(0, 1.43, 0), Vector3(0.12 * w, 0.075, 0.125), skin, 8, 2)
+			if not o.body:
+				_ball(mb, Vector3(0, 1.43, 0), Vector3(0.12 * w, 0.075, 0.125), skin, 8, 2)
 			for side in [-1.0, 1.0]:
 				_strip(mb, [_surf(side * 0.13, 1.4, -1.0, w, bulk), Vector3(side * 0.13 * w, 1.5, 0), _surf(side * 0.13, 1.4, 1.0, w, bulk)], 0.025, shirt)
 			if look.has("print"):
@@ -653,7 +764,8 @@ static func _torso(mb, look: Dictionary, o: Dictionary) -> void:
 			_panel(mb, 0.0, 1.46, 1.36, 0.022, 0.022, -1.0, shirt.darkened(0.15), w, bulk, 1)
 			_panel(mb, -0.12, 1.36, 1.32, 0.025, 0.025, -1.0, accent, w, bulk, 1)
 		"dress":
-			_ball(mb, Vector3(0, 1.43, 0), Vector3(0.12 * w, 0.07, 0.12), skin, 8, 2)
+			if not o.body:
+				_ball(mb, Vector3(0, 1.43, 0), Vector3(0.12 * w, 0.07, 0.12), skin, 8, 2)
 			_band(mb, 1.06, 0.175 * w, 0.125, 0.03, look.get("belt", shirt.darkened(0.25)))
 		"hoodie":
 			# Hood bunched on the back, drawstrings, kangaroo pocket.
@@ -745,10 +857,12 @@ static func _extras(mb, look: Dictionary, o: Dictionary) -> void:
 		var p := _surf(0.0, 1.24, -1.0, w, bulk, 0.0)
 		for side in [-1.0, 1.0]:
 			_surf_strip(mb, [Vector2(side * 0.08, 1.46), Vector2(side * 0.065, 1.29)], -1.0, 0.024, w, bulk, 0.008, Color(0.1, 0.1, 0.11))
+		mb.set_tag("rigid")
 		_block(mb, p + Vector3(0, 0, -0.04), Vector3(0.14, 0.085, 0.06), col)
 		_block(mb, p + Vector3(0, -0.005, -0.085), Vector3(0.055, 0.055, 0.04), Color(0.15, 0.15, 0.16))
 		mb.box(p + Vector3(0, -0.005, -0.106), Vector3(0.036, 0.036, 0.004), Color(0.3, 0.42, 0.6))
 		mb.box(p + Vector3(0.045, 0.046, -0.04), Vector3(0.03, 0.008, 0.025), Color(0.85, 0.85, 0.85))
+		mb.set_tag("")
 	if look.has("stripes"):
 		# Two stripes over each shoulder and a band across the back.
 		var col: Color = look.stripes
@@ -788,10 +902,12 @@ static func _print(mb, look: Dictionary, w: float, bulk: float, y := 1.32, front
 
 ## Hi-vis vest over a tee: reflective bands round the body and braces over
 ## the shoulders.
-static func _hivis(mb, w: float, vest: Color) -> void:
+static func _hivis(mb, w: float, vest: Color, body := false) -> void:
 	var bulk := 1.05
-	_ball(mb, Vector3(0, 1.29, 0), Vector3(0.262 * w, 0.18, 0.162), vest, 8, 4)
-	_ball(mb, Vector3(0, 1.11, 0), Vector3(0.205 * w, 0.13, 0.145), vest, 8, 3)
+	if not body:
+		# On a BodyKit body the vest is its top region.
+		_ball(mb, Vector3(0, 1.29, 0), Vector3(0.262 * w, 0.18, 0.162), vest, 8, 4)
+		_ball(mb, Vector3(0, 1.11, 0), Vector3(0.205 * w, 0.13, 0.145), vest, 8, 3)
 	for y in [1.15, 1.27]:
 		var g := _girth(y, w, bulk)
 		_band(mb, y, g.x + 0.012, g.y + 0.012, 0.022, REFLECTIVE)
@@ -814,8 +930,10 @@ static func _uniform(mb, look: Dictionary, o: Dictionary) -> void:
 		_panel(mb, 0.0, 1.4, 1.32, 0.13, 0.13, 1.0, Color(0.88, 0.88, 0.84), w, bulk, 1, 0.015, 3)
 		_panel(mb, 0.0, 1.27, 1.12, 0.12, 0.12, -1.0, vest.lightened(0.08), w, bulk, 1, 0.014, 3)
 		_panel(mb, -0.1, 1.38, 1.33, 0.025, 0.025, -1.0, gold, w, bulk, 1, 0.016)
+		mb.set_tag("rigid")
 		_block(mb, Vector3(0.13 * w, 1.45, -0.09), Vector3(0.05, 0.08, 0.04), black)
 		mb.box(Vector3(0.145 * w, 1.52, -0.09), Vector3(0.012, 0.06, 0.012), black)
+		mb.set_tag("")
 	else:
 		_panel(mb, -0.1, 1.38, 1.33, 0.025, 0.025, -1.0, gold, w, 1.0, 1, 0.014)
 		_panel(mb, 0.0, 1.46, 1.06, 0.012, 0.012, -1.0, o.shirt.darkened(0.12), w, 1.0, 2, 0.012)
@@ -835,11 +953,8 @@ static func _bag(mb, look: Dictionary, o: Dictionary) -> void:
 			var cube := bag == "cube"
 			var size := Vector3(0.44, 0.44, 0.38) if cube else Vector3(0.3, 0.36, 0.14)
 			var c := Vector3(0, 1.31 if cube else 1.26, back + size.z * 0.5 + 0.01)
+			mb.set_tag("rigid")
 			mb.box(c, size, col)
-			var strap := col.darkened(0.3) if not cube else Color(0.12, 0.12, 0.13)
-			for side in [-1.0, 1.0]:
-				var x: float = side * 0.12 * w
-				_strip(mb, [_surf(x, 1.16, -1.0, w, bulk), _surf(x, 1.41, -1.0, w, bulk), Vector3(x, _shoulder_top(x, w, bulk), 0), Vector3(x, 1.42, back + 0.02)], 0.022, strap)
 			if cube:
 				# Lid seam, and the brand's logo on top and back.
 				mb.box(c + Vector3(0, size.y * 0.5 + 0.004, 0), Vector3(size.x + 0.02, 0.008, size.z + 0.02), col.darkened(0.2))
@@ -848,14 +963,21 @@ static func _bag(mb, look: Dictionary, o: Dictionary) -> void:
 			else:
 				mb.box(c + Vector3(0, -0.07, size.z * 0.5 + 0.015), Vector3(0.22, 0.15, 0.03), col.darkened(0.15))
 				mb.box(c + Vector3(0, size.y * 0.5 + 0.015, 0), Vector3(0.08, 0.02, 0.03), col.darkened(0.3))
+			mb.set_tag("")
+			var strap := col.darkened(0.3) if not cube else Color(0.12, 0.12, 0.13)
+			for side in [-1.0, 1.0]:
+				var x: float = side * 0.12 * w
+				_strip(mb, [_surf(x, 1.16, -1.0, w, bulk), _surf(x, 1.41, -1.0, w, bulk), Vector3(x, _shoulder_top(x, w, bulk), 0), Vector3(x, 1.42, back + 0.02)], 0.022, strap)
 		"crossbody":
 			var strap := col.darkened(0.35)
 			var top := Vector3(-0.13 * w, _shoulder_top(-0.13 * w, w, bulk), 0)
 			_strip(mb, [_surf(0.14, 1.11, -1.0, w, bulk), _surf(0.02, 1.27, -1.0, w, bulk), _surf(-0.11, 1.41, -1.0, w, bulk), top], 0.018, strap)
 			_strip(mb, [top, _surf(-0.11, 1.41, 1.0, w, bulk), _surf(0.04, 1.24, 1.0, w, bulk), _surf(0.17, 1.08, 1.0, w, bulk)], 0.018, strap)
 			var p := _surf(0.13, 1.08, -1.0, w, bulk, 0.0)
+			mb.set_tag("rigid")
 			_block(mb, p + Vector3(0, 0, -0.035), Vector3(0.2, 0.12, 0.07), col)
 			mb.box(p + Vector3(0, 0.035, -0.072), Vector3(0.19, 0.035, 0.01), col.darkened(0.2))
+			mb.set_tag("")
 		"briefcase":
 			mb.set_bone(bone_index("LeftHand"))
 			_block(mb, Vector3(-0.3, 0.6, 0.0), Vector3(0.08, 0.27, 0.38), col)
@@ -898,17 +1020,20 @@ static func _arms(mb, look: Dictionary, o: Dictionary) -> void:
 		var wr := Vector3(side * 0.29, 0.9, 0)
 		mb.set_bone(bone_index(prefix + "UpperArm"))
 		if sleeves == "long":
-			_tube(mb, sh, el, 0.075 * puff, 0.065 * puff, sleeve, sides)
+			if not o.body:
+				_tube(mb, sh, el, 0.075 * puff, 0.065 * puff, sleeve, sides)
 			if look.has("stripes"):
 				for z in [-0.022, 0.022]:
 					_strip(mb, [sh + Vector3(side * 0.08 * puff, -0.03, z), el + Vector3(side * 0.07 * puff, 0, z)], 0.009, look.stripes, sh.lerp(el, 0.5) + Vector3(0, 0, z), Vector3.ONE)
 			if outfit == "puffer":
 				_ball(mb, sh.lerp(el, 0.5), Vector3(0.095, 0.05, 0.095), sleeve, 6, 2)
 		else:
-			_tube(mb, sh, el, 0.068, 0.058, skin, sides)
+			if not o.body:
+				_tube(mb, sh, el, 0.068, 0.058, skin, sides)
 			if sleeves == "short":
 				var hem := sh.lerp(el, 0.45)
-				_tube(mb, sh, hem, 0.086, 0.08, sleeve)
+				if not o.body:
+					_tube(mb, sh, hem, 0.086, 0.08, sleeve)
 				_tube(mb, hem + (sh - el) * 0.08, hem, 0.083, 0.082, o.accent if outfit == "jersey" else sleeve.darkened(0.12))
 		if outfit == "bomber" and side < 0:
 			mb.box(Vector3(side * (0.255 * w + 0.075), 1.33, 0), Vector3(0.01, 0.06, 0.05), Color(0.6, 0.6, 0.62))
@@ -919,8 +1044,9 @@ static func _arms(mb, look: Dictionary, o: Dictionary) -> void:
 
 		mb.set_bone(bone_index(prefix + "LowerArm"))
 		var fore := sleeve if sleeves == "long" else skin
-		_ball(mb, el, Vector3(0.062, 0.062, 0.062) * (puff if sleeves == "long" else 1.0), fore, 5, 3)
-		_tube(mb, el, wr, 0.06 * (puff if sleeves == "long" else 1.0), 0.05, fore, sides)
+		if not o.body:
+			_ball(mb, el, Vector3(0.062, 0.062, 0.062) * (puff if sleeves == "long" else 1.0), fore, 5, 3)
+			_tube(mb, el, wr, 0.06 * (puff if sleeves == "long" else 1.0), 0.05, fore, sides)
 		if sleeves == "long":
 			if look.has("stripes"):
 				for z in [-0.02, 0.02]:
@@ -930,7 +1056,8 @@ static func _arms(mb, look: Dictionary, o: Dictionary) -> void:
 			_tube(mb, Vector3(side * 0.29, 0.94, 0), wr, 0.063, 0.063, cuff)
 
 		mb.set_bone(bone_index(prefix + "Hand"))
-		_hand(mb, side, skin, o.sides > 8)
+		if not o.body:
+			_hand(mb, side, skin, o.sides > 8)
 		if side > 0 and look.has("cane"):
 			_tube(mb, Vector3(0.296, 0.82, -0.03), Vector3(0.32, 0.0, -0.13), 0.013, 0.012, look.cane, 4)
 			_tube(mb, Vector3(0.296, 0.875, 0.025), Vector3(0.296, 0.865, -0.06), 0.015, 0.015, look.cane, 4)
@@ -977,10 +1104,11 @@ static func _legs(mb, look: Dictionary, o: Dictionary) -> void:
 		var ankle := Vector3(x, 0.1, 0)
 		mb.set_bone(bone_index(prefix + "UpperLeg"))
 		if bottoms == "shorts":
-			_tube(mb, hip, knee, fit[0], fit[1], skin, sides)
-			_tube(mb, hip, Vector3(x, 0.6, 0), 0.108, 0.1, pants, sides)
+			if not o.body:
+				_tube(mb, hip, knee, fit[0], fit[1], skin, sides)
+				_tube(mb, hip, Vector3(x, 0.6, 0), 0.108, 0.1, pants, sides)
 			_tube(mb, Vector3(x, 0.63, 0), Vector3(x, 0.6, 0), 0.101, 0.101, pants.darkened(0.15))
-		else:
+		elif not o.body:
 			_tube(mb, hip, knee, fit[0], fit[1], leg, sides)
 		if bottoms == "cargo":
 			mb.box(Vector3(side * 0.205, 0.68, 0.0), Vector3(0.03, 0.14, 0.12), pants.darkened(0.12))
@@ -989,8 +1117,9 @@ static func _legs(mb, look: Dictionary, o: Dictionary) -> void:
 
 		mb.set_bone(bone_index(prefix + "LowerLeg"))
 		var lower := skin if bottoms == "shorts" else leg
-		_ball(mb, knee, Vector3(fit[1], 0.07, fit[1]) * 0.98, lower, 5, 3)
-		_tube(mb, knee, ankle, fit[2], fit[3], lower, sides)
+		if not o.body:
+			_ball(mb, knee, Vector3(fit[1], 0.07, fit[1]) * 0.98, lower, 5, 3)
+			_tube(mb, knee, ankle, fit[2], fit[3], lower, sides)
 		match bottoms:
 			"jeans":
 				# Turn-ups showing the lighter inside of the denim.
@@ -1000,7 +1129,7 @@ static func _legs(mb, look: Dictionary, o: Dictionary) -> void:
 				_tube(mb, Vector3(x, 0.115, 0), Vector3(x, 0.2, 0), 0.062, 0.07, pants.darkened(0.2))
 			"cargo":
 				_tube(mb, Vector3(x, 0.13, 0), Vector3(x, 0.2, 0), 0.074, 0.076, pants.darkened(0.06))
-		if socks.a > 0.0 and (bare or bottoms == "shorts"):
+		if socks.a > 0.0 and (bare or bottoms == "shorts") and not o.body:
 			_tube(mb, Vector3(x, 0.1, 0), Vector3(x, 0.2, 0), 0.058, 0.06, socks)
 
 		mb.set_bone(bone_index(prefix + "Foot"))
@@ -1022,7 +1151,8 @@ static func _shoe(mb, look: Dictionary, o: Dictionary, side: float) -> void:
 		"slides":
 			var socks: Color = look.get("socks", Color(0, 0, 0, 0))
 			mb.rounded_slab(Vector3(x, 0.016, -0.05), Vector3(0.12, 0.032, 0.28), col.darkened(0.2))
-			mb.smooth_ball(Vector3(x, 0.045, -0.05), Vector3(0.05, 0.035, 0.12), socks if socks.a > 0.0 else o.skin, 8, 4)
+			if not o.body:
+				mb.smooth_ball(Vector3(x, 0.045, -0.05), Vector3(0.05, 0.035, 0.12), socks if socks.a > 0.0 else o.skin, 8, 4)
 			mb.smooth_ball(Vector3(x, 0.06, -0.075), Vector3(0.062, 0.03, 0.05), col, 8, 3)
 		"dress":
 			mb.rounded_slab(Vector3(x, 0.011, -0.055), Vector3(0.11, 0.022, 0.29), col.darkened(0.5))
@@ -1061,26 +1191,30 @@ static func _head(mb, look: Dictionary, o: Dictionary) -> void:
 	# Skull, longer front to back than across, running into a narrower jaw
 	# as one loft (_head_rings), plus a soft chin. Two crossing balls left a
 	# jagged seam over the cheeks (0.24 review).
-	var keep: Transform3D = mb.xform
-	mb.xform = keep * Transform3D(Basis.IDENTITY, c + Vector3(0, 0, 0.008))
-	mb.loft(_head_rings(skin), 16 if fine else 12, 0.007)
-	mb.xform = keep
-	mb.smooth_ball(c + Vector3(0, -0.14, -0.082), Vector3(0.055, 0.04, 0.04), skin, 8 if fine else 6, 4)
+	# A BodyKit body has its own head, face, eyes and beard: only hair, hats
+	# and eyewear are added.
+	if not o.body:
+		var keep: Transform3D = mb.xform
+		mb.xform = keep * Transform3D(Basis.IDENTITY, c + Vector3(0, 0, 0.008))
+		mb.loft(_head_rings(skin), 16 if fine else 12, 0.007)
+		mb.xform = keep
+		mb.smooth_ball(c + Vector3(0, -0.14, -0.082), Vector3(0.055, 0.04, 0.04), skin, 8 if fine else 6, 4)
 	# Face (0.24: was box eyes, nose and mouth): eye whites with dark irises,
 	# brows, a nose with a bridge and a rounded tip, upper and lower lip.
 	var segs := 8 if fine else 6
 	var iris: Color = look.get("eyes", Color(0.2, 0.13, 0.08))
 	var mouth_z := -0.012 if look.get("beard", false) else 0.0
-	for side in [-1.0, 1.0]:
+	for side in [-1.0, 1.0] if not o.body else []:
 		_ball(mb, c + Vector3(side * 0.165, -0.01, 0.01), Vector3(0.026, 0.05, 0.034), skin.darkened(0.08), 6, 3)
 		mb.smooth_ball(c + Vector3(side * 0.062, 0.012, -0.148), Vector3(0.03, 0.019, 0.02), Color(0.93, 0.92, 0.89), segs, 4)
 		mb.smooth_ball(c + Vector3(side * 0.062, 0.011, -0.162), Vector3(0.0135, 0.0145, 0.01), iris, segs, 3)
 		mb.smooth_ball(c + Vector3(side * 0.064, 0.052, -0.158), Vector3(0.037, 0.009, 0.012), hair.darkened(0.3), segs, 3)
-	mb.smooth_limb(c + Vector3(0, 0.025, -0.163), c + Vector3(0, -0.03, -0.186), 0.012, 0.016, skin.darkened(0.04), segs)
-	mb.smooth_ball(c + Vector3(0, -0.035, -0.184), Vector3(0.022, 0.017, 0.016), skin.darkened(0.06), segs, 4)
-	var lip := skin.lerp(Color(0.6, 0.28, 0.28), 0.3).darkened(0.1)
-	mb.smooth_ball(c + Vector3(0, -0.092, -0.148 + mouth_z), Vector3(0.034, 0.009, 0.012), lip.darkened(0.12), segs, 3)
-	mb.smooth_ball(c + Vector3(0, -0.106, -0.146 + mouth_z), Vector3(0.03, 0.011, 0.012), lip, segs, 3)
+	if not o.body:
+		mb.smooth_limb(c + Vector3(0, 0.025, -0.163), c + Vector3(0, -0.03, -0.186), 0.012, 0.016, skin.darkened(0.04), segs)
+		mb.smooth_ball(c + Vector3(0, -0.035, -0.184), Vector3(0.022, 0.017, 0.016), skin.darkened(0.06), segs, 4)
+		var lip := skin.lerp(Color(0.6, 0.28, 0.28), 0.3).darkened(0.1)
+		mb.smooth_ball(c + Vector3(0, -0.092, -0.148 + mouth_z), Vector3(0.034, 0.009, 0.012), lip.darkened(0.12), segs, 3)
+		mb.smooth_ball(c + Vector3(0, -0.106, -0.146 + mouth_z), Vector3(0.03, 0.011, 0.012), lip, segs, 3)
 	if look.get("sunglasses", false):
 		mb.box(c + Vector3(0, 0.02, -0.174), Vector3(0.25, 0.06, 0.02), Color(0.04, 0.04, 0.05))
 	elif look.get("glasses", false):
@@ -1090,10 +1224,11 @@ static func _head(mb, look: Dictionary, o: Dictionary) -> void:
 	if look.get("sunglasses", false) or look.get("glasses", false):
 		for side in [-1.0, 1.0]:
 			mb.box(c + Vector3(side * 0.172, 0.025, -0.085), Vector3(0.01, 0.015, 0.17), Color(0.06, 0.06, 0.08))
-	if look.get("beard", false):
+	if look.get("beard", false) and not o.body:
 		_ball(mb, c + Vector3(0, -0.11, -0.04), Vector3(0.14, 0.09, 0.13), hair, 6, 3)
 	if headwear == "":
-		_hair(mb, style, c, hair, skin)
+		# The body's scalp is painted with the hair: no cap ball over it.
+		_hair(mb, style, c, hair, skin, o.body)
 	else:
 		# Only hair that shows below a hat.
 		if style in ["long", "ponytail", "locs", "bob"]:
@@ -1114,17 +1249,25 @@ static func _head(mb, look: Dictionary, o: Dictionary) -> void:
 			_strip(mb, arc, 0.02, hp.darkened(0.2), c + Vector3(0, -0.05, 0), Vector3.ONE)
 
 
+## under_hat: only the hair that shows outside a cap (a hat, or a BodyKit
+## scalp painted with the hair colour).
 static func _hair(mb, style: String, c: Vector3, hair: Color, skin: Color, under_hat := false) -> void:
 	match style:
 		"short":
-			_ball(mb, c + Vector3(0, 0.07, 0.02), Vector3(0.18, 0.14, 0.18), hair, 10, 5)
+			if not under_hat:
+				_ball(mb, c + Vector3(0, 0.07, 0.02), Vector3(0.18, 0.14, 0.18), hair, 10, 5)
 		"fade":
+			if under_hat:
+				return
 			_ball(mb, c + Vector3(0, 0.1, 0.015), Vector3(0.165, 0.12, 0.17), hair, 10, 5)
 			_ball(mb, c + Vector3(0, 0.04, 0.015), Vector3(0.176, 0.14, 0.176), hair.lerp(skin, 0.5), 10, 5)
 		"buzz":
+			if under_hat:
+				return
 			_ball(mb, c + Vector3(0, 0.05, 0.015), Vector3(0.175, 0.15, 0.175), hair.lerp(skin, 0.35), 10, 5)
 		"curly":
-			_ball(mb, c + Vector3(0, 0.08, 0.02), Vector3(0.19, 0.15, 0.19), hair, 10, 5)
+			if not under_hat:
+				_ball(mb, c + Vector3(0, 0.08, 0.02), Vector3(0.19, 0.15, 0.19), hair, 10, 5)
 			for k in 5:
 				var a := TAU * k / 5.0 + 0.3
 				_ball(mb, c + Vector3(cos(a) * 0.1, 0.19, 0.02 + sin(a) * 0.1), Vector3(0.07, 0.06, 0.07), hair.lightened(0.06), 5, 2)
@@ -1143,7 +1286,8 @@ static func _hair(mb, style: String, c: Vector3, hair: Color, skin: Color, under
 				_ball(mb, c + Vector3(0, 0.07, 0.02), Vector3(0.18, 0.14, 0.18), hair, 10, 5)
 			mb.limb(c + Vector3(0, 0.06, 0.17), c + Vector3(0, -0.22, 0.22), 0.05, 0.035, hair, 5)
 		"bun":
-			_ball(mb, c + Vector3(0, 0.07, 0.02), Vector3(0.18, 0.14, 0.18), hair, 10, 5)
+			if not under_hat:
+				_ball(mb, c + Vector3(0, 0.07, 0.02), Vector3(0.18, 0.14, 0.18), hair, 10, 5)
 			_ball(mb, c + Vector3(0, 0.2, 0.09), Vector3(0.08, 0.08, 0.08), hair, 6, 3)
 		"afro":
 			_ball(mb, c + Vector3(0, 0.1, 0.03), Vector3(0.25, 0.21, 0.24), hair, 10, 5)
@@ -1192,6 +1336,238 @@ static func _hat(mb, headwear: String, c: Vector3, hat: Color) -> void:
 			mb.limb(c + Vector3(0, 0.08, 0), c + Vector3(0, 0.2, 0), 0.19, 0.21, hat, 8)
 			mb.rounded_slab(c + Vector3(0, 0.09, -0.21), Vector3(0.26, 0.022, 0.12), hat.darkened(0.3))
 			mb.box(c + Vector3(0, 0.15, -0.2), Vector3(0.06, 0.06, 0.02), Color(0.95, 0.8, 0.25))
+
+
+# --- Body mode: fitting the kit's details onto a BodyKit body ------------------
+
+## The old block body's limb segments per limb bone (shoulder, elbow, wrist;
+## hip, knee, ankle), which the kit's sleeve hems, cuffs and stripes follow.
+const OLD_LIMBS := {
+	5: [Vector3(-0.25, 1.41, 0), Vector3(-0.28, 1.13, 0)], 6: [Vector3(-0.28, 1.13, 0), Vector3(-0.29, 0.9, 0)],
+	8: [Vector3(0.25, 1.41, 0), Vector3(0.28, 1.13, 0)], 9: [Vector3(0.28, 1.13, 0), Vector3(0.29, 0.9, 0)],
+	11: [Vector3(-0.11, 0.92, 0), Vector3(-0.11, 0.5, 0)], 12: [Vector3(-0.11, 0.5, 0), Vector3(-0.11, 0.1, 0)],
+	14: [Vector3(0.11, 0.92, 0), Vector3(0.11, 0.5, 0)], 15: [Vector3(0.11, 0.5, 0), Vector3(0.11, 0.1, 0)],
+}
+## Old heights that move to body joints (_warp's knots).
+const OLD_KNOTS := [0.1, 0.5, 0.92, 1.02, 1.18, 1.41, 1.5, 1.53]
+## Gap kept between the body (or its cloth) and a detail lying on it, and how
+## much of a detail's old height off the surface it keeps.
+const WARP_GAP := 0.004
+const WARP_KEEP := 0.6
+
+
+## Moves the kit's details (vertices from first_v, triangles from first_i)
+## from the old block body they were made for onto the BodyKit body `b`:
+## torso details by height knots at the joints and the body's outline per
+## height (shoulder tops by the shoulder line), neck details by the neck's
+## outline, limb details along the new bones by the limb radii, shoes onto
+## the foot boxes, head details by the head box, hand items with the hands.
+## Rigid groups (belt blocks, bags, radio, camera) move whole.
+static func _warp(mb, look: Dictionary, o: Dictionary, b: Dictionary, first_v: int, first_i: int) -> void:
+	var pos: PackedVector3Array = mb.verts
+	var n := pos.size()
+	if n <= first_v:
+		return
+	var f := BodyKit.fit(b)
+	var j: Dictionary = b.joints
+	var d := BodyKit._dress(look, o)
+	var thick: PackedFloat32Array = d.thick
+	var old := pos.duplicate()
+	var bones := PackedInt32Array()
+	bones.resize(n)
+	var marks: Array = mb._bone_marks
+	for k in marks.size():
+		var end: int = n if k == marks.size() - 1 else marks[k + 1][0]
+		for v in range(maxi(marks[k][0], first_v), end):
+			bones[v] = marks[k][1]
+	var kn := [j.LeftFoot.y, j.LeftLowerLeg.y, j.Hips.y, j.Spine.y, j.Chest.y, j.LeftUpperArm.y,
+		j.Neck.y - 0.015, j.Neck.y + 0.03]
+	for k in range(1, kn.size()):
+		kn[k] = maxf(kn[k], kn[k - 1] + 0.01)
+	var torso: Dictionary = f.torso
+	var neck: Dictionary = f.neck
+	var bulk: float = o.bulk
+	var waist_y := lerpf(j.Hips.y, j.Spine.y, d.waist)
+	var leg_fit: Array = LEG_FIT.get("bare" if d.shorts else d.bottoms, LEG_FIT.trousers)
+	var long: bool = d.sleeves == "long"
+	var puff := 1.22 if o.outfit == "puffer" else (1.08 if o.outfit in ["hoodie", "bomber", "delivery"] else 1.0)
+	var head: AABB = b.head
+	var eye: Vector3 = f.eye
+	var face_z := eye.z - 0.012
+	for v in range(first_v, n):
+		var p := old[v]
+		var bone := bones[v]
+		var q := p
+		if bone <= BodyKit.CHEST or bone == BodyKit.NECK:
+			var y := p.y
+			var yen := _knot(clampf(y, 0.5, 1.44), kn)
+			var cz := BodyKit.slice_cz(torso, yen)
+			var push := thick[BodyKit.TOP] if _knot(y, kn) > waist_y else thick[BodyKit.BOTTOMS]
+			if bone != BodyKit.NECK:
+				var g := _old_torso(y, bulk)
+				var u := p.x / g.x
+				var w := p.z / g.y
+				var al := atan2(w, u)
+				var wn := BodyKit.slice_r(torso, yen, 0.0 if u >= 0.0 else PI)
+				var fn := BodyKit.slice_r(torso, yen, -PI * 0.5)
+				var bn := BodyKit.slice_r(torso, yen, PI * 0.5)
+				var ph := atan2(sin(al) * (fn if w < 0.0 else bn), cos(al) * wn)
+				var r := _fit_r(Vector2(u, w).length(), BodyKit.slice_r(torso, yen, ph) + push + WARP_GAP,
+					Vector2(cos(al) * g.x, sin(al) * g.y).length())
+				q = Vector3(cos(ph) * r, _knot(y, kn), cz + sin(ph) * r)
+				# Over the shoulders: onto the body's shoulder line.
+				var ws := smoothstep(1.38, 1.46, y)
+				if ws > 0.0:
+					var ax := absf(p.x)
+					var ot := maxf(1.3 + 0.2 * sqrt(maxf(0.0, 1.0 - pow(p.x / (0.25 * bulk), 2.0))),
+						1.39 + 0.08 * sqrt(maxf(0.0, 1.0 - pow((ax - 0.24) / 0.09, 2.0))))
+					var xn: float = p.x * f.shoulder / 0.33
+					var dy := minf(y - ot, 0.06)
+					var yt := _top_at(f.top, absf(xn)) + push + WARP_GAP + (dy * WARP_KEEP if dy > 0.0 else dy)
+					q = q.lerp(Vector3(xn, yt, cz + p.z * (fn if p.z < 0.0 else bn) / g.y), ws)
+			# Round the neck: collars, hoods' necks, necklaces.
+			var rr := Vector2(p.x, p.z).length()
+			var an := 1.0 if bone == BodyKit.NECK else smoothstep(1.4, 1.44, p.y) * (1.0 - smoothstep(0.1, 0.13, rr))
+			if an > 0.0:
+				var th := atan2(p.z, p.x)
+				var yk := _knot(p.y, kn)
+				var r := _fit_r(rr / 0.07, BodyKit.slice_r(neck, yk, th) + WARP_GAP, 0.07)
+				q = q.lerp(Vector3(cos(th) * r, yk, BodyKit.slice_cz(neck, yk) + sin(th) * r), an)
+		elif BodyKit.LIMBS.has(bone):
+			var seg: Array = OLD_LIMBS[bone]
+			var a0: Vector3 = seg[0]
+			var od: Vector3 = seg[1] - a0
+			var ol := od.length()
+			od /= ol
+			var t := (p - a0).dot(od) / ol
+			var qv := p - a0 - od * (t * ol)
+			var na: Vector3 = j[BodyKit.BONE_NAMES[bone]]
+			var nd: Vector3 = j[BodyKit.BONE_NAMES[BodyKit.LIMBS[bone]]] - na
+			var nl := nd.length()
+			nd /= nl
+			var qn := Quaternion(od, nd) * qv
+			var fr := BodyKit.limb_frame(na, na + nd)
+			var rn := BodyKit.limb_r(f.limbs[bone], t, atan2(qn.dot(fr[2]), qn.dot(fr[1])))
+			var ro := 0.0
+			var push := 0.0
+			match bone:
+				5, 8:
+					if long:
+						ro = lerpf(0.075, 0.065, t) * puff
+					elif d.sleeves == "short" and t < 0.45:
+						ro = lerpf(0.086, 0.08, t / 0.45)
+					else:
+						ro = lerpf(0.068, 0.058, t)
+					if long or (d.sleeves == "short" and t < 0.42):
+						push = thick[BodyKit.SLEEVE]
+				6, 9:
+					ro = lerpf(0.06 * (puff if long else 1.0), 0.05, t)
+					if long and t < 0.93:
+						push = thick[BodyKit.SLEEVE]
+				11, 14:
+					var shorts: bool = d.bottoms == "shorts" and t < 0.75
+					ro = lerpf(0.108, 0.1, t / 0.75) if shorts else lerpf(leg_fit[0], leg_fit[1], t)
+					push = _leg_push(d, thick, t < 0.74)
+				_:
+					ro = lerpf(leg_fit[2], leg_fit[3], t)
+					push = _leg_push(d, thick, false)
+			q = na + nd * (t * nl) + qn.normalized() * _fit_r(qv.length() / ro, rn + push + WARP_GAP, ro)
+		elif bone == 7 or bone == 10:
+			var side := -1.0 if bone == 7 else 1.0
+			q = p + f.hands[0 if bone == 7 else 1] - Vector3(side * 0.29, 0.8, -0.005)
+		elif bone == 13 or bone == 16:
+			var side := -1.0 if bone == 13 else 1.0
+			var box: AABB = f.feet[0 if bone == 13 else 1]
+			var c := box.get_center()
+			q = Vector3(c.x + (p.x - side * 0.11) * (box.size.x * 0.5 + 0.012) / 0.063, p.y,
+				remap(p.z, -0.2, 0.1, box.position.z - 0.012, box.end.z + 0.015))
+		elif bone == BodyKit.HEAD:
+			q = Vector3(p.x * f.brow / 0.159, eye.y + (p.y - 1.702) * (f.crown - eye.y) / 0.176,
+				face_z + (p.z + 0.16) * (f.back - face_z) / 0.346)
+			q += (q - head.get_center()).normalized() * WARP_GAP
+		pos[v] = q
+	# Rigid groups move with the vertex nearest the body's axis.
+	var rigid: PackedInt32Array = mb.tag_ranges("rigid")
+	for k in range(0, rigid.size(), 2):
+		if rigid[k] < first_v or rigid[k + 1] <= rigid[k]:
+			continue
+		var best := rigid[k]
+		for v in range(rigid[k], rigid[k + 1]):
+			if Vector2(old[v].x, old[v].z).length() < Vector2(old[best].x, old[best].z).length():
+				best = v
+		var delta := pos[best] - old[best]
+		for v in range(rigid[k], rigid[k + 1]):
+			pos[v] = old[v] + delta
+	# Keep each triangle facing the way it did, and smooth the normals again.
+	var idx: PackedInt32Array = mb.indices
+	var nrm: PackedVector3Array = mb.normals
+	var acc := PackedVector3Array()
+	acc.resize(n)
+	for t in range(first_i, idx.size(), 3):
+		var a := idx[t]
+		var bb := idx[t + 1]
+		var c := idx[t + 2]
+		var ns := nrm[a] + nrm[bb] + nrm[c]
+		var co := (old[bb] - old[a]).cross(old[c] - old[a])
+		var cn := (pos[bb] - pos[a]).cross(pos[c] - pos[a])
+		if co.dot(ns) * cn.dot(ns) < 0.0:
+			idx[t + 1] = c
+			idx[t + 2] = bb
+			cn = -cn
+		for v in [a, bb, c]:
+			acc[v] += cn
+	for v in range(first_v, n):
+		if acc[v].length_squared() > 1e-14:
+			nrm[v] = acc[v].normalized()
+	mb.verts = pos
+	mb.normals = nrm
+	mb.indices = idx
+
+
+## The cloth over a leg at the details' height: trousers, or tights and bare
+## legs below shorts, skirts and dresses.
+static func _leg_push(d: Dictionary, thick: PackedFloat32Array, upper: bool) -> float:
+	if d.bottoms in ["skirt", "dress"] or (d.bottoms == "shorts" and not upper):
+		return thick[BodyKit.LEGS]
+	return thick[BodyKit.BOTTOMS]
+
+
+## Old height y on the body's height (piecewise linear between the knots,
+## slope 1 past the ends).
+static func _knot(y: float, kn: Array) -> float:
+	if y <= OLD_KNOTS[0]:
+		return kn[0] + y - OLD_KNOTS[0]
+	for k in range(1, OLD_KNOTS.size()):
+		if y <= OLD_KNOTS[k]:
+			return lerpf(kn[k - 1], kn[k], (y - OLD_KNOTS[k - 1]) / (OLD_KNOTS[k] - OLD_KNOTS[k - 1]))
+	return kn[-1] + y - OLD_KNOTS[-1]
+
+
+## The old block body's torso half width and half depth at height y (chest,
+## waist, hips and the top of the legs).
+static func _old_torso(y: float, bulk: float) -> Vector2:
+	var g := _profile(clampf(y, 0.5, 1.44), 1.0, bulk)
+	var u := (y - 0.95) / 0.13
+	if absf(u) < 1.0:
+		var h := Vector2(0.19, 0.13) * sqrt(1.0 - u * u)
+		g = Vector2(maxf(g.x, h.x), maxf(g.y, h.y))
+	if y < 0.95:
+		g = Vector2(maxf(g.x, 0.2), maxf(g.y, 0.09))
+	return g
+
+
+## The body's shoulder line at |x| (BodyKit.fit top, 1 cm bins).
+static func _top_at(top: PackedFloat32Array, x: float) -> float:
+	var fx := clampf(x / 0.01 - 0.5, 0.0, top.size() - 1)
+	var k := int(fx)
+	return lerpf(top[k], top[mini(k + 1, top.size() - 1)], fx - k)
+
+
+## A detail's radius on the body: `s` is its old radius over the old
+## surface's `ro`; on or inside the surface it scales with the new surface
+## `inner`, outside it keeps WARP_KEEP of its old height off it.
+static func _fit_r(s: float, inner: float, ro: float) -> float:
+	return inner + (s - 1.0) * ro * WARP_KEEP if s >= 1.0 else s * inner
 
 
 # --- Shapes -------------------------------------------------------------------

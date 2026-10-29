@@ -33,6 +33,9 @@ const SPINE := 1
 const CHEST := 2
 const NECK := 3
 const HEAD := 4
+const BONE_NAMES := ["Hips", "Spine", "Chest", "Neck", "Head", "LeftUpperArm", "LeftLowerArm", "LeftHand",
+	"RightUpperArm", "RightLowerArm", "RightHand", "LeftUpperLeg", "LeftLowerLeg", "LeftFoot", "RightUpperLeg",
+	"RightLowerLeg", "RightFoot"]
 
 ## Cloth thickness (m) by top, pushed out from the skin.
 const TOP_THICK := {"tee": 0.004, "tank": 0.003, "polo": 0.005, "jersey": 0.005, "hoodie": 0.012, "jacket": 0.014,
@@ -97,7 +100,9 @@ static func shape_weights(look: Dictionary) -> Dictionary:
 		w[g + "_fat"] = weight
 	elif weight < 0.0:
 		w[g + "_thin"] = -weight
-	var muscle: float = look.get("muscle", 0.0)
+	# The hero is athletic unless the look says otherwise.
+	var hero: bool = look.get("hero", false)
+	var muscle: float = look.get("muscle", 0.5 if hero else 0.0)
 	if muscle > 0.0:
 		w[g + "_muscle"] = muscle
 	var age: float = look.get("age", 0.0)
@@ -105,7 +110,7 @@ static func shape_weights(look: Dictionary) -> Dictionary:
 		w[g + "_old"] = age
 	elif age < 0.0:
 		w[g + "_young"] = -age
-	var stature: float = look.get("stature", 0.0)
+	var stature: float = look.get("stature", 0.15 if hero else 0.0)
 	if stature > 0.0:
 		w[g + "_tall"] = stature
 	elif stature < 0.0:
@@ -270,12 +275,12 @@ static func _region(part: int, along: float, c: Vector3, code: int, cj: Dictiona
 			if d.bottoms in ["skirt", "dress"]:
 				return LEGS
 			if d.bottoms == "shorts":
-				return BOTTOMS if along < 0.55 else LEGS
+				return BOTTOMS if along < 0.74 else LEGS
 			return BOTTOMS
 		12, 15:  # shins
 			if not d.shorts:
 				return BOTTOMS
-			if d.socks and along > 0.86:
+			if d.socks and along > 0.75:
 				return SOCKS
 			return LEGS
 	# Feet: inside the shoes, except in slides.
@@ -366,3 +371,280 @@ static func add_eyes(mb, look: Dictionary, b: Dictionary, fine: bool) -> void:
 		mb.smooth_ball(c, Vector3(0.0118, 0.0118, 0.0118), Color(0.93, 0.92, 0.89), sides, 4)
 		mb.smooth_ball(c + Vector3(0, 0, -0.0095), Vector3(0.0058, 0.0062, 0.003), iris, sides, 3)
 		mb.smooth_ball(c + Vector3(out * 0.003, 0.0185, -0.0075), Vector3(0.0165, 0.0034, 0.0045), brow, sides, 3)
+
+
+# --- Fit tables (CharacterKit fits its collars, hems, hats and shoes with them)
+
+## Height step and angle bins of the torso and neck slices.
+const SLICE_STEP := 0.02
+const SLICE_BINS := 16
+## Limb radius table: bins along the bone and round it.
+const LIMB_ALONG := 6
+const LIMB_BINS := 8
+## Limb parts and the joint each runs to (CharacterKit.BONES order).
+const LIMBS := {5: 6, 6: 7, 8: 9, 9: 10, 11: 12, 12: 13, 14: 15, 15: 16}
+
+
+## The body's measures for fitting the kit's parts to it, cached in `b`:
+## torso and neck slices (outline per height), limb radii, the shoulder-top
+## line, hand centres, foot boxes and the head's front, back, crown and
+## forehead width. Measured on the bare body (cloth is added on top).
+static func fit(b: Dictionary) -> Dictionary:
+	if b.has("fit"):
+		return b.fit
+	var pos: PackedVector3Array = b.pos
+	var part: PackedInt32Array = block(b.mesh + "/part")
+	var near: PackedInt32Array = block(b.mesh + "/near")
+	var j: Dictionary = b.joints
+	# The torso takes in the shoulder caps (things cross the shoulders onto
+	# them) and the thighs (skirts and aprons hang over them).
+	var arm_y: float = j.LeftUpperArm.y - 0.04
+	var torso := PackedByteArray()
+	var neck := PackedByteArray()
+	torso.resize(pos.size())
+	neck.resize(pos.size())
+	var top := PackedFloat32Array()
+	top.resize(32)
+	top.fill(-1.0)
+	var shoulder := 0.0
+	var boxes := {}
+	for i in pos.size():
+		var p := part[i]
+		var v := pos[i]
+		var cap := (p == 5 or p == 8) and v.y > arm_y
+		torso[i] = 1 if p <= CHEST or p == 11 or p == 14 or cap else 0
+		neck[i] = 1 if p == NECK else 0
+		if p == SPINE or p == CHEST or cap:
+			var k := mini(int(absf(v.x) / 0.01), top.size() - 1)
+			top[k] = maxf(top[k], v.y)
+		if cap:
+			shoulder = maxf(shoulder, absf(v.x))
+		if p in [7, 10, 13, 16]:
+			if not boxes.has(p):
+				boxes[p] = AABB(v, Vector3.ZERO)
+			boxes[p] = boxes[p].expand(v)
+	_fill(top, 1)
+	var head: AABB = b.head
+	var eye: Vector3 = (b.eyes[0] + b.eyes[1]) * 0.5
+	var brow := 0.0
+	for i in pos.size():
+		if part[i] == HEAD and pos[i].y > eye.y + 0.03 and pos[i].y < eye.y + 0.05:
+			brow = maxf(brow, absf(pos[i].x))
+	var limbs := {}
+	for p in LIMBS:
+		limbs[p] = _limb_table(pos, part, p, j[BONE_NAMES[p]], j[BONE_NAMES[LIMBS[p]]])
+	var f := {"torso": _slices(pos, near, torso), "neck": _slices(pos, near, neck), "top": top, "shoulder": shoulder,
+		"limbs": limbs, "hands": [boxes[7].get_center(), boxes[10].get_center()], "feet": [boxes[13], boxes[16]],
+		"eye": eye, "crown": head.end.y, "back": head.end.z, "brow": brow}
+	b["fit"] = f
+	return f
+
+
+## Fills the gaps (-1) in `a` from the nearest set entries, linearly
+## between them. Past the ends, hold 1 keeps the end values and hold 0 wraps
+## round (angle bins).
+static func _fill(a: PackedFloat32Array, hold := 1) -> void:
+	var n := a.size()
+	var have := []
+	for k in n:
+		if a[k] >= 0.0:
+			have.append(k)
+	if have.is_empty():
+		a.fill(0.0)
+		return
+	for k in n:
+		if a[k] >= 0.0:
+			continue
+		var lo := -1
+		var hi := -1
+		for s in have:
+			if s < k:
+				lo = s
+			elif hi < 0:
+				hi = s
+		if hold == 0:
+			# Round the circle.
+			if lo < 0:
+				lo = have[-1] - n
+			if hi < 0:
+				hi = have[0] + n
+			a[k] = lerpf(a[posmod(lo, n)], a[posmod(hi, n)], float(k - lo) / (hi - lo))
+		elif lo < 0:
+			a[k] = a[hi]
+		elif hi < 0:
+			a[k] = a[lo]
+		else:
+			a[k] = lerpf(a[lo], a[hi], float(k - lo) / (hi - lo))
+
+
+## The outline of the vertices in `mask` at heights SLICE_STEP apart, from
+## where triangle edges cross each height: per level the depth centre cz and
+## the furthest point in each of SLICE_BINS angle bins round (0, cz), the
+## angle being atan2(z - cz, x).
+static func _slices(pos: PackedVector3Array, idx: PackedInt32Array, mask: PackedByteArray) -> Dictionary:
+	var lo := INF
+	var hi := -INF
+	for i in pos.size():
+		if mask[i]:
+			lo = minf(lo, pos[i].y)
+			hi = maxf(hi, pos[i].y)
+	var y0 := ceilf(lo / SLICE_STEP) * SLICE_STEP
+	var n := int(floorf((hi - y0) / SLICE_STEP)) + 1
+	var pts := []
+	for k in n:
+		pts.append(PackedVector2Array())
+	for t in range(0, idx.size(), 3):
+		for e in 3:
+			var a := idx[t + e]
+			var c := idx[t + (e + 1) % 3]
+			if mask[a] == 0 or mask[c] == 0:
+				continue
+			var pa := pos[a]
+			var pc := pos[c]
+			if pa.y > pc.y:
+				var sw := pa
+				pa = pc
+				pc = sw
+			if pc.y - pa.y < 1e-6:
+				continue
+			for k in range(maxi(ceili((pa.y - y0) / SLICE_STEP), 0), mini(floori((pc.y - y0) / SLICE_STEP), n - 1) + 1):
+				var q := pa.lerp(pc, (y0 + k * SLICE_STEP - pa.y) / (pc.y - pa.y))
+				pts[k].append(Vector2(q.x, q.z))
+	var cz := PackedFloat32Array()
+	cz.resize(n)
+	cz.fill(-INF)
+	var r := PackedFloat32Array()
+	r.resize(n * SLICE_BINS)
+	r.fill(-1.0)
+	for k in n:
+		var level: PackedVector2Array = pts[k]
+		if level.is_empty():
+			continue
+		var z0 := INF
+		var z1 := -INF
+		for q in level:
+			z0 = minf(z0, q.y)
+			z1 = maxf(z1, q.y)
+		cz[k] = (z0 + z1) * 0.5
+		var bins := PackedFloat32Array()
+		bins.resize(SLICE_BINS)
+		bins.fill(-1.0)
+		for q in level:
+			var d := Vector2(q.x, q.y - cz[k])
+			var bin := posmod(int(floorf((d.angle() + PI) / TAU * SLICE_BINS)), SLICE_BINS)
+			bins[bin] = maxf(bins[bin], d.length())
+		_fill(bins, 0)
+		for bin in SLICE_BINS:
+			r[k * SLICE_BINS + bin] = bins[bin]
+	# Levels with nothing take the nearest level's outline.
+	for k in n:
+		if cz[k] > -INF:
+			continue
+		var near := -1
+		for d in n:
+			if k - d >= 0 and cz[k - d] > -INF:
+				near = k - d
+				break
+			if k + d < n and cz[k + d] > -INF:
+				near = k + d
+				break
+		cz[k] = cz[near]
+		for bin in SLICE_BINS:
+			r[k * SLICE_BINS + bin] = r[near * SLICE_BINS + bin]
+	return {"y0": y0, "n": n, "cz": cz, "r": r}
+
+
+## The slice outline's radius at height y (held at the ends) and angle phi.
+static func slice_r(s: Dictionary, y: float, phi: float) -> float:
+	var r: PackedFloat32Array = s.r
+	var fy := clampf((y - s.y0) / SLICE_STEP, 0.0, s.n - 1)
+	var k0 := int(fy)
+	var k1 := mini(k0 + 1, s.n - 1)
+	var fa := (phi + PI) / TAU * SLICE_BINS - 0.5
+	var b0 := int(floorf(fa))
+	var u := fa - b0
+	b0 = posmod(b0, SLICE_BINS)
+	var b1 := (b0 + 1) % SLICE_BINS
+	var r0 := lerpf(r[k0 * SLICE_BINS + b0], r[k0 * SLICE_BINS + b1], u)
+	var r1 := lerpf(r[k1 * SLICE_BINS + b0], r[k1 * SLICE_BINS + b1], u)
+	return lerpf(r0, r1, fy - k0)
+
+
+## The slice's depth centre at height y.
+static func slice_cz(s: Dictionary, y: float) -> float:
+	var cz: PackedFloat32Array = s.cz
+	var fy := clampf((y - s.y0) / SLICE_STEP, 0.0, s.n - 1)
+	var k0 := int(fy)
+	return lerpf(cz[k0], cz[mini(k0 + 1, s.n - 1)], fy - k0)
+
+
+## A limb's frame from joint a to joint b: [direction, front-facing side
+## axis, the third axis].
+static func limb_frame(a: Vector3, b: Vector3) -> Array:
+	var d := (b - a).normalized()
+	var u := (Vector3(0, 0, -1) - d * d.z * -1.0).normalized()
+	return [d, u, d.cross(u)]
+
+
+## Part `p`'s furthest vertex from its bone a..b per bin along (LIMB_ALONG)
+## and round it (LIMB_BINS, angle atan2(q.w, q.u) in limb_frame()).
+static func _limb_table(pos: PackedVector3Array, part: PackedInt32Array, p: int, a: Vector3, b: Vector3) -> PackedFloat32Array:
+	var fr := limb_frame(a, b)
+	var d: Vector3 = fr[0]
+	var length := a.distance_to(b)
+	var r := PackedFloat32Array()
+	r.resize(LIMB_ALONG * LIMB_BINS)
+	r.fill(-1.0)
+	for i in pos.size():
+		if part[i] != p:
+			continue
+		var t := (pos[i] - a).dot(d) / length
+		if t < 0.0 or t >= 1.0:
+			continue
+		var q := pos[i] - a - d * (t * length)
+		var bin := posmod(int(floorf((atan2(q.dot(fr[2]), q.dot(fr[1])) + PI) / TAU * LIMB_BINS)), LIMB_BINS)
+		var s := int(t * LIMB_ALONG) * LIMB_BINS + bin
+		r[s] = maxf(r[s], q.length())
+	# Gaps round each ring, then whole rings from their neighbours.
+	var rings := PackedFloat32Array()
+	rings.resize(LIMB_ALONG)
+	rings.fill(-1.0)
+	for k in LIMB_ALONG:
+		var ring := r.slice(k * LIMB_BINS, (k + 1) * LIMB_BINS)
+		var any := false
+		for x in ring:
+			any = any or x >= 0.0
+		if not any:
+			continue
+		_fill(ring, 0)
+		rings[k] = 1.0
+		for bin in LIMB_BINS:
+			r[k * LIMB_BINS + bin] = ring[bin]
+	for k in LIMB_ALONG:
+		if rings[k] >= 0.0:
+			continue
+		var near := k
+		for dk in LIMB_ALONG:
+			if k - dk >= 0 and rings[k - dk] >= 0.0:
+				near = k - dk
+				break
+			if k + dk < LIMB_ALONG and rings[k + dk] >= 0.0:
+				near = k + dk
+				break
+		for bin in LIMB_BINS:
+			r[k * LIMB_BINS + bin] = r[near * LIMB_BINS + bin]
+	return r
+
+
+## The limb table's radius at t along (0..1, held at the ends) and angle a.
+static func limb_r(r: PackedFloat32Array, t: float, a: float) -> float:
+	var ft := clampf(t * LIMB_ALONG - 0.5, 0.0, LIMB_ALONG - 1)
+	var k0 := int(ft)
+	var k1 := mini(k0 + 1, LIMB_ALONG - 1)
+	var fa := (a + PI) / TAU * LIMB_BINS - 0.5
+	var b0 := int(floorf(fa))
+	var u := fa - b0
+	b0 = posmod(b0, LIMB_BINS)
+	var b1 := (b0 + 1) % LIMB_BINS
+	return lerpf(lerpf(r[k0 * LIMB_BINS + b0], r[k0 * LIMB_BINS + b1], u),
+		lerpf(r[k1 * LIMB_BINS + b0], r[k1 * LIMB_BINS + b1], u), ft - k0)
