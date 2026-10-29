@@ -68,6 +68,11 @@ func _run() -> void:
 		"test_driving_layouts",
 		"test_brake_and_steer_drifts", "test_classes_brake_and_corner_apart", "test_held_gas_turns_stay_tight", "test_movers_stand_on_hill_ground",
 		"test_touch_driving_layouts",
+		"test_floating_arrows_steer_where_the_thumb_lands",
+		"test_stick_is_the_wheel_only",
+		"test_touches_never_stick",
+		"test_touch_layout_moves_resizes_and_resets",
+		"test_settings_controls_cards_and_layout_editor",
 		"test_scripted_car_gets_unstuck", "test_heavy_vehicle_pushes_harder", "test_spawns_need_room", "test_overlap_resolves", "test_heavy_pushes_parked", "test_pinned_car_holds_still", "test_xray_only_when_hidden", "test_cars_prewarmed", "test_hero_seen_under_roofs", "test_cab_stop_skips_parked_car",
 		"test_vehicle_classes_cover_every_kind", "test_suspension_bounces_and_settles", "test_side_hit_spins_and_dents", "test_hard_crash_throws_panel", "test_crash_throws_rider", "test_car_fire_then_explodes",
 		"test_vehicle_handling_differs",
@@ -983,15 +988,16 @@ func test_camera_turns_with_car() -> void:
 	p.vehicle = car
 	cam.snap()
 	_check(cam.turns() and Controls.stick_steers() and absf(cam.yaw) < 0.01, "Follow is the default: the view starts behind the car and the stick steers")
-	# Up is gas.
-	Controls.override_vector = Vector2(0, -1)
+	# GAS drives (the stick is the wheel only since 0.25.2).
+	Controls.override_vector = Vector2.ZERO
+	Input.action_press("gas")
 	await _frames(120)
-	_check(car.speed > 12.0 and absf(cam.yaw) < 0.05, "stick up drives on (%.1f m/s) and the view stays put going straight" % car.speed)
+	_check(car.speed > 12.0 and absf(cam.yaw) < 0.05, "GAS drives on (%.1f m/s) and the view stays put going straight" % car.speed)
 	# Leaning the stick right turns the car right; the view follows, never
 	# faster than 45 degrees a second (0.21: faster made Sachin dizzy).
 	var max_rate := 0.0
 	var last: float = cam.yaw
-	Controls.override_vector = Vector2(0.7, -0.7)
+	Controls.override_vector = Vector2(0.7, 0)
 	var turned := 0.0
 	var was: float = TopDownCamera._heading(-car.global_basis.z)
 	for f in 60:
@@ -1002,7 +1008,7 @@ func test_camera_turns_with_car() -> void:
 		max_rate = maxf(max_rate, rad_to_deg(absf(wrapf(cam.yaw - last, -PI, PI))) * 60.0)
 		last = cam.yaw
 	_check(turned < -deg_to_rad(20.0), "leaning the stick right turns the car right (%.0f degrees)" % rad_to_deg(-turned))
-	Controls.override_vector = Vector2(0, -1)
+	Controls.override_vector = Vector2.ZERO
 	for f in 180:
 		await _frames(1)
 		max_rate = maxf(max_rate, rad_to_deg(absf(wrapf(cam.yaw - last, -PI, PI))) * 60.0)
@@ -1014,19 +1020,21 @@ func test_camera_turns_with_car() -> void:
 	# Up the screen is now the car's way ahead, in the stick's frame too.
 	var up: Vector3 = cam.ground_axes()[1]
 	_check(up.dot(-car.global_basis.z) > 0.99 and cam.input_axes()[1].dot(up) > 0.99, "screen up is the car's heading, for the view and the stick")
-	# Stick down brakes, then backs up; the view does not flip round.
+	# BRAKE brakes, then backs up; the view does not flip round.
 	var held: float = cam.yaw
 	var moved_back := 0.0
-	Controls.override_vector = Vector2(0, 1)
+	Input.action_release("gas")
+	Input.action_press("brake")
 	var from: Vector3 = car.global_position
 	var drift := 0.0
 	for f in 420:
 		await _frames(1)
 		drift = maxf(drift, absf(wrapf(cam.yaw - held, -PI, PI)))
 	moved_back = (car.global_position - from).dot(-car.global_basis.z)
-	_check(car.velocity.dot(-car.global_basis.z) < -1.0, "stick down brakes and then backs up (%.1f m/s)" % car.velocity.dot(-car.global_basis.z))
+	_check(car.velocity.dot(-car.global_basis.z) < -1.0, "BRAKE brakes and then backs up (%.1f m/s)" % car.velocity.dot(-car.global_basis.z))
 	_check(drift < deg_to_rad(5.0), "backing up, the view holds (%.1f degrees)" % rad_to_deg(drift))
 	# Stopped, turning the car in place does not turn the view.
+	Input.action_release("brake")
 	Controls.override_vector = null
 	car.speed = 0.0
 	car.velocity = Vector3.ZERO
@@ -1058,7 +1066,7 @@ func test_camera_turns_with_car() -> void:
 		var fast = _player_car(kind, Vector3(-200.0 if kind == "sedan" else 200.0, 0, 600.0), 0.0)
 		p.vehicle = fast
 		cam.snap()
-		Controls.override_vector = Vector2(0, -1)
+		Input.action_press("gas")
 		await _frames(420)
 		var rect: Rect2 = cam.get_viewport().get_visible_rect()
 		var co: Vector3 = cam.project_ray_origin(Vector2(rect.size.x * 0.5, 0.0))
@@ -1067,7 +1075,7 @@ func test_camera_turns_with_car() -> void:
 		var ahead: float = (top - fast.global_position).dot(-fast.global_basis.z)
 		var want: float = 70.0 if kind == "super" else maxf(70.0, fast.speed * 2.2)
 		_check(ahead > want, "%s flat out at %.1f m/s: the screen shows %.0f m ahead, %.1f s (%.0f m framed, %.0f degrees)" % [kind, fast.speed, ahead, ahead / fast.speed, cam.size, cam.perspective_pitch])
-		Controls.override_vector = null
+		Input.action_release("gas")
 		fast.queue_free()
 	# On foot (H-13, H-14): the view follows the walk, calmer than in a car,
 	# while the stick's frame holds so a sideways push walks straight instead
@@ -1393,7 +1401,7 @@ func test_settings_page_tabs_and_preview() -> void:
 	# Every tab, each setting with a line under it saying what it does.
 	var want := {"Camera": ["View: ", "Look down near towers: ", "Camera turn", "Screen shake", "Reset camera", "Distance", "Drive zoom-out", "Angle"],
 		"Graphics": ["Quality", "Bloom: ", "Smooth edges: ", "Vivid colour: ", "Real lights: ", "Detail: ", "Shadows: ", "FPS limit", "Show FPS: "],
-		"Controls": ["Driving"],
+		"Controls": ["Edit on-foot layout", "Edit driving layout", "Reset all controls"],
 		"Game": ["Weather", "Skip 3 hours", "Blood: ", "New game", "Log: ", "BUG button: ", "Report issue", "Export log", "Copy log"]}
 	for t in page.TABS:
 		page.show_tab(t)
@@ -3137,6 +3145,294 @@ func test_touch_driving_layouts() -> void:
 	touch._input(tap)
 	get_window().size = window_size
 	await get_tree().process_frame
+
+
+## Floating arrows (0.25.2, Sachin: "the arrow can be anywhere where the
+## players touches"): the arrows appear where the thumb lands on the left
+## half; sliding right or left of that point steers like the arrow buttons,
+## the point follows a long slide, and letting go straightens the wheel.
+func test_floating_arrows_steer_where_the_thumb_lands() -> void:
+	await _new_game(false)
+	var touch = game.hud.touch
+	touch.visible = true
+	var window_size := get_window().size
+	get_window().size = Vector2i(1280, 720)
+	await get_tree().process_frame
+	var car = _spawn_car(_home(), Vector3(0, 0, 8), 0.0)
+	game.player.enter_vehicle(car)
+	game.settings["controls"] = "float"
+	game.apply_settings()
+	await get_tree().process_frame
+	_check(touch.float_on() and not touch.stick_on() and Controls.wheel_steering() and not touch.buttons().any(func(b): return b.action == "steer_left"), "the floating layout is up in the car: no fixed arrows, steering by wheel")
+	# Well away from where the arrows rest.
+	var at := Vector2(430, 260)
+	var tap := InputEventScreenTouch.new()
+	tap.index = 3
+	tap.position = at
+	tap.pressed = true
+	touch._input(tap)
+	var drag := InputEventScreenDrag.new()
+	drag.index = 3
+	drag.position = at + Vector2(8, 0)
+	touch._input(drag)
+	var dead: bool = Controls.steer() == 0.0 and touch._stick_origin.distance_to(at) < 0.5
+	drag.position = at + Vector2(40, 0)
+	touch._input(drag)
+	var right: bool = Controls.steer() > 0.99 and Input.is_action_pressed("steer_right") and not Input.is_action_pressed("steer_left")
+	# A long slide drags the point along, so a short way back steers left.
+	drag.position = at + Vector2(200, 0)
+	touch._input(drag)
+	var followed: bool = absf(touch._stick_origin.x - (at.x + 200.0 - touch.FLOAT_REACH)) < 0.5
+	drag.position = at + Vector2(110, 0)
+	touch._input(drag)
+	var left: bool = Controls.steer() < -0.99 and Input.is_action_pressed("steer_left") and not Input.is_action_pressed("steer_right")
+	tap.position = drag.position
+	tap.pressed = false
+	touch._input(tap)
+	var straight: bool = Controls.steer() == 0.0 and touch._stick_touch == -1
+	_check(dead and right and followed and left and straight, "a thumb anywhere on the left steers: dead zone %s, right %s, the point follows %s, left %s, let go straight %s" % [dead, right, followed, left, straight])
+	# The right half is the pedals' side: a touch on empty screen there does nothing.
+	tap.index = 4
+	tap.position = Vector2(900, 200)
+	tap.pressed = true
+	touch._input(tap)
+	_check(touch._stick_touch == -1, "a touch on the right half does not start the arrows")
+	tap.pressed = false
+	touch._input(tap)
+	game.player.exit_vehicle()
+	game.settings["controls"] = "stick"
+	game.apply_settings()
+	get_window().size = window_size
+	await get_tree().process_frame
+
+
+## Stick + pedals (0.25.2): with the view behind the car the stick is the
+## wheel only, by its sideways lean (a small dead zone, full lock short of
+## the rim); it never drives or brakes, which is the pedals' job.
+func test_stick_is_the_wheel_only() -> void:
+	await _new_game(false)
+	Controls.override_vector = Vector2(0.06, -1.0)
+	var dead: bool = Controls.stick_steer() == 0.0
+	Controls.override_vector = Vector2(0.9, 0.0)
+	var full: bool = is_equal_approx(Controls.stick_steer(), 1.0)
+	Controls.override_vector = Vector2(-0.5, 0.5)
+	var half: float = Controls.stick_steer()
+	Controls.override_vector = null
+	_check(dead and full and half < -0.15 and half > -0.6, "the stick's lean steers: dead near the middle, full lock at 0.9, half lean %.2f" % half)
+	var car = _spawn_car(_home(), Vector3(0, 0, 8), 0.0)
+	game.player.enter_vehicle(car)
+	game.settings["controls"] = "stick"
+	game.settings["camera_turn"] = "car"
+	game.apply_settings()
+	await _frames(5)
+	Controls.override_vector = Vector2(0, -1)
+	await _frames(90)
+	var still: float = car.speed
+	_check(Controls.stick_steers() and Controls.gas() == 0.0 and absf(still) < 0.5, "stick up alone neither presses GAS nor moves the car (%.1f m/s)" % still)
+	Controls.override_vector = Vector2(0.8, 0)
+	Input.action_press("gas")
+	var was: float = car.rotation.y
+	await _frames(90)
+	var turned: float = wrapf(car.rotation.y - was, -PI, PI)
+	Input.action_release("gas")
+	Controls.override_vector = null
+	_check(car.speed > 3.0 and turned < -0.2, "GAS drives and the stick's lean turns the car right (%.0f degrees)" % rad_to_deg(-turned))
+	game.player.exit_vehicle()
+	game.settings["camera_turn"] = "north"
+	game.apply_settings()
+
+
+## Touches are never left held (0.25.2): a release while the phone or
+## settings pause the game still lets go, a reused touch index lets go of
+## what it held, a thumb sliding off a pedal lets go, and losing focus or
+## hiding the controls lets go of everything.
+func test_touches_never_stick() -> void:
+	await _new_game(false)
+	var touch = game.hud.touch
+	touch.visible = true
+	var window_size := get_window().size
+	get_window().size = Vector2i(1280, 720)
+	await get_tree().process_frame
+	var car = _spawn_car(_home(), Vector3(0, 0, 8), 0.0)
+	game.player.enter_vehicle(car)
+	game.settings["controls"] = "stick"
+	game.apply_settings()
+	await get_tree().process_frame
+	var gas: Dictionary = touch.find_item("drive.gas")
+	var brake: Dictionary = touch.find_item("drive.brake")
+	var stick: Dictionary = touch.find_item("drive.stick")
+	var hold := func(index: int, at: Vector2, down: bool) -> void:
+		var ev := InputEventScreenTouch.new()
+		ev.index = index
+		ev.position = at
+		ev.pressed = down
+		touch._input(ev)
+	var slide := func(index: int, at: Vector2) -> void:
+		var ev := InputEventScreenDrag.new()
+		ev.index = index
+		ev.position = at
+		touch._input(ev)
+	hold.call(1, touch._center(gas), true)
+	hold.call(2, touch._center(stick), true)
+	slide.call(2, touch._center(stick) + Vector2(70, 0))
+	var held: bool = Input.is_action_pressed("gas") and Controls.touch_vector.x > 0.5
+	# The phone opens (the game pauses) and both thumbs lift.
+	get_tree().paused = true
+	hold.call(1, touch._center(gas), false)
+	hold.call(2, touch._center(stick), false)
+	var freed: bool = not Input.is_action_pressed("gas") and Controls.touch_vector == Vector2.ZERO and touch._stick_touch == -1
+	hold.call(3, touch._center(gas), true)
+	var ignored: bool = not Input.is_action_pressed("gas")
+	get_tree().paused = false
+	hold.call(3, touch._center(gas), false)
+	_check(touch.process_mode == Node.PROCESS_MODE_ALWAYS and held and freed and ignored, "lifting thumbs while paused lets go (held %s, freed %s); a press while paused is the page's (%s)" % [held, freed, ignored])
+	# A touch index whose release never came is reused: GAS lets go.
+	hold.call(4, touch._center(gas), true)
+	hold.call(4, touch._center(brake), true)
+	_check(not Input.is_action_pressed("gas") and Input.is_action_pressed("brake"), "a reused touch lets go of GAS before pressing BRAKE")
+	hold.call(4, touch._center(brake), false)
+	# Sliding off a pedal onto empty screen lets go; a small wobble does not.
+	hold.call(5, touch._center(gas), true)
+	slide.call(5, touch._center(gas) + Vector2(0, -touch._extent(gas).y - 20.0))
+	var wobble: bool = Input.is_action_pressed("gas")
+	slide.call(5, Vector2(760, 200))
+	_check(wobble and not Input.is_action_pressed("gas"), "a wobble keeps GAS (%s); sliding off onto the road lets go" % wobble)
+	hold.call(5, Vector2(760, 200), false)
+	# Losing focus, or the controls hiding, lets go of everything.
+	hold.call(6, touch._center(gas), true)
+	hold.call(7, touch._center(stick), true)
+	slide.call(7, touch._center(stick) + Vector2(-60, 0))
+	touch._notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
+	var focus: bool = not Input.is_action_pressed("gas") and Controls.touch_vector == Vector2.ZERO and touch._stick_touch == -1
+	hold.call(8, touch._center(brake), true)
+	touch.visible = false
+	var hidden: bool = not Input.is_action_pressed("brake")
+	touch.visible = true
+	_check(focus and hidden, "focus out lets go of all (%s); hiding the controls does too (%s)" % [focus, hidden])
+	game.player.exit_vehicle()
+	get_window().size = window_size
+	await get_tree().process_frame
+
+
+## Moving and resizing controls (0.25.2, Sachin: "allow the players to
+## resize the buttons, or change their placements" and "allow resetting the
+## placement back to original places"): a placed control is drawn and hit
+## there, kept on screen, grown or shrunk within 60-160%, saved in the
+## settings (and through a save file's JSON), and Reset puts one mode back.
+func test_touch_layout_moves_resizes_and_resets() -> void:
+	await _new_game(false)
+	var touch = game.hud.touch
+	touch.visible = true
+	var window_size := get_window().size
+	get_window().size = Vector2i(1280, 720)
+	await get_tree().process_frame
+	var attack: Dictionary = touch.find_item("foot.attack")
+	var home: Vector2 = touch._center(attack)
+	var r0: float = touch._extent(attack).x
+	var to := Vector2(900, 300)
+	touch.place(attack, to)
+	var moved: bool = touch._center(attack).distance_to(to) < 0.5 and touch._button_at(to) == attack.action and touch._button_at(home) != attack.action
+	var edge: Vector2 = to + Vector2(r0 * 1.35, 0)
+	var small_miss: bool = touch._button_at(edge) != attack.action
+	touch.resize(attack, 0.3)
+	var big: bool = touch.size_percent(attack) == 130 and touch._center(attack).distance_to(to) < 0.5 and touch._button_at(edge) == attack.action
+	_check(moved and small_miss and big, "a control moves (%s) and grows to 130%% where it is, its touch area with it (%s)" % [moved, big])
+	for i in 20:
+		touch.resize(attack, 0.1)
+	var top: int = touch.size_percent(attack)
+	for i in 30:
+		touch.resize(attack, -0.1)
+	var bottom: int = touch.size_percent(attack)
+	touch.place(attack, Vector2(-500, -500))
+	var c: Vector2 = touch._center(attack)
+	var ext: Vector2 = touch._extent(attack)
+	_check(top == 160 and bottom == 60 and c.x >= ext.x - 0.5 and c.y >= ext.y - 0.5, "sizes stay 60-160%% (%d, %d) and a control dragged off screen stays on it" % [bottom, top])
+	# The stick moved to the right half takes touches there instead.
+	var stick: Dictionary = touch.find_item("foot.stick")
+	touch.place(stick, Vector2(1050, 500))
+	var swapped: bool = touch._in_stick_half(Vector2(1000, 300)) and not touch._in_stick_half(Vector2(200, 300))
+	touch.reset("foot.")
+	_check(swapped and touch._in_stick_half(Vector2(200, 300)), "a stick moved right takes the right half (%s), and back left after a reset" % swapped)
+	# Saved in the settings; survives the save file's JSON.
+	touch.place(attack, to)
+	touch.resize(attack, 0.2)
+	touch.place(touch.DRIVE_BUTTONS[0], Vector2(700, 600))
+	var layout: Dictionary = game.settings["touch_layout"]
+	var stored: bool = layout.has("foot.attack") and layout.has("drive.gas") and touch.layout == layout
+	game.settings["touch_layout"] = JSON.parse_string(JSON.stringify(layout))
+	game.apply_settings()
+	var loaded: bool = touch._center(attack).distance_to(to) < 0.5 and touch.size_percent(attack) == 120
+	# Reset on foot leaves the driving layout alone.
+	touch.reset("foot.")
+	var back: bool = touch._center(attack).distance_to(home) < 0.5 and touch.size_percent(attack) == 100 and touch.layout.has("drive.gas")
+	_check(stored and loaded and back, "the layout is stored in the settings (%s), loads from JSON (%s), and Reset on foot puts it back, keeping the driving one (%s)" % [stored, loaded, back])
+	game.settings["touch_layout"].clear()
+	game.apply_settings()
+	get_window().size = window_size
+	await get_tree().process_frame
+
+
+## Settings > Controls (0.25.2, Sachin: "instead slider for controls, show
+## them on the preview screens"): a card per layout, each a drawing of its
+## controls; a tap picks it and the live preview shows it. The layout
+## editor moves and resizes a control, Reset puts it back, Done saves, and
+## "Reset all controls" clears every change.
+func test_settings_controls_cards_and_layout_editor() -> void:
+	await _new_game(false)
+	var page = game.hud.phone.settings_page
+	game.hud.settings_button.pressed.emit()
+	await _idle(2)
+	page.show_tab("Controls")
+	await _idle(2)
+	var drawn := true
+	for k in page.cards:
+		var minis: Array = page.cards[k].find_children("*", "Control", true, false).filter(func(n): return n.get_script() == preload("res://scripts/touch_controls.gd"))
+		drawn = drawn and minis.size() == 1 and minis[0].preview and minis[0].driving and minis[0].scheme == k
+	_check(page.cards.keys() == Controls.SCHEMES and drawn and page._overlay_box.visible and page.overlay.scheme == Controls.scheme, "a card per layout, each drawing its own controls, and the controls over the live preview")
+	page.cards["float"].pressed.emit()
+	await _idle(1)
+	_check(Controls.scheme == "float" and game.settings["controls"] == "float" and page.cards["float"].button_pressed and not page.cards["stick"].button_pressed and page.overlay.scheme == "float", "tapping Floating arrows picks it, and the preview shows it")
+	# The editor, driving.
+	_find_button(page._list, "Edit driving layout").pressed.emit()
+	await _idle(1)
+	var ed = page.edit_touch
+	_check(page.editor.visible and ed.driving and ed.scheme == "float" and ed.preview, "Edit driving layout opens the editor on the floating layout")
+	var gas: Dictionary = ed.find_item("drive.gas")
+	var from: Vector2 = ed._center(gas)
+	var to: Vector2 = from + Vector2(-300, -120)
+	var drag_to := func(a: Vector2, b: Vector2) -> void:
+		var ev := InputEventMouseButton.new()
+		ev.button_index = MOUSE_BUTTON_LEFT
+		ev.position = a + Vector2(6, 4)
+		ev.pressed = true
+		page._editor_input(ev)
+		var mv := InputEventMouseMotion.new()
+		mv.position = b + Vector2(6, 4)
+		page._editor_input(mv)
+		var up: InputEventMouseButton = ev.duplicate()
+		up.position = mv.position
+		up.pressed = false
+		page._editor_input(up)
+	drag_to.call(from, to)
+	var moved: bool = ed._center(gas).distance_to(to) < 0.5 and ed.selected == "drive.gas" and game.settings["touch_layout"].has("drive.gas")
+	page._resize_picked(0.2)
+	var grown: bool = ed.size_percent(gas) == 120 and page._edit_size.text == "Size 120%"
+	_check(moved and grown, "dragging GAS moves it (%s); + makes it 120%% (%s)" % [moved, grown])
+	_find_button(page.editor, "Reset").pressed.emit()
+	await _idle(1)
+	_check(ed._center(gas).distance_to(from) < 0.5 and not game.settings["touch_layout"].has("drive.gas"), "Reset puts GAS back")
+	drag_to.call(from, to)
+	_find_button(page.editor, "Done").pressed.emit()
+	await _idle(1)
+	var hud_touch = game.hud.touch
+	_check(not page.editor.visible and page.overlay.layout.has("drive.gas") and hud_touch.layout.has("drive.gas") and is_equal_approx(float(hud_touch.layout["drive.gas"].x), to.x - ed._corner(gas).x), "Done keeps the change, for the preview and the game's controls")
+	_find_button(page._list, "Reset all controls").pressed.emit()
+	await _idle(1)
+	_check(game.settings["touch_layout"].is_empty() and hud_touch.layout.is_empty() and page.overlay.layout.is_empty(), "Reset all controls puts every control back")
+	game.settings["controls"] = "stick"
+	game.apply_settings()
+	page._back.pressed.emit()
+	await _idle(2)
 
 
 ## A player-driven `kind` at `pos` heading -z turned by `yaw`, at `speed`.
@@ -7929,11 +8225,10 @@ func test_settings_sliders_snap_and_apply() -> void:
 		"shake": func(): return roundi(cam.shake_strength * 100.0),
 		"quality": func(): return game.graphics.quality,
 		"fps_limit": func(): return game.fps_limit(),
-		"controls": func(): return Controls.scheme,
 		"weather": func(): return "auto" if game.atmosphere.weather_changes else game.atmosphere.weather,
 	}
 	var want := {"Camera": ["Distance", "Drive zoom-out", "Angle", "Camera turn", "Screen shake"],
-		"Graphics": ["Quality", "FPS limit"], "Controls": ["Driving"], "Game": ["Weather"]}
+		"Graphics": ["Quality", "FPS limit"], "Controls": [], "Game": ["Weather"]}
 	var keep: Dictionary = s.duplicate(true)
 	for t in page.TABS:
 		page.show_tab(t)

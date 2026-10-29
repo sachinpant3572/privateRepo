@@ -34,12 +34,14 @@ const PAD_AXES := {
 	"gas": [JOY_AXIS_TRIGGER_RIGHT, 1.0],
 	"brake": [JOY_AXIS_TRIGGER_LEFT, 1.0],
 }
-## Driving layouts (settings "controls"). stick: the car heads where the
-## stick points, as on foot, with GAS and BRAKE pedals beside it. arrows:
-## left and right buttons turn the wheel, the pedals drive. tilt: the phone
-## is the wheel.
-const SCHEMES := ["stick", "arrows", "tilt"]
-const SCHEME_NAMES := {"stick": "Stick + pedals", "arrows": "Arrows + pedals", "tilt": "Tilt + pedals"}
+## Driving layouts (settings "controls"). stick: the stick's sideways lean
+## turns the wheel (with the view turning behind the car; under a north-up
+## view the car heads where it points), GAS and BRAKE pedals drive. arrows:
+## left and right buttons turn the wheel. float: the arrows appear wherever
+## the thumb lands (a floating stick that only steers). tilt: the phone is
+## the wheel.
+const SCHEMES := ["stick", "arrows", "float", "tilt"]
+const SCHEME_NAMES := {"stick": "Stick + pedals", "arrows": "Arrows + pedals", "float": "Floating arrows + pedals", "tilt": "Tilt + pedals"}
 ## Tilt steering: no turn inside TILT_DEAD of level, full lock at
 ## TILT_FULL (both the sine of the roll angle: about 3 and 25 degrees).
 const TILT_DEAD := 0.05
@@ -47,10 +49,10 @@ const TILT_FULL := 0.42
 
 var camera: Camera3D
 var touch_vector := Vector2.ZERO # written by the on-screen joystick
-## Steer by stick: the wheel is fully over with the stick this many degrees
-## off straight up; pulled back further than STICK_BACK it brakes.
-const STICK_FULL := 60.0
-const STICK_BACK := 110.0
+## Steer by stick: no turn inside STICK_DEAD of the centre (sideways),
+## full lock at STICK_FULL.
+const STICK_DEAD := 0.12
+const STICK_FULL := 0.9
 var override_vector = null # tests set a Vector2 here to steer the player
 var scheme := "stick"
 var tilt_override = null # tests set a gravity Vector3 here to tilt the phone
@@ -129,28 +131,19 @@ func stick_steers() -> bool:
 	return scheme == "stick" and camera != null and camera.has_method("turns") and camera.turns()
 
 
-## Steer by stick: [wheel -1..1, gas 0..1, brake 0..1]. Up the screen is
-## straight on; leaning the stick turns the wheel, fully at STICK_FULL
-## degrees; pulled back past STICK_BACK it brakes and, stopped, reverses.
-func stick_wheel() -> Array[float]:
-	var v := move_vector()
-	var amount := v.length()
-	if amount < 0.15:
-		return [0.0, 0.0, 0.0]
-	var angle := atan2(v.x, -v.y)
-	if absf(angle) <= deg_to_rad(STICK_BACK):
-		# Gas eases off as the stick leans over: full lock lifts off, as
-		# steering without the gas did on a d-pad.
-		return [clampf(angle / deg_to_rad(STICK_FULL), -1.0, 1.0), amount * clampf(cos(angle) + 0.3, 0.0, 1.0), 0.0]
-	# Backing up, leaning the stick swings the tail that way.
-	var back := signf(angle) * (PI - absf(angle))
-	return [clampf(back / deg_to_rad(STICK_FULL), -1.0, 1.0), 0.0, amount]
+## Steer by stick: the wheel, -1..1, from how far the stick leans left or
+## right; up and down do nothing (the pedals drive). Eased in so small leans
+## make small corrections.
+func stick_steer() -> float:
+	var x := move_vector().x
+	var t := clampf((absf(x) - STICK_DEAD) / (STICK_FULL - STICK_DEAD), 0.0, 1.0)
+	return signf(x) * pow(t, 1.4)
 
 
-## Gas pedal, 0..1. W and the stick's up count in the wheel layouts.
+## Gas pedal, 0..1. W (and a pad stick's up) count when steering by wheel.
 func gas() -> float:
 	var g := Input.get_action_strength("gas")
-	if wheel_steering():
+	if wheel_steering() or stick_steers():
 		g = maxf(g, Input.get_action_strength("move_up"))
 	return g
 
@@ -158,7 +151,7 @@ func gas() -> float:
 ## Brake pedal, 0..1 (held at a stop, it reverses).
 func brake() -> float:
 	var b := Input.get_action_strength("brake")
-	if wheel_steering():
+	if wheel_steering() or stick_steers():
 		b = maxf(b, Input.get_action_strength("move_down"))
 	return b
 

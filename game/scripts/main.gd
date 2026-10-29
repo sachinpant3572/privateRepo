@@ -41,7 +41,7 @@ var game_log
 var inventory = Inventory.new()
 var respawning := false
 var cash := 0
-var settings := {"shadows": true, "show_fps": true, "weather": "auto", "detail": "high", "controls": "stick", "view": "perspective", "zoom": 1.0, "angle": 65.0, "auto_tilt": true, "camera_turn": "car", "drive_zoom": 1.0, "fps_limit": 120, "quality": "high", "bloom": true, "aa": false, "vivid": true, "real_lights": true, "log": true, "log_button": true, "shake": 50, "blood": true}
+var settings := {"shadows": true, "show_fps": true, "weather": "auto", "detail": "high", "controls": "stick", "view": "perspective", "zoom": 1.0, "angle": 65.0, "auto_tilt": true, "camera_turn": "car", "drive_zoom": 1.0, "fps_limit": 120, "quality": "high", "bloom": true, "aa": false, "vivid": true, "real_lights": true, "log": true, "log_button": true, "shake": 50, "blood": true, "touch_layout": {}}
 ## Settings > Graphics > FPS limit.
 const FPS_LIMITS := [30, 60, 75, 90, 120]
 ## Settings > Camera > Screen shake, in percent of the full shake (0 is off).
@@ -191,6 +191,13 @@ func apply_settings() -> void:
 	Country.Tiles.cover = 0.5 if graphics.quality == "low" else 1.0
 	var scheme: String = settings.get("controls", "stick")
 	Controls.scheme = scheme if Controls.SCHEMES.has(scheme) else "stick"
+	# Where the on-screen controls sit and how big (Settings > Controls >
+	# Edit layout); the touch layer reads the same dictionary.
+	if not (settings.get("touch_layout") is Dictionary):
+		settings["touch_layout"] = {}
+	if hud and hud.touch:
+		hud.touch.layout = settings["touch_layout"]
+		hud.touch.queue_redraw()
 	# Headless runs (tests, tools) go flat out.
 	Engine.max_fps = 0 if DisplayServer.get_name() == "headless" else fps_limit()
 	if missions:

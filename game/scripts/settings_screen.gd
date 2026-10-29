@@ -5,6 +5,7 @@ extends Control
 ## right. The game stays paused; only its camera keeps running while the page
 ## is open, so a change eases in the preview exactly as it would in play.
 
+const TouchControls = preload("res://scripts/touch_controls.gd")
 const TABS := ["Camera", "Graphics", "Controls", "Game"]
 const HINT := Color(0.62, 0.66, 0.74)
 
@@ -30,6 +31,18 @@ var _held: HSlider = null
 var _held_from := {}
 var _grab_tex: Texture2D
 var _grab_hi_tex: Texture2D
+## Controls tab: a card per driving layout (by scheme), the chosen layout's
+## controls drawn over the live preview, and the layout editor.
+var cards := {}
+var overlay: TouchControls
+var editor: Control
+var edit_touch: TouchControls
+var _overlay_box: Control
+var _edit_driving := false
+var _edit_grab := Vector2.ZERO
+var _edit_drag := false
+var _edit_size: Label
+var _edit_modes := {}
 
 
 func _ready() -> void:
@@ -108,6 +121,14 @@ func _ready() -> void:
 	preview_cam.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	preview_cam.current = true
 	preview.add_child(preview_cam)
+	# The Controls tab draws the chosen layout over the preview, at the
+	# preview's scale.
+	_overlay_box = Control.new()
+	_overlay_box.clip_contents = true
+	_overlay_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_overlay_box.visible = false
+	_aspect.add_child(_overlay_box)
+	overlay = _preview_controls(_overlay_box)
 	var under := HBoxContainer.new()
 	under.add_theme_constant_override("separation", 12)
 	right.add_child(under)
@@ -118,6 +139,7 @@ func _ready() -> void:
 	var note: Label = phone._text("Game paused. The preview shows the view with these settings.", 16, HINT)
 	note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	under.add_child(note)
+	_build_editor()
 
 
 ## Opens the page (the game is already paused by the phone). `back` is
@@ -148,6 +170,7 @@ func show_page(back := "BACK") -> void:
 func hide_page() -> void:
 	if not visible:
 		return
+	close_editor()
 	visible = false
 	var cam = phone.game.camera
 	if cam != null:
@@ -234,6 +257,8 @@ func show_tab(t: String) -> void:
 		_list.remove_child(c)
 		c.queue_free()
 	_scroll.scroll_vertical = 0
+	cards.clear()
+	_overlay_box.visible = t == "Controls"
 	match t:
 		"Camera": _camera_tab()
 		"Graphics": _graphics_tab()
@@ -328,8 +353,228 @@ func _graphics_tab() -> void:
 
 func _controls_tab() -> void:
 	var game = phone.game
-	_row(_slider("Driving", "controls", Controls.SCHEMES, func(): return Controls.scheme, func(v): return Controls.SCHEME_NAMES[v]),
-		"Steering in a car: a stick, left and right arrows, or tilting the phone. The pedals stay on the right.")
+	var head: Label = phone._text("Driving", 20, Color.WHITE)
+	head.set_meta("section", true)
+	_list.add_child(head)
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
+	for scheme in Controls.SCHEMES:
+		grid.add_child(_scheme_card(scheme))
+	_row(grid, "Steering in a car: a stick, arrow buttons, arrows that appear wherever your thumb lands (floating), or tilting the phone. The pedals stay on the right. The preview shows the one picked.")
+	var edit := HBoxContainer.new()
+	edit.add_theme_constant_override("separation", 10)
+	for m in [["Edit on-foot layout", false], ["Edit driving layout", true]]:
+		var b: Button = phone._button(m[0], open_editor.bind(m[1]))
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		edit.add_child(b)
+	_row(edit, "Drag any button, pedal or the stick to where your thumbs want it, and make it bigger or smaller.")
+	_row(phone._button("Reset all controls", func():
+		game.settings["touch_layout"].clear()
+		game.apply_settings()
+		_show_overlay()), "Puts every control back where it started, at its first size.")
+	_show_overlay()
+
+
+## A layout's card: a small drawing of its controls over a dark screen and
+## its name; pressed, it is the layout used.
+func _scheme_card(scheme: String) -> Button:
+	var card: Button = phone._button("", func():
+		phone.game.settings["controls"] = scheme
+		phone.game.apply_settings()
+		for k in cards:
+			cards[k].set_pressed_no_signal(k == scheme)
+		_show_overlay())
+	card.toggle_mode = true
+	card.set_pressed_no_signal(Controls.scheme == scheme)
+	card.custom_minimum_size = Vector2(225, 170)
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var screen := ColorRect.new()
+	screen.color = Color(0.2, 0.23, 0.26)
+	screen.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	screen.clip_contents = true
+	screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	screen.offset_left = 8
+	screen.offset_top = 8
+	screen.offset_right = -8
+	screen.offset_bottom = -40
+	card.add_child(screen)
+	var road := ColorRect.new()
+	road.color = Color(0.13, 0.14, 0.16)
+	road.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	road.anchor_left = 0.35
+	road.anchor_right = 0.62
+	road.anchor_bottom = 1.0
+	screen.add_child(road)
+	var mini := _preview_controls(screen)
+	mini.show_mode(true, scheme)
+	var name_l: Label = phone._text(Controls.SCHEME_NAMES[scheme], 17, Color.WHITE)
+	name_l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_l.autowrap_mode = TextServer.AUTOWRAP_OFF
+	name_l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	name_l.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	name_l.offset_top = -38
+	name_l.offset_bottom = -6
+	card.add_child(name_l)
+	cards[scheme] = card
+	return card
+
+
+## Touch controls that are only drawn, filling `box` at the game screen's
+## proportions (box.size / screen size), with the player's layout.
+func _preview_controls(box: Control) -> TouchControls:
+	var t := TouchControls.new()
+	t.preview = true
+	t.layout = phone.game.settings.get("touch_layout", {})
+	box.add_child(t)
+	var fit := func():
+		var screen := get_viewport().get_visible_rect().size
+		t.size = screen
+		t.scale = Vector2.ONE * box.size.x / maxf(screen.x, 1.0)
+		t.position = Vector2(0, (box.size.y - screen.y * t.scale.y) * 0.5)
+	box.resized.connect(fit)
+	fit.call()
+	return t
+
+
+## The live preview shows the picked driving layout with the player's
+## placements.
+func _show_overlay() -> void:
+	overlay.layout = phone.game.settings["touch_layout"]
+	overlay.show_mode(true, Controls.scheme)
+	overlay.queue_redraw()
+	for c in cards.values():
+		for t in c.find_children("*", "Control", true, false):
+			if t is TouchControls:
+				t.layout = overlay.layout
+				t.queue_redraw()
+
+
+# --- Layout editor ---------------------------------------------------------------
+
+## Full screen over the game view: the controls at their real size and
+## place; drag one to move it, tap it and use - / + to resize it.
+func _build_editor() -> void:
+	editor = Control.new()
+	editor.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	editor.mouse_filter = Control.MOUSE_FILTER_STOP
+	editor.visible = false
+	add_child(editor)
+	var view := TextureRect.new()
+	view.texture = preview.get_texture()
+	view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	view.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	view.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	editor.add_child(view)
+	edit_touch = TouchControls.new()
+	edit_touch.preview = true
+	editor.add_child(edit_touch)
+	edit_touch.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var bar_bg := ColorRect.new()
+	bar_bg.color = Color(0, 0, 0, 0.6)
+	bar_bg.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	bar_bg.offset_bottom = 120
+	bar_bg.mouse_filter = Control.MOUSE_FILTER_STOP
+	editor.add_child(bar_bg)
+	var col := VBoxContainer.new()
+	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	col.offset_left = 16
+	col.offset_right = -16
+	col.offset_top = 8
+	col.add_theme_constant_override("separation", 4)
+	bar_bg.add_child(col)
+	var bar := HBoxContainer.new()
+	bar.add_theme_constant_override("separation", 10)
+	col.add_child(bar)
+	for m in [["On foot", false], ["Driving", true]]:
+		var b: Button = phone._button(m[0], open_editor.bind(m[1]))
+		b.toggle_mode = true
+		b.custom_minimum_size = Vector2(130, 56)
+		_edit_modes[m[1]] = b
+		bar.add_child(b)
+	var gap := Control.new()
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.add_child(gap)
+	for s in [["-", -0.1], ["+", 0.1]]:
+		var b: Button = phone._button(s[0], _resize_picked.bind(s[1]))
+		b.custom_minimum_size = Vector2(70, 56)
+		b.add_theme_font_size_override("font_size", 28)
+		bar.add_child(b)
+	_edit_size = phone._text("", 20, Color(1.0, 0.85, 0.4))
+	_edit_size.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_edit_size.custom_minimum_size = Vector2(150, 0)
+	_edit_size.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	bar.add_child(_edit_size)
+	var reset: Button = phone._button("Reset", func():
+		edit_touch.reset("drive." if _edit_driving else "foot.")
+		edit_touch.selected = ""
+		phone.game.apply_settings()
+		_edit_refresh())
+	reset.custom_minimum_size = Vector2(120, 56)
+	bar.add_child(reset)
+	var done: Button = phone._button("Done", close_editor)
+	done.custom_minimum_size = Vector2(120, 56)
+	bar.add_child(done)
+	col.add_child(phone._text("Drag a control to move it. Tap one, then - / + to resize it. Reset puts this page back as it was.", 16, HINT))
+	editor.gui_input.connect(_editor_input)
+
+
+## Opens the editor on the on-foot or driving controls (the driving layout
+## picked now).
+func open_editor(driving: bool) -> void:
+	_edit_driving = driving
+	edit_touch.layout = phone.game.settings["touch_layout"]
+	edit_touch.selected = ""
+	edit_touch.show_mode(driving, Controls.scheme)
+	editor.visible = true
+	_edit_refresh()
+
+
+## Saves the layout and goes back to the Controls tab.
+func close_editor() -> void:
+	if editor == null or not editor.visible:
+		return
+	editor.visible = false
+	_edit_drag = false
+	phone.game.apply_settings()
+	if tab == "Controls":
+		_show_overlay()
+
+
+func _editor_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
+			var b := edit_touch.item_at(event.position)
+			edit_touch.selected = b.get("id", "")
+			_edit_drag = not b.is_empty()
+			if _edit_drag:
+				_edit_grab = edit_touch._center(b) - event.position
+		else:
+			_edit_drag = false
+		_edit_refresh()
+	elif event is InputEventMouseMotion and _edit_drag:
+		var b := edit_touch.find_item(edit_touch.selected)
+		if not b.is_empty():
+			edit_touch.place(b, event.position + _edit_grab)
+
+
+func _resize_picked(step: float) -> void:
+	var b := edit_touch.find_item(edit_touch.selected)
+	if b.is_empty():
+		return
+	edit_touch.resize(b, step)
+	_edit_refresh()
+
+
+func _edit_refresh() -> void:
+	for k in _edit_modes:
+		_edit_modes[k].set_pressed_no_signal(k == _edit_driving)
+	var b := edit_touch.find_item(edit_touch.selected)
+	_edit_size.text = "Size %d%%" % edit_touch.size_percent(b) if not b.is_empty() else "Tap a control"
+	edit_touch.queue_redraw()
 
 
 func _game_tab() -> void:

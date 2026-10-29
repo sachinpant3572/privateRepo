@@ -676,10 +676,7 @@ func _player_input() -> void:
 		_wheel = true
 		var s := Controls.steer()
 		if by_stick:
-			var w := Controls.stick_wheel()
-			s = clampf(w[0] + Input.get_axis("steer_left", "steer_right"), -1.0, 1.0)
-			gas = maxf(gas, w[1])
-			brake = maxf(brake, w[2])
+			s = clampf(Controls.stick_steer() + Input.get_axis("steer_left", "steer_right"), -1.0, 1.0)
 		# Turning in takes STEER_IN seconds (scaled by the class's wheel);
 		# letting go or turning back is twice as quick.
 		var rate := 1.0 / (STEER_IN * _feel("wheel"))
