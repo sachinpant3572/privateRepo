@@ -20,7 +20,7 @@ planned size" rule for the city; #104 (organic outline) carries on inside it.
   west side and crosses the city east-west at y ~1110-1220, then turns south
   to the Gulf at (1550, 2000). The Gulf coast is y 2000 in the south and
   runs diagonally (1450,2000)-(2250,1350)-(2750,650) in the east. The
-  Bellerive Hills (terrain grid x 152..2232, y -1848..-408, peaks ~72 m) lie
+  Bellerive Hills (terrain grid x 152..2232, y -1848..-408, top 114 m) lie
   just north; their foothills are 0-15 m at y -600.
 - Growth, three directions:
   - **North, San Fierro** (~0.35-0.45 km²): the edge moves from y ~-330 up to
