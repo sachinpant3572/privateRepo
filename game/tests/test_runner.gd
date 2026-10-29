@@ -5103,8 +5103,10 @@ func test_country_joins_the_city() -> void:
 		linked_to[c.links[n]] = true
 	var outward := 0
 	var carried := 0
+	# An exit with the Gulf within 120 m ahead (the grown city's south
+	# lobe reaches the beach) has no room for a country road to carry on.
 	for x in plan.exits:
-		if x.cls == "river" or not c.in_play_area(plan.pos(x.node) + Vector2(x.dir) * 30.0):
+		if x.cls == "river" or not c.in_play_area(plan.pos(x.node) + Vector2(x.dir) * 120.0):
 			continue
 		outward += 1
 		carried += 1 if linked_to.has(x.node) else 0

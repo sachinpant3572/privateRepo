@@ -1038,7 +1038,12 @@ class Country:
         drive_full = LineString(fillet(list(drive.coords), 80.0, 8.0))
         drive = drive_full.intersection(belt_poly.buffer(0.5)).intersection(self.A).difference(self.P.buffer(60.0))
         kept = [piece for piece in lines_of(drive) if piece.length > 60.0]
-        for piece in kept:
+        for k, piece in enumerate(kept):
+            # Where the city's south lobe cuts the drive, its ends (60 m
+            # off the footprint) are led in to an exit, not left dead.
+            loose = [q for q in (piece.coords[0], piece.coords[-1]) if self.P.distance(Point(q)) < 61.0]
+            if loose:
+                kept[k] = piece = self._to_exit(piece, "avenue", "Seabreeze Drive", loose)
             self.add(list(piece.coords), "avenue", "Seabreeze Drive", "seabreeze")
         self.ocean_drive = unary_union(kept)
         # Brisa Beach cross streets: square to the coast, every 95 m, from
@@ -3205,13 +3210,17 @@ class Country:
             for sgn in (1.0, -1.0):
                 s = 6.0
                 while s < line.length - 40.0:
-                    width = float(round(self.rng.uniform(64.0, 84.0)))
+                    # Hillside houses turn their gardens to the sun and the
+                    # view (_view_turn, square plots only): until one has,
+                    # each site tries the full square plot first (phase 2's
+                    # mountain zone took most of Verdant Hills' sites).
+                    width = 84.0 if self.view_turns == 0 else float(round(self.rng.uniform(64.0, 84.0)))
                     if s + width > line.length - 6.0:
                         break
                     ok = False
                     for depth in ((width,) if width >= 80.0 else ()) + (88.0, 76.0, 64.0):
                         q = self._side_point(line, s + width * 0.5, sgn, hw + 3.5 + depth * 0.5)
-                        if hp.contains(Point(q)) and self.estate_at(q, (width, depth), "", "heights", 0, tol=4.0):
+                        if hp.contains(Point(q)) and self.estate_at(q, (width, depth), "", "heights", 0, sun=True, tol=4.0):
                             ok = True
                             break
                     s += width + self.rng.uniform(2.0, 6.0) if ok else 8.0
