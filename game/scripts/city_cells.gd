@@ -109,6 +109,8 @@ const ROAD_MIX := {
 }
 ## The paved quarter streets and walking lanes.
 const PAVER_KINDS := ["pavers", "pavers", "tile_brown", "tile_white", "setts"]
+## The order the quarter's pavings stack in where two meet (see _street).
+const PAVER_LAYERS := ["pavers", "tile_brown", "tile_white", "setts"]
 ## Road paint (the fade above applies to these colours only).
 const PAINTS := [MARKING, WHITE_LINE, BIKE_GREEN, Color(0.93, 0.93, 0.9)]
 ## Dug-up ground at roadworks.
@@ -443,8 +445,12 @@ static func _street(ctx: Ctx, e: int, cls: String) -> void:
 			_dashes(mb, s0, run, 0.0, MARKING, drop)
 		"quarter":
 			# Old pavers, setts or tiles between the curbs, no markings.
+			# It runs into the junction, over the next street's paving: each
+			# kind 1.5 mm apart so two never fight in one plane (under the
+			# zebra at 0.025; HANDOFF-shimmer.md).
 			var skin: int = mb.uvs.size()
-			mb.box(Vector3(mid, 0.005, 0), Vector3(run + 1.0, 0.02, w - 0.4), MeshBuilder.glow(look[0], look[1]))
+			var lift := 0.0015 * PAVER_LAYERS.find(road_surface(city.seed_value, e, cls, style))
+			mb.box(Vector3(mid, 0.005 + lift, 0), Vector3(run + 1.0, 0.02, w - 0.4), MeshBuilder.glow(look[0], look[1]))
 			mb.scale_uvs(skin, look[2])
 		"lane":
 			# Pedestrian lane: paved over, bollards at each end, lights strung

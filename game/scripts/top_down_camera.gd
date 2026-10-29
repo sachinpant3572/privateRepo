@@ -81,6 +81,13 @@ const BODY_CUT := 1.1
 ## Perspective: buildings within this share of the camera's usual distance
 ## from the focus dissolve, so a roof the camera skims past doesn't pop.
 const NEAR_FADE := 0.15
+## Perspective: the near plane, as a share of the near fade's reach. The
+## fade drops everything nearer than 0.35 of its reach, so nothing visible
+## is clipped, and the depth buffer (24-bit, packed toward the near plane)
+## gets 2 to 6 times the precision a 1 m near plane gave: the thin layers
+## on the ground (road skins, paint, pads, millimetres apart) stop
+## fighting in the distance (HANDOFF-shimmer.md).
+const NEAR_CLIP := 0.3
 ## Perspective: air the camera keeps along its line above a roof it backed
 ## out of. On wide framings the near fade reaches past it, so the roof just
 ## under the camera thins out, which is wanted.
@@ -418,7 +425,6 @@ func _update_look_up(pos: Vector3, delta: float) -> void:
 	var env: Environment = get_world_3d().environment if get_world_3d() != null else null
 	if _look_t <= 0.0:
 		if was > 0.0:
-			near = 1.0
 			if env != null:
 				SkyDome.horizon_haze(env, false)
 		return
@@ -432,7 +438,7 @@ func _update_look_up(pos: Vector3, delta: float) -> void:
 	global_transform = Transform3D(from.basis.slerp(to.basis, k).orthonormalized(), from.origin.lerp(to.origin, k))
 	projection = PROJECTION_PERSPECTIVE
 	fov = lerpf(fov, LOOK_UP_FOV, k)
-	near = lerpf(1.0, 0.3, k)
+	near = lerpf(near, 0.3, k)
 	far = lerpf(far, 4000.0, k)
 
 
@@ -489,7 +495,7 @@ func _update_close_up(delta: float) -> void:
 	global_transform = Transform3D(from.basis.slerp(to.basis, k).orthonormalized(), from.origin.lerp(to.origin, k))
 	projection = PROJECTION_PERSPECTIVE
 	fov = lerpf(base, CLOSE_UP_FOV, k)
-	near = lerpf(1.0, 0.2, k)
+	near = lerpf(near, 0.2, k)
 	# The city's see-through hole follows this camera: it narrows toward the
 	# eye (cone) and only the body hole is open, so nothing in front of the
 	# face stays solid and nothing else is ghosted.
@@ -914,12 +920,14 @@ func _frame(delta: float) -> void:
 		_back = maxf(_back, need)
 		back = _back
 		fov = rad_to_deg(2.0 * atan(size * 0.5 / back))
+		near = maxf(1.0, NEAR_FADE * NEAR_CLIP * base)
 		far = back * 4.0
 		# Flatter than 65 degrees the top of the screen sees further out.
 		view_depth = back * maxf(1.0, sin(deg_to_rad(PITCH_LOW)) / sin(deg_to_rad(perspective_pitch)))
 	else:
 		rotation = Vector3(deg_to_rad(-PITCH), yaw, 0.0)
 		projection = PROJECTION_ORTHOGONAL
+		near = 1.0
 		# The ground under a focus high above it (an aircraft) is further.
 		far = DISTANCE + 120.0 + maxf(_focus.y - Terrain.height(_focus.x, _focus.z), 0.0) * 1.2
 		view_depth = DISTANCE

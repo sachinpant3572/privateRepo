@@ -72,29 +72,54 @@ float vnoise(vec2 p) {
 // Grain so flat colours read as stone, asphalt and plaster; wet ground with
 // puddles that mirror the sky; emission for the glow codes; roughness and
 // sheen for the material codes (alpha in sixteenths, see MeshBuilder).
-// Dark joint lines on a grid of `cell` (soft-edged, `w` wide).
-float joints(vec2 p, vec2 cell, float w) {
-	vec2 f = abs(fract(p / cell + 0.5) - 0.5) * cell;
-	return 1.0 - smoothstep(w * 0.5, w, min(f.x, f.y));
+// Anti-aliasing (HANDOFF-shimmer.md): there are no textures to mipmap, so
+// every pattern below is filtered by the pixel's footprint (fwidth, metres
+// per pixel). Detail `size` metres across keeps its full contrast while it
+// spans a few pixels and fades to its average as it nears one, so fine grain,
+// bricks and joints don't crawl and sparkle as the camera moves.
+float fine(float fw, float size) {
+	return 1.0 - smoothstep(0.3, 0.8, fw / size);
 }
 
-// Patterns along the pattern coordinates uv (see MeshBuilder.uvs).
-vec3 pattern(int c, vec3 col, vec2 uv, vec3 wpos, vec3 wnormal, inout float rough, inout float spec) {
+// Lines `w` wide, `period` apart along x, box-filtered over the footprint
+// `fw`: a line thinner than a pixel is drawn a pixel wide at the share of
+// it that it covers, and once the lines are about a pixel apart they blend
+// to their average. 0..1.
+float aa_line(float x, float period, float w, float fw) {
+	float f = abs(fract(x / period + 0.5) - 0.5) * period;
+	fw = max(fw, 0.0001);
+	float edge = max(fw, w * 0.33);
+	float half_w = max(w, fw) * 0.5;
+	float l = min(w / fw, 1.0) * (1.0 - smoothstep(half_w - edge * 0.5, half_w + edge * 0.5, f));
+	return mix(l, w / period, smoothstep(period * 0.25, period * 0.5, fw));
+}
+
+// Dark joint lines on a grid of `cell` (about 1.5 `w` wide); `fw` is the
+// footprint of p (fwidth).
+float joints(vec2 p, vec2 cell, float w, vec2 fw) {
+	float x = aa_line(p.x, cell.x, w * 1.5, fw.x);
+	float y = aa_line(p.y, cell.y, w * 1.5, fw.y);
+	return 1.0 - (1.0 - x) * (1.0 - y);
+}
+
+// Patterns along the pattern coordinates uv (see MeshBuilder.uvs); fwu is
+// the footprint of uv and fwp of wpos (metres per pixel).
+vec3 pattern(int c, vec3 col, vec2 uv, vec3 wpos, vec3 wnormal, vec2 fwu, float fwp, inout float rough, inout float spec) {
 	if (c == 3) {
-		col *= 1.0 - 0.28 * joints(uv, vec2(1.5), 0.05);
+		col *= 1.0 - 0.28 * joints(uv, vec2(1.5), 0.05, fwu);
 	} else if (c == 5) {
 		vec2 b = uv / vec2(0.6, 0.3);
 		b.x += step(1.0, mod(floor(b.y), 2.0)) * 0.5;
-		col *= 0.88 + 0.2 * hash(floor(b) + 7.0);
-		col *= 1.0 - 0.3 * joints(fract(b) * vec2(0.6, 0.3), vec2(0.6, 0.3), 0.025);
+		col *= mix(0.98, 0.88 + 0.2 * hash(floor(b) + 7.0), fine(max(fwu.x / 0.6, fwu.y / 0.3), 1.0));
+		col *= 1.0 - 0.3 * joints(b * vec2(0.6, 0.3), vec2(0.6, 0.3), 0.025, fwu);
 	} else if (c == 6) {
 		col *= 0.95 + 0.07 * hash(vec2(floor(uv.x / 1.0), 3.0));
-		col *= 1.0 - 0.18 * (1.0 - smoothstep(0.0, 0.04, abs(fract(uv.x) - 0.5) - 0.46));
+		col *= 1.0 - 0.18 * (1.0 - aa_line(uv.x, 1.0, 0.04, fwu.x));
 		col *= mix(0.88, 1.0, vnoise(uv * 0.7));
 	} else if (c == 7 && wpos.y > 0.7) {
 		// Foliage off the ground: leaf clusters with dark gaps and sunlit
 		// tips on the upper side.
-		float leaf = vnoise(wpos.xz * 2.6 + wpos.y * 2.1) * 0.55 + vnoise(wpos.xz * 6.5 - wpos.y * 4.3) * 0.45;
+		float leaf = vnoise(wpos.xz * 2.6 + wpos.y * 2.1) * 0.55 + mix(0.5, vnoise(wpos.xz * 6.5 - wpos.y * 4.3), fine(fwp, 0.15)) * 0.45;
 		col *= 0.5 + 0.7 * leaf;
 		col += col * 0.4 * smoothstep(0.66, 0.86, leaf) * clamp(wnormal.y, 0.0, 1.0);
 		rough = 0.95;
@@ -103,25 +128,24 @@ vec3 pattern(int c, vec3 col, vec2 uv, vec3 wpos, vec3 wnormal, inout float roug
 		col *= 0.93 + 0.12 * step(0.5, fract(uv.x / 4.0));
 		col *= 0.85 + 0.25 * vnoise(wpos.xz * 1.7);
 	} else if (c == 9) {
-		vec2 cell = abs(fract(uv / vec2(0.16, 0.16)) - 0.5);
-		col *= 1.0 - 0.25 * step(0.42, max(cell.x, cell.y));
+		// Cells 16 cm square (dark 2.6 cm gaps).
+		col *= 1.0 - 0.25 * joints(uv, vec2(0.16), 0.017, fwu);
 		// Module frames every metre along the row; rows end at the geometry.
-		float frame = abs(fract(uv.x) - 0.5);
-		col = mix(col, vec3(0.75, 0.77, 0.8), step(0.475, frame));
+		col = mix(col, vec3(0.75, 0.77, 0.8), aa_line(uv.x, 1.0, 0.05, fwu.x));
 		rough = 0.3;
 		spec = 0.5;
 	} else if (c == 10) {
 		float lap = fract(uv.y / 0.22);
-		col *= 0.86 + 0.14 * smoothstep(0.0, 0.85, lap);
+		col *= 0.86 + 0.14 * mix(0.575, smoothstep(0.0, 0.85, lap), fine(fwu.y, 0.22));
 	} else if (c == 11) {
-		col *= 1.0 - 0.22 * (1.0 - smoothstep(0.0, 0.03, abs(fract(uv.x / 0.5) - 0.5) - 0.44));
+		col *= 1.0 - 0.22 * (1.0 - aa_line(uv.x, 0.5, 0.045, fwu.x));
 		rough = 0.35;
 		spec = 0.6;
 	} else if (c == 13) {
 		vec2 b = uv / vec2(0.24, 0.08);
 		b.x += step(1.0, mod(floor(b.y), 2.0)) * 0.5;
-		col *= 0.85 + 0.25 * hash(floor(b) + 3.0);
-		col = mix(col, vec3(0.78, 0.76, 0.72), joints(fract(b) * vec2(0.24, 0.08), vec2(0.24, 0.08), 0.014) * 0.6);
+		col *= mix(0.975, 0.85 + 0.25 * hash(floor(b) + 3.0), fine(max(fwu.x / 0.24, fwu.y / 0.08), 1.0));
+		col = mix(col, vec3(0.78, 0.76, 0.72), joints(b * vec2(0.24, 0.08), vec2(0.24, 0.08), 0.014, fwu) * 0.6);
 	}
 	return col;
 }
@@ -132,8 +156,12 @@ void surface(vec3 base, float code, vec3 wpos, vec3 wnormal, vec3 view_dir, vec2
 	rough = 0.9;
 	spec = 0.25;
 	metal = 0.0;
+	// Footprints for the filtering (taken here, outside any branch).
+	vec2 fwu = fwidth(uv);
+	vec3 fw3 = fwidth(wpos);
+	float fwp = max(max(fw3.x, fw3.y), fw3.z);
 	if (detail > 0.5) {
-		col = pattern(c, col, uv, wpos, wnormal, rough, spec);
+		col = pattern(c, col, uv, wpos, wnormal, fwu, fwp, rough, spec);
 	} else if (c == 9) {
 		rough = 0.3;
 		spec = 0.5;
@@ -147,16 +175,24 @@ void surface(vec3 base, float code, vec3 wpos, vec3 wnormal, vec3 view_dir, vec2
 			// asphalt (wear 0) has no patches or cracks, the usual grey
 			// (wear 1) some, washed-out pale asphalt (2) many, and deep.
 			float wear = clamp((dot(base, vec3(0.3333)) - 0.17) * 9.375, 0.0, 2.2);
-			col *= 0.9 + 0.2 * hash(floor(wpos.xz * 9.0));
+			col *= mix(1.0, 0.9 + 0.2 * hash(floor(wpos.xz * 9.0)), fine(fwp, 0.111));
 			vec2 pc = floor(wpos.xz / 3.5);
 			float patch = step(1.0 - 0.04 * wear, hash(pc + 17.0));
 			col = mix(col, col * 0.86, patch);
+			// Sealed cracks: hairlines along the noise's zero line, drawn at
+			// least a pixel wide and as faint as the share they cover
+			// (the crack value climbs about 1.6 per metre across one).
 			float crack = abs(vnoise(wpos.xz * 0.55) * 2.0 - 1.0);
-			float t = smoothstep(0.0, max(0.012 * wear, 0.0001), crack) + step(0.22 * wear, vnoise(wpos.xz * 0.09 + 3.0));
-			col *= 1.0 + 0.2 * (t - 1.0) * (t < 1.0 ? min(wear, 1.6) : 1.0);
+			float lw = max(0.012 * wear, 0.0001);
+			float edge = max(lw, fwp * 1.6);
+			float line = (1.0 - smoothstep(0.0, edge, crack)) * lw / edge;
+			// Where the coarse mask is on, the cracks show as lines of the
+			// plain colour on asphalt a fifth brighter.
+			bool masked = vnoise(wpos.xz * 0.09 + 3.0) >= 0.22 * wear;
+			col *= masked ? 1.2 - 0.2 * line : 1.0 - 0.2 * line * min(wear, 1.6);
 		} else if (c == 3) {
 			// Concrete: speckle and the odd stain.
-			col *= 0.94 + 0.1 * hash(floor(wpos.xz * 14.0));
+			col *= mix(0.99, 0.94 + 0.1 * hash(floor(wpos.xz * 14.0)), fine(fwp, 0.071));
 			col *= mix(0.93, 1.0, smoothstep(0.6, 0.8, 1.0 - vnoise(wpos.xz * 0.45 + 9.0)));
 		}
 	}

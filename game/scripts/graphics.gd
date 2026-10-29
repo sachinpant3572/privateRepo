@@ -20,6 +20,10 @@ const QUALITIES := ["low", "medium", "high", "ultra"]
 ## once more per light, and the whole scene again into the headlight
 ## shadow map. So since 0.22 Ultra keeps High's two car lights and no
 ## headlight shadow, and adds only anti-aliasing (cheap on phone GPUs).
+## The shimmer Sachin saw on Ultra (2026-10-29), with 4x MSAA already on,
+## came from the shader's sub-pixel patterns and ground layers sharing a
+## plane, fixed for every preset (HANDOFF-shimmer.md); High stays without
+## MSAA so the default keeps its frame rate on weaker phones.
 const PRESETS := {
 	"low": {"detail": "low", "shadows": false, "bloom": false, "aa": false, "vivid": false, "real_lights": true, "cars": 1, "lamps": 0, "bars": false, "car_shadow": false, "scale": 0.8},
 	"medium": {"detail": "high", "shadows": true, "bloom": false, "aa": false, "vivid": false, "real_lights": true, "cars": 1, "lamps": 2, "bars": false, "car_shadow": false, "scale": 1.0},
