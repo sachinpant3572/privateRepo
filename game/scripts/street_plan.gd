@@ -121,7 +121,7 @@ const ROAD_NAMES := {
 	"cypress_circle": "Cypress Circle", "harbor_circle": "Harbor Circle",
 	"hibiscus": "Hibiscus Avenue", "tamarind": "Tamarind Avenue", "mangrove": "Mangrove Avenue",
 	"presidio": "Presidio Avenue", "gulfview": "Gulfview Avenue", "pelican": "Pelican Avenue",
-	"seagrape": "Seagrape Avenue", "ocean": "Ocean Drive",
+	"seagrape": "Seagrape Avenue", "ocean": "Ocean Drive", "causeway": "Serena Causeway",
 }
 
 ## The citywide arterial grid (California: the boulevards run straight
@@ -140,6 +140,10 @@ const ART_Y_SOUTH := [1040.0, 1240.0, 1400.0, 1610.0, 1760.0, 1990.0]
 const GULF_DIR := Vector2(0.776, -0.630)
 const OCEAN_AT := Vector2(1402.8, 1941.8)
 const SEAGRAPE_AT := Vector2(1242.0, 1744.0)
+## Serena Causeway (world_map's `overseas` highway) heads out over the Gulf
+## from (1450, 1400) to (2000, 1870), crossing Ocean Drive on the way.
+const CAUSEWAY_FROM := Vector2(1450.0, 1400.0)
+const CAUSEWAY_DIR := Vector2(550.0, 470.0) / Vector2(550.0, 470.0).length()
 ## A point inside Brisa Beach (between Seagrape and Ocean Drive).
 const BRISA_SEED := Vector2(1634, 1593)
 ## District streets fall up to this share of a block off an even split
@@ -663,6 +667,12 @@ func _layout(src: Array) -> void:
 		roads.append([piece, "avenue", "seagrape"])
 	for piece in Geometry2D.intersect_polyline_with_polygon(ocean, north):
 		roads.append([piece, "avenue", "ocean"])
+	# Serena Causeway: the highway over the Gulf lands on Ocean Drive. Its
+	# first stretch runs seaward off the Drive across the beach, so the trim
+	# leaves the city an exit there for the country road to meet.
+	var causeway_at := _cross(PackedVector2Array([CAUSEWAY_FROM, CAUSEWAY_FROM + CAUSEWAY_DIR * 1200.0]), ocean)
+	for piece in Geometry2D.intersect_polyline_with_polygon(PackedVector2Array([causeway_at, causeway_at + CAUSEWAY_DIR * 300.0]), north):
+		roads.append([piece, "avenue", "causeway"])
 	# The other arterials, on the same grid: clipped to the land they cross
 	# (and out of Brisa Beach, which has its own grid).
 	for a in ARTERIALS:
