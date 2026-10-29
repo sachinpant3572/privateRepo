@@ -80,7 +80,11 @@ Driving (vehicle.gd `_traffic_ai`):
 - `_drive` eases the throttle by the angle still to steer; `_traffic_ai`
   undoes that, or a car slowed to a stop mid U-turn.
 - Taxis and `_script_ai` don't obey lights (taxi.gd is not this
-  package's); hook: they could call `traffic.may_go` like `_traffic_ai`.
+  package's); hook: they could call `traffic.may_go` like `_traffic_ai`,
+  and not count `_stuck_time` behind a car whose `is_waiting()` is true
+  (a queue, not a blockage). Today a called cab goes round queues at
+  reds; it arrived in 25-55 s in six runs, so the phone test waits up to
+  the game's CALL_TIMEOUT (120 s) instead of 60 s.
 
 Demand and mix (traffic.gd):
 - Budget = clamp(round(cap x level x hour x surge), 2, cap), cap by
@@ -115,6 +119,11 @@ there run 100-130 m); lights forced with `_set_phase` and `go_end = 1e9`.
   turned the first red orange); a queue of 5-6 held at a red; rush 10-11
   cars in the bubble (budget 11, density 0.81) vs a brownstone street at
   2:30 with 3 (budget 2, density 0.10).
+- Full suite 2026-10-29: 1261 checks passed, 1 failed:
+  test_country_kit_builds_every_kind (farmhouse_big solids overlap, 24
+  rows). Not this package's: country_kit.gd and its preloads are
+  untouched here (prop_kit's `traffic_light` only, which it never calls)
+  and the test builds from fixed seeds, so it fails on the base too.
 - Probe (xvfb, opengl3, 11 cars): physics 3.0-3.4 ms a frame with the
   controller running, 2.8-4.1 paused: its cost is below the probe's
   noise. Lenses: one MultiMesh draw; no lights.

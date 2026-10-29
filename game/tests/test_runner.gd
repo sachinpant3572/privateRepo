@@ -4035,7 +4035,11 @@ func test_taxi_phone_call_and_skip() -> void:
 	var cab = taxi.cab
 	_check(game.population.out_of_view(cab.global_position), "it sets off out of view")
 	_check(game.map_markers().any(func(m): return m.label == "Your cab"), "the cab is on the maps")
-	await _until(func(): return taxi.state == taxi.State.WAITING, 3600)
+	# Up to the game's own limit for a called cab (CALL_TIMEOUT, then "Your
+	# cab got stuck"). With traffic queuing at lights the scripted cab, which
+	# goes round anything standing 3 s, took 25-55 s in six runs (a parked
+	# car short of the stop costs it 5-10 s each time); 60 s was too tight.
+	await _until(func(): return taxi.state == taxi.State.WAITING, int(taxi.CALL_TIMEOUT * 60.0))
 	_check(taxi.state == taxi.State.WAITING, "the called cab arrives")
 	var gap: float = cab.global_position.distance_to(p.global_position)
 	_check(gap < 16.0, "at the curb by the player, %.1f m" % gap)
