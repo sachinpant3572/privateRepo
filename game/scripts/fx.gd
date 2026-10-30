@@ -105,7 +105,9 @@ func crash(pos: Vector3, impact: float, involves_player: bool) -> void:
 func explosion(pos: Vector3, scale := 1.0, ground := NAN) -> void:
 	if is_nan(ground):
 		ground = Terrain.height(pos.x, pos.z)
-	preload("res://scripts/senses.gd").emit(get_tree(), "crash", pos, null, {"loud": 1.5})
+	# People hear it out to 80 m (less for a small one): near it they duck
+	# or cower and then run, further off they run, cops come to look.
+	preload("res://scripts/senses.gd").emit(get_tree(), "explosion", pos, null, {"loud": clampf(scale, 0.4, 1.5)})
 	Birds.startle(pos, 60.0 * scale)
 	boom.blast(pos, scale, ground)
 	var player = get_tree().get_first_node_in_group("player")

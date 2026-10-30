@@ -66,6 +66,7 @@ var _chat_lead := false
 ## The bench collider sat on (CollisionShape3D) while pause_kind is "bench".
 var _bench = null
 var _react_from := Vector3.ZERO
+var _react_kind := ""
 var _dodge_dir := Vector3.ZERO
 var _rain_hurry := false
 var _scream_at := 0.0
@@ -323,6 +324,7 @@ func _gait() -> String:
 
 func _on_reaction(p: Dictionary) -> void:
 	_react_from = p.data.get("from", p.pos)
+	_react_kind = p.kind
 	_set_state(State.REACT)
 	match reaction:
 		"flee":
@@ -337,6 +339,16 @@ func _on_reaction(p: Dictionary) -> void:
 
 func _on_reaction_end(was: String) -> void:
 	if state != State.REACT:
+		return
+	if was in ["duck", "cower"] and _react_kind == "explosion" and _pending.is_empty() \
+			and clock >= reacted_at + float(Senses.HOLD[was]) - 0.05 \
+			and can_perceive() and health > 0.0 and _flinch <= 0.0:
+		# Down for the blast, then away from the fire: only when the duck
+		# ran its full time (not cut short by a hit, a knock-down, a death
+		# or another reaction taking over). Queued, so it starts on this
+		# same tick from _update_reaction, never inside another start.
+		_pending = {"kind": "explosion", "reaction": "flee", "pos": _react_from, "source": null,
+			"data": {}, "danger": Senses.danger("explosion"), "at": clock}
 		return
 	_set_state(State.WANDER)
 	if was in ["approach", "help", "dodge", "investigate"]:
