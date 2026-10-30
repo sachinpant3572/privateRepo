@@ -9062,19 +9062,24 @@ func test_burnt_steel_keys_miss_paints() -> void:
 	for kind in VK.PALETTES:
 		paints.append_array(VK.PALETTES[kind])
 	paints.append_array([VK.POLICE_BLACK, VK.TAXI_YELLOW, VK.VAN_WHITE])
+	# The shader holds each key exactly; only the vertex colour is rounded.
 	var near := 1.0
 	var worst := ""
+	var self_far := 0.0
 	for key: Color in [VK.RIM, VK.STEEL, VK.TRIM]:
-		for paint: Color in paints:
-			for rounded in [false, true]:
-				var a := Vector3(key.r, key.g, key.b) * 255.0
+		var k := Vector3(key.r, key.g, key.b)
+		for rounded in [false, true]:
+			var own := k * 255.0
+			own = own.round() if rounded else own.floor()
+			self_far = maxf(self_far, k.distance_to(own / 255.0))
+			for paint: Color in paints:
 				var b := Vector3(paint.r, paint.g, paint.b) * 255.0
-				a = a.round() if rounded else a.floor()
 				b = b.round() if rounded else b.floor()
-				var d := a.distance_to(b) / 255.0
+				var d := k.distance_to(b / 255.0)
 				if d < near:
 					near = d
 					worst = "%s near %s" % [paint, key]
+	_check(self_far < 0.006, "the steel parts' own colours still match their keys in full (%.4f off at most)" % self_far)
 	_check(near > 0.012, "every paint sits clear of the burnt shell's steel keys (nearest %.4f: %s)" % [near, worst])
 
 
