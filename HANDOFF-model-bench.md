@@ -51,3 +51,6 @@ uses the same tokens. Not a measurement.
 - P1 son-xhigh: all 4 gates pass, +63/-15; first-run SCRIPT ERROR (get_layer_data
   null headless) caught and fixed via flame_images() helper; noted PASS row can
   hide a SCRIPT ERROR; no shader-declaration check in its test.
+- P1 opus-med: all 4 gates pass; first test run failed 2 checks (get_layer_data
+  null headless), fixed via _flame_images() helper; restores global state; no
+  shader-declaration check in its test.
