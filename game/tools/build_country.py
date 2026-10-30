@@ -4049,11 +4049,11 @@ class Country:
             # Only where the road lies on its graded profile: a bridge deck or
             # a tunnel has none, and the ground under it is not the road.
             zs = [self.mtn.profile_at(q) for q in pts]
-            g = max([abs(b - a) / max(dist(p, q), 0.1) for a, b, p, q, za, zb in zip(hs, hs[1:], pts, pts[1:], zs, zs[1:])
-                     if za is not None and zb is not None] or [0.0])
-            off = max([abs(h - z) for h, z in zip(hs, zs) if z is not None] or [0.0])
-            w = worst.setdefault(pc["name"], [0.0, 0.0, 0.0])
-            worst[pc["name"]] = [max(w[0], g), max(w[1], off), max(w[2], max(hs))]
+            g = max([(abs(b - a) / max(dist(p, q), 0.1), p) for a, b, p, q, za, zb in zip(hs, hs[1:], pts, pts[1:], zs, zs[1:])
+                     if za is not None and zb is not None] or [(0.0, None)], key=lambda t: t[0])
+            off = max([(abs(h - z), q) for h, z, q in zip(hs, zs, pts) if z is not None] or [(0.0, None)], key=lambda t: t[0])
+            w = worst.setdefault(pc["name"], [(0.0, None), (0.0, None), 0.0])
+            worst[pc["name"]] = [max(w[0], g, key=lambda t: t[0]), max(w[1], off, key=lambda t: t[0]), max(w[2], max(hs))]
         # Each pad is flat under its whole lot (2 m samples).
         offs = []
         for poly, ph in self.mtn_pads:
@@ -4068,8 +4068,10 @@ class Country:
         offs.sort(reverse=True)
         print("mountain: graded", self.mtn_grades, "pads %d, worst off flat (m)" % len(offs), offs[:4],
               "peak %.0f m" % float(self.mtn.heights.max()))
-        for name, (g, off, top) in sorted(worst.items()):
-            print("  %-20s steepest %.1f%%, off its profile %.2f m, top %.0f m" % (name, g * 100.0, off, top))
+        at = lambda q: "(%.0f, %.0f)" % tuple(q) if q is not None else "-"
+        for name, ((g, gq), (off, oq), top) in sorted(worst.items()):
+            print("  %-20s steepest %.1f%% at %s, off its profile %.2f m at %s, top %.0f m"
+                  % (name, g * 100.0, at(gq), off, at(oq), top))
 
     def self_check(self):
         """Geometry checks with shapely: lots clear of each other, of the roads

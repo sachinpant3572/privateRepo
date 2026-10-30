@@ -75,10 +75,39 @@ City Hall grounds, Moreau Square, the Esplanade and 8 traffic circles. It
 has no lake, pond, big park, golf course, cemetery, stadium, rail yard,
 container port or airport inside the city.
 
-Open. Draft direction: new boroughs across water with large blocks
-(120-250 m, buildings filling them, mid-block alleys not streets), 1-2 big
-parks, docks; existing districts thinned (drop minor streets where blocks
-are < ~4,000 m²). Cost and options to be written here before the build.
+Design (2026-10-30). How the plan works now (street_plan.gd "SP"): the
+core outline is hand data (world_map cities.bellerive.core, 74 pts,
+4.24 km², local x -300..2220, y -570..1945); arterials sit on fixed lines
+ART_X / ART_Y_NORTH / ART_Y_SOUTH (SP:142-144, 310-450 m apart); each patch
+splits a superblock into a grid ([4,6] gives ~80-110 x 60 m blocks) or a
+field (dsep [270, 74]). Open land = a snapped Rect2 in `_voids` (Liberty
+Green, PARK_SIZE SP:63); `is_park` handles one park only. `_thin` (SP:2036)
+merges blocks by a patch's `cut` chance (only docks uses it). Water: the
+Morrow only; the land is cut into north/south banks (SP:627), so a bay
+needs new bank logic. Every block is playable (no block cap); tests pin
+the size (test_runner :309 km² 3.9-4.5) and block shapes.
+
+Stages, in order (rough cost; xhigh effort suits them):
+A. **Open land in the city we have** (~8-12 h). Open-land set pieces as a
+   list (kind, rect, water): a central park with a lake (~500 x 280 m), 4-6
+   neighbourhood parks with ponds, a cemetery, a stadium, a rail yard and
+   container stacks on the docks; `_thin` on the residential patches so
+   their blocks grow to ~100-160 m; lakes and ponds drawn in city_cells and
+   on the maps; tests for parks, water and block sizes.
+B. **Grow the core to ~8 km²** (~14-20 h). Outline east and west (the Gulf
+   is south, the range north), more ART lines, new patches with big blocks
+   (industrial and port dsep ~[400, 140]), a golf course and an airport edge
+   as open land, then re-run urban, country and their tests.
+C. **Sloped districts** (~40-70 h, Sachin's yes): the foothills north of
+   the city as hill districts (hill_n's contour rings, Vinewood-style):
+   city ground on a height field, roads graded, buildings stepped onto it,
+   traffic, people and cameras on heights.
+D. **A bay and a beach borough** (~10-16 h): a second water body in the
+   plan (bank logic), a barrier-island beach borough reached by 2-3
+   causeways (the existing bridge class).
+Total ~72-118 h. Cheaper option: A + B only (~22-32 h, ~8 km², flat, no
+bay); D can be dropped and the beach kept on the Gulf shore.
+Milestone APK after A (with #114 and the helicopters), then after B, C, D.
 
 ## Recorded for later phases (reviewer Low #7)
 
