@@ -414,7 +414,9 @@ static func fit_cull(p: CPUParticles3D) -> void:
 	if p.mesh == null:
 		return
 	var top := p.scale_amount_max
-	if p.scale_amount_curve != null:
+	if p.scale_amount_curve != null and p.scale_amount_curve.point_count > 0:
+		# The highest point is the curve's top while its tangents are flat,
+		# as FireFx.curve makes them; a curve that overshoots would need sampling.
 		var best := 0.0
 		for i in p.scale_amount_curve.point_count:
 			best = maxf(best, p.scale_amount_curve.get_point_position(i).y)

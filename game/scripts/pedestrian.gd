@@ -346,8 +346,9 @@ func _on_reaction_end(was: String) -> void:
 		# Down for the blast, then away from the fire: only when the duck
 		# ran its full time (not cut short by a hit, a knock-down, a death
 		# or another reaction taking over). Queued, so it starts on this
-		# same tick from _update_reaction, never inside another start.
-		_pending = {"kind": "explosion", "reaction": "flee", "pos": _react_from, "source": null,
+		# same tick from _update_reaction, never inside another start. From
+		# reaction_pos: a second blast during the duck moves it there.
+		_pending = {"kind": "explosion", "reaction": "flee", "pos": reaction_pos, "source": null,
 			"data": {}, "danger": Senses.danger("explosion"), "at": clock}
 		return
 	_set_state(State.WANDER)

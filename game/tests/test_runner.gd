@@ -7838,11 +7838,13 @@ func test_people_react_to_an_explosion() -> void:
 	var p = game.player
 	_place_player(_home(), Vector3(7.5, 0, 7.5))
 	var blast: Vector3 = p.global_position + Vector3(0, 0, -4)
-	# [category, personality, where from the blast, first reaction, then]
+	# [category, personality, where from the blast, first reaction, then];
+	# "hit" is struck while ducking, which must call off the run that follows.
 	var crowd := [
 		["general", "calm", Vector3(8, 0, 0), "duck", "flee"], ["elderly", "calm", Vector3(-6, 0, -9), "cower", "flee"],
 		["general", "calm", Vector3(0, 0, -40), "flee", "flee"], ["gang", "brave", Vector3(-40, 0, 0), "look", ""],
-		["general", "calm", Vector3(95, 0, 0), "", ""],
+		["general", "calm", Vector3(95, 0, 0), "", ""], ["cop", "calm", Vector3(30, 0, 5), "investigate", ""],
+		["general", "calm", Vector3(-8, 0, 3), "duck", "hit"],
 	]
 	var peds := []
 	for row in crowd:
@@ -7863,6 +7865,8 @@ func test_people_react_to_an_explosion() -> void:
 		var want: String = crowd[i][3]
 		_check(peds[i].reaction == want and (want == "" or peds[i].reaction_kind == "explosion"),
 			"the %s is reacting to the explosion with '%s', got '%s' (%s)" % [crowd[i][0], want, peds[i].reaction, peds[i].reaction_kind])
+		if crowd[i][4] == "hit":
+			peds[i].take_hit(null, 1.0, Vector3.ZERO, false)
 	var start := []
 	for ped in peds:
 		start.append(ped.global_position)
@@ -7870,6 +7874,10 @@ func test_people_react_to_an_explosion() -> void:
 	for i in peds.size():
 		var then: String = crowd[i][4]
 		if then == "":
+			continue
+		if then == "hit":
+			_check(not (peds[i].reaction == "flee" and peds[i].reaction_kind == "explosion"),
+				"struck while ducking, the %s does not then run from the blast ('%s')" % [crowd[i][0], peds[i].reaction])
 			continue
 		var moved: float = Vector2(peds[i].global_position.x - start[i].x, peds[i].global_position.z - start[i].z).length()
 		_check(peds[i].reaction == "flee" and moved > 3.0,
