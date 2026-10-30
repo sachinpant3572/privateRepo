@@ -50,6 +50,24 @@ on Opus with Sonnet trial packages). Stage D (the bay) is NOT approved.
 |---|---|---|---|
 | (pending) | | | |
 
+## Build results (2026-10-30)
+
+- Generator: 0.91 km2, terraces 28 (6.2 km), climbs 29 (2.7 km), hillside
+  lots 207 (house 110, rows/painted ladies/garden apartments 28 each, exec
+  13); "hillside" in WALK_ZONES gave 8 hill sidewalk loops (82 -> 90).
+- Climbs: traced at 0.12 on the smoothed ground, every one graded to the
+  0.13 cap and three measured 0.149-0.185 over 32 m (each street is graded
+  on its own raw ground, steeper than the smoothed one). Now traced at
+  HILL_CONNECT 0.10, leaving 3 points under the cap.
+- Pads: the 8 m grid blends a pad into any pad or road at another height
+  within about a cell. Mountain lots already in the game slope ~1 m at the
+  front (the road's grading runs into the front yard), accepted as the
+  standard; at the back and sides 22 of 207 hill lots were off level. Now
+  `mountain_terrain` measures each hill lot on the final grid (`_pad_tilt`,
+  middle/back/sides 1 m in) and drops those off by > HILL_PAD_TOL 0.2 m,
+  worst first, one per 24 m group a round, remaking the grid (<= 4 rounds).
+  test_hill_districts checks the same rows at 0.3 m.
+
 ## Open questions
 
 ## Traps
