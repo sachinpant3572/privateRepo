@@ -1,8 +1,8 @@
 extends Node
 ## Screenshots of the country round Bellerive (phase 2): suburbs past the
 ## plan's edge, Brisa Beach, the towns, farms, bayou, bridges, the storm
-## barricades and the play area's fence, by day and at night. Needs a real
-## renderer:
+## barricades, the play area's fence and the hill districts, by day and at
+## night. Needs a real renderer:
 ##   xvfb-run godot --rendering-driver opengl3 res://tests/country_shots.tscn -- <out_dir>
 
 const MainScene = preload("res://main.tscn")
@@ -43,6 +43,13 @@ const VIEWS := [
 	["c27_gatehouse", -450.0, 455.0, 70.0, 12.5],
 	["c28_res_towers", 1650.0, 1718.0, 110.0, 12.5],
 	["c29_midrise_condos", -131.0, 1930.0, 90.0, 12.5],
+	# The hill districts (#116 stage C): terraces along the contours, the
+	# climbs between them and the homes on their pads, by day and at night.
+	["c30_hill_terraces_west", 335.0, -919.0, 90.0, 12.5],
+	["c31_hill_terraces_low", 1271.0, -487.0, 90.0, 12.5],
+	["c32_hill_terraces_east", 1818.0, -685.0, 90.0, 12.5],
+	["c33_hill_mid", 433.0, -647.0, 110.0, 12.5],
+	["c34_hill_night", 335.0, -919.0, 90.0, 21.5],
 ]
 
 var out_dir := "user://"
@@ -70,6 +77,7 @@ func _run() -> void:
 			continue
 		# A view on a country landmark follows its lot.
 		var at: Vector3 = game.city.country.landmark(v[1]).pos if v[1] is String else Vector3(v[1], 0.0, v[2])
+		at.y = Terrain.height(at.x, at.z)
 		game.atmosphere.hour = v[4]
 		game.player.global_position = at + Vector3(0, 0.5, 0)
 		game.city.stream_now(at)
