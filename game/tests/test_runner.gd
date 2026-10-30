@@ -76,7 +76,7 @@ func _run() -> void:
 		"test_touch_layout_moves_resizes_and_resets",
 		"test_settings_controls_cards_and_layout_editor",
 		"test_scripted_car_gets_unstuck", "test_heavy_vehicle_pushes_harder", "test_spawns_need_room", "test_overlap_resolves", "test_heavy_pushes_parked", "test_pinned_car_holds_still", "test_xray_only_when_hidden", "test_cars_prewarmed", "test_hero_seen_under_roofs", "test_cab_stop_skips_parked_car",
-		"test_vehicle_classes_cover_every_kind", "test_suspension_bounces_and_settles", "test_side_hit_spins_and_dents", "test_hard_crash_throws_panel", "test_crash_throws_rider", "test_car_fire_then_explodes", "test_explosion_makes_pieces_and_cleans_up", "test_burnt_steel_keys_miss_paints", "test_flame_frames_are_layers", "test_people_react_to_an_explosion",
+		"test_vehicle_classes_cover_every_kind", "test_suspension_bounces_and_settles", "test_side_hit_spins_and_dents", "test_hard_crash_throws_panel", "test_crash_throws_rider", "test_car_fire_then_explodes", "test_explosion_makes_pieces_and_cleans_up", "test_burnt_steel_keys_miss_paints", "test_flame_frames_are_layers", "test_people_react_to_an_explosion", "test_fire_emitters_cull_margin",
 		"test_vehicle_handling_differs",
 		"test_traffic_drives_every_kind",
 		"test_vehicle_models_in_budget_and_grounded", "test_three_wheelers_and_big_trucks",
@@ -9162,6 +9162,53 @@ func test_flame_frames_are_layers() -> void:
 	_check(not same, "no two flame layers are the same picture")
 	var m: ShaderMaterial = FireFx.flame_material(2)
 	_check(m.get_shader_parameter("shape") == tex, "the flame material draws that same texture array")
+
+
+## Godot bounds a CPUParticles3D by each particle's flat quad at its scale, not
+## facing the camera, so a big billboard seen edge-on pops out at the screen
+## edge unless the emitter has an extra cull margin (FireFx.fit_cull).
+func test_fire_emitters_cull_margin() -> void:
+	await _new_game(false)
+	var node := _home()
+	Fx.boom.clear()
+	await _frames(2)
+	var car = _spawn_car(node, Vector3(0, 0, 0), 0.0)
+	await _frames(1)
+	car._damage(car.max_health * 0.9, true)
+	var fire = car._fire
+	_check(fire != null, "the car burns")
+	if fire == null:
+		car.queue_free()
+		return
+	await _frames(30)
+	var emitters: Array = []
+	for child in fire.get_children():
+		if child is CPUParticles3D:
+			emitters.append(child)
+	_check(emitters.size() >= 3, "a burning car has flame and smoke emitters (%d)" % emitters.size())
+	car._damage(car.max_health * 2.0, true)
+	await _frames(3)
+	var blast = null
+	for b in Fx.boom.blasts():
+		if b.active:
+			blast = b
+	_check(blast != null, "the explosion has an active blast")
+	if blast != null:
+		for p in [blast.ball, blast.ball2, blast.column, blast.cap, blast.dust, blast.chunks, blast.bits, blast.sparks]:
+			if p != null and p.visible:
+				emitters.append(p)
+	var checked := 0
+	var short := 0
+	for p: CPUParticles3D in emitters:
+		var box: Vector3 = p.mesh.get_aabb().size
+		var side: float = maxf(box.x, maxf(box.y, box.z))
+		var need: float = 0.5 * side * p.scale_amount_max
+		checked += 1
+		if p.extra_cull_margin < need - 0.001:
+			short += 1
+			_check(false, "%s: cull margin %.2f is under half its quad (%.2f)" % [p.name, p.extra_cull_margin, need])
+	_check(checked >= 8 and short == 0, "every fire and blast emitter has a cull margin of half its quad times its scale (%d checked)" % checked)
+	car.queue_free()
 
 
 func test_explosion_makes_pieces_and_cleans_up() -> void:

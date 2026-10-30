@@ -403,6 +403,25 @@ static func emitter(amount: int, life: float, mesh: Mesh) -> CPUParticles3D:
 	return p
 
 
+## Keeps a billboard emitter from being culled while part of its quads still
+## shows. Godot bounds a CPUParticles3D by each particle's mesh box at the
+## particle's own (scaled) transform, not facing the camera: a flat quad has
+## no depth there, so seen edge-on from the side a billboard reaches up to
+## half its diagonal past that box. Call it again after the scales change.
+static func fit_cull(p: CPUParticles3D) -> void:
+	if p.mesh == null:
+		return
+	var top := p.scale_amount_max
+	if p.scale_amount_curve != null:
+		var best := 0.0
+		for i in p.scale_amount_curve.point_count:
+			best = maxf(best, p.scale_amount_curve.get_point_position(i).y)
+		top *= best
+	var margin: float = p.mesh.get_aabb().size.length() * 0.5 * top
+	if absf(p.extra_cull_margin - margin) > 0.01:
+		p.extra_cull_margin = margin
+
+
 ## Picks a random picture (atlas cell or array layer) for each particle.
 static func random_frame(p: CPUParticles3D) -> void:
 	p.anim_speed_min = 0.0

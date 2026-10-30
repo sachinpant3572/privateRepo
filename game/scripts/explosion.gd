@@ -393,6 +393,7 @@ class Blast extends Node3D:
 		p.angular_velocity_max = 500.0
 		p.scale_amount_min = 0.6 * size
 		p.scale_amount_max = 1.3 * size
+		FireFx.fit_cull(p)
 		p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 		p.initial_velocity_min = 6.0
 		p.initial_velocity_max = 15.0
@@ -411,6 +412,7 @@ class Blast extends Node3D:
 		ball.initial_velocity_max = 14.0 * s
 		ball.scale_amount_min = 0.8 * s
 		ball.scale_amount_max = 1.3 * s
+		FireFx.fit_cull(ball)
 		ball.position = Vector3(0, 0.4 * s, 0)
 		ball.restart()
 		_ball2_due = ball2 != null
@@ -420,6 +422,7 @@ class Blast extends Node3D:
 			ball2.initial_velocity_max = 10.0 * s
 			ball2.scale_amount_min = 0.7 * s
 			ball2.scale_amount_max = 1.1 * s
+			FireFx.fit_cull(ball2)
 			ball2.position = Vector3(0, 0.6 * s, 0)
 		column.position = Vector3(0, 0.5 * s, 0)
 		column.emission_sphere_radius = 0.7 * s
@@ -427,6 +430,7 @@ class Blast extends Node3D:
 		column.initial_velocity_max = 7.0 * s
 		column.scale_amount_min = 0.8 * s
 		column.scale_amount_max = 1.2 * s
+		FireFx.fit_cull(column)
 		column.color = dim
 		column.restart()
 		_cap_due = cap != null
@@ -437,6 +441,7 @@ class Blast extends Node3D:
 			cap.initial_velocity_max = 3.5 * s
 			cap.scale_amount_min = 0.9 * s
 			cap.scale_amount_max = 1.3 * s
+			FireFx.fit_cull(cap)
 			cap.color = dim
 		dust.visible = on_ground
 		if on_ground:
@@ -445,6 +450,7 @@ class Blast extends Node3D:
 			dust.emission_ring_inner_radius = 0.6 * s
 			dust.scale_amount_min = 0.8 * s
 			dust.scale_amount_max = 1.3 * s
+			FireFx.fit_cull(dust)
 			dust.color = dim
 			dust.restart()
 		chunks.position = Vector3(0, 0.4 * s, 0)

@@ -75,6 +75,7 @@ func _ready() -> void:
 		_embers.randomness = 0.6
 		_embers.scale_amount_min = 0.5
 		_embers.scale_amount_max = 1.5
+		FireFx.fit_cull(_embers)
 		_embers.color_ramp = FireFx.ramp([0.0, 0.5, 1.0], [Color(1.0, 0.85, 0.4, 1.0), Color(1.0, 0.4, 0.06, 0.9), Color(0.4, 0.08, 0.0, 0.0)])
 		_embers.emitting = false
 		add_child(_embers)
@@ -150,15 +151,18 @@ func _update(first := false) -> void:
 	_night = FireFx.night()
 	_core.scale_amount_min = (0.3 + 0.8 * k) * live
 	_core.scale_amount_max = (0.5 + 1.0 * k) * live
+	FireFx.fit_cull(_core)
 	_core.initial_velocity_max = 2.2 + 1.2 * k
 	_body.scale_amount_min = (0.35 + 1.1 * k) * live
 	_body.scale_amount_max = (0.55 + 1.5 * k) * live
+	FireFx.fit_cull(_body)
 	_body.initial_velocity_min = 1.2 + 0.6 * k
 	_body.initial_velocity_max = 2.4 + 2.0 * k
 	if _wide != null:
 		_wide.emitting = k > 0.35 and live > 0.35
 		_wide.scale_amount_min = (0.6 + 0.6 * k) * live
 		_wide.scale_amount_max = (0.9 + 0.8 * k) * live
+		FireFx.fit_cull(_wide)
 		_wide.initial_velocity_max = 1.8 + 1.4 * k
 	if _embers != null:
 		_embers.emitting = k > 0.12 and live > 0.2
@@ -166,6 +170,7 @@ func _update(first := false) -> void:
 	# Averaged over a puff's life, ~2.9 m across at full blaze (peak ~5.3 m).
 	_smoke.scale_amount_min = 0.6 + 0.4 * k
 	_smoke.scale_amount_max = 0.8 + 0.6 * k
+	FireFx.fit_cull(_smoke)
 	_smoke.initial_velocity_min = 1.4 + 0.6 * k
 	_smoke.initial_velocity_max = 2.6 + 1.6 * k
 	_smoke.spread = 20.0 + 14.0 * k
