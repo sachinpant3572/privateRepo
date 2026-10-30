@@ -69,3 +69,8 @@ uses the same tokens. Not a measurement.
   error.
 - P2 builder tokens: son-low 91k, son-med 97k, opus-low 95k, opus-med 114k,
   opus-high 123k, son-max 148k, son-xhigh 159k.
+- P2 blinded Opus-high grade (1-10; est. main-session fix min): son-max 9 (3),
+  son-xhigh 8 (5), opus-med 7 (6), son-high 5 (10), opus-low 5 (10),
+  opus-high 5 (10), son-low 3 (15), son-med 3 (15). Only son-max's test fails
+  on a half-diagonal/half-side formula. son-high (trial 2) is byte-identical
+  to the original 70ef924. Grader $ in the cost table.
