@@ -274,7 +274,7 @@ static func _point_problem(c, p: Vector2) -> String:
 			break
 	if zone == "":
 		return "off the country's ground"
-	if zone in ["canal", "canal_bank", "sand", "bayou", "mountain"]:
+	if zone in ["canal", "canal_bank", "sand", "bayou", "mountain", "hillside"]:
 		return "on %s ground" % zone
 	for i in t.get("l", []):
 		if Tiles._in_rect(p, country.lots[int(i)], 0.0):

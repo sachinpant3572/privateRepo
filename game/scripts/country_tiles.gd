@@ -18,7 +18,7 @@ const Flora = preload("res://scripts/kits/flora_kit.gd")
 
 ## Zones whose home cars are live parked cars (Kit.live_cars) rather than
 ## static models: Bellerive's suburbs (HANDOFF-bellerive-expand.md BX-2).
-const LIVE_CAR_ZONES := ["heights", "eastside", "fringe", "shore", "beach_town", "bayou_town"]
+const LIVE_CAR_ZONES := ["heights", "eastside", "fringe", "shore", "beach_town", "bayou_town", "hillside"]
 const GROUND_Y := -0.04
 ## On the hills the ground sits this much lower still, so a road (straight
 ## between its nodes) never dips under a crest of the ground it lies on.
@@ -110,6 +110,8 @@ const ZONE_GROUND := {
 	"far_land": [Color(0.48, 0.54, 0.34), true],
 	# The Bellerive Hills: dry golden grass under the chaparral.
 	"mountain": [Color(0.6, 0.55, 0.36), false],
+	# The hill districts (#116 stage C): watered gardens on the terraces.
+	"hillside": [Color(0.4, 0.53, 0.3), true],
 	# Golden Flats fields (tools/farmland.py): pivot circles with wheel
 	# tracks, strip fields in rows, canals in concrete.
 	"pivot_track": [Color(0.42, 0.34, 0.24), false], "pivot_green": [Color(0.3, 0.42, 0.2), false],
@@ -142,6 +144,7 @@ const TREES := {
 	# On raised ground the hills' ecology picks (Flora.pick); this is the
 	# flat foot of the range.
 	"mountain": [12.0, {"chaparral": 3, "live_oak": 1, "dry_grass": 2, "toyon": 1}],
+	"hillside": [16.0, {"live_oak": 3, "toyon": 2, "round": 2, "cypress": 1, "eucalyptus": 1}],
 }
 ## Zones that are wild ground: on the hills they take the ecology's ground
 ## colour, plants and ground cover.

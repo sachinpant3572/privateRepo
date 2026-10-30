@@ -468,7 +468,7 @@ east and north through Midtown and past the Aurum Tower (82), and Settings > Ang
 setting hides (HANDOFF-perspective-camera.md).
 
 The country is generated, not hand-made. After changing `data/world_map.json`
-or the street plan, dump the plan and rebuild it (needs `pip install shapely`):
+or the street plan, dump the plan and rebuild it (needs `pip install shapely numpy contourpy`):
 
 ```bash
 cd game && godot --headless -s res://tests/plan_dump.gd -- /tmp/plan.json

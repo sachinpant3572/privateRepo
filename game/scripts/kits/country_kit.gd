@@ -608,6 +608,7 @@ const BACKS := [
 const ZONE_LEAN := {
 	"heights": {"wall": 2.0, "iron": 1.5, "stone": 1.5},
 	"mountain": {"stone": 3.0, "wall": 1.5, "hedge": 0.5},
+	"hillside": {"stone": 2.0, "wall": 1.5, "hedge": 1.0},
 	"bayou_town": {"chain": 1.5, "ply": 2.0, "wire": 2.0, "": 1.5, "broken": 1.5},
 	"eastside": {"block": 1.5, "chain": 1.3, "": 1.2},
 	"wheaton": {"picket": 2.0, "wire": 1.5, "board": 1.3},

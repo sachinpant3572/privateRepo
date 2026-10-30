@@ -11,8 +11,9 @@ street plan's exits (the junctions where a cut street left the city).
 Bellerive's suburbs fill its urban outline (world_map.json "urban") round
 the footprint; the Beltway rings that outline.
 
-Needs shapely (pip install shapely) and a plan dump of the current street
-plan (the country's suburb streets carry on from its exits):
+Needs shapely, numpy and contourpy (pip install shapely numpy contourpy) and
+a plan dump of the current street plan (the country's suburb streets carry on
+from its exits):
 
     cd game
     godot --headless -s res://tests/plan_dump.gd -- /tmp/plan.json
@@ -49,6 +50,7 @@ import wealth  # noqa: E402
 from mountain import Mountain, roads as mountain_roads, lines as mountain_lines, OBSERVATORY, OBSERVATORY_SIZE, OBSERVATORY_ROAD_END, LETTERS, LETTERS_SIZE, MASTS, MAST_SIZE  # noqa: E402
 from mountain import GRADE, SUMMIT_SITES, PEAKS, CABLE, CABLE_MID_SIZE  # noqa: E402
 import numpy as np  # noqa: E402
+import contourpy  # noqa: E402
 
 # An avenue grades like a street.
 GRADE.setdefault("avenue", GRADE["street"])
@@ -218,7 +220,13 @@ SUBURB_STYLE.update({
     "arterial": {"garden_apartments": 3, "strip_mall": 2, "diner": 1, "gas_station": 1},
     "beach": {"beach_bar": 3, "diner": 2, "garden_apartments": 2, "shopfront": 2},
     "mountain": {"house": 3, "mansion": 2},
+    "hillside": {"house": 4, "exec_house": 2, "mansion": 1},  # by height band in street_lots
 })
+# The hill districts' homes by height (street_lots): rows and apartments
+# low down, houses on the middle terraces, exec houses and mansions on top.
+HILL_BANDS = ((40.0, {"rowhouse_row": 3, "painted_lady_row": 2, "garden_apartments": 2, "house": 3}),
+              (90.0, {"house": 5, "exec_house": 2}),
+              (1e9, {"exec_house": 3, "mansion": 2}))
 
 # --- Bellerive v3 outskirts patterns (HANDOFF-bellerive-v3.md B-4; the
 # numbers are reference/world/bellerive_patterns.md "Game use"). Every
@@ -259,7 +267,7 @@ TRACT_PITCH = 79.0          # two 30 m lots back to back, their setbacks and a s
 TRACT_PITCH_MIN = 52.0      # closest tract streets (one from each city street): shallower lots
 TRACT_LOT_SHALLOW = (15.0, 20.0)
 # Sidewalk loops for people (HANDOFF-bellerive-expand.md BX-1).
-WALK_ZONES = ("heights", "bayou_town", "fringe", "eastside", "beach_town", "shore")
+WALK_ZONES = ("heights", "bayou_town", "fringe", "eastside", "beach_town", "shore", "hillside")
 WALK_CLASSES = ("street", "avenue")
 WALK_MID = 1.25             # the middle of a 2.5 m sidewalk, out from the road's edge
 WALK_BLOCK_MAX = 400000.0   # bigger faces are open country, not blocks
@@ -296,11 +304,35 @@ SHORE_PITCH_MIN = 60.0      # closest two shore streets from the city run
 # Pattern tags a road carries from its source into the graph (pc["tag"]).
 PATTERN_WALKS = {"heights": ("flats",), "eastside": ("tract", "bulb"),
                  "shore": ("loop", "stub", "bulb", "collector", "beltway")}
+# The hill districts (#116 stage C, HANDOFF-hill-districts): terraced
+# streets along the contours of the range's lower slopes north of the city.
+HILL_BOX = (120.0, -1260.0, 2320.0, -260.0)  # where they can lie (local m)
+HILL_CELL = 8.0             # height grid they are planned on
+HILL_BLUR = 4.0             # cells: the grid is smoothed so contours run easy
+HILL_TOP = 180.0            # no hill street higher than this (smoothed m)
+HILL_SLOPE = 0.35           # nor where the smoothed ground is steeper
+HILL_PART_MIN = 40000.0     # smallest piece of land worth a district (m2)
+HILL_PITCH = 76.0           # between two terraces (two lot depths)
+HILL_RUN = 120.0            # shortest terrace
+HILL_REACH = 70.0           # a terrace end carries on along its contour this far to meet a road
+HILL_CONNECT = 0.12         # grade of the climbs between terraces (street cap 0.13)
+HILL_GAP = 220.0            # between a terrace's climbs
+HILL_NAMES = ["Toyon Terrace", "Sagewood Terrace", "Manzanita Crest", "Columbine Terrace", "Buckeye Drive",
+              "Chamise Terrace", "Kestrel Crest", "Madrone Drive", "Yarrow Terrace", "Sumac Crest",
+              "Ceanothus Drive", "Fennel Terrace", "Holly Crest", "Tanoak Drive", "Lupine Terrace",
+              "Vista Point Drive", "Swift Crest", "Poppy Terrace", "Elderberry Drive", "Wildrye Terrace",
+              "Thrasher Crest", "Bluff View Drive", "Corona Terrace", "Pinnacle Drive", "Saltbush Terrace",
+              "Owlwood Crest", "Halo Drive", "Quail Run Terrace", "Starview Drive", "Brodiaea Terrace"]
+HILL_CLIMB_NAMES = ["Talus Way", "Scree Rise", "Cobble Way", "Flint Rise", "Shale Way", "Quartz Rise", "Mica Way",
+                    "Jasper Rise", "Agate Way", "Basalt Rise", "Chert Way", "Slate Rise", "Opal Way", "Garnet Rise",
+                    "Topaz Way", "Beryl Rise", "Pumice Way", "Obsidian Rise", "Feldspar Way", "Onyx Rise",
+                    "Tuff Way", "Gypsum Rise", "Arroyo Way", "Gully Rise", "Cliffrose Way", "Roadrunner Rise",
+                    "Overlook Way", "Harrier Rise", "Lookout Way", "Tumble Rise", "Ember Way", "Scrub Jay Rise"]
 
 # Ground zones, in drawing order; the game colours them (country_tiles.gd).
 ZONES = ["land", "farmland", "bayou", "hills", "heights", "bayou_town", "fringe", "eastside",
          "beach_town", "shore", "town", "sand", "far_desert", "far_mountains", "far_forest",
-         "far_lakeside", "far_parkland", "far_military", "far_land", "mountain"] + farmland.ZONES
+         "far_lakeside", "far_parkland", "far_military", "far_land", "mountain"] + farmland.ZONES + ["hillside"]
 
 
 def main() -> None:
@@ -706,7 +738,8 @@ class Country:
         self._exits()
         regs = [Polygon(self.L(r["polygon"])) for r in w["regions"] if r.get("phase") == 2]
         rp = next((r for r in w["regions"] if r.get("id") == "red_pine"), None)
-        self.red_pine = prep(Polygon(self.L(rp["polygon"]))) if rp else prep(Point(1e9, 1e9).buffer(1.0))
+        self.red_pine_poly = Polygon(self.L(rp["polygon"])) if rp else Point(1e9, 1e9).buffer(1.0)
+        self.red_pine = prep(self.red_pine_poly)
         # The city rect, grown to the footprint's box where the core reaches
         # past it; the shore between it and the Gulf belongs to the city.
         self.city_rect = box(*unary_union([self.city_rect, self.P.envelope]).bounds)
@@ -1101,11 +1134,257 @@ class Country:
         self._eastside_roads()
         self._shore_roads()
         self._pier_site()
+        self._hill_roads()
         self._settle()
         self._carry_on()
         self._grade_rest()
         self._rail_finish()
         self._planned_crossings()
+
+    def _hill_roads(self):
+        """The hill districts (#116 stage C): terraces along the contours of
+        the range's lower, gentler slopes north of the city, HILL_PITCH apart,
+        joined to each other and to the roads below by climbs traced at
+        HILL_CONNECT across the fall line. A terrace no climb reaches goes.
+        The land they serve leaves the mountain zone as "hillside"."""
+        x0, y0, x1, y1 = HILL_BOX
+        xs = np.arange(x0, x1 + HILL_CELL * 0.5, HILL_CELL)
+        ys = np.arange(y0, y1 + HILL_CELL * 0.5, HILL_CELL)
+        gx_, gy_ = np.meshgrid(xs, ys)
+        zs = self.mtn.raw(gx_.ravel(), gy_.ravel()).reshape(gx_.shape)
+        r = int(3 * HILL_BLUR)
+        k = np.exp(-0.5 * (np.arange(-r, r + 1) / HILL_BLUR) ** 2)
+        k /= k.sum()
+        zs = np.pad(zs, r, mode="edge")
+        zs = np.apply_along_axis(lambda v: np.convolve(v, k, "valid"), 0, zs)
+        zs = np.apply_along_axis(lambda v: np.convolve(v, k, "valid"), 1, zs)
+        gy, gx = np.gradient(zs, HILL_CELL)
+        ok = ((zs >= 3.0) & (zs <= HILL_TOP) & (np.hypot(gx, gy) <= HILL_SLOPE)).astype(float)
+        cells = []
+        pts, offs = contourpy.contour_generator(xs, ys, ok, fill_type=contourpy.FillType.OuterOffset).filled(0.5, 1.5)
+        for ring_pts, ring_offs in zip(pts, offs):
+            rings = [ring_pts[ring_offs[i]:ring_offs[i + 1]] for i in range(len(ring_offs) - 1)]
+            cells.append(Polygon(rings[0], rings[1:]).buffer(0))
+        roads = [s for s in self.sources if CLASSES[s[1]]["graph"]]
+        fast = [s for s in roads if s[1] in ("freeway", "highway")]
+        cut = [s[0].buffer(CLASSES[s[1]]["w"] * 0.5 + 25.0) for s in fast]
+        cut += [self.water.buffer(30.0), self.P.buffer(40.0), self.red_pine_poly]
+        cut += [r_["poly"].buffer(20.0) for r_ in self.reserved]
+        cut += [Point(q).buffer(80.0) for q in self.lm_pts]
+        cut += [rl[0].buffer(30.0) for rl in self.rails]
+        cut += [Point(q).buffer(120.0) for q in [OBSERVATORY, LETTERS] + list(MASTS)]
+        region = unary_union(cells).intersection(self.zone_poly["mountain"]).difference(unary_union(cut))
+        region = unary_union([q for q in polys_of(region.buffer(-10.0).buffer(10.0)) if q.area >= HILL_PART_MIN])
+        if region.is_empty:
+            return
+
+        # Terraces: contours at 1 m steps from the bottom up; a run is kept
+        # where it stays clear of the roads and of the terraces already laid.
+        road_block = prep(unary_union([s[0].buffer(CLASSES[s[1]]["w"] * 0.5 + 30.0) for s in roads]))
+        joinable = unary_union([s[0] for s in roads if s not in fast])
+        terraces = []  # [line, end kinds ("road" or "bulb")]
+        acc = None
+        lines_gen = contourpy.contour_generator(xs, ys, zs, line_type=contourpy.LineType.Separate)
+        for level in np.arange(4.0, HILL_TOP + 1.0, 1.0):
+            for seg in lines_gen.lines(level):
+                if len(seg) < 3:
+                    continue
+                full = LineString(seg)
+                for piece in lines_of(full.intersection(region)):
+                    if piece.length < HILL_RUN:
+                        continue
+                    n = max(2, int(piece.length / 8.0) + 1)
+                    run_pts = [piece.interpolate(i / (n - 1), normalized=True).coords[0] for i in range(n)]
+                    acc_p = prep(acc.buffer(HILL_PITCH)) if acc is not None else None
+                    free = [not road_block.contains(Point(p)) and not (acc_p and acc_p.contains(Point(p))) for p in run_pts]
+                    i = 0
+                    while i < len(run_pts):
+                        if not free[i]:
+                            i += 1
+                            continue
+                        j = i
+                        while j + 1 < len(run_pts) and free[j + 1]:
+                            j += 1
+                        run = run_pts[i:j + 1]
+                        if len(run) >= 2 and LineString(run).length >= HILL_RUN:
+                            new, kinds = self._hill_ends(full, run, joinable if acc is None else unary_union([joinable, acc]))
+                            line = LineString(new)
+                            terraces.append([line, kinds])
+                            acc = line if acc is None else acc.union(line)
+                            acc_p = prep(acc.buffer(HILL_PITCH))
+                            for t in range(j + 1, len(run_pts)):
+                                free[t] = free[t] and not acc_p.contains(Point(run_pts[t]))
+                        i = j + 1
+
+        # Climbs: every HILL_GAP along a terrace, down to the next way below;
+        # then, for terraces still cut off, the shortest climb from anywhere
+        # along them, up or down.
+        st_lines = [t[0] for t in terraces]
+        reach = prep(region.buffer(60.0))
+        fast_p = prep(unary_union([s[0].buffer(CLASSES[s[1]]["w"] * 0.5 + 6.0) for s in fast]))
+        base_lines = [s[0] for s in roads if s not in fast]
+        climbs, starts = [], []
+
+        def grad(p):
+            i = int(round(min(max((p[1] - ys[0]) / HILL_CELL, 0), len(ys) - 1)))
+            j = int(round(min(max((p[0] - xs[0]) / HILL_CELL, 0), len(xs) - 1)))
+            return gx[i, j], gy[i, j]
+
+        def trace(p0, own, side, up):
+            """A climb from p0 on terrace `own` to the first other way it
+            meets, at HILL_CONNECT where the ground is steeper, else straight
+            down (or up) the fall line; None where it leaves the hills,
+            nears a freeway or turns back onto its own terrace."""
+            tgt = unary_union([l for l in st_lines if l is not own] + base_lines + climbs)
+            path = [p0]
+            for step in range(80):
+                p = path[-1]
+                ax, ay = grad(p)
+                m = math.hypot(ax, ay)
+                if m < 1e-6:
+                    return None
+                dx, dy = (ax / m, ay / m) if up else (-ax / m, -ay / m)
+                if m > HILL_CONNECT:
+                    th = math.acos(HILL_CONNECT / m) * side
+                    c, s_ = math.cos(th), math.sin(th)
+                    dx, dy = dx * c - dy * s_, dx * s_ + dy * c
+                q = (p[0] + dx * 4.0, p[1] + dy * 4.0)
+                if step > 2:
+                    hit = LineString([p, q]).intersection(tgt)
+                    if not hit.is_empty:
+                        hp = self._points(hit) or [c for g in lines_of(hit) for c in g.coords]
+                        path.append(min(hp, key=lambda c: dist(c, p)))
+                        out = LineString(path)
+                        return out if out.length >= 20.0 else None
+                if not reach.contains(Point(q)) or fast_p.contains(Point(q)):
+                    return None
+                if step > 3 and own.distance(Point(q)) < 3.0:
+                    return None
+                path.append(q)
+            return None
+
+        for line in st_lines:
+            n, s = 0, HILL_GAP * 0.5
+            while s < line.length - 30.0:
+                p0 = line.interpolate(s).coords[0]
+                s += HILL_GAP
+                n += 1
+                if any(dist(p0, q) < 120.0 for q in starts):
+                    continue
+                c = trace(p0, line, 1 if n % 2 else -1, False)
+                if c is not None:
+                    climbs.append(c)
+                    starts.append(p0)
+        base = unary_union(base_lines)
+
+        def cut_off():
+            """Terraces in a group of ways that reaches no road, by group."""
+            every = st_lines + climbs
+            root = list(range(len(every)))
+
+            def find(a):
+                while root[a] != a:
+                    root[a] = root[root[a]]
+                    a = root[a]
+                return a
+            tree = STRtree(every)
+            for a in range(len(every)):
+                for b in tree.query(every[a].buffer(1.0)):
+                    if int(b) != a and every[a].distance(every[int(b)]) < 1.0:
+                        root[find(a)] = find(int(b))
+            good = {find(a) for a in range(len(every)) if every[a].distance(base) < 1.0}
+            groups = {}
+            for a in range(len(st_lines)):
+                if find(a) not in good:
+                    groups.setdefault(find(a), []).append(a)
+            return groups
+
+        for _ in range(6):
+            groups = cut_off()
+            added = 0
+            for members in groups.values():
+                best = None
+                for a in members:
+                    line = st_lines[a]
+                    for s in np.arange(15.0, line.length - 15.0, 30.0):
+                        p0 = line.interpolate(s).coords[0]
+                        if any(dist(p0, q) < 60.0 for q in starts):
+                            continue
+                        for side in (1, -1):
+                            for up in (False, True):
+                                c = trace(p0, line, side, up)
+                                if c is not None and (best is None or c.length < best[0].length):
+                                    best = (c, p0)
+                if best:
+                    climbs.append(best[0])
+                    starts.append(best[1])
+                    added += 1
+            if not added:
+                break
+        lost = {a for members in cut_off().values() for a in members}
+        kept = [t for a, t in enumerate(terraces) if a not in lost]
+        # Terraces first, so _grade_rest grades the climbs onto them.
+        kept_src = []
+        for a, (line, _kinds) in enumerate(kept):
+            self.add(list(line.coords), "street", HILL_NAMES[a] if a < len(HILL_NAMES) else "", "hill")
+            kept_src.append(self.sources[-1])
+        for a, line in enumerate(climbs):
+            self.add(list(line.coords), "street", HILL_CLIMB_NAMES[a] if a < len(HILL_CLIMB_NAMES) else "", "hill")
+        # A terrace that ends on nothing gets a turning circle; where none
+        # fits it is cut back to its last climb (join_ends would tie it to
+        # the terrace below with a straight, ungraded link).
+        for src, (_line, kinds) in zip(kept_src, kept):
+            for at_end in (False, True):
+                if kinds[1 if at_end else 0] != "bulb":
+                    continue
+                cur = src[0]
+                c = list(cur.coords)
+                e, q = (c[-1], c[-2]) if at_end else (c[0], c[1])
+                d = (e[0] - q[0], e[1] - q[1])
+                dn = math.hypot(*d) or 1.0
+                if self._bulb(e, (d[0] / dn, d[1] / dn), "street", own=cur):
+                    continue
+                marks = [cur.project(Point(pt)) for cl in climbs for pt in (cl.coords[0], cl.coords[-1])
+                         if cur.distance(Point(pt)) < 1.0]
+                if marks:
+                    s_cut = max(marks) if at_end else min(marks)
+                    if (s_cut if not at_end else cur.length - s_cut) > 1.0:
+                        src[0] = substring(cur, 0.0, s_cut) if at_end else substring(cur, s_cut, cur.length)
+        self.hill_region = region
+        hz = region.buffer(40.0).intersection(self.zone_poly["mountain"])
+        self.zones = [(z, p.difference(hz) if z == "mountain" else p) for z, p in self.zones] + [("hillside", hz)]
+        self.zone_poly = dict(self.zones)
+        self.zone_strip["hillside"] = Polygon()
+        print("hill districts: %.2f km2, terraces %d (%.1f km, %d cut off), climbs %d (%.1f km)" % (
+            region.area / 1e6, len(kept), sum(t[0].length for t in kept) / 1000.0, len(lost),
+            len(climbs), sum(c.length for c in climbs) / 1000.0))
+
+    def _hill_ends(self, full, run, joinable):
+        """A terrace run on its full contour, each end carried on along the
+        contour (HILL_REACH at most) to the first road it meets: the points
+        and each end's kind ("road" where it met one, else "bulb")."""
+        new = list(run)
+        kinds = ["bulb", "bulb"]
+        for k, end in enumerate((run[0], run[-1])):
+            sa = full.project(Point(end))
+            sb = max(0.0, sa - HILL_REACH) if k == 0 else min(full.length, sa + HILL_REACH)
+            if abs(sb - sa) < 1.0:
+                continue
+            hits = self._points(substring(full, min(sa, sb), max(sa, sb)).intersection(joinable))
+            if not hits:
+                continue
+            q = min(hits, key=lambda c: dist(c, end))
+            ext = list(substring(full, min(sa, full.project(Point(q))), max(sa, full.project(Point(q)))).coords)
+            if k == 0:
+                if dist(ext[0], end) < dist(ext[-1], end):
+                    ext = ext[::-1]
+                new = ext[:-1] + new
+            else:
+                if dist(ext[-1], end) < dist(ext[0], end):
+                    ext = ext[::-1]
+                new = new + ext[1:]
+            kinds[k] = "road"
+        return new, kinds
 
     def _settle(self):
         """A suburb street left stopping on nothing (cut short by a zone's
@@ -2948,7 +3227,7 @@ class Country:
                     continue
                 if tag in ("arterial", "beltway", "route"):
                     style = "arterial"
-            elif style == "mountain":
+            elif style in ("mountain", "hillside"):
                 if cls in ("highway", "freeway", "track") or tag in ("observatory", "fire_road", "beltway", "route", "track"):
                     continue
             elif style == "shore":
@@ -2995,7 +3274,12 @@ class Country:
                         # Hillside homes stand apart, with scrub between.
                         s += self.rng.uniform(25.0, 60.0)
                         continue
-                    if style == "mountain":
+                    if style == "hillside":
+                        # Rows and apartments low down, bigger homes higher up.
+                        here = line.interpolate(s).coords[0]
+                        band = next(t for top, t in HILL_BANDS if self.mtn.raw_at(here) < top)
+                        kind = self.rng.choices(list(band), list(band.values()))[0]
+                    if style in ("mountain", "hillside"):
                         # Homes only on the lower slopes (HOME_TOP), and none in
                         # Red Pine (phase 3: forest and the summit only).
                         here = line.interpolate(s).coords[0]
@@ -3003,7 +3287,7 @@ class Country:
                             s += 20.0
                             continue
                         # Higher up, a mansion more often than a house.
-                        if kind == "house" and self.rng.random() < min(0.8, self.mtn.raw_at(here) / 400.0):
+                        if style == "mountain" and kind == "house" and self.rng.random() < min(0.8, self.mtn.raw_at(here) / 400.0):
                             kind = "mansion"
                         # Not where the road climbs steeply past the frontage:
                         # the lot's pad could not sit level with it.
@@ -4171,7 +4455,7 @@ class Country:
             z = self._zone_at((q["x"], q["y"])) or "-"
             types = by_zone.setdefault(z, [0, {}])[1]
             types[q["type"]] = types.get(q["type"], 0) + 1
-        for z in ("heights", "bayou_town", "fringe", "eastside", "shore", "beach_town"):
+        for z in ("heights", "bayou_town", "fringe", "eastside", "shore", "beach_town", "hillside"):
             if z in by_zone:
                 kinds = {}
                 for l in self.lots:

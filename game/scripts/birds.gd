@@ -76,7 +76,7 @@ const ZONE_HABITAT := {
 	"farmland": "farm", "pivot_track": "farm", "pivot_green": "farm", "pivot_gold": "farm",
 	"pivot_bare": "farm", "field_green_row": "farm", "field_green": "farm", "field_gold": "farm",
 	"field_bare_row": "farm", "field_bare": "farm",
-	"town": "town", "heights": "town", "fringe": "town", "eastside": "town",
+	"town": "town", "heights": "town", "fringe": "town", "eastside": "town", "hillside": "town",
 }
 ## City district styles by the water.
 const HARBOUR_STYLES := ["waterfront", "docks", "beach"]
