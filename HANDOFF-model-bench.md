@@ -130,3 +130,17 @@ packages (3-27 min) are below that bar; P2's wrong formula came from the
 main session's brief (a lossy handoff). Proposal (Sachin decides, desktop
 file): small packages stay in the main session; builders (Sonnet xhigh) only
 for long parallel separate-file packages.
+
+## Follow-up test (Sachin, 2026-10-30: "create the scheduled task for next week
+after the reset, at around 11AM on Tuesday, to test that 3 setup with 3 jobs")
+Runs as its own session, Tue 2026-11-03 11:00 IST. Arms: S = Sonnet xhigh
+builder + per-job Opus-high review; O = Opus high builder + per-job review;
+M = main session does the job (a `fork` agent, so it inherits a real main
+context), no per-job review. 3 jobs x 3 repeats per arm = 27 runs.
+- Jobs: replays of 3 past small reviewed fixes (not the flame or cull ones),
+  each a one- or two-file change with a test, from its base commit, reviewed
+  final as reference. No new game features.
+- Same brief per job for all arms; hidden test + mutation check + one blinded
+  Opus-high grader per job; costs from subagent logs (cap lock-wait cache
+  writes as above). Waves of <= 4 builders to keep the Godot lock queue short.
+- Report: grade mean/spread, cost incl. review and fix, wall time, per arm.
