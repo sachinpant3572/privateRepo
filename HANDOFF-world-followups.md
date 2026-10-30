@@ -16,11 +16,7 @@ approved by this.
   (508,-3006) is a switchback leg 14 m from the next with ~11 m between
   them, below the 8 m height grid; Firebreak 30.6 % at its junction with
   West Ridge Track's start (150,-4034). Both are trails, not traffic roads.
-- **Hill road pieces 4 -> 3.5 m** (country_tiles HILL_PIECE): at the Canyon
-  Freeway / Crest Drive junction (2223,-1247) the ground twists ~1 m per
-  8 m cell, and a 4 m triangle's chord sat 5.5 cm off it (test 5 cm).
-- **City exits 139 -> 133** after the open land: the city edge moved
-  north near Halcyon (y -166 -> -220) and shifted in the east.
+- Hill road pieces 4 -> 3.5 m and city exits 139 -> 133: see archive.
 
 ## Reference maps (Sachin, 2026-10-30)
 

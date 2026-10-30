@@ -122,3 +122,11 @@ _layout). (3) districts in city.gd (patch prefix -> district) and
 world_map districts; open land: golf course, airport edge. (4) tests:
 km² range, exits, block counts; check city build time on load.
 Plot helper: scratchpad planplot.py (plan.json -> png).
+
+## Moved from the handoff (2026-10-30)
+
+- **Hill road pieces 4 -> 3.5 m** (country_tiles HILL_PIECE): at the Canyon
+  Freeway / Crest Drive junction (2223,-1247) the ground twists ~1 m per
+  8 m cell, and a 4 m triangle's chord sat 5.5 cm off it (test 5 cm).
+- **City exits 139 -> 133** after the open land: the city edge moved
+  north near Halcyon (y -166 -> -220) and shifted in the east.
