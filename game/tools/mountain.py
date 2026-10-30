@@ -144,6 +144,7 @@ UNDER_DROP = 6.5  # a trail's underpass runs this far below the road over it
 # this of the rail; otherwise it passes under a rail bridge or over the rail
 # (in its cutting), this far apart (5.5 m clearance and the deck).
 RAIL_CLEAR = 7.0
+LEVEL_REACH = 20.0  # a road at a level crossing is flat this far either side of the rail
 
 
 LINES = Path(__file__).resolve().parent / "mountain_lines.json"
@@ -562,6 +563,7 @@ class Mountain:
                     cost += prev
                 row.append((cost, (v, kind), back))
             best.append(row)
+        level = []
         if free:
             k = min(range(4), key=lambda q: best[-1][q][0])
             for c in range(len(free) - 1, -1, -1):
@@ -570,7 +572,19 @@ class Mountain:
                 pins[i] = v
                 if kind:
                     self.rail_cross.append((other, so, kind, _HALF.get(cls, 4.0), across(i, other, so)))
+                else:
+                    level.append((i, other))
                 k = back
+        # A level crossing is flat across the tracks: the rail's graded strip
+        # sets the ground about 15 m either side of it, so the road holds the
+        # rail's height out to LEVEL_REACH from it (else road and ground part).
+        for i, other in level:
+            _l, rs, rz = next(p for p in self.profiles if p[0] is other)[:3]
+            for step in (-1, 1):
+                j = i + step
+                while 0 <= j < len(s) and j not in pins and other.distance(Point(pts[j])) < LEVEL_REACH:
+                    pins[j] = float(np.interp(other.project(Point(pts[j])), rs, rz))
+                    j += step
         for i, h in pins.items():
             z[i] = h
         # Pinned heights stay; the rest is pulled within the grade of them.
