@@ -2148,8 +2148,6 @@ func _full_link(e: int) -> Array:
 ## district's rules say. Dropping a street joins the blocks either side,
 ## within the district's size limits, and never cuts junctions off.
 func _thin() -> void:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = hash([seed_value, "thin"])
 	var links: Array = []
 	var seen := {}
 	for n in node_pos.size():
@@ -2173,7 +2171,10 @@ func _thin() -> void:
 	for l in links:
 		var e0: int = l[0][0]
 		var p: Dictionary = PATCHES[edge_patch[e0]]
-		var roll := rng.randf()
+		# Rolled by where the link is, not in order: streets added elsewhere
+		# (#116's lobes) left one stream shifted and re-cut the docks.
+		var mid: Vector2 = (node_pos[l[1]] + node_pos[l[2]]).round()
+		var roll := float(absi(hash([seed_value, "thin", mid])) % 100000) / 100000.0
 		var cut: float = p.cut[_fam[e0]] if _fam[e0] >= 0 else 0.0
 		if roll < cut:
 			if _adj[l[1]].size() < 3 or _adj[l[2]].size() < 3:
