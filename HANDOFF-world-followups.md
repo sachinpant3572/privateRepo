@@ -115,7 +115,7 @@ C. **Sloped districts** (~40-70 h, Sachin's yes): the foothills north of
    the city as hill districts (hill_n's contour rings, Vinewood-style):
    city ground on a height field, roads graded, buildings stepped onto it,
    traffic, people and cameras on heights.
-   Build (2026-10-30): HANDOFF-hill-districts.md (country zone, option B).
+   Built 2026-10-30 (country zone, option B): HANDOFF-hill-districts.md.
 D. **A bay and a beach borough** (~10-16 h): a second water body in the
    plan (bank logic), a barrier-island beach borough reached by 2-3
    causeways (the existing bridge class).
@@ -145,6 +145,5 @@ Stage A build (approach in the archive):
 
 ## Traps
 
-- country.json and mountain_lines.json are single-line multi-MB files:
-  never grep them (output overflow); read them with python json.
+- country.json, mountain_lines.json: one-line multi-MB; read with python json.
 - Blocked hosts: sportskeeda.com, bragitoff.com, wixmp.com.
