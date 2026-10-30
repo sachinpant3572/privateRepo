@@ -111,6 +111,12 @@ func _run() -> void:
 		await _fire(game)
 		get_tree().quit()
 		return
+	if OS.get_environment("SHOTS") == "wreck_lit":
+		# A burnt-out car lit by its own fire, street lamps, a headlight and
+		# the sun, beside an intact car of the same paint (wl_*.png).
+		await _wreck_lit(game)
+		get_tree().quit()
+		return
 	if OS.get_environment("SHOTS") == "farm":
 		# Just Golden Flats' farmland (quick look while working on it).
 		await _farm(game)
@@ -781,6 +787,74 @@ func _fire(game) -> void:
 	game.Graphics.pick(game.settings, "high")
 	game.apply_settings()
 	game.atmosphere.hour = 11.0
+
+
+## How the burnt-out shell takes each kind of light, at High: its own dying
+## fire, the street lamps, a car's real headlight aimed at it, then daylight.
+## An intact car of the same paint stands beside it once the fire is out.
+## Run it with `--fixed-fps 60`.
+func _wreck_lit(game) -> void:
+	var at := Vector2(691.5, 459) # the parked van's spot in _nightfx, under its sedan's beam
+	var pos := Vector3(at.x, Terrain.height(at.x, at.y), at.y)
+	game.city.stream_now(pos)
+	game.player.visible = false
+	game.player.global_position = pos
+	game.Graphics.pick(game.settings, "high")
+	game.apply_settings()
+	game.atmosphere.hour = 22.5
+	game.camera.fixed_focus = pos + Vector3(1.5, 0, 0)
+	game.camera.room_size = 10.0
+	game.camera.snap()
+	var paint := Color(0.75, 0.75, 0.72)
+	var car = Vehicle.new()
+	car.kind = "sedan"
+	car.body_color = paint
+	game.add_child(car)
+	car.global_position = pos
+	await _frames(40)
+	car._damage(car.health - car.max_health * car.FIRE_AT * 0.97, true)
+	await _frames(5)
+	var fire = car._fire
+	for i in 1800:
+		if fire.exploded:
+			break
+		await _frames(1)
+	await _frames(150)
+	await _shot("wl_1_own_fire.png")
+	for i in 3600:
+		if not is_instance_valid(fire):
+			break
+		await _frames(1)
+	var twin = Vehicle.new()
+	twin.kind = "sedan"
+	twin.body_color = paint
+	game.add_child(twin)
+	twin.global_position = pos + Vector3(3.0, 0, 0)
+	await _frames(40)
+	game.graphics.rescan()
+	await _frames(5)
+	print("wreck_lit lamps: %d lamp lights, %d car lights" % [game.graphics.lit_lamps().size(), game.graphics.lit_cars.size()])
+	await _shot("wl_2_lamps.png")
+	var beam = Vehicle.new()
+	beam.kind = "sedan"
+	beam.body_color = Color(0.2, 0.35, 0.7)
+	game.add_child(beam)
+	beam.global_position = pos + Vector3(1.5, 0, 11.0)
+	beam.driver = Vehicle.Driver.PLAYER
+	await _frames(20)
+	game.graphics.rescan()
+	await _frames(10)
+	print("wreck_lit headlight: %d lamp lights, %d car lights" % [game.graphics.lit_lamps().size(), game.graphics.lit_cars.size()])
+	await _shot("wl_3_headlight.png")
+	beam.queue_free()
+	game.atmosphere.hour = 11.0
+	await _frames(30)
+	await _shot("wl_4_day.png")
+	car.queue_free()
+	twin.queue_free()
+	game.camera.fixed_focus = null
+	game.camera.room_size = 0.0
+	game.player.visible = true
 
 
 ## A car with its lights on at night, on the flat and pointing up and down
