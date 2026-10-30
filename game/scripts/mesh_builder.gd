@@ -652,20 +652,20 @@ void fragment() {
 	float fine = vnoise(p * 11.0);
 	vec3 ash = vec3(0.56, 0.54, 0.5);
 	vec3 rust = vec3(0.5, 0.29, 0.16);
-	vec3 soot = vec3(0.1, 0.095, 0.09);
+	vec3 soot = vec3(0.13, 0.12, 0.11);
 	vec3 c = mix(ash, rust, smoothstep(0.42, 0.68, big));
 	c = mix(c, ash * 1.12, smoothstep(0.7, 0.9, fine) * 0.5);
 	// Soot streaks, heavier low on the body and on the sides than the top.
 	float low = 1.0 - smoothstep(0.25, 0.9, p.y);
 	float side = 1.0 - abs(normalize(n).y);
 	float streak = smoothstep(0.45, 0.75, vnoise(vec3(p.x * 3.0, p.y * 0.8, p.z * 3.0)));
-	c = mix(c, soot, clamp(low * 0.55 + side * streak * 0.4, 0.0, 0.75));
+	c = mix(c, soot, clamp(low * 0.4 + side * streak * 0.35, 0.0, 0.6));
 	// Glass (VehicleKit.GLASS) is gone: the cabin shows dark and sooty.
 	float glass = 1.0 - smoothstep(0.02, 0.06, distance(src, vec3(0.15, 0.19, 0.25)));
 	// Black parts (tyres, trim, the dash) burn to char.
 	float dark = 1.0 - smoothstep(0.06, 0.13, lum);
-	c = mix(c, soot * (0.8 + fine * 0.6), max(glass * 0.9, dark * 0.85));
-	ALBEDO = pow(c, vec3(2.2));
+	c = mix(c, soot * (0.8 + fine * 0.6), max(glass * 0.9, dark * 0.75));
+	ALBEDO = c;
 	ROUGHNESS = 0.92;
 	METALLIC = 0.15;
 	SPECULAR = 0.3;

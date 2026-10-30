@@ -131,6 +131,11 @@ gameplay choice for Sachin; the blast still makes "crash").
   `MeshBuilder.burnt_material()`: grey ash with rust patches from 3D noise and
   soot low down and on the glass. It lives in MeshBuilder because the Fx
   autoload must preload it for prewarm (fx.gd can't see vehicle.gd).
+  First version was ~3x too dark (near-black under lamps): it wrote
+  `ALBEDO = pow(c, 2.2)`, but colours in this project's custom shaders go in
+  as they are (a constant ash with no pow matched a plain StandardMaterial of
+  the same grey; with pow it read 31 % vs 84 %). Fixed with no pow, plus
+  lighter soot. SHOTS=wreck_lit shows it by its fire, lamps, headlight, day.
 
 ## Open questions
 
