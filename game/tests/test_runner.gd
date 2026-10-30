@@ -76,7 +76,7 @@ func _run() -> void:
 		"test_touch_layout_moves_resizes_and_resets",
 		"test_settings_controls_cards_and_layout_editor",
 		"test_scripted_car_gets_unstuck", "test_heavy_vehicle_pushes_harder", "test_spawns_need_room", "test_overlap_resolves", "test_heavy_pushes_parked", "test_pinned_car_holds_still", "test_xray_only_when_hidden", "test_cars_prewarmed", "test_hero_seen_under_roofs", "test_cab_stop_skips_parked_car",
-		"test_vehicle_classes_cover_every_kind", "test_suspension_bounces_and_settles", "test_side_hit_spins_and_dents", "test_hard_crash_throws_panel", "test_crash_throws_rider", "test_car_fire_then_explodes",
+		"test_vehicle_classes_cover_every_kind", "test_suspension_bounces_and_settles", "test_side_hit_spins_and_dents", "test_hard_crash_throws_panel", "test_crash_throws_rider", "test_car_fire_then_explodes", "test_explosion_makes_pieces_and_cleans_up",
 		"test_vehicle_handling_differs",
 		"test_traffic_drives_every_kind",
 		"test_vehicle_models_in_budget_and_grounded", "test_three_wheelers_and_big_trucks",
@@ -9006,6 +9006,79 @@ func test_car_fire_then_explodes() -> void:
 	_check(near.health < near.max_health and near.global_position.distance_to(near_at) > 0.05, "the car beside it is shoved %.2f m and damaged" % near.global_position.distance_to(near_at))
 	car.queue_free()
 	near.queue_free()
+
+
+## "Improve the quality of explosions and fire" (Sachin, 2026-10-30): a burning
+## car has flame layers, embers, smoke and (High) one flickering light; its
+## explosion sets off the fireball, smoke column, flash light, shockwave ring
+## and a scorch mark, and when it is over every piece is off again, the lights
+## are given back and the scorch fades; Low spends fewer particles and no light.
+func test_explosion_makes_pieces_and_cleans_up() -> void:
+	await _new_game(false)
+	var FireFx = load("res://scripts/fire_fx.gd")
+	var quality: String = FireFx.level
+	var node := _home()
+	Fx.boom.clear()
+	await _frames(2)
+	var lights_before := _fx_lights()
+	var counts := {}
+	for level in ["high", "low"]:
+		Fx.set_quality(level)
+		var car = _spawn_car(node, Vector3(0, 0, 0), 0.0)
+		await _frames(1)
+		car._damage(car.max_health * 0.9, true)
+		var fire = car._fire
+		_check(fire != null and not car.wrecked, "%s: the car burns" % level)
+		await _frames(30)
+		var layers: Array = []
+		for child in fire.get_children():
+			if child is CPUParticles3D and child.emitting:
+				layers.append(child)
+		var sum := 0
+		for l in layers:
+			sum += l.amount
+		counts[level] = sum
+		if level == "high":
+			_check(layers.size() >= 4 and FireFx.lights_used == 1 and _fx_lights() == lights_before + 1, "high: flames, embers and smoke are on, with one fire light (%d layers, %d lights taken)" % [layers.size(), FireFx.lights_used])
+		else:
+			_check(FireFx.lights_used == 0 and _fx_lights() == lights_before, "low: no real fire light")
+		car._damage(car.max_health * 2.0, true)
+		await _frames(3)
+		_check(fire.exploded, "%s: it explodes" % level)
+		var boom = Fx.boom
+		_check(boom.running() == 1 and boom.pieces_on() >= 6 and boom.scorches() == 1, "%s: the blast runs (%d pieces on, %d scorch mark)" % [level, boom.pieces_on(), boom.scorches()])
+		var blast = boom.blasts()[(boom._next + boom.BLASTS - 1) % boom.BLASTS]
+		var lit: bool = blast.light != null and blast.light.visible
+		_check(lit == (level == "high"), "%s: the flash light is %s" % [level, "on for a moment" if lit else "off"])
+		var amount := 0
+		for p in [blast.ball, blast.column, blast.cap, blast.dust, blast.chunks, blast.bits, blast.sparks]:
+			if p != null:
+				amount += p.amount
+		counts[level + "_blast"] = amount
+		for f in 40:
+			await _frames(1)
+		_check(not blast.light or not blast.light.visible, "%s: the flash light is out after 0.7 s" % level)
+		# The fire and the blast run their course.
+		for f in 780:
+			await _frames(1)
+		_check(not is_instance_valid(fire) and boom.running() == 0 and boom.pieces_on() == 0, "%s: fire node freed and every blast piece off (%d on)" % [level, boom.pieces_on()])
+		_check(FireFx.lights_used == 0 and _fx_lights() == lights_before, "%s: the lights are given back" % level)
+		_check(boom.scorches() == 1 and boom.scorch_alpha() > 0.3, "%s: the scorch mark is still on the ground" % level)
+		boom._process(60.0)
+		_check(boom.scorches() == 0, "%s: the scorch mark fades away" % level)
+		car.queue_free()
+		await _frames(2)
+	_check(counts["low"] < counts["high"] and counts["low_blast"] < counts["high_blast"], "Low spends fewer particles than High (fire %d < %d, blast %d < %d)" % [counts["low"], counts["high"], counts["low_blast"], counts["high_blast"]])
+	Fx.set_quality(quality)
+
+
+## Real lights shown in the world now (tests).
+func _fx_lights() -> int:
+	var n := 0
+	for l in get_tree().root.find_children("*", "OmniLight3D", true, false):
+		if l.is_visible_in_tree():
+			n += 1
+	return n
 
 
 ## Settings > Camera > Screen shake (0.23, Sachin: "screen shake is too

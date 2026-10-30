@@ -221,6 +221,7 @@ func _apply(delta: float) -> void:
 	var elevation := lerpf(25.0, 65.0, sin(t * PI))
 	sun.rotation_degrees = Vector3(-elevation, lerpf(70.0, -70.0, t), 0.0)
 	RenderingServer.global_shader_parameter_set("night", night)
+	Fx.night = night # fire and smoke dim with it (the shader global cannot be read back)
 	if (night > 0.02) != _night_on:
 		_night_on = night > 0.02
 		night_changed.emit(_night_on)

@@ -15,6 +15,9 @@ const Birds = preload("res://scripts/birds.gd")
 const GameLog = preload("res://scripts/game_log.gd")
 const Blood = preload("res://scripts/blood.gd")
 const Puffs = preload("res://scripts/puffs.gd")
+const Boom = preload("res://scripts/explosion.gd")
+const FireFx = preload("res://scripts/fire_fx.gd")
+const Terrain = preload("res://scripts/terrain.gd")
 
 ## Off in headless runs (tests), where slowing time would only slow tests.
 var enabled := true
@@ -23,6 +26,10 @@ var camera: Node
 var bloodwork: Blood
 ## Exhaust and tyre smoke (Fx.puff).
 var puffs: Puffs
+## 0 by day .. 1 at night (the Atmosphere sets it each frame).
+var night := 0.0
+## Explosions: fireball, smoke column, shockwave, scorch (Fx.explosion).
+var boom: Boom
 
 var _pools := {}
 var _skids: MultiMeshInstance3D
@@ -52,6 +59,9 @@ func _ready() -> void:
 	puffs = Puffs.new()
 	puffs.name = "Puffs"
 	add_child(puffs)
+	boom = Boom.new()
+	boom.name = "Boom"
+	add_child(boom)
 
 
 func _process(_delta: float) -> void:
@@ -83,6 +93,26 @@ func crash(pos: Vector3, impact: float, involves_player: bool) -> void:
 		shake(0.2 + 0.6 * strength)
 		if impact > 14.0:
 			hit_stop(0.06)
+
+
+## An explosion of size `scale` (1 about a car, a fuel tank or a gas bottle
+## less) at `pos`: flash, fireball, smoke column, dust and shockwave on the
+## ground, flung chunks and sparks, a scorch mark; people near it hear it, birds
+## fly, and the view shakes by how far the player is. `ground` is the surface
+## height under it (default: the terrain). It does no damage: the caller
+## hurts what is near (car_fire.gd does).
+func explosion(pos: Vector3, scale := 1.0, ground := NAN) -> void:
+	if is_nan(ground):
+		ground = Terrain.height(pos.x, pos.z)
+	preload("res://scripts/senses.gd").emit(get_tree(), "crash", pos, null, {"loud": 1.5})
+	Birds.startle(pos, 60.0 * scale)
+	boom.blast(pos, scale, ground)
+	var player = get_tree().get_first_node_in_group("player")
+	if player != null:
+		var reach := 45.0 * scale
+		var d: float = player.global_position.distance_to(pos)
+		if d < reach:
+			shake(lerpf(1.0, 0.25, d / reach))
 
 
 ## A car knocked a roadside prop of `kind` down at `pos` (Breakables):
@@ -172,6 +202,7 @@ func puff(pos: Vector3, vel: Vector3, size: float, grow: float, life: float, col
 ## Graphics quality: fewer puffs alive at once on the lower presets.
 func set_quality(level: String) -> void:
 	puffs.cap = PUFFS.get(level, PUFFS["high"])
+	FireFx.set_level(level)
 
 
 ## Blood from a wound at `pos` spraying along `dir` (zero: any way), with
