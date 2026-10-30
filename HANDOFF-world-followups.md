@@ -20,8 +20,7 @@ approved by this.
 
 ## Reference maps (Sachin, 2026-10-30)
 
-Files in reference/world/ref_maps/; what they show is in
-HANDOFF-world-followups-archive.md (big blocks, open land, water, clusters).
+Files in reference/world/ref_maps/; what they show is in the archive.
 
 ## Liberty City size (#116): design (to write before building)
 
