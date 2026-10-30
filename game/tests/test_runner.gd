@@ -4951,15 +4951,22 @@ func test_taxi_phone_call_and_skip() -> void:
 	game.waypoint = game.city.node_pos(far)
 	# Another car stopped right where the player stands: the waiting cab
 	# still wins (no carjacking a passer-by).
+	# A parked car: a traffic car moved there still drives, and knocking the
+	# player down (no ENTER while down) is not what this checks.
 	var other = null
 	for v in get_tree().get_nodes_in_group("vehicles"):
-		if v != cab and not v.wrecked:
+		if v is Vehicle and not v.has_method("exit_check") and v != cab and not v.wrecked and v.driver == Vehicle.Driver.NONE:
 			other = v
 			break
+	_check(other != null, "a parked car to stand beside the cab")
 	if other != null:
 		other.global_position = cab.global_position + cab.global_basis.x * 3.6
+		other.global_rotation = cab.global_rotation
+		other.speed = 0.0
+		other.motion = Vector3.ZERO
 		other.reset_physics_interpolation()
 	await _taxi_board(cab)
+	_check(p.knocked_time <= 0.0, "nobody knocked the player down")
 	_check(p.vehicle == cab, "boarding takes the waiting cab, not the car beside it")
 	_check(taxi.state == taxi.State.CHOOSING and taxi.trip.get("name") == "Waypoint", "with a waypoint set, that is where it goes")
 	var fare: int = taxi.trip.fare
