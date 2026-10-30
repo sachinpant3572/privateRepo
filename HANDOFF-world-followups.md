@@ -88,23 +88,27 @@ B. **Grow the core to ~8 km²** (~14-20 h). Outline east and west (the Gulf
    world_map districts; open land: golf course, airport edge. (4) tests:
    km² range, exits, block counts; check city build time on load.
    Plot helper: scratchpad planplot.py (plan.json -> png).
-   Stage B layout (2026-10-30, decided before editing; worktree /tmp/bwt):
-   - River banks are picked by side (`_chain`: nearest chain the river does
-     / does not lie between from (300,300)); mean height swapped them once
-     the core crossed the west leg.
-   - New arterial lines without moving old streets: ART_X gains -1300,
-     -1000 (west) and 2480, 2820, 3150 (east); ART_Y_SOUTH gains -580..860
-     in front. `_splits` keys shift by the count prepended (as -580 did).
-   - West inner strip (river to x -390) cut off by a seam at x -390:
-     Magnolia Heights (north of Crescent, style heights) and Blackwater
-     Bayou (south, style bayou), both world_map districts already.
-   - West bank: seam x -330 parts it from Morrow Point; Tallow Bank (new,
-     industrial, big blocks); Aurum and Crescent cross the west leg on
-     bridges (class bridge) where the country's Route 40 / Route 1 bridges
-     were. Presidio runs on there with no bridge.
-   - East: seam on Mangrove (x 2130) north of Crescent; Verdant Park (new,
-     style heights) with a golf course (open land, kind golf). The airport
-     marker (local 1750,300) sits on the stadium: left for later.
+   Stage B build (2026-10-30): urban 8.94 km², plan blocks 6.69 km²
+   (outline 7.53), 150 city exits.
+   - River banks are picked by side (`_chain`: the chain the river does /
+     does not lie between from (300,300)); mean height swapped them.
+   - ART_X gains -1300, -1000 (west) and 2480, 2820, 3150 (east: Juniper,
+     Sycamore Avenues, Fairway Drive; without ARTERIALS entries the east
+     blocks were 220-350 m); ART_Y_SOUTH gains -580..860 in front, so
+     `_splits` keys shift by the count prepended.
+   - West: seam x -390 parts Magnolia Heights / Blackwater Bayou from the
+     river strip; seam x -330 parts Tallow Bank (industrial, big blocks)
+     from Morrow Point; Aurum and Crescent cross the west leg on bridges.
+     The civic void west of City Hall stops at Laurel (it made a 370 x
+     240 m slab).
+   - East: Verdant Park (seam on Mangrove x 2130) with a golf course
+     (OPEN_LAND kind golf, city_cells `_golf`: lake, clubhouse, 4-9 holes).
+     Airport marker (local 1750,300) sits on the stadium: left for later.
+   - Ocean Drive (now 2500 m) carries a vertex at the Serena Causeway
+     landing (1753,1657): the field street that met it there went, and the
+     country causeway found no exit 42 m off its line.
+   - The street field was NOT regenerated: no new patch is a field patch,
+     and regenerating could shift old districts.
 C. **Sloped districts** (~40-70 h, Sachin's yes): the foothills north of
    the city as hill districts (hill_n's contour rings, Vinewood-style):
    city ground on a height field, roads graded, buildings stepped onto it,
