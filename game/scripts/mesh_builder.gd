@@ -652,15 +652,15 @@ void fragment() {
 	float lum = dot(src, vec3(0.3, 0.59, 0.11));
 	float big = vnoise(p * 1.6) * 0.65 + vnoise(p * 4.1) * 0.35;
 	float fine = vnoise(p * 11.0);
-	vec3 scorch = vec3(0.36, 0.25, 0.17);
-	vec3 soot = vec3(0.13, 0.11, 0.095);
+	vec3 scorch = vec3(0.33, 0.28, 0.23);
+	vec3 soot = vec3(0.14, 0.125, 0.11);
 	vec3 ash = vec3(0.5, 0.48, 0.45);
 	// Scorched paint, brown and black in blotches.
 	vec3 c = mix(scorch, soot, smoothstep(0.38, 0.66, big));
 	c = mix(c, scorch * 1.15, smoothstep(0.7, 0.9, fine) * 0.35);
 	// Grey ash where the paint burnt right off: the hottest, top panels.
 	float top = smoothstep(0.5, 0.9, normalize(n).y);
-	c = mix(c, ash, top * smoothstep(0.5, 0.75, big * 0.5 + fine * 0.5) * 0.55);
+	c = mix(c, ash, top * smoothstep(0.4, 0.7, big * 0.4 + fine * 0.6) * 0.7);
 	// Soot streaks, heavier low on the body and on the sides than the top.
 	float low = 1.0 - smoothstep(0.25, 0.9, p.y);
 	float side = 1.0 - abs(normalize(n).y);

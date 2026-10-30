@@ -100,7 +100,7 @@ HANDOFF-hill-districts-archive.md.
   only be applied on rusted cars that are intentionally put in places by us").
   Sources (forums, salvage guides) agree: fresh = soot, scorched brown paint,
   grey ash where the paint burnt off; flash rust comes days later. Shell now
-  scorch brown (0.36,0.25,0.17) / soot (0.13,0.11,0.095) blotches, ash grey on
+  scorch brown (0.33,0.28,0.23; 0.36,0.25,0.17 read orange in sun) / soot (0.14,0.125,0.11) blotches, ash grey on
   top panels only. Placed rusted-car props (graveyards etc.) are an idea for
   later, not approved.
 
