@@ -81,6 +81,9 @@ fire_fx.gd). Est. ~$6-9 and 1-1.5 h in all; cheaper option: package 1 only.
 | Package | Review findings (severity) | First-run gate fails | Main fix time |
 |---|---|---|---|
 | 1. Flame Texture2DArray (27 min; Sonnet $1.56, at Opus prices $2.60; review $0.88) | 0 High, 0 Medium, 3 Low (270 KB `flame_images` kept for tests only; `create_from_images` result ignored; test missed a shader-only revert) + 2 nits | Before-shots dir missing (12/16 saved), SCRIPT ERROR in its test (headless `get_layer_data` is null; test still printed PASS); no parse errors | ~5 min (all 3 Lows + comment nit) |
+| 2. Cull margin `FireFx.fit_cull` (3 min; Sonnet $0.56, at Opus prices $0.83; review $1.77) | 0 High, 1 Medium (half the AABB diagonal is too small for flames anchored at their base: `_core` 0.82 set vs 1.48 needed, `_body` 1.89 vs 3.34, `_wide` 1.32 vs 2.33; its test used the same wrong idea), 2 Low (test skipped the scale curve and the fire growing; fx.gd's own small emitters left as is) | None | ~10 min (far-corner margin, test recomputes independently and after `_k = 1`; old formula now fails it) |
+
+Verdict: builds $2.12 on Sonnet vs $3.43 at Opus prices (-38%), but with the per-package Opus reviews ($2.65) $4.77, +39% over Opus-only builds (the final review is common to both). Neither package reached Opus-high quality alone (a test passing over a SCRIPT ERROR; a wrong cull formula); both did after review. Per the rule, builders go back to Opus.
 
 ## Build results (2026-10-30)
 

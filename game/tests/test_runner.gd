@@ -9186,6 +9186,10 @@ func test_fire_emitters_cull_margin() -> void:
 		if child is CPUParticles3D:
 			emitters.append(child)
 	_check(emitters.size() >= 3, "a burning car has flame and smoke emitters (%d)" % emitters.size())
+	# The flames grow as the fire takes hold: the margins must follow.
+	fire._k = 1.0
+	fire._update()
+	_check(_cull_short(emitters) == 0, "the cull margins follow a fire at full strength")
 	car._damage(car.max_health * 2.0, true)
 	await _frames(3)
 	var blast = null
@@ -9197,18 +9201,31 @@ func test_fire_emitters_cull_margin() -> void:
 		for p in [blast.ball, blast.ball2, blast.column, blast.cap, blast.dust, blast.chunks, blast.bits, blast.sparks]:
 			if p != null and p.visible:
 				emitters.append(p)
-	var checked := 0
+	var short := _cull_short(emitters)
+	_check(emitters.size() >= 8 and short == 0, "every fire and blast emitter's cull margin reaches its quad's far corner at full scale (%d checked)" % emitters.size())
+	car.queue_free()
+
+
+# Counts emitters whose cull margin falls short of the farthest a billboard
+# quad can reach from its particle: the quad's far corner from its origin
+# (flames sit on their base) times the largest scale, curve included.
+func _cull_short(emitters: Array) -> int:
 	var short := 0
 	for p: CPUParticles3D in emitters:
-		var box: Vector3 = p.mesh.get_aabb().size
-		var side: float = maxf(box.x, maxf(box.y, box.z))
-		var need: float = 0.5 * side * p.scale_amount_max
-		checked += 1
-		if p.extra_cull_margin < need - 0.001:
+		var b: AABB = p.mesh.get_aabb()
+		var far := Vector3(maxf(absf(b.position.x), absf(b.end.x)), maxf(absf(b.position.y), absf(b.end.y)),
+			maxf(absf(b.position.z), absf(b.end.z))).length()
+		var top := p.scale_amount_max
+		if p.scale_amount_curve != null:
+			var best := 0.0
+			for i in p.scale_amount_curve.point_count:
+				best = maxf(best, p.scale_amount_curve.get_point_position(i).y)
+			top *= best
+		var need: float = far * top
+		if p.extra_cull_margin < need - 0.02:
 			short += 1
-			_check(false, "%s: cull margin %.2f is under half its quad (%.2f)" % [p.name, p.extra_cull_margin, need])
-	_check(checked >= 8 and short == 0, "every fire and blast emitter has a cull margin of half its quad times its scale (%d checked)" % checked)
-	car.queue_free()
+			_check(false, "%s: cull margin %.2f is under its quad's reach (%.2f)" % [p.name, p.extra_cull_margin, need])
+	return short
 
 
 func test_explosion_makes_pieces_and_cleans_up() -> void:

@@ -406,8 +406,10 @@ static func emitter(amount: int, life: float, mesh: Mesh) -> CPUParticles3D:
 ## Keeps a billboard emitter from being culled while part of its quads still
 ## shows. Godot bounds a CPUParticles3D by each particle's mesh box at the
 ## particle's own (scaled) transform, not facing the camera: a flat quad has
-## no depth there, so seen edge-on from the side a billboard reaches up to
-## half its diagonal past that box. Call it again after the scales change.
+## no depth there, and the billboard turns it about the particle's origin, so
+## it can reach as far as the quad's farthest corner from that origin (the
+## whole height for a flame anchored at its base). Call it again after the
+## scales change.
 static func fit_cull(p: CPUParticles3D) -> void:
 	if p.mesh == null:
 		return
@@ -417,9 +419,15 @@ static func fit_cull(p: CPUParticles3D) -> void:
 		for i in p.scale_amount_curve.point_count:
 			best = maxf(best, p.scale_amount_curve.get_point_position(i).y)
 		top *= best
-	var margin: float = p.mesh.get_aabb().size.length() * 0.5 * top
+	var margin: float = far_corner(p.mesh.get_aabb()) * top
 	if absf(p.extra_cull_margin - margin) > 0.01:
 		p.extra_cull_margin = margin
+
+
+## How far a box's farthest corner lies from the origin.
+static func far_corner(b: AABB) -> float:
+	return Vector3(maxf(absf(b.position.x), absf(b.end.x)), maxf(absf(b.position.y), absf(b.end.y)),
+		maxf(absf(b.position.z), absf(b.end.z))).length()
 
 
 ## Picks a random picture (atlas cell or array layer) for each particle.
