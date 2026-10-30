@@ -33,6 +33,11 @@ const LANDMARK_COLORS := {
 	"esplanade": Color(0.45, 0.72, 0.4),
 	"circle": Color(0.45, 0.72, 0.4),
 	"square": Color(0.45, 0.72, 0.4),
+	"parkland": Color(0.45, 0.72, 0.4),
+	"cemetery": Color(0.4, 0.6, 0.42),
+	"stadium": Color(0.62, 0.62, 0.64),
+	"containers": Color(0.58, 0.6, 0.66),
+	"railyard": Color(0.6, 0.55, 0.48),
 	"government": Color(0.86, 0.84, 0.78),
 	"court": Color(0.85, 0.5, 0.35),
 	"police": Color(0.5, 0.6, 0.85),
@@ -115,6 +120,9 @@ static func bake(city) -> Dictionary:
 			walk = SIDEWALK.lerp(OUTSIDE, 0.5)
 		_poly(img, origin, plan.inner(f), walk)
 		_poly(img, origin, plan.lot(f), color)
+	# Lakes and ponds in the parks.
+	for lk in plan.lakes:
+		_poly(img, origin, lk, Color(WATER, 1.0))
 	for e in plan.edge_count():
 		var cls: String = plan.edge_class(e)
 		var a: Vector2 = plan.pos(plan.edge_a[e])

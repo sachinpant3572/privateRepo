@@ -528,11 +528,24 @@ class Mountain:
             b = np.subtract(qb, qa)
             return abs(float(a[0] * b[1] - a[1] * b[0])) / max(float(np.linalg.norm(a) * np.linalg.norm(b)), 1e-9)
 
+        def hug(i, other, so):
+            """How far along the rail, either side of the crossing, the road
+            stays inside the rail's graded strip (a road that curls back
+            beside the track after crossing it): the rail's span must cover
+            that, or the strip sets the ground under the road at rail height."""
+            far = 0.0
+            for step in (-1, 1):
+                j = i + step
+                while 0 <= j < len(s) and other.distance(Point(pts[j])) < LEVEL_REACH:
+                    far = max(far, abs(other.project(Point(pts[j])) - so))
+                    j += step
+            return far
+
         free = []
         for i, h, other, so in sorted(rail_x, key=lambda q: q[0]):
             o = float(own[i])
             if abs(o - h) >= RAIL_CLEAR:
-                self.rail_cross.append((other, so, "b" if h > o else "t", _HALF.get(cls, 4.0), across(i, other, so)))
+                self.rail_cross.append((other, so, "b" if h > o else "t", _HALF.get(cls, 4.0), across(i, other, so), hug(i, other, so)))
             else:
                 free.append((i, h, other, so, o))
 
@@ -571,7 +584,7 @@ class Mountain:
                 i, _h, other, so, _o = free[c]
                 pins[i] = v
                 if kind:
-                    self.rail_cross.append((other, so, kind, _HALF.get(cls, 4.0), across(i, other, so)))
+                    self.rail_cross.append((other, so, kind, _HALF.get(cls, 4.0), across(i, other, so), hug(i, other, so)))
                 else:
                     level.append((i, other))
                 k = back

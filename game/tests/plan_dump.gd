@@ -54,6 +54,9 @@ func _init() -> void:
 		data.faces.append({"kind": face.kind, "poly": _arr(face.poly), "inner": _arr(face.inner), "lot": _arr(face.lot), "rect": [rect_l.size.x, rect_l.size.y]})
 	for sp in plan.set_pieces:
 		data.pieces.append([sp.id, sp.kind, sp.face])
+	data["lakes"] = []
+	for lk in plan.lakes:
+		data.lakes.append(_arr(lk))
 	for k in spots.size():
 		data.landmarks.append([names[k], spots[k][1].x, spots[k][1].y, plan.face_of(spots[k][1])])
 	var f := FileAccess.open(out_path, FileAccess.WRITE)

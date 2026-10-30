@@ -980,6 +980,12 @@ static func _land_block(ctx: Ctx, style: String) -> void:
 	var grounds: bool = ctx.plan.set_piece(ctx.face) == "grounds"
 	ctx.edge = ctx.plan.edge_distance(ctx.plan.faces[ctx.face].center, true)
 	var lawn: bool = style in LAWNS or grounds
+	if style in OPEN_LAND:
+		var ground: Color = LOT_GROUND.green if style in ["parkland", "cemetery"] else YARD
+		_flat_in_front(ctx, ctx.ff, ctx.lot, KERB + 0.01, _paved(ground))
+		_use_parcel(ctx, ctx.rect)
+		_open_land(ctx, style)
+		return
 	_flat_in_front(ctx, ctx.ff, ctx.lot, KERB + 0.01, _paved(LOT_GROUND.green if lawn else LOT_GROUND.get(district, PAVEMENT)))
 	if style in LAWNS:
 		_use_parcel(ctx, ctx.rect)
@@ -1883,6 +1889,352 @@ static func _liberty_green(ctx: Ctx) -> void:
 		Props.gas_lamp(mb, local, Vector3(s * hx * 0.62, 0, -2.2), ctx.glow)
 		Props.gas_lamp(mb, local, Vector3(-2.2, 0, s * hz * 0.62), ctx.glow)
 	_done(ctx, local, false, ctx.props)
+
+
+# --- Open land (street_plan.gd OPEN_LAND) ------------------------------------------
+
+## The open-land kinds: blocks of parkland, a cemetery, a stadium, a
+## container yard and a rail yard (no buildings on lots).
+const OPEN_LAND := ["parkland", "cemetery", "stadium", "containers", "railyard"]
+const GRAVEL := Color(0.5, 0.45, 0.38)
+const HEADSTONE := Color(0.62, 0.62, 0.6)
+const CYPRESS := Color(0.13, 0.27, 0.15)
+const CONTAINER_COLORS := [Color(0.7, 0.2, 0.15), Color(0.15, 0.35, 0.6), Color(0.85, 0.55, 0.1), Color(0.2, 0.5, 0.3),
+	Color(0.55, 0.55, 0.55), Color(0.8, 0.8, 0.78), Color(0.45, 0.2, 0.4)]
+
+
+static func _open_land(ctx: Ctx, style: String) -> void:
+	match style:
+		"parkland":
+			_parkland(ctx)
+		"cemetery":
+			_cemetery(ctx)
+		"stadium":
+			_stadium(ctx)
+		"containers":
+			_container_yard(ctx)
+		"railyard":
+			_rail_yard(ctx)
+
+
+## A flat strip (path, track bed) from a to b in the parcel frame.
+static func _open_strip(mb, a: Vector3, b: Vector3, width: float, color: Color, y := 0.03) -> void:
+	var d := b - a
+	if d.length() < 0.2:
+		return
+	var saved: Transform3D = mb.xform
+	mb.xform = saved * Transform3D(Basis(Vector3.UP, atan2(-d.z, d.x)), (a + b) * 0.5)
+	mb.box(Vector3(0, y, 0), Vector3(d.length(), 0.04, width), color)
+	mb.xform = saved
+
+
+static func _near_any(p: Vector2, segs: Array, pad: float) -> bool:
+	for s in segs:
+		if Geometry2D.get_closest_point_to_segment(p, s[0], s[1]).distance_to(p) < s[2] + pad:
+			return true
+	return false
+
+
+## Parkland (Liberty City's Middle Park, Griffith and MacArthur parks): lawn,
+## a lake or pond with a stone rim and a railing, a path round the water and
+## paths in from each side, clumps of trees, a ball field when there is room,
+## a playground, benches and lamps.
+static func _parkland(ctx: Ctx) -> void:
+	var mb = ctx.mb
+	var rng := ctx.rng
+	var hx := ctx.hx
+	var hz := ctx.hz
+	var plan = ctx.plan
+	var local := _at(ctx, Vector3(0, KERB, 0), 0.0)
+	var inv := ctx.frame.affine_inverse()
+	var lake := PackedVector2Array()
+	for k in plan.lakes.size():
+		if plan.lake_face[k] == ctx.face:
+			for q in plan.lakes[k]:
+				var l: Vector3 = inv * Vector3(q.x, 0, q.y)
+				lake.append(Vector2(l.x, l.z))
+	var clear: Array = [] # [a, b, half width] the trees keep off
+	var lake_c := Vector2.ZERO
+	var lake_r := 0.0
+	if lake.size() >= 3:
+		if Geometry2D.is_polygon_clockwise(lake):
+			lake.reverse()
+		for q in lake:
+			lake_c += q / lake.size()
+		for q in lake:
+			lake_r = maxf(lake_r, q.distance_to(lake_c))
+		var rim: PackedVector2Array = Geometry2D.offset_polygon(lake, 1.4)[0]
+		var walk: PackedVector2Array = Geometry2D.offset_polygon(lake, 5.5)[0]
+		mb.flat(rim, 0.06, Buildings.STONE)
+		mb.flat(lake, 0.09, POND.lightened(0.2))
+		# The path round the water, the railing along its rim (no swimming:
+		# the railing keeps people and cars out of the lake).
+		for k in walk.size():
+			var a := walk[k]
+			var b := walk[(k + 1) % walk.size()]
+			_open_strip(mb, Vector3(a.x, 0, a.y), Vector3(b.x, 0, b.y), 3.2, PLAZA)
+			clear.append([a, b, 2.5])
+		for k in rim.size():
+			var a := rim[k]
+			var b := rim[(k + 1) % rim.size()]
+			Props.fence(mb, local, Vector3(a.x, 0.06, a.y), Vector3(b.x, 0.06, b.y), Color(0.2, 0.22, 0.2), 0.95)
+		# A boat jetty from the water's front (+z) edge, with rowing boats.
+		var jp := lake[0]
+		for q in lake:
+			if q.y > jp.y:
+				jp = q
+		mb.box(Vector3(jp.x, 0.35, jp.y - 4.0), Vector3(3.0, 0.2, 10.0), Color(0.45, 0.33, 0.22))
+		for s in [-1.0, 1.0]:
+			mb.box(Vector3(jp.x + s * 3.2, 0.2, jp.y - 6.0), Vector3(1.4, 0.35, 3.8), Color(0.75, 0.3, 0.2) if s < 0 else Color(0.85, 0.85, 0.8))
+	# Paths in from the middle of each side, to the lake path or the middle.
+	var stop := lake_r + 5.5 if lake_r > 0.0 else 8.0
+	for dir in [Vector2(1, 0), Vector2(-1, 0), Vector2(0, 1), Vector2(0, -1)]:
+		var edge := Vector2(dir.x * hx, dir.y * hz)
+		var to := lake_c + (edge - lake_c).normalized() * stop * 0.98
+		_open_strip(mb, Vector3(edge.x, 0, edge.y), Vector3(to.x, 0, to.y), 3.0, PLAZA)
+		clear.append([edge, to, 2.5])
+		var mid := (edge + to) * 0.5
+		var side := Vector2(-dir.y, dir.x)
+		for f in [0.3, 0.7]:
+			var q := edge.lerp(to, f) + side * 2.6
+			Props.bench(mb, local, Vector3(q.x, 0, q.y), atan2(side.x, side.y))
+		var lp := mid - side * 2.4
+		Props.gas_lamp(mb, local, Vector3(lp.x, 0, lp.y), ctx.glow)
+	if lake_r <= 0.0:
+		mb.cylinder(Vector3(0, 0.0, 0), 7.0, 0.07, PLAZA.lightened(0.05), 16)
+		mb.cylinder(Vector3(0, 0.07, 0), 2.2, 0.8, Buildings.STONE, 10)
+	# A ball field in a corner the lake leaves free, a playground in another.
+	var corners := [Vector2(-hx, -hz), Vector2(hx, -hz), Vector2(-hx, hz), Vector2(hx, hz)]
+	corners.sort_custom(func(a, b): return a.distance_to(lake_c) > b.distance_to(lake_c))
+	if hx > 70.0 and hz > 55.0:
+		var c: Vector2 = corners[0] * 0.62
+		var fs := Vector2(minf(60.0, hx * 0.42), minf(40.0, hz * 0.42))
+		if c.distance_to(lake_c) > lake_r + fs.length() * 0.5 + 6.0:
+			mb.box(Vector3(c.x, 0.025, c.y), Vector3(fs.x, 0.03, fs.y), Color(0.42, 0.66, 0.34))
+			for s in [-1.0, 1.0]:
+				mb.box(Vector3(c.x + s * fs.x * 0.5, 0.045, c.y), Vector3(0.2, 0.02, fs.y), Color(0.95, 0.95, 0.92))
+				mb.box(Vector3(c.x, 0.045, c.y + s * fs.y * 0.5), Vector3(fs.x, 0.02, 0.2), Color(0.95, 0.95, 0.92))
+			mb.box(Vector3(c.x, 0.045, c.y), Vector3(0.2, 0.02, fs.y), Color(0.95, 0.95, 0.92))
+			clear.append([c - Vector2(fs.x * 0.5, 0), c + Vector2(fs.x * 0.5, 0), fs.y * 0.5 + 2.0])
+	var pg: Vector2 = corners[1] * 0.72
+	if pg.distance_to(lake_c) > lake_r + 16.0:
+		mb.box(Vector3(pg.x, 0.03, pg.y), Vector3(16.0, 0.04, 12.0), Color(0.75, 0.6, 0.4))
+		mb.box(Vector3(pg.x - 3.0, 1.2, pg.y), Vector3(4.0, 0.2, 2.0), Color(0.85, 0.3, 0.2))
+		for s in [-1.0, 1.0]:
+			mb.box(Vector3(pg.x - 3.0 + s * 1.9, 0.6, pg.y), Vector3(0.15, 1.2, 0.15), Color(0.25, 0.3, 0.6))
+		mb.box(Vector3(pg.x + 3.5, 1.1, pg.y), Vector3(0.15, 2.2, 3.4), Color(0.9, 0.75, 0.2))
+		local.append([Vector3(pg.x, 0.8, pg.y), Vector3(10.0, 1.6, 4.0)])
+		clear.append([pg, pg, 10.0])
+	# Trees in clumps (the way parks are planted), clear of water and paths.
+	var budget := clampi(int(hx * hz / 80.0), 16, 240)
+	var tries := 0
+	while budget > 0 and tries < 60:
+		tries += 1
+		var c := Vector2(rng.randf_range(-hx + 8.0, hx - 8.0), rng.randf_range(-hz + 8.0, hz - 8.0))
+		if lake_r > 0.0 and c.distance_to(lake_c) < lake_r + 14.0:
+			continue
+		for k in rng.randi_range(5, 12):
+			var p := c + Vector2(rng.randf_range(-14.0, 14.0), rng.randf_range(-14.0, 14.0))
+			if absf(p.x) > hx - 2.5 or absf(p.y) > hz - 2.5 or _near_any(p, clear, 2.5):
+				continue
+			if lake.size() >= 3 and (Geometry2D.is_point_in_polygon(p, lake) or p.distance_to(lake_c) < lake_r + 8.0):
+				continue
+			if rng.randf() < 0.75:
+				Props.oak(mb, local, Vector3(p.x, 0, p.y), rng)
+			else:
+				Props.street_tree(mb, local, Vector3(p.x, 0, p.y), rng)
+			budget -= 1
+	_done(ctx, local, false, ctx.props)
+
+
+## A cemetery (LA's Evergreen, New Orleans' above-ground tombs): a stone
+## wall round it with a gate on the street, a drive up to a chapel, rows of
+## headstones between paths, a few tombs and cypresses.
+static func _cemetery(ctx: Ctx) -> void:
+	var mb = ctx.mb
+	var rng := ctx.rng
+	var hx := ctx.hx
+	var hz := ctx.hz
+	var local := _at(ctx, Vector3(0, KERB, 0), 0.0)
+	var wall := Color(0.6, 0.57, 0.52)
+	# The wall, with a gate in the middle of the front (+z) side.
+	for seg in [[Vector3(-hx, 0, -hz), Vector3(hx, 0, -hz)], [Vector3(-hx, 0, -hz), Vector3(-hx, 0, hz)], [Vector3(hx, 0, -hz), Vector3(hx, 0, hz)],
+			[Vector3(-hx, 0, hz), Vector3(-4.0, 0, hz)], [Vector3(4.0, 0, hz), Vector3(hx, 0, hz)]]:
+		var a: Vector3 = seg[0]
+		var b: Vector3 = seg[1]
+		var size := Vector3(absf(b.x - a.x) + 0.5, 1.8, absf(b.z - a.z) + 0.5)
+		mb.box((a + b) * 0.5 + Vector3(0, 0.9, 0), size, wall)
+		local.append([(a + b) * 0.5 + Vector3(0, 0.9, 0), size])
+	for s in [-1.0, 1.0]:
+		mb.box(Vector3(s * 4.3, 1.4, hz), Vector3(0.9, 2.8, 0.9), wall.darkened(0.1))
+	# The drive from the gate to the chapel, and cross paths.
+	mb.box(Vector3(0, 0.03, 0), Vector3(5.0, 0.04, hz * 2.0), Color(0.42, 0.42, 0.42))
+	mb.box(Vector3(0, 0.03, 0), Vector3(hx * 2.0 - 4.0, 0.04, 3.0), PLAZA)
+	var chapel := Vector3(0, 0, -hz + 12.0)
+	mb.box(chapel + Vector3(0, 3.0, 0), Vector3(9.0, 6.0, 14.0), Color(0.82, 0.8, 0.74))
+	mb.gable(chapel + Vector3(0, 7.5, 0), Vector3(9.6, 3.0, 14.6), Color(0.35, 0.3, 0.3), Color(0.82, 0.8, 0.74))
+	mb.box(chapel + Vector3(0, 8.0, 6.0), Vector3(2.4, 10.0, 2.4), Color(0.82, 0.8, 0.74))
+	local.append([chapel + Vector3(0, 3.0, 0), Vector3(9.0, 6.0, 14.0)])
+	# Headstones in rows; here and there a tomb or a cypress.
+	var z := -hz + 26.0
+	while z < hz - 4.0:
+		var x := -hx + 4.0
+		while x < hx - 4.0:
+			if absf(x) > 5.0 and absf(z) > 3.5:
+				var roll := rng.randf()
+				if roll < 0.025 and absf(x) > 9.0:
+					mb.box(Vector3(x, 1.2, z), Vector3(2.6, 2.4, 3.0), Color(0.75, 0.74, 0.7))
+					mb.gable(Vector3(x, 2.8, z), Vector3(2.9, 0.8, 3.3), Color(0.6, 0.6, 0.58), Color(0.75, 0.74, 0.7))
+					local.append([Vector3(x, 1.2, z), Vector3(2.6, 2.4, 3.0)])
+				elif roll < 0.06:
+					mb.cylinder(Vector3(x, 0, z), 0.12, 1.2, Color(0.3, 0.22, 0.15), 4)
+					mb.ball(Vector3(x, 3.4, z), Vector3(0.9, 3.0, 0.9), CYPRESS, 6, 3)
+				elif roll < 0.85:
+					var h := rng.randf_range(0.6, 1.1)
+					mb.box(Vector3(x, h * 0.5, z), Vector3(0.7, h, 0.18), HEADSTONE.darkened(rng.randf() * 0.25))
+					if roll < 0.15:
+						mb.box(Vector3(x, h * 0.75, z), Vector3(0.18, 0.14, 0.18) + Vector3(0.5, 0, 0), HEADSTONE)
+			x += 2.6
+		z += 3.4
+	_done(ctx, local)
+
+
+## Bellerive Bowl: a football stadium in a car park. Stands rise in steps
+## round the pitch, open at the corners (the way in), with floodlights.
+static func _stadium(ctx: Ctx) -> void:
+	var mb = ctx.mb
+	var hx := ctx.hx
+	var hz := ctx.hz
+	var local := _at(ctx, Vector3(0, KERB, 0), 0.0)
+	# Car park: tarmac with bays.
+	mb.box(Vector3(0, 0.025, 0), Vector3(hx * 2.0, 0.03, hz * 2.0), _paved(Color(0.3, 0.3, 0.31)))
+	for x in range(int(-hx + 6.0), int(hx - 6.0), 3):
+		for zz in [-hz + 8.0, hz - 8.0]:
+			mb.box(Vector3(x, 0.045, zz), Vector3(0.12, 0.02, 5.0), Color(0.9, 0.9, 0.85))
+	# The pitch along the parcel's longer side.
+	var along_x := hx >= hz
+	var pl := Vector2(105.0, 68.0) if along_x else Vector2(68.0, 105.0)
+	var scale := minf(1.0, minf((hx - 30.0) * 2.0 / (pl.x + 44.0), (hz - 30.0) * 2.0 / (pl.y + 44.0)) * 1.0)
+	pl *= maxf(scale, 0.5)
+	mb.box(Vector3(0, 0.04, 0), Vector3(pl.x + 8.0, 0.04, pl.y + 8.0), _paved(Color(0.3, 0.55, 0.28)))
+	for k in 10:
+		if k % 2 == 0:
+			var t := -0.5 + (k + 0.5) / 10.0
+			mb.box(Vector3(t * pl.x if along_x else 0.0, 0.065, 0.0 if along_x else t * pl.y), Vector3(pl.x / 10.0 if along_x else pl.x, 0.01, pl.y if along_x else pl.y / 10.0), Color(0.34, 0.6, 0.31))
+	var line := Color(0.95, 0.95, 0.92)
+	for s in [-1.0, 1.0]:
+		mb.box(Vector3(s * pl.x * 0.5, 0.07, 0), Vector3(0.15, 0.01, pl.y), line)
+		mb.box(Vector3(0, 0.07, s * pl.y * 0.5), Vector3(pl.x, 0.01, 0.15), line)
+	mb.box(Vector3(0, 0.07, 0), Vector3(0.15, 0.01, pl.y) if along_x else Vector3(pl.x, 0.01, 0.15), line)
+	# Four stands: steps of seats, a back wall, a roof on the long sides.
+	var gap := 6.0
+	var steps := 12
+	var seats := [Color(0.7, 0.15, 0.15), Color(0.85, 0.85, 0.85)]
+	for side in 4:
+		var long_side := (side < 2) == along_x
+		var len_s: float = (pl.x if side < 2 else pl.y) + 8.0
+		var sgn := 1.0 if side % 2 == 0 else -1.0
+		for i in steps:
+			var d := (pl.y if side < 2 else pl.x) * 0.5 + gap + i * 1.6
+			var h := 0.6 + i * 0.75
+			var c := Vector3(0, h * 0.5, sgn * (d + 0.8)) if side < 2 else Vector3(sgn * (d + 0.8), h * 0.5, 0)
+			var sz := Vector3(len_s, h, 1.6) if side < 2 else Vector3(1.6, h, len_s)
+			mb.box(c, sz, seats[(i / 3) % 2])
+		var back := (pl.y if side < 2 else pl.x) * 0.5 + gap + steps * 1.6 + 0.4
+		var wc := Vector3(0, 6.0, sgn * back) if side < 2 else Vector3(sgn * back, 6.0, 0)
+		var ws := Vector3(len_s, 12.0, 0.8) if side < 2 else Vector3(0.8, 12.0, len_s)
+		mb.box(wc, ws, Color(0.55, 0.56, 0.6))
+		var mid := (pl.y if side < 2 else pl.x) * 0.5 + gap + steps * 0.8
+		var whole := Vector3(0, 6.0, sgn * mid) if side < 2 else Vector3(sgn * mid, 6.0, 0)
+		local.append([whole, Vector3(len_s, 12.0, steps * 1.6 + 1.2) if side < 2 else Vector3(steps * 1.6 + 1.2, 12.0, len_s)])
+		if long_side:
+			var rc := Vector3(0, 14.5, sgn * (back - 8.0)) if side < 2 else Vector3(sgn * (back - 8.0), 14.5, 0)
+			mb.box(rc, Vector3(len_s, 0.4, 17.0) if side < 2 else Vector3(17.0, 0.4, len_s), Color(0.8, 0.82, 0.85))
+	# Floodlights at the corners.
+	for sx in [-1.0, 1.0]:
+		for sz in [-1.0, 1.0]:
+			var p := Vector3(sx * (pl.x * 0.5 + 18.0), 0, sz * (pl.y * 0.5 + 18.0))
+			mb.cylinder(p, 0.6, 32.0, Color(0.5, 0.52, 0.55), 6)
+			mb.box(p + Vector3(0, 32.5, 0), Vector3(5.0, 3.0, 0.6), Color(0.9, 0.9, 0.82))
+			local.append([p + Vector3(0, 2.0, 0), Vector3(1.4, 4.0, 1.4)])
+	_done(ctx, local)
+
+
+## A container yard on the docks: stacks one to four high in rows between
+## lanes, a straddle crane over a row, a chain-link fence round it.
+static func _container_yard(ctx: Ctx) -> void:
+	var mb = ctx.mb
+	var rng := ctx.rng
+	var hx := ctx.hx
+	var hz := ctx.hz
+	var local := _at(ctx, Vector3(0, KERB, 0), 0.0)
+	mb.box(Vector3(0, 0.025, 0), Vector3(hx * 2.0, 0.03, hz * 2.0), _paved(Color(0.4, 0.4, 0.4)))
+	var row := 2.4 * 2 + 0.4
+	var z := -hz + 8.0
+	while z + row < hz - 8.0:
+		var x := -hx + 10.0
+		while x + 6.0 < hx - 10.0:
+			if rng.randf() < 0.88:
+				var high := rng.randi_range(1, 4)
+				for w in 2:
+					for k in high:
+						Props.container(mb, [], Vector3(x + 3.0, k * 2.6, z + 1.2 + w * 2.5), CONTAINER_COLORS[rng.randi() % CONTAINER_COLORS.size()])
+				local.append([Vector3(x + 3.0, high * 1.3, z + row * 0.5), Vector3(6.0, high * 2.6, row)])
+			x += 6.4
+		z += row + 9.0
+	# A straddle crane over the first row.
+	var yellow := Color(0.95, 0.72, 0.15)
+	var cz := -hz + 8.0 + row * 0.5
+	for s in [-1.0, 1.0]:
+		mb.box(Vector3(-hx * 0.3, 7.0, cz + s * (row * 0.5 + 1.2)), Vector3(1.0, 14.0, 1.0), yellow)
+		local.append([Vector3(-hx * 0.3, 2.0, cz + s * (row * 0.5 + 1.2)), Vector3(1.2, 4.0, 1.2)])
+	mb.box(Vector3(-hx * 0.3, 14.3, cz), Vector3(1.4, 1.0, row + 4.0), yellow)
+	for s in [-1.0, 1.0]:
+		Props.fence(mb, local, Vector3(-hx, 0, s * hz), Vector3(hx, 0, s * hz) if s < 0 else Vector3(-6.0, 0, s * hz), Color(0.55, 0.57, 0.58), 2.4)
+		Props.fence(mb, local, Vector3(s * hx, 0, -hz), Vector3(s * hx, 0, hz), Color(0.55, 0.57, 0.58), 2.4)
+	Props.fence(mb, local, Vector3(6.0, 0, hz), Vector3(hx, 0, hz), Color(0.55, 0.57, 0.58), 2.4)
+	_done(ctx, local)
+
+
+## A freight rail yard: tracks side by side on ballast, strings of wagons on
+## some, a signal box and floodlight masts.
+static func _rail_yard(ctx: Ctx) -> void:
+	var mb = ctx.mb
+	var rng := ctx.rng
+	var hx := ctx.hx
+	var hz := ctx.hz
+	var local := _at(ctx, Vector3(0, KERB, 0), 0.0)
+	mb.box(Vector3(0, 0.025, 0), Vector3(hx * 2.0, 0.03, hz * 2.0), _paved(GRAVEL))
+	var along_x := hx >= hz
+	var half_len := (hx if along_x else hz) - 6.0
+	var half_w := (hz if along_x else hx) - 10.0
+	var w := -half_w
+	while w <= half_w:
+		var a := Vector3(-half_len, 0.05, w) if along_x else Vector3(w, 0.05, -half_len)
+		var b := Vector3(half_len, 0.05, w) if along_x else Vector3(w, 0.05, half_len)
+		Props.rails(mb, a, b, rng.randf() < 0.3)
+		if rng.randf() < 0.6:
+			var n := rng.randi_range(3, int(half_len / 8.0))
+			var at := rng.randf_range(-half_len + 8.0, half_len - n * 15.0)
+			var col: Color = [Color(0.45, 0.25, 0.15), Color(0.2, 0.3, 0.45), Color(0.35, 0.35, 0.3)][rng.randi() % 3]
+			for k in n:
+				var t := at + k * 15.0
+				var c := Vector3(t, 2.1, w) if along_x else Vector3(w, 2.1, t)
+				var sz := Vector3(14.0, 3.4, 3.0) if along_x else Vector3(3.0, 3.4, 14.0)
+				mb.box(c, sz, col.darkened(rng.randf() * 0.2))
+				mb.box(c - Vector3(0, 1.6, 0), sz * Vector3(0.9, 0.0, 0.8) + Vector3(0, 0.6, 0), Color(0.12, 0.12, 0.12))
+				local.append([c, sz])
+		w += 5.0
+	var sb := Vector3(half_len - 6.0, 0, half_w + 5.0) if along_x else Vector3(half_w + 5.0, 0, half_len - 6.0)
+	mb.box(sb + Vector3(0, 3.5, 0), Vector3(6.0, 7.0, 4.0), Color(0.55, 0.3, 0.22))
+	mb.box(sb + Vector3(0, 5.2, 0), Vector3(6.2, 1.6, 4.2), Color(0.75, 0.82, 0.85))
+	local.append([sb + Vector3(0, 3.5, 0), Vector3(6.0, 7.0, 4.0)])
+	for s in [-1.0, 1.0]:
+		var m := Vector3(s * half_len * 0.5, 0, -half_w - 5.0) if along_x else Vector3(-half_w - 5.0, 0, s * half_len * 0.5)
+		mb.cylinder(m, 0.4, 20.0, Color(0.5, 0.52, 0.55), 6)
+		mb.box(m + Vector3(0, 20.4, 0), Vector3(3.0, 1.2, 0.5), Color(0.9, 0.9, 0.82))
+		local.append([m + Vector3(0, 2.0, 0), Vector3(1.0, 4.0, 1.0)])
+	_done(ctx, local)
 
 
 # --- Civic centre and set pieces ---------------------------------------------------

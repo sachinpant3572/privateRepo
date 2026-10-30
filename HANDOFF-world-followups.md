@@ -34,39 +34,8 @@ approved by this.
 
 ## Reference maps (Sachin, 2026-10-30)
 
-"See how meticulously the city grid is planned so everything doesn't seem
-like only roads and roads." Files: reference/world/ref_maps/ (Leonida fan
-map, an extended San Andreas fan map, an island city in Cities: Skylines,
-Liberty City from Chinatown Wars). He also linked a GTA V satellite map
-(bragitoff.com) and a GTA VI Vice City map (wixmp.com / DeviantArt): both
-hosts are blocked here (403), not fetched. GTA V/VI facts:
-reference/world/gta_v_vi.md.
-
-What they show:
-- **Big blocks, few roads.** Liberty City's blocks are large and full of
-  buildings; a hierarchy of a few wide roads frames them. Ours (2026-10-30,
-  /tmp/plan.json): 613 land blocks, **median 3,340 m² (~58x58 m)**, p90
-  5,570 m²; streets and river take ~41 % of the edge loop's 3.95 km².
-  Manhattan: ~80x270 m (21,600 m²).
-- **Open land inside the city:** big parks (Middle Park), plazas, docks, an
-  airport, beaches. Not every gap is a street.
-- **Water splits the boroughs**; few bridges cross it (2-4 per channel).
-- **Cities are dense clusters in wild country** (Leonida, SA): a few
-  winding roads between them, not road everywhere.
-
-Two more from Sachin (2026-10-30, uploads; files gta_v_satellite.jpg,
-gta_vi_leonida_fan_avatarsd.jpg):
-- **GTA V:** one city in the island's south corner (~1/5 of the land),
-  held between the Vinewood Hills and the sea. Much of the city is not
-  street: the airport (as big as downtown), the port's piers and container
-  yards, the concrete river channel, a golf club, the beach strip, and
-  elevated freeways with interchanges cutting through. The grid is fine
-  only downtown and loosens outward. A freeway loop runs round the island
-  with small towns along it.
-- **GTA VI fan map (Leonida):** several coastal cities round a central
-  lake and swamp with few roads between them. A beach borough on a barrier
-  island is reached by causeways (Vice Beach). The airport sits inside the
-  city. A chain of keys runs south on long bridges.
+Files in reference/world/ref_maps/; what they show is in
+HANDOFF-world-followups-archive.md (big blocks, open land, water, clusters).
 
 ## Liberty City size (#116): design (to write before building)
 
@@ -115,6 +84,26 @@ D. **A bay and a beach borough** (~10-16 h): a second water body in the
 Total ~72-118 h. Cheaper option: A + B only (~22-32 h, ~8 km², flat, no
 bay); D can be dropped and the beach kept on the Gulf shore.
 Milestone APK after A (with #114 and the helicopters), then after B, C, D.
+
+Stage A build (2026-10-30, approach before editing):
+- street_plan.gd: OPEN_LAND list {id, kind, at, size, lake}; `_open_land()`
+  after `_thin` kills the district links (edge_patch >= 0) between land
+  blocks whose middles lie in the site, keeping the graph joined and never
+  merging a landmark's block; each site is a set piece (kind park /
+  cemetery / stadium / railyard / containers). Sites sit between
+  arterials, so no arterial crosses them. Lakes are plan polygons
+  (`lakes`), not river water (is_water_point would make the face "water").
+- Sites: Halcyon Park + lake (wards_n, x 1010-1460, y -220..140); parks
+  with ponds in quarter_w, point_w, point_e, havana_e (Liberty Green stays);
+  Old Morrow Cemetery (south bank); Bellerive Bowl stadium (x 1470-1760,
+  y 150-490); container yard and rail yard on the docks.
+- city.gd block_style returns the kind; city_cells.gd builders per kind
+  (trees capped per block for the frame budget); lakes have a stone rim
+  and a railing with collision (no swimming in the game, so no walking on
+  water). map_image draws lakes as water and the kinds in their colours.
+- wards / wards_n get `cut` so their blocks grow (bigger blocks).
+- Tests: each site came out as one block of its kind and size; lakes in
+  their block; landmark blocks kept; land area still in range.
 
 ## Recorded for later phases (reviewer Low #7)
 

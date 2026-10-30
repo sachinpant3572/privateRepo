@@ -1517,11 +1517,12 @@ class Country:
         rl = self.rails[i]
         name = rl[2]
         spans = list(prof[5])
-        for other, so, kind, hw, sin in self.mtn.rail_cross:
+        for other, so, kind, hw, sin, hug in self.mtn.rail_cross:
             if other is not line:
                 continue
-            # Along the rail, a road crossing aslant needs a longer span.
-            half = min((hw + (6.0 if kind == "b" else 10.0)) / max(sin, 0.3), 60.0)
+            # Along the rail, a road crossing aslant needs a longer span, and
+            # one running on beside the track the length it stays close.
+            half = max(min((hw + (6.0 if kind == "b" else 10.0)) / max(sin, 0.3), 60.0), min(hug + hw, 60.0))
             if any(a - 4.0 < so < b + 4.0 for a, b, _k in spans):
                 continue
             spans.append((so - half, so + half, kind))

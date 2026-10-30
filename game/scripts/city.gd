@@ -421,7 +421,7 @@ func block_style(f: int) -> String:
 	if plan.is_park(f):
 		return "green"
 	var piece: String = plan.set_piece(f)
-	if piece in ["esplanade", "circle", "square"]:
+	if piece in ["esplanade", "circle", "square", "parkland", "cemetery", "stadium", "containers", "railyard"]:
 		return piece
 	if _landmarks.has(f):
 		return _landmarks[f].type

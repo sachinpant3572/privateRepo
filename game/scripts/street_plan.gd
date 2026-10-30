@@ -61,6 +61,23 @@ const MOREAU_AT := Vector2(1170, 300)
 const MOREAU_HALF := 40.0
 ## Liberty Green's size (its middle is the park_at given to build()).
 const PARK_SIZE := Vector2(204, 132)
+## Open land inside the city (Liberty City's Middle Park, LA's Griffith and
+## Exposition parks, the port's yards): the district streets inside each
+## site are dropped so its blocks join into one (kind: "parkland", "cemetery",
+## "stadium", "railyard", "containers"). `lake` is the lake's size as a
+## share of the block's lot (0 for none). Sites sit between arterials, so
+## none crosses them, and keep clear of the landmarks.
+const OPEN_LAND := [
+	{"id": "halcyon_park", "kind": "parkland", "at": Vector2(1235, -40), "size": Vector2(440, 350), "lake": 0.55},
+	{"id": "lamplighter_park", "kind": "parkland", "at": Vector2(40, 900), "size": Vector2(160, 150), "lake": 0.3},
+	{"id": "heron_park", "kind": "parkland", "at": Vector2(260, 1560), "size": Vector2(170, 150), "lake": 0.35},
+	{"id": "cane_row_park", "kind": "parkland", "at": Vector2(850, 1450), "size": Vector2(160, 140), "lake": 0.3},
+	{"id": "parque_luna", "kind": "parkland", "at": Vector2(1850, 1000), "size": Vector2(170, 150), "lake": 0.3},
+	{"id": "morrow_cemetery", "kind": "cemetery", "at": Vector2(1150, 1690), "size": Vector2(200, 170), "lake": 0.0},
+	{"id": "bellerive_bowl", "kind": "stadium", "at": Vector2(1615, 320), "size": Vector2(290, 340), "lake": 0.0},
+	{"id": "ironwharf_containers", "kind": "containers", "at": Vector2(1320, 930), "size": Vector2(250, 120), "lake": 0.0},
+	{"id": "ironwharf_rail_yard", "kind": "railyard", "at": Vector2(860, 925), "size": Vector2(260, 110), "lake": 0.0},
+]
 ## The unnamed or minor arterials (the seam roads are laid out by name).
 const ARTERIALS := [
 	{"x": -80.0, "bank": "north", "cls": "avenue", "road": "palmetto"},
@@ -211,10 +228,12 @@ const PATCHES := [
 		"su": [64.0, 78.0], "sv": [64.0, 78.0], "fam": "uv", "cls": "quarter", "cut": [0.0, 0.0], "lane": 0.06, "max": [0.0, 0.0, 0.0]},
 	# The Wards: long east-west blocks (South LA's bungalow grid); the
 	# streets run on through Crescent Boulevard.
+	# Some of their cross streets are dropped, so blocks run to ~120-180 m
+	# (Liberty City's and Manhattan's long blocks), not all ~60 m.
 	{"id": "wards", "bank": "north", "seed": Vector2(1000, 600), "grid": [4, 6], "angle": 0.0,
-		"su": [90.0, 90.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
+		"su": [90.0, 90.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.3], "lane": 0.0, "max": [190.0, 190.0, 20000.0]},
 	{"id": "wards_n", "bank": "north", "seed": Vector2(1000, 150), "grid": [4, 6], "angle": 0.0,
-		"su": [90.0, 90.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
+		"su": [90.0, 90.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.3], "lane": 0.0, "max": [190.0, 190.0, 20000.0]},
 	# Cable Hill (San Francisco's painted rows) and Jade Gate (its
 	# Chinatown), north of Presidio Avenue at the foot of the hills. Their
 	# streets carry on south through Gilt and Midtown.
@@ -293,6 +312,9 @@ var park_face := -1
 var set_pieces: Array[Dictionary] = []
 ## Founders Circle's middle (local metres).
 var circle_at := Vector2.ZERO
+## Lakes and ponds in the open land (local metres), and the block each is in.
+var lakes: Array[PackedVector2Array] = []
+var lake_face := PackedInt32Array()
 
 ## District regions: [polygon, patch index].
 var _regions: Array = []
@@ -340,6 +362,7 @@ func build(win: Rect2, margin: float, seed_v: int, river_line: PackedVector2Arra
 	_find_faces()
 	t = _lap("graph", t)
 	_thin()
+	_open_land(landmarks)
 	_ease_crowds()
 	_simplify()
 	_compact()
@@ -360,6 +383,8 @@ func build(win: Rect2, margin: float, seed_v: int, river_line: PackedVector2Arra
 		_find_faces()
 	if not outline.is_empty():
 		var pins: Array = [park_at]
+		for site in OPEN_LAND:
+			pins.append(site.at)
 		for w in wants:
 			pins.append(w[0])
 		_trim_to_outline(pins)
@@ -381,6 +406,7 @@ func build(win: Rect2, margin: float, seed_v: int, river_line: PackedVector2Arra
 	for sp in set_pieces:
 		var f := face_of(sp.at)
 		sp.face = f if f >= 0 and faces[f].kind == "land" and f != park_face else -1
+	_make_lakes()
 	# The grid streets round the parks and the civic centre take their names.
 	for named in [[park_face, "park"], [set_piece_face("moreau_square"), "moreau"], [set_piece_face("city_hall_grounds"), "civic"], [set_piece_face("esplanade"), "esplanade"]]:
 		if named[0] >= 0:
@@ -2094,6 +2120,67 @@ func _thin() -> void:
 			if not _joined(l[1], l[2]):
 				for e in l[0]:
 					edge_cls[e] = p.cls
+
+
+## Joins the blocks of each OPEN_LAND site into one: the district streets
+## between two land blocks whose middles are in the site are dropped
+## (arterials stay), then the stubs left inside are pruned. A block holding
+## a landmark stays out. Each site becomes a set piece.
+func _open_land(landmarks: Array) -> void:
+	for site in OPEN_LAND:
+		var r := Rect2(site.at - site.size * 0.5, site.size)
+		var inside := {}
+		for f in faces.size():
+			if faces[f].kind != "land" or not r.has_point(faces[f].center):
+				continue
+			var held := false
+			for lm in landmarks:
+				held = held or Geometry2D.is_point_in_polygon(lm[1], faces[f].poly)
+			if not held:
+				inside[f] = true
+		for e in edge_a.size():
+			if _dead[e] == 1 or edge_patch[e] < 0:
+				continue
+			var slots := edge_face[e]
+			if inside.has(slots.x) and inside.has(slots.y):
+				_kill(e)
+		set_pieces.append({"id": site.id, "kind": site.kind, "at": site.at, "face": -1})
+	_prune()
+
+
+## The open land's lakes: a wobbly oval in each site's lot rectangle (its
+## share `lake` of the rectangle), kept clear of the lot's edge.
+func _make_lakes() -> void:
+	lakes = []
+	lake_face = PackedInt32Array()
+	for site in OPEN_LAND:
+		var f := set_piece_face(site.id)
+		if site.lake <= 0.0 or f < 0:
+			continue
+		var r: Rect2 = faces[f].rect
+		if r.size.x <= 0.0:
+			continue
+		var xf := front_frame2d(f)
+		var c := r.get_center()
+		var rad: Vector2 = r.size * 0.5 * float(site.lake)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = hash([seed_value, site.id])
+		var ph := rng.randf() * TAU
+		var poly := PackedVector2Array()
+		for k in 32:
+			var a := TAU * k / 32.0
+			var w := 1.0 + 0.12 * sin(3.0 * a + ph) + 0.06 * sin(5.0 * a + ph * 2.0)
+			poly.append(xf * (c + Vector2(cos(a) * rad.x, sin(a) * rad.y) * w))
+		lakes.append(poly)
+		lake_face.append(f)
+
+
+## The lake or pond at local point p, or -1.
+func lake_at(p: Vector2) -> int:
+	for k in lakes.size():
+		if Geometry2D.is_point_in_polygon(p, lakes[k]):
+			return k
+	return -1
 
 
 ## A junction of five or more streets (where district streets happened to
