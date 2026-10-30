@@ -89,7 +89,17 @@ on Opus with Sonnet trial packages). Stage D (the bay) is NOT approved.
   are pinned 7 m apart, 0.155 end to end, which no grading fits. Fix: trace()
   rejects a climb whose ends (terrace on the raw ground, the way it meets at
   its graded height via `mtn.profile_at`, mountain roads being graded first)
-  rise more than HILL_RISE 0.11 x its length.
+  rise more than HILL_RISE 0.11 x its length. Run 6: 28 terraces (0 cut
+  off), 28 climbs, 177 hillside lots, hill tests pass.
+- Sachin, 2026-10-30: "We can have some steep hills too, is good for
+  variety, pnly if they match real life hills." Real hill towns: most streets
+  under ~10-15 %, a few blocks 20-31 % (SF Filbert St 31.5 %, 22nd St 31.5 %;
+  LA Eldred St 33 %; Pittsburgh Canton Ave 37 %). Decision: up to
+  HILL_STEEP_MAX 6 climbs <= 160 m may rise HILL_STEEP_RISE 0.18 end to end,
+  tagged "steep", graded to 0.19 (cap 0.20); every 4th climb start tries a
+  trace at 0.15 (straighter up the slope). Kept at the mild end so every car
+  and truck climbs them (vehicle.gd SLOPE_PULL; Firebreak tracks are 25 %).
+  Test: hill streets 13 % (+0.015), short (<= 200 m) ones 20 % (+0.015), <= 6.
 
 ## Open questions
 
