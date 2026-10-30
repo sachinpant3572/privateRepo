@@ -78,6 +78,10 @@ MTN_TAGS = ("freeway", "crest", "canyon", "observatory", "fire_road", "letters_t
 HOME_TOP = 400.0  # no hillside homes higher than this (m)
 # The fillet the range's planned ways get where a city exit joins them.
 MTN_FILLET = {"highway": 200.0, "road": 45.0, "lane": 30.0, "track": 12.0, "trail": 15.0}
+# Planned ways graded under their class cap: the 8 m height grid reads a road
+# graded right at the cap up to ~0.02 steeper over 32 m (Crest Drive's hairpin
+# at (1760,-1130) measured 0.144-0.151 as its centre line moved 0.2 m).
+MTN_CAP = {"crest": 0.125}
 
 # Ground beyond the play area, so the edge is a fence, not the end of the world.
 BEYOND = 450.0
@@ -317,6 +321,7 @@ HILL_RUN = 120.0            # shortest terrace
 HILL_REACH = 70.0           # a terrace end carries on along its contour this far to meet a road
 HILL_CONNECT = 0.10         # grade the climbs are traced at on the smoothed ground (street cap
                             # 0.13: each street is graded on its own ground, so they come out steeper)
+HILL_GRADE = 0.12           # hill streets are graded to this (the 0.13 cap less the grid's excess)
 HILL_PAD_TOL = 0.2          # a hill home's pad: most its back and sides may lie off level (m)
 HILL_GAP = 220.0            # between a terrace's climbs
 HILL_NAMES = ["Toyon Terrace", "Sagewood Terrace", "Manzanita Crest", "Columbine Terrace", "Buckeye Drive",
@@ -1363,7 +1368,8 @@ class Country:
         self.zone_poly = dict(self.zones)
         self.zone_strip["hillside"] = Polygon()
         print("hill districts: %.2f km2, terraces %d (%.1f km, %d cut off), climbs %d (%.1f km)" % (
-            region.area / 1e6, len(kept), sum(t[0].length for t in kept) / 1000.0, len(lost),
+            region.area / 1e6, len(kept), sum(t[0].length for t in kept) / 1000.0,
+            sum(1 for a in lost if a < len(st_lines)),
             len(climbs), sum(c.length for c in climbs) / 1000.0))
 
     def _hill_ends(self, full, run, joinable):
@@ -1529,7 +1535,7 @@ class Country:
         for s in self.sources:
             if s[3] in skip or not CLASSES[s[1]]["graph"] or self.mtn.poly.distance(s[0]) > 1.0:
                 continue
-            gr = self.mtn.grade(s[0], s[1])
+            gr = self.mtn.grade(s[0], s[1], cap=HILL_GRADE if s[3] == "hill" else None)
             if gr > 0.0:
                 self.mtn_grades.append((s[2] or s[3], round(gr, 3)))
 
@@ -1703,7 +1709,8 @@ class Country:
                     spans = sorted(spans + self._underpasses(line, spans))
                 # Mount Calder Road ends level in the summit car park.
                 flat = 60.0 if ident == "calder" else 0.0
-                self.mtn_grades.append((name, round(self.mtn.grade(line, cls, spans=spans, flat_end=flat), 3)))
+                self.mtn_grades.append((name, round(self.mtn.grade(line, cls, spans=spans, cap=MTN_CAP.get(ident),
+                                                                   flat_end=flat), 3)))
             self._note_structures(line, cls, name, spans)
             # Where it rides on an earlier way, that way alone is laid (two
             # near-copies noded into a tangle of scraps and left dead ends).

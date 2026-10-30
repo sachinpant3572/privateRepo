@@ -76,6 +76,14 @@ on Opus with Sonnet trial packages). Stage D (the bay) is NOT approved.
   its shape is unchanged, but its end now reaches 10.5 m further to meet
   Harrier Rise, so grade() resamples its 4 m points and the 60 m smoothing
   lands a little differently by the hairpin at (1760,-1130).
+- Run 4 (cut-off groups dropped whole): terraces 25 (3 cut off), climbs 27
+  (2.6 km), 17 dropped, lots 179; Basalt/Onyx fixed. Crest Drive still 0.148:
+  the ground there is identical to before stage C; only the centre line
+  moved (<= 0.22 m), and an exact 1 m resample reads 0.144 then, 0.151 now.
+  Mica Way 0.146 (6.7 m over a 46 m piece between two climbs). Cause, both:
+  a way graded right at its cap reads up to ~0.02 steeper on the 8 m grid,
+  the whole of the test's 0.015 slack. Fix (the test kept as is): hill
+  streets graded to HILL_GRADE 0.12, Crest Drive to MTN_CAP 0.125.
 
 ## Open questions
 
