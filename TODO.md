@@ -1,5 +1,53 @@
 # TODO
 
+## Thursday, Oct 30, 2026: industry, secret sites, a busy airport and everyday-life services
+
+Sachin, 2026-10-30: "Add to TODO, build a Quarry in map, away from the city, behind
+the mountains, and a Coal Mine too somewhere appropriate + Caves to explore with their
+own mysteries + A Nuclear Energy facility + An FBI/CIA like agency in the game + One
+large airport in Belleriv with more than 30 big airliner planes capacity and remains
+continously busy, ability to purchase flight tickets from the counter or througu phone,
+same for trains, buses, trams, taxi booling through phone app, quick commerce app on
+phone for daily items + online clothing shopping(Amazon like service) + most of the
+things that happens in everyday life. We will bhuld a detailed plan for this and
+execute later."
+
+Status: **plan first, build later**, on his word. Nothing here is approved to build yet.
+All names below are placeholders to be replaced by original ones in the plan (no real
+agencies, brands or places).
+
+- **Quarry**: away from the city, behind Mount Calder (the range's north side, past
+  the Morrow gorge). Terraced pit, haul road, crushers, conveyors, dump trucks; ties in
+  with the quarry job in ACTIVITY_ROADMAP.md (row "Trucking, quarry, valet ...").
+- **Coal mine**: somewhere it fits geologically and economically (a rust-belt or hill
+  county, on the freight line so coal trains have a reason to run, #111): headframe,
+  tipple, spoil heaps, a mine town.
+- **Caves to explore, each with its own mystery**: limestone or lava caves in the
+  range and the hill counties; a story or secret per cave (collectibles, an old
+  smuggling stash, a sealed lab, a lost expedition). Needs underground spaces, which the
+  game cannot draw yet (the range's tunnels are data only, HANDOFF-world-mountain.md).
+- **Nuclear power station**: a guarded plant with cooling towers on a lake or the
+  coast, far from the city; restricted area, wanted level for trespass, possible heist
+  or sabotage-prevention missions.
+- **A federal agency** (FBI/CIA-like, fictional name): a headquarters building,
+  agents and unmarked cars, a top wanted-level tier, a black site, and story missions
+  for or against it.
+- **One large airport in Bellerive** (Bellerive International in WORLD_V3_PLAN.md):
+  gates and stands for **30+ wide-body airliners**, continuously busy (planes taxiing,
+  taking off and landing on a schedule, ground vehicles, a terminal crowd). Needs stage
+  B's airport edge to grow into a full site, plane models and simple flight paths.
+- **Tickets for travel**: buy flight tickets at the counter or on the phone; the same
+  for trains, buses and trams (WORLD_V3_PLAN.md "Scheduled flights, trains, ferries and
+  ships": kiosk, ticket, fade, arrival). Trams and buses need routes and stops first
+  (#111 for trains).
+- **Phone apps for everyday life**: taxi booking (a ride-hailing app on top of the
+  existing phone cab call), a quick-commerce app for daily items delivered to the door,
+  an online clothes shop (Amazon-like) delivering to home (ties into the wardrobe, #98),
+  and more of what happens in everyday life (bills, food delivery, banking, bookings).
+- **The plan to write** (when Sachin says go): research how GTA V, Watch Dogs and
+  similar games do each item, then for each one the place on the map, what the player
+  can do there, systems it needs, a rough cost and an order, written up as a plan doc.
+
 ## HIGH PRIORITY. Wednesday, Oct 28, 2026: fix what players disliked in GTA Chinatown Wars
 
 Status: **open, high priority.** Sachin: "These are the negative feedback regarding Chinatowan Wars,
