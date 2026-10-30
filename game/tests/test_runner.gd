@@ -76,7 +76,7 @@ func _run() -> void:
 		"test_touch_layout_moves_resizes_and_resets",
 		"test_settings_controls_cards_and_layout_editor",
 		"test_scripted_car_gets_unstuck", "test_heavy_vehicle_pushes_harder", "test_spawns_need_room", "test_overlap_resolves", "test_heavy_pushes_parked", "test_pinned_car_holds_still", "test_xray_only_when_hidden", "test_cars_prewarmed", "test_hero_seen_under_roofs", "test_cab_stop_skips_parked_car",
-		"test_vehicle_classes_cover_every_kind", "test_suspension_bounces_and_settles", "test_side_hit_spins_and_dents", "test_hard_crash_throws_panel", "test_crash_throws_rider", "test_car_fire_then_explodes", "test_explosion_makes_pieces_and_cleans_up",
+		"test_vehicle_classes_cover_every_kind", "test_suspension_bounces_and_settles", "test_side_hit_spins_and_dents", "test_hard_crash_throws_panel", "test_crash_throws_rider", "test_car_fire_then_explodes", "test_explosion_makes_pieces_and_cleans_up", "test_burnt_steel_keys_miss_paints",
 		"test_vehicle_handling_differs",
 		"test_traffic_drives_every_kind",
 		"test_vehicle_models_in_budget_and_grounded", "test_three_wheelers_and_big_trucks",
@@ -9052,6 +9052,32 @@ func test_car_fire_then_explodes() -> void:
 ## explosion sets off the fireball, smoke column, flash light, shockwave ring
 ## and a scorch mark, and when it is over every piece is off again, the lights
 ## are given back and the scorch fades; Low spends fewer particles and no light.
+func test_burnt_steel_keys_miss_paints() -> void:
+	# The burnt shell picks its bare steel by vertex colour (BURNT_SHADER:
+	# RIM, STEEL and TRIM, mask zero from 0.012 away). Every paint must sit
+	# past that after 8-bit rounding either way, or a whole burnt body reads
+	# as steel (black police and muscle paints are only ~0.014 from TRIM).
+	var VK = load("res://scripts/kits/vehicle_kit.gd")
+	var paints: Array = VK.PAINTS.duplicate()
+	for kind in VK.PALETTES:
+		paints.append_array(VK.PALETTES[kind])
+	paints.append_array([VK.POLICE_BLACK, VK.TAXI_YELLOW, VK.VAN_WHITE])
+	var near := 1.0
+	var worst := ""
+	for key: Color in [VK.RIM, VK.STEEL, VK.TRIM]:
+		for paint: Color in paints:
+			for rounded in [false, true]:
+				var a := Vector3(key.r, key.g, key.b) * 255.0
+				var b := Vector3(paint.r, paint.g, paint.b) * 255.0
+				a = a.round() if rounded else a.floor()
+				b = b.round() if rounded else b.floor()
+				var d := a.distance_to(b) / 255.0
+				if d < near:
+					near = d
+					worst = "%s near %s" % [paint, key]
+	_check(near > 0.012, "every paint sits clear of the burnt shell's steel keys (nearest %.4f: %s)" % [near, worst])
+
+
 func test_explosion_makes_pieces_and_cleans_up() -> void:
 	await _new_game(false)
 	var FireFx = load("res://scripts/fire_fx.gd")
@@ -9059,7 +9085,7 @@ func test_explosion_makes_pieces_and_cleans_up() -> void:
 	# then, not at the first fire), then the specks go.
 	var warm: Node3D = Fx.prewarm_fire()
 	var mats: int = FireFx._mats.size()
-	_check(warm != null and warm.get_child_count() == mats + 4 and mats >= 4, "every fire material is drawn at load (%s specks for %d materials + 4)" % [warm.get_child_count() if warm != null else -1, mats])
+	_check(warm != null and warm.get_child_count() == mats + 4 and mats >= 4 and FireFx._mats.has("flame_2") and FireFx._mats.has("flame_3"), "every fire material is drawn at load (%s specks for %d materials + 4)" % [warm.get_child_count() if warm != null else -1, mats])
 	await _frames(45)
 	_check(not is_instance_valid(warm), "the prewarm specks are gone after half a second")
 	var quality: String = FireFx.level

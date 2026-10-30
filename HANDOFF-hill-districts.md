@@ -103,6 +103,14 @@ HANDOFF-hill-districts-archive.md.
   scorch dark brown (0.23,0.155,0.1; Sachin: "Day wreck can be dark brown, night is good now"; 0.36,0.25,0.17 read orange in sun) / soot (0.14,0.125,0.11) blotches, ash grey on
   top panels only. Placed rusted-car props (graveyards etc.) are an idea for
   later, not approved.
+- Fire v2 review (Opus, 2026-10-30): High, TRIM key caught black paints
+  (POLICE_BLACK, muscle/roadster/muv black ~0.014 away): TRIM key now
+  0.006-0.012 like RIM/STEEL, and test_burnt_steel_keys_miss_paints checks
+  every paint after 8-bit rounding. Mediums, keep_scale grew blasts and car
+  smoke (3-8x area at peak): smoke quads cut (column/cap 2.8, dust 1.7; car
+  smoke scale 0.6-1.4) so the life-averaged size matches the old fill. Lows:
+  softer blotch edges; prewarm test checks flame_2/3. Left: flame atlas mip
+  bleed (frame edges are clear), particle AABB culling (not seen in shots).
 
 ## Open questions
 

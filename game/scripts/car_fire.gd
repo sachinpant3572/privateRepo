@@ -163,8 +163,9 @@ func _update(first := false) -> void:
 	if _embers != null:
 		_embers.emitting = k > 0.12 and live > 0.2
 		_embers.initial_velocity_max = 3.5 + 3.5 * k
-	_smoke.scale_amount_min = 0.8 + 0.9 * k
-	_smoke.scale_amount_max = 1.1 + 1.4 * k
+	# Averaged over a puff's life, ~2.9 m across at full blaze (peak ~5.3 m).
+	_smoke.scale_amount_min = 0.6 + 0.4 * k
+	_smoke.scale_amount_max = 0.8 + 0.6 * k
 	_smoke.initial_velocity_min = 1.4 + 0.6 * k
 	_smoke.initial_velocity_max = 2.6 + 1.6 * k
 	_smoke.spread = 20.0 + 14.0 * k

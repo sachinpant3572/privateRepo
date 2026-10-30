@@ -656,7 +656,7 @@ void fragment() {
 	vec3 soot = vec3(0.14, 0.125, 0.11);
 	vec3 ash = vec3(0.5, 0.48, 0.45);
 	// Scorched paint, brown and black in blotches.
-	vec3 c = mix(scorch, soot, smoothstep(0.38, 0.66, big));
+	vec3 c = mix(scorch, soot, smoothstep(0.32, 0.74, big));
 	c = mix(c, scorch * 1.15, smoothstep(0.7, 0.9, fine) * 0.35);
 	// Grey ash where the paint burnt right off: the hottest, top panels.
 	float top = smoothstep(0.5, 0.9, normalize(n).y);
@@ -674,10 +674,10 @@ void fragment() {
 	// Bare steel keeps a dull shine: the wheel rims (VehicleKit.RIM) and steel
 	// parts (STEEL), and, in patches, the steel bars where the plastic
 	// bumpers and sills (TRIM, not the tyres) melted off.
-	// Tight keys: silver paints sit 0.017-0.07 from these (8-bit vertex colours round by < 0.004).
+	// Tight keys: paints sit 0.0136 or more from these (silver 0.017-0.07, black 0.014-0.018; 8-bit vertex colours round by < 0.004).
 	float rim = 1.0 - smoothstep(0.006, 0.012, distance(src, vec3(0.74, 0.76, 0.79)));
 	float bare = 1.0 - smoothstep(0.006, 0.012, distance(src, vec3(0.6, 0.62, 0.64)));
-	float trim = 1.0 - smoothstep(0.012, 0.022, distance(src, vec3(0.07, 0.07, 0.08)));
+	float trim = 1.0 - smoothstep(0.006, 0.012, distance(src, vec3(0.07, 0.07, 0.08)));
 	float bar = trim * smoothstep(0.2, 0.3, p.y) * (1.0 - smoothstep(0.75, 0.85, p.y)) * smoothstep(0.4, 0.55, big);
 	float steel = max(max(rim, bare), bar);
 	c = mix(c, vec3(0.44, 0.43, 0.42) * (0.85 + fine * 0.3), steel);

@@ -237,7 +237,10 @@ class Blast extends Node3D:
 		ball = _fireball(c.ball, 0.8, hard)
 		ball2 = _fireball(c.ball2, 0.6, hard) if c.ball2 > 0 else null
 		# The column of smoke: lit orange at first, then dark, then grey.
-		column = FireFx.emitter(c.column, 4.6, FireFx.quad(Vector2(3.4, 3.4), smoke, 4, false, 0))
+		# Smoke quads are sized so a puff averaged over its life (the scale
+		# curves grow it) covers about what it did before the particle
+		# scales took effect: the fill cost stays where it was.
+		column = FireFx.emitter(c.column, 4.6, FireFx.quad(Vector2(2.8, 2.8), smoke, 4, false, 0))
 		FireFx.random_frame(column)
 		column.explosiveness = 0.3
 		column.randomness = 0.4
@@ -254,7 +257,7 @@ class Blast extends Node3D:
 		column.color_ramp = FireFx.ramp([0.0, 0.1, 0.3, 0.7, 1.0], [Color(0.55, 0.26, 0.08, 0.0), Color(0.4, 0.19, 0.07, 0.9), Color(0.1, 0.09, 0.085, 0.92), Color(0.15, 0.145, 0.14, 0.55), Color(0.2, 0.2, 0.2, 0.0)])
 		_add(column)
 		if c.cap > 0:
-			cap = FireFx.emitter(c.cap, 4.2, FireFx.quad(Vector2(3.8, 3.8), smoke, 4, false, 0))
+			cap = FireFx.emitter(c.cap, 4.2, FireFx.quad(Vector2(2.8, 2.8), smoke, 4, false, 0))
 			FireFx.random_frame(cap)
 			cap.explosiveness = 0.6
 			cap.spread = 80.0
@@ -268,7 +271,7 @@ class Blast extends Node3D:
 			cap.color_ramp = FireFx.ramp([0.0, 0.15, 0.6, 1.0], [Color(0.35, 0.17, 0.07, 0.0), Color(0.12, 0.105, 0.1, 0.85), Color(0.17, 0.165, 0.16, 0.5), Color(0.22, 0.22, 0.22, 0.0)])
 			_add(cap)
 		# Dust racing out along the ground.
-		dust = FireFx.emitter(c.dust, 1.8, FireFx.quad(Vector2(2.2, 2.2), smoke, 4, false, 0))
+		dust = FireFx.emitter(c.dust, 1.8, FireFx.quad(Vector2(1.7, 1.7), smoke, 4, false, 0))
 		FireFx.random_frame(dust)
 		dust.explosiveness = 0.9
 		dust.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
