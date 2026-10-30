@@ -115,6 +115,7 @@ C. **Sloped districts** (~40-70 h, Sachin's yes): the foothills north of
    the city as hill districts (hill_n's contour rings, Vinewood-style):
    city ground on a height field, roads graded, buildings stepped onto it,
    traffic, people and cameras on heights.
+   Build (2026-10-30): HANDOFF-hill-districts.md (country zone, option B).
 D. **A bay and a beach borough** (~10-16 h): a second water body in the
    plan (bank logic), a barrier-island beach borough reached by 2-3
    causeways (the existing bridge class).
