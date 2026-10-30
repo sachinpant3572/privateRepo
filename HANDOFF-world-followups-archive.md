@@ -38,3 +38,60 @@ gta_vi_leonida_fan_avatarsd.jpg):
   island is reached by causeways (Vice Beach). The airport sits inside the
   city. A chain of keys runs south on long bridges.
 
+## Done: follow-up detail (moved 2026-10-30)
+
+- **Camera test** (test_perspective_camera): the tower spots filled the six
+  inside spots first, after which no random spot was checked for a hidden
+  player. The search now carries on past them. Committed.
+- **Slope check** (build_country.py mountain_check): grade and off-profile
+  are measured only where the road has a profile (not over a bridge deck or
+  a tunnel). Wheaton's 174 % was its bridge span; Summit Fire's 265 m "off"
+  was `profile_at() or 0.0` on profile-less points.
+- **Route 9 off the rail** (mountain_plan.py): the rail pass is pinned to
+  the gorge's one shelf (2.2 %, 30 m cells, inside the range); every avoid
+  cost on the rail either planned the same line or found no path (the A*
+  keys states on a 0.5 m height offset, so a cost change can lose the only
+  grade-feasible route). So the road moves instead: Route 9 drops its
+  (-700,-2400) waypoint (on the rail, with the river right beside it) and
+  takes `avoid=(("rail_pass", 30.0, 10.0),)`. Close running (< 28 m) fell
+  from 2,460 m to 480 m: two crossings and the road over the rail tunnel.
+  Everything after Route 9 (lines joining it) is re-planned with it.
+  That 30 m line climbed 15-20 m up the gorge wall above the rail, and
+  Wheaton and Dam roads (river, rail, then Route 9) could not climb to it:
+  Wheaton 219 %, Dam 113 %, Route 9 86 % where its (-720,-3250) waypoint
+  sat 10 m off the rail. Now: avoid 22 m at a high cost (just clear of the
+  shelf, near the rail's level), waypoint moved to (-704,-3250), and the
+  grader's shared-stretch pins must be in reach of the rail crossings
+  (mountain.py). The old line ran 548 m within 8 m of the rail.
+- **Level crossings and hugging roads** (mountain.py): a road at a level
+  crossing holds the rail's height out to LEVEL_REACH (20 m) from it. Wheaton
+  (108 % after that) crosses over the rail and curls back 7-9 m beside it,
+  7 m above the rail's strip; each rail crossing now records `hug` (how far
+  along the rail the road stays within 20 m) and the rail span covers it.
+  Wheaton now 15.1 % (cap 13 %).
+- **Summit Fire Road** (mountain.py): graded after Calder (ROAD_ORDER), and
+  a road end within JOIN_REACH (20 m) of an earlier road takes its height
+  (it stopped 16 m short of Calder's middle and took the terrain instead).
+  265 % (fake) -> 32 % -> 31.2 %, worst near its Calder end (1105,-1258).
+
+## Stage A build approach (moved 2026-10-30)
+
+Stage A build (2026-10-30, approach before editing):
+- street_plan.gd: OPEN_LAND list {id, kind, at, size, lake}; `_open_land()`
+  after `_thin` kills the district links (edge_patch >= 0) between land
+  blocks whose middles lie in the site, keeping the graph joined and never
+  merging a landmark's block; each site is a set piece (kind park /
+  cemetery / stadium / railyard / containers). Sites sit between
+  arterials, so no arterial crosses them. Lakes are plan polygons
+  (`lakes`), not river water (is_water_point would make the face "water").
+- Sites: Halcyon Park + lake (wards_n, x 1010-1460, y -220..140); parks
+  with ponds in quarter_w, point_w, point_e, havana_e (Liberty Green stays);
+  Old Morrow Cemetery (south bank); Bellerive Bowl stadium (x 1470-1760,
+  y 150-490); container yard and rail yard on the docks.
+- city.gd block_style returns the kind; city_cells.gd builders per kind
+  (trees capped per block for the frame budget); lakes have a stone rim
+  and a railing with collision (no swimming in the game, so no walking on
+  water). map_image draws lakes as water and the kinds in their colours.
+- wards / wards_n get `cut` so their blocks grow (bigger blocks).
+- Tests: each site came out as one block of its kind and size; lakes in
+  their block; landmark blocks kept; land area still in range.

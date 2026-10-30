@@ -10881,8 +10881,15 @@ func test_heli_exit_only_when_low() -> void:
 					continue
 				var mid: Vector3 = c.global_position
 				var top: float = mid.y + size.y * 0.5
-				var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(Vector3(mid.x, top + 40.0, mid.z), Vector3(mid.x, top - 1.0, mid.z), HeliLayers.WORLD))
-				if hit.is_empty() or absf(hit.position.y - top) > 0.3:
+				# Clear over the helicopter's footprint: no tower standing on
+				# this box (a ray starting inside one counts as a hit there).
+				var flat := true
+				for off in [Vector2.ZERO, Vector2(6, 6), Vector2(-6, 6), Vector2(6, -6), Vector2(-6, -6)]:
+					var rq := PhysicsRayQueryParameters3D.create(Vector3(mid.x + off.x, top + 40.0, mid.z + off.y), Vector3(mid.x + off.x, top - 1.0, mid.z + off.y), HeliLayers.WORLD | HeliLayers.PROPS)
+					rq.hit_from_inside = true
+					var hit := space.intersect_ray(rq)
+					flat = flat and not hit.is_empty() and absf(hit.position.y - top) <= 0.3
+				if not flat:
 					continue
 				best = area
 				roof = Vector3(mid.x, top, mid.z)
