@@ -65,6 +65,14 @@ func blast(pos: Vector3, s: float, ground: float) -> void:
 func warm() -> void:
 	if _built != _key():
 		_rebuild()
+	_make_scorches()
+
+
+## The materials drawn on plain meshes (flash, shockwave, scorch), for the
+## shader prewarm in Fx.
+func mesh_materials() -> Array:
+	warm()
+	return [_blasts[0].flash_mat, _blasts[0].ring_mat, _scorch[0].material_override]
 
 
 func _key() -> String:
@@ -134,29 +142,35 @@ func blasts() -> Array:
 	return _blasts
 
 
+## The scorch marks, made once (warm() at load, so the first blast does not).
+func _make_scorches() -> void:
+	if not _scorch.is_empty():
+		return
+	var q := QuadMesh.new()
+	q.size = Vector2.ONE
+	q.orientation = PlaneMesh.FACE_Y
+	for i in SCORCHES:
+		var m := MeshInstance3D.new()
+		m.mesh = q
+		m.top_level = true
+		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		mat.albedo_texture = FireFx.scorch()
+		mat.albedo_color = Color(0.02, 0.018, 0.016, 0.0)
+		mat.render_priority = 1
+		m.material_override = mat
+		m.visible = false
+		add_child(m)
+		_scorch.append(m)
+		_scorch_start.append(0.0)
+
+
 func _scorch_at(at: Vector3, s: float) -> void:
-	if _scorch.is_empty():
-		var q := QuadMesh.new()
-		q.size = Vector2.ONE
-		q.orientation = PlaneMesh.FACE_Y
-		for i in SCORCHES:
-			var m := MeshInstance3D.new()
-			m.mesh = q
-			m.top_level = true
-			m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			var mat := StandardMaterial3D.new()
-			mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
-			mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-			mat.albedo_texture = FireFx.scorch()
-			mat.albedo_color = Color(0.02, 0.018, 0.016, 0.0)
-			mat.render_priority = 1
-			m.material_override = mat
-			m.visible = false
-			add_child(m)
-			_scorch.append(m)
-			_scorch_start.append(0.0)
+	_make_scorches()
 	var i := _scorch_next
 	_scorch_next = (_scorch_next + 1) % SCORCHES
 	var size := 6.5 * s * _rng.randf_range(0.9, 1.15)

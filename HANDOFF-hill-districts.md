@@ -38,8 +38,8 @@ on Opus with Sonnet trial packages). Stage D (the bay) is NOT approved.
   mountain_terrain.
 - **Game side**: "hillside" in ZONE_GROUND, TREES, LIVE_CAR_ZONES, birds,
   country_kit fences; flat (3D) distance checks made 2D where hills break
-  them (pedestrian, taxi `_pulled_up_by`, population, player
-  `_free_spot_beside`, m03 lantern lights).
+  them (pedestrian `_wander`, taxi `_pulled_up_by`, player
+  `_free_spot_beside`; population and m03 not changed).
 - **Sonnet trial** (CLAUDE.md): packages run on sonnet/high, each with its
   own Opus review; metrics below. Godot runs serialized with
   `flock /tmp/godot.lock`.
@@ -56,6 +56,8 @@ Opus review to catch real defects (package 2 a High first-fire stall and a
 setting it ignored), and both hit parse errors on their first run. Quality
 did not hold well enough to drop the per-package review: builders go back to
 Opus (CLAUDE.md rule), Sachin to overrule.
+Final review (M1): shaders compiled at the first fire on Android; now
+Fx.prewarm_fire draws every fire/blast material for 0.5 s at load.
 Fire Lows left as they are: the scorch outliving a respawn (clear() only in
 tests; it fades in 50 s) and the unused "explosion" sense (senses.gd: a
 gameplay choice for Sachin; the blast still makes "crash").

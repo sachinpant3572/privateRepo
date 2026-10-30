@@ -207,6 +207,40 @@ func set_quality(level: String, real_lights := true) -> void:
 	FireFx.warm()
 	boom.warm()
 	GameLog.event("fire_warm", {"ms": (Time.get_ticks_usec() - t0) / 1000.0})
+	prewarm_fire.call_deferred()
+
+
+## Draws every fire and blast material for half a second, specks in front of
+## the camera, so their shaders compile while the game loads and not at the
+## first fire or blast (Android compiles a shader the first time it is
+## drawn: a hitch). Particles draw through a MultiMesh, another shader
+## variant than a plain mesh, so those go through a one-particle emitter
+## (clear, alpha 0). Returns the holder (null with no camera), tests.
+func prewarm_fire() -> Node3D:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return null
+	var holder := Node3D.new()
+	holder.name = "FireWarm"
+	holder.position = Vector3(0.0, 0.0, -(cam.near + 0.5))
+	cam.add_child(holder)
+	for mat in FireFx._mats.values():
+		var q := QuadMesh.new()
+		q.size = Vector2.ONE * 0.002
+		q.material = mat
+		var p := FireFx.emitter(1, 0.5, q)
+		p.color = Color(1.0, 1.0, 1.0, 0.0)
+		holder.add_child(p)
+	for mat in boom.mesh_materials():
+		var speck := MeshInstance3D.new()
+		var box := BoxMesh.new()
+		box.size = Vector3.ONE * 0.002
+		speck.mesh = box
+		speck.material_override = mat
+		speck.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		holder.add_child(speck)
+	get_tree().create_timer(0.5).timeout.connect(holder.queue_free)
+	return holder
 
 
 ## Blood from a wound at `pos` spraying along `dir` (zero: any way), with

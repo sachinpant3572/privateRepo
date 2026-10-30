@@ -6371,15 +6371,13 @@ func test_mount_calder() -> void:
 func test_hill_districts() -> void:
 	await _new_game(false)
 	var c = game.city.country
-	var poly := PackedVector2Array()
-	for s in c.suburbs:
-		if s.zone == "hillside":
-			for q in s.poly:
-				poly.append(Vector2(q[0], q[1]))
+	var polys := _hill_polys(c)
 	var area := 0.0
-	for k in poly.size():
-		area += poly[k].cross(poly[(k + 1) % poly.size()])
-	area = absf(area) * 0.5e-6
+	for poly in polys:
+		var a := 0.0
+		for k in poly.size():
+			a += poly[k].cross(poly[(k + 1) % poly.size()])
+		area += absf(a) * 0.5e-6
 	_check(area >= 0.85, "the hill districts cover %.2f km2" % area)
 	# Hill streets: streets with most of their nodes on the hillside.
 	var streets := 0
@@ -6394,7 +6392,7 @@ func test_hill_districts() -> void:
 		var nodes: PackedInt32Array = rd.nodes
 		var on := 0
 		for n in nodes:
-			if Geometry2D.is_point_in_polygon(c.node_pos[n], poly):
+			if _in_polys(c.node_pos[n], polys):
 				on += 1
 		if c.edge_class(int(rd.e0)) != "street" or on * 2 < nodes.size():
 			continue
@@ -6434,6 +6432,8 @@ func test_hill_districts() -> void:
 			# (HILL_STEEP in tools/build_country.py); the rest keep to 13 %.
 			if g > 0.13 + 0.015 and (g > 0.20 + 0.015 or s[-1] > 200.0):
 				over.append("%s %.3f at (%.0f, %.0f)" % [rd.name, g, a.x, a.y])
+			elif g > 0.13 + 0.015 and rd.name == "":
+				over.append("unnamed %.3f at (%.0f, %.0f)" % [g, a.x, a.y])
 			elif g > 0.13 + 0.015:
 				steep[rd.name] = true
 	_check(streets >= 40 and length >= 7000.0, "%d hill streets, %.1f km" % [streets, length / 1000.0])
@@ -6475,9 +6475,28 @@ func test_hill_districts() -> void:
 	# People walk the hill streets' sidewalks.
 	var walks := 0
 	for w in c.walks:
-		if Geometry2D.is_point_in_polygon(Vector2(w[0].x, w[0].z), poly):
+		if _in_polys(Vector2(w[0].x, w[0].z), polys):
 			walks += 1
 	_check(walks >= 3, "%d sidewalk loops on the hills" % walks)
+
+
+## The hill districts' outlines, one polygon each.
+func _hill_polys(c) -> Array[PackedVector2Array]:
+	var polys: Array[PackedVector2Array] = []
+	for s in c.suburbs:
+		if s.zone == "hillside":
+			var poly := PackedVector2Array()
+			for q in s.poly:
+				poly.append(Vector2(q[0], q[1]))
+			polys.append(poly)
+	return polys
+
+
+func _in_polys(p: Vector2, polys: Array[PackedVector2Array]) -> bool:
+	for poly in polys:
+		if Geometry2D.is_point_in_polygon(p, poly):
+			return true
+	return false
 
 
 func _ground_at(q: Vector3) -> float:
@@ -6492,18 +6511,14 @@ func _ground_at(q: Vector3) -> float:
 func test_hill_heights_are_flat_checks() -> void:
 	await _new_game(false)
 	var c = game.city.country
-	var poly := PackedVector2Array()
-	for s in c.suburbs:
-		if s.zone == "hillside":
-			for q in s.poly:
-				poly.append(Vector2(q[0], q[1]))
+	var polys := _hill_polys(c)
 	var at := Vector2.INF
 	for rd in c.roads:
 		if c.edge_class(int(rd.e0)) != "street":
 			continue
 		for n in rd.nodes:
 			var q: Vector2 = c.node_pos[n]
-			if Terrain.height(q.x, q.y) > 60.0 and Geometry2D.is_point_in_polygon(q, poly):
+			if Terrain.height(q.x, q.y) > 60.0 and _in_polys(q, polys):
 				at = q
 				break
 		if at != Vector2.INF:
@@ -6859,10 +6874,13 @@ func test_every_home_has_a_way_in() -> void:
 	for g in gaps:
 		var hill: int = g[1]
 		var l: Array = c.lots[hill]
+		tile_key = Vector2i(-99999, -99999)
 		for key: Vector2i in c.tiles:
 			for i in c.tiles[key].l:
 				if int(i) == hill:
 					tile_key = key
+		if tile_key.x == -99999:
+			continue
 		if not built_tiles.has(tile_key):
 			built_tiles[tile_key] = preload("res://scripts/country_tiles.gd").build(c, tile_key)
 		var built: Dictionary = built_tiles[tile_key]
@@ -9023,6 +9041,13 @@ func test_car_fire_then_explodes() -> void:
 func test_explosion_makes_pieces_and_cleans_up() -> void:
 	await _new_game(false)
 	var FireFx = load("res://scripts/fire_fx.gd")
+	# Every fire and blast material is drawn once at load (shaders compile
+	# then, not at the first fire), then the specks go.
+	var warm: Node3D = Fx.prewarm_fire()
+	var mats: int = FireFx._mats.size()
+	_check(warm != null and warm.get_child_count() == mats + 3 and mats >= 4, "every fire material is drawn at load (%s specks for %d materials + 3)" % [warm.get_child_count() if warm != null else -1, mats])
+	await _frames(45)
+	_check(not is_instance_valid(warm), "the prewarm specks are gone after half a second")
 	var quality: String = FireFx.level
 	var node := _home()
 	Fx.boom.clear()
