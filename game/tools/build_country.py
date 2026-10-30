@@ -322,6 +322,8 @@ HILL_REACH = 70.0           # a terrace end carries on along its contour this fa
 HILL_CONNECT = 0.10         # grade the climbs are traced at on the smoothed ground (street cap
                             # 0.13: each street is graded on its own ground, so they come out steeper)
 HILL_GRADE = 0.12           # hill streets are graded to this (the 0.13 cap less the grid's excess)
+HILL_RISE = 0.11            # most a climb may rise end to end over its length (its ends are pinned:
+                            # the terrace on the ground, a mountain road at its graded height)
 HILL_PAD_TOL = 0.2          # a hill home's pad: most its back and sides may lie off level (m)
 HILL_GAP = 220.0            # between a terrace's climbs
 HILL_NAMES = ["Toyon Terrace", "Sagewood Terrace", "Manzanita Crest", "Columbine Terrace", "Buckeye Drive",
@@ -1241,7 +1243,8 @@ class Country:
             """A climb from p0 on terrace `own` to the first other way it
             meets, at HILL_CONNECT where the ground is steeper, else straight
             down (or up) the fall line; None where it leaves the hills,
-            nears a freeway or turns back onto its own terrace."""
+            nears a freeway, turns back onto its own terrace or meets a way
+            too far above or below it to grade (HILL_RISE)."""
             tgt = unary_union([l for l in st_lines if l is not own] + base_lines + climbs)
             path = [p0]
             for step in range(80):
@@ -1262,7 +1265,12 @@ class Country:
                         hp = self._points(hit) or [c for g in lines_of(hit) for c in g.coords]
                         path.append(min(hp, key=lambda c: dist(c, p)))
                         out = LineString(path)
-                        return out if out.length >= 20.0 else None
+                        if out.length < 20.0:
+                            return None
+                        end = out.coords[-1]
+                        z_end = self.mtn.profile_at(end)
+                        z_end = self.mtn.raw_at(end) if z_end is None else z_end
+                        return out if abs(self.mtn.raw_at(p0) - z_end) <= HILL_RISE * out.length else None
                 if not reach.contains(Point(q)) or fast_p.contains(Point(q)):
                     return None
                 if step > 3 and own.distance(Point(q)) < 3.0:

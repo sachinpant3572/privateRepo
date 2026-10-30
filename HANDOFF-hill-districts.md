@@ -84,6 +84,12 @@ on Opus with Sonnet trial packages). Stage D (the bay) is NOT approved.
   a way graded right at its cap reads up to ~0.02 steeper on the 8 m grid,
   the whole of the test's 0.015 slack. Fix (the test kept as is): hill
   streets graded to HILL_GRADE 0.12, Crest Drive to MTN_CAP 0.125.
+- Run 5 (those caps): Crest Drive 0.143, Mica Way 0.130, both fixed. Gully
+  Rise (a 45 m climb, Bluff View Drive down to Crest Drive) 0.166: its ends
+  are pinned 7 m apart, 0.155 end to end, which no grading fits. Fix: trace()
+  rejects a climb whose ends (terrace on the raw ground, the way it meets at
+  its graded height via `mtn.profile_at`, mountain roads being graded first)
+  rise more than HILL_RISE 0.11 x its length.
 
 ## Open questions
 
