@@ -54,3 +54,6 @@ uses the same tokens. Not a measurement.
 - P1 opus-med: all 4 gates pass; first test run failed 2 checks (get_layer_data
   null headless), fixed via _flame_images() helper; restores global state; no
   shader-declaration check in its test.
+- P1 son-med: all 4 gates pass; first test had a SCRIPT ERROR yet printed PASS
+  (caught); its fix makes the uniqueness check skip headless (0 layers read), so
+  that check never runs in the suite (weaker test). No shader check.
