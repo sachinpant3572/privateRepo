@@ -104,7 +104,10 @@ func _think(delta: float) -> void:
 		punch()
 	if Controls.just_pressed("interact"):
 		var game = get_tree().get_first_node_in_group("game")
-		if game == null or game.interiors == null or not game.interiors.try_interact():
+		# The waiting cab comes before a shop door, as the HUD offers them.
+		if _board_waiting_cab(game):
+			pass
+		elif game == null or game.interiors == null or not game.interiors.try_interact():
 			try_enter_vehicle()
 
 
@@ -126,12 +129,17 @@ func nearest_vehicle():
 	return best
 
 
+## Boards the cab waiting for us when it is in reach. True when it did.
+func _board_waiting_cab(game) -> bool:
+	return game != null and game.taxi != null and is_instance_valid(game.taxi.cab) \
+			and global_position.distance_to(game.taxi.cab.global_position) < ENTER_RANGE \
+			and game.taxi.board(game.taxi.cab)
+
+
 func try_enter_vehicle() -> void:
 	var game = get_tree().get_first_node_in_group("game")
 	# The cab waiting for us wins over any car that happens to be nearer.
-	if game != null and game.taxi != null and is_instance_valid(game.taxi.cab) \
-			and global_position.distance_to(game.taxi.cab.global_position) < ENTER_RANGE \
-			and game.taxi.board(game.taxi.cab):
+	if _board_waiting_cab(game):
 		return
 	var car = nearest_vehicle()
 	if car == null:
