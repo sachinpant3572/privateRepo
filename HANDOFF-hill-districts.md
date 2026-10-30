@@ -49,6 +49,16 @@ on Opus with Sonnet trial packages). Stage D (the bay) is NOT approved.
 | Package | Review findings (severity) | First-run gate fails | Main fix time |
 |---|---|---|---|
 | 1. Hill height fixes (pedestrian `_wander`, taxi `_pulled_up_by`, player `_free_spot_beside`, new test; ~9 min, 105k tokens) | 0 High, 1 Medium (test measured the player against the street node's height, 0.3 m slack: slope-dependent), 1 Low in package (exit spot ignored `Terrain.drop`), 2 Low in nearby code (heli `open_ground_near` y 0, vehicle `drive_path` 3D dot) | Parse errors on untyped `:=` (2), run hung to timeout (exit 124); clean on rerun. Reverting the fixes failed 4 of 5 checks, as it should | ~10 min (all 4 findings fixed) |
+| 2. Fire and explosions (fire_fx.gd, explosion.gd, car_fire.gd rewrite, Fx.boom pool, per-quality LEVELS, test, SHOTS=fire) | 1 High (textures made in GDScript on the first fire/blast: a stall), 3 Medium (pool of 2 cut a live smoke column; lights ignored Settings > Real lights, 30 m flash; ~13 m column sprites, overdraw), 4 Low (scorch too small, heli ground without `Terrain.drop`, scorch survives a respawn, "explosion" sense unused) | Parse errors on untyped `:=` and a `for ... if ... else` (3), new test read only scorch slot 0, engine ERROR from `global_shader_parameter_get`, a first look too small, state left between tests | ~15 min (High, Mediums, 2 Lows fixed; 2 Lows left, below) |
+
+Trial verdict (2 packages): both worked and looked right, but each needed an
+Opus review to catch real defects (package 2 a High first-fire stall and a
+setting it ignored), and both hit parse errors on their first run. Quality
+did not hold well enough to drop the per-package review: builders go back to
+Opus (CLAUDE.md rule), Sachin to overrule.
+Fire Lows left as they are: the scorch outliving a respawn (clear() only in
+tests; it fades in 50 s) and the unused "explosion" sense (senses.gd: a
+gameplay choice for Sachin; the blast still makes "crash").
 
 ## Build results (2026-10-30)
 

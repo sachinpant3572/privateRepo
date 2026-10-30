@@ -22,12 +22,14 @@ const LEVELS := {
 		"ball": 16, "ball2": 8, "column": 16, "cap": 8, "dust": 10, "chunks": 12, "bits": 8, "sparks": 16,
 		"lights": 1, "flash": true},
 	"high": {"core": 10, "body": 16, "wide": 12, "ember": 10, "smoke": 14,
-		"ball": 24, "ball2": 12, "column": 24, "cap": 14, "dust": 16, "chunks": 18, "bits": 12, "sparks": 24,
+		"ball": 24, "ball2": 12, "column": 16, "cap": 10, "dust": 16, "chunks": 18, "bits": 12, "sparks": 24,
 		"lights": 2, "flash": true},
 }
 
 ## Set by Fx.set_quality.
 static var level := "high"
+## Settings > Graphics > Real lights: off, no fire or blast gets one.
+static var real_lights := true
 ## Burning cars now holding a real light (CarFire takes and gives back).
 static var lights_used := 0
 
@@ -39,8 +41,20 @@ static func cfg() -> Dictionary:
 	return LEVELS.get(level, LEVELS["high"])
 
 
-static func set_level(q: String) -> void:
+static func set_level(q: String, real := true) -> void:
 	level = q if LEVELS.has(q) else "high"
+	real_lights = real
+
+
+## Makes every texture now (about 100k pixels in GDScript), so the first
+## fire or blast in play does not stall a frame to make them.
+static func warm() -> void:
+	flame()
+	cloud()
+	cloud(true)
+	dot()
+	ring()
+	scorch()
 
 
 ## 0 by day .. 1 at night.

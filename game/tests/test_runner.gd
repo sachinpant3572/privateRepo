@@ -9047,7 +9047,10 @@ func test_explosion_makes_pieces_and_cleans_up() -> void:
 		_check(fire.exploded, "%s: it explodes" % level)
 		var boom = Fx.boom
 		_check(boom.running() == 1 and boom.pieces_on() >= 6 and boom.scorches() == 1, "%s: the blast runs (%d pieces on, %d scorch mark)" % [level, boom.pieces_on(), boom.scorches()])
-		var blast = boom.blasts()[(boom._next + boom.BLASTS - 1) % boom.BLASTS]
+		var blast = null
+		for b in boom.blasts():
+			if b.active:
+				blast = b
 		var lit: bool = blast.light != null and blast.light.visible
 		_check(lit == (level == "high"), "%s: the flash light is %s" % [level, "on for a moment" if lit else "off"])
 		var amount := 0
@@ -9069,6 +9072,11 @@ func test_explosion_makes_pieces_and_cleans_up() -> void:
 		car.queue_free()
 		await _frames(2)
 	_check(counts["low"] < counts["high"] and counts["low_blast"] < counts["high_blast"], "Low spends fewer particles than High (fire %d < %d, blast %d < %d)" % [counts["low"], counts["high"], counts["low_blast"], counts["high_blast"]])
+	# Real lights off: the pool is rebuilt at once (no stall at the first
+	# blast) and no blast holds a light.
+	Fx.set_quality("high", false)
+	var unlit := Fx.boom.blasts().filter(func(b): return b.light == null)
+	_check(Fx.boom.blasts().size() == 3 and unlit.size() == 3, "real lights off: %d of %d blasts without a light" % [unlit.size(), Fx.boom.blasts().size()])
 	Fx.set_quality(quality)
 
 

@@ -195,7 +195,7 @@ func apply_settings() -> void:
 	Country.UNLOAD_RADIUS = 210.0 * reach
 	graphics.apply(settings)
 	Fx.set_blood(settings.get("blood", true) != false)
-	Fx.set_quality(graphics.quality)
+	Fx.set_quality(graphics.quality, settings.get("real_lights", true) != false)
 	# Phones on Low get half the hills' grass tufts and stones.
 	Country.Tiles.cover = 0.5 if graphics.quality == "low" else 1.0
 	var scheme: String = settings.get("controls", "stick")

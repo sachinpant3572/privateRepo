@@ -200,9 +200,13 @@ func puff(pos: Vector3, vel: Vector3, size: float, grow: float, life: float, col
 
 
 ## Graphics quality: fewer puffs alive at once on the lower presets.
-func set_quality(level: String) -> void:
+func set_quality(level: String, real_lights := true) -> void:
 	puffs.cap = PUFFS.get(level, PUFFS["high"])
-	FireFx.set_level(level)
+	FireFx.set_level(level, real_lights)
+	var t0 := Time.get_ticks_usec()
+	FireFx.warm()
+	boom.warm()
+	GameLog.event("fire_warm", {"ms": (Time.get_ticks_usec() - t0) / 1000.0})
 
 
 ## Blood from a wound at `pos` spraying along `dir` (zero: any way), with

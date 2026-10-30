@@ -16,8 +16,8 @@ extends Node3D
 const FireFx = preload("res://scripts/fire_fx.gd")
 const Terrain = preload("res://scripts/terrain.gd")
 
-## Blasts that can run at once (a third restarts the oldest).
-const BLASTS := 2
+## Blasts that can run at once (a fourth restarts the one nearest its end).
+const BLASTS := 3
 ## Burn marks kept at once, and how long one lasts (s).
 const SCORCHES := 4
 const SCORCH_LIFE := 50.0
@@ -29,7 +29,6 @@ const BLAST_LIFE := 8.0
 const LIFT := 0.045
 
 var _blasts: Array = []
-var _next := 0
 var _built := ""
 var _scorch: Array[MeshInstance3D] = []
 var _scorch_start: Array[float] = []
@@ -48,20 +47,35 @@ func _ready() -> void:
 ## height under it, for the shockwave, dust and scorch (none of them if
 ## `pos` is high above it, a helicopter in the air).
 func blast(pos: Vector3, s: float, ground: float) -> void:
-	if _built != FireFx.level:
-		_rebuild()
-	var b = _blasts[_next]
-	_next = (_next + 1) % BLASTS
+	warm()
+	var b = _blasts[0]
+	for c in _blasts:
+		if not c.active:
+			b = c
+			break
+		if c.t > b.t:
+			b = c
 	b.go(pos, s, ground)
 	if pos.y - ground < 5.0 * s:
 		_scorch_at(Vector3(pos.x, ground, pos.z), s)
+
+
+## Builds the pool for the current quality and real-lights setting if it is
+## not built yet (Fx.set_quality calls it, so the first blast does not).
+func warm() -> void:
+	if _built != _key():
+		_rebuild()
+
+
+func _key() -> String:
+	return "%s %s" % [FireFx.level, FireFx.real_lights]
 
 
 func _rebuild() -> void:
 	for b in _blasts:
 		b.queue_free()
 	_blasts.clear()
-	_built = FireFx.level
+	_built = _key()
 	for i in BLASTS:
 		var b := Blast.new()
 		b.name = "Blast%d" % i
@@ -145,7 +159,7 @@ func _scorch_at(at: Vector3, s: float) -> void:
 			_scorch_start.append(0.0)
 	var i := _scorch_next
 	_scorch_next = (_scorch_next + 1) % SCORCHES
-	var size := 4.8 * s * _rng.randf_range(0.9, 1.15)
+	var size := 6.5 * s * _rng.randf_range(0.9, 1.15)
 	var up := Terrain.normal(at.x, at.z)
 	var b := Basis(Quaternion(Vector3.UP, up)) * Basis(Vector3.UP, _rng.randf() * TAU) * Basis.from_scale(Vector3(size, 1.0, size * _rng.randf_range(0.85, 1.0)))
 	_scorch[i].global_transform = Transform3D(b, Vector3(at.x, at.y + LIFT, at.z))
@@ -222,7 +236,7 @@ class Blast extends Node3D:
 		column.angle_max = 180.0
 		column.angular_velocity_min = -25.0
 		column.angular_velocity_max = 25.0
-		column.scale_amount_curve = FireFx.curve([Vector2(0.0, 0.5), Vector2(0.25, 1.2), Vector2(1.0, 2.3)])
+		column.scale_amount_curve = FireFx.curve([Vector2(0.0, 0.5), Vector2(0.25, 1.1), Vector2(1.0, 1.6)])
 		column.color_ramp = FireFx.ramp([0.0, 0.1, 0.3, 0.7, 1.0], [Color(0.55, 0.26, 0.08, 0.0), Color(0.4, 0.19, 0.07, 0.9), Color(0.1, 0.09, 0.085, 0.92), Color(0.15, 0.145, 0.14, 0.55), Color(0.2, 0.2, 0.2, 0.0)])
 		_add(column)
 		if c.cap > 0:
@@ -236,7 +250,7 @@ class Blast extends Node3D:
 			cap.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 			cap.angle_min = -180.0
 			cap.angle_max = 180.0
-			cap.scale_amount_curve = FireFx.curve([Vector2(0.0, 0.6), Vector2(0.3, 1.3), Vector2(1.0, 2.0)])
+			cap.scale_amount_curve = FireFx.curve([Vector2(0.0, 0.6), Vector2(0.3, 1.2), Vector2(1.0, 1.6)])
 			cap.color_ramp = FireFx.ramp([0.0, 0.15, 0.6, 1.0], [Color(0.35, 0.17, 0.07, 0.0), Color(0.12, 0.105, 0.1, 0.85), Color(0.17, 0.165, 0.16, 0.5), Color(0.22, 0.22, 0.22, 0.0)])
 			_add(cap)
 		# Dust racing out along the ground.
@@ -298,7 +312,7 @@ class Blast extends Node3D:
 		flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		flash.visible = false
 		add_child(flash)
-		if c.flash:
+		if c.flash and FireFx.real_lights:
 			light = OmniLight3D.new()
 			light.light_color = Color(1.0, 0.72, 0.4)
 			light.omni_attenuation = 2.0
@@ -431,7 +445,7 @@ class Blast extends Node3D:
 		flash.position = Vector3(0, 0.8 * s, 0)
 		if light != null:
 			light.position = Vector3(0, 1.8 * s, 0)
-			light.omni_range = 18.0 + 9.0 * s
+			light.omni_range = 8.0 + 6.0 * s
 			peak = 7.5 * sqrt(s)
 			light.light_energy = peak
 			light.visible = true

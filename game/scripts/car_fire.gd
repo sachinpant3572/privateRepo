@@ -100,7 +100,7 @@ func _ready() -> void:
 	# Lit orange by the fire at its base, then black, then grey and thin.
 	_smoke.color_ramp = FireFx.ramp([0.0, 0.12, 0.32, 0.7, 1.0], [Color(0.5, 0.23, 0.07, 0.0), Color(0.36, 0.17, 0.06, 0.8), Color(0.08, 0.075, 0.07, 0.88), Color(0.12, 0.115, 0.11, 0.55), Color(0.18, 0.18, 0.18, 0.0)])
 	add_child(_smoke)
-	if FireFx.lights_used < c.lights:
+	if FireFx.real_lights and FireFx.lights_used < c.lights:
 		FireFx.lights_used += 1
 		_light = OmniLight3D.new()
 		_light.light_color = Color(1.0, 0.55, 0.22)
@@ -227,7 +227,7 @@ func explode() -> void:
 	# A bigger vehicle makes a bigger ball of fire (the blast it deals does not change).
 	var ground: float = car.global_position.y
 	if car._cls["class"] == "heli":
-		ground = Terrain.height(at.x, at.z)
+		ground = Terrain.height(at.x, at.z) - Terrain.drop(at.x, at.z)
 	Fx.explosion(at, clampf(sqrt(_size.x * _size.z / 7.9), 0.85, 1.35), ground)
 	for h in get_tree().get_nodes_in_group("humanoids"):
 		if h.dead or (h.get("vehicle") != null):
