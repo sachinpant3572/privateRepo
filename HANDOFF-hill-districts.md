@@ -58,9 +58,10 @@ did not hold well enough to drop the per-package review: builders go back to
 Opus (CLAUDE.md rule), Sachin to overrule.
 Final review (M1): shaders compiled at the first fire on Android; now
 Fx.prewarm_fire draws every fire/blast material for 0.5 s at load.
-Fire Lows left as they are: the scorch outliving a respawn (clear() only in
-tests; it fades in 50 s) and the unused "explosion" sense (senses.gd: a
-gameplay choice for Sachin; the blast still makes "crash").
+Fire Low left: the scorch outliving a respawn (clear() only in tests; it
+fades in 50 s). Explosion sense now used (Sachin: "Use this explosions and
+make them react please"): Fx.explosion emits "explosion"; a full-time duck or
+cower then flees (pedestrian `_on_reaction_end`); test_people_react_to_an_explosion.
 
 Trial 1 cost (session logs, API list prices as the weight; cache reads cost
 $0.20/MTok on both models, so Sonnet only halves input/output): Sonnet runs
@@ -79,6 +80,7 @@ fire_fx.gd). Est. ~$6-9 and 1-1.5 h in all; cheaper option: package 1 only.
 
 | Package | Review findings (severity) | First-run gate fails | Main fix time |
 |---|---|---|---|
+| 1. Flame Texture2DArray (27 min; Sonnet $1.56, at Opus prices $2.60; review $0.88) | 0 High, 0 Medium, 3 Low (270 KB `flame_images` kept for tests only; `create_from_images` result ignored; test missed a shader-only revert) + 2 nits | Before-shots dir missing (12/16 saved), SCRIPT ERROR in its test (headless `get_layer_data` is null; test still printed PASS); no parse errors | ~5 min (all 3 Lows + comment nit) |
 
 ## Build results (2026-10-30)
 

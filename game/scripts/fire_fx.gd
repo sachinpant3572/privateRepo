@@ -109,6 +109,18 @@ const _TONGUES := [
 static func flame() -> Texture2DArray:
 	if _tex.has("flame"):
 		return _tex["flame"]
+	var arr := Texture2DArray.new()
+	var err := arr.create_from_images(flame_images())
+	if err != OK:
+		push_error("FireFx.flame: texture array not made (%s)" % error_string(err))
+	_tex["flame"] = arr
+	return arr
+
+
+## The flame pictures, one 64 x 128 image per frame with its own mipmaps
+## (not cached: flame() keeps only the array; tests build them again,
+## since the headless renderer cannot hand a layer back).
+static func flame_images() -> Array[Image]:
 	var w := 64
 	var h := 128
 	var images: Array[Image] = []
@@ -134,11 +146,7 @@ static func flame() -> Texture2DArray:
 				img.set_pixel(x, y, Color(1, 1, 1, clampf(a, 0.0, 1.0)))
 		img.generate_mipmaps()
 		images.append(img)
-	var arr := Texture2DArray.new()
-	arr.create_from_images(images)
-	_tex["flame_images"] = images # the headless renderer cannot hand layers back (tests read these)
-	_tex["flame"] = arr
-	return _tex["flame"]
+	return images
 
 
 ## Tiling noise (64 x 64, grey) that the flame shader scrolls up through the
@@ -395,7 +403,7 @@ static func emitter(amount: int, life: float, mesh: Mesh) -> CPUParticles3D:
 	return p
 
 
-## Picks a random picture of the atlas for each particle.
+## Picks a random picture (atlas cell or array layer) for each particle.
 static func random_frame(p: CPUParticles3D) -> void:
 	p.anim_speed_min = 0.0
 	p.anim_speed_max = 0.0

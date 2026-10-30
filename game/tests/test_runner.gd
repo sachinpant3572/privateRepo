@@ -9143,9 +9143,10 @@ func test_flame_frames_are_layers() -> void:
 	_check(arr.get_layers() == frames, "one layer per flame frame (%d of %d)" % [arr.get_layers(), frames])
 	_check(arr.get_width() == 64 and arr.get_height() == 128, "the flame layers are 64 x 128 (%d x %d)" % [arr.get_width(), arr.get_height()])
 	_check(arr.has_mipmaps(), "the flame layers have mipmaps")
+	_check(FireFx.FLAME_SHADER.contains("sampler2DArray"), "the flame shader samples the array by layer (not an atlas)")
 	# The headless renderer cannot hand a layer back, so compare the images
-	# the array was made from.
-	var imgs: Array = FireFx._tex["flame_images"]
+	# the array is made from.
+	var imgs: Array = FireFx.flame_images()
 	_check(imgs.size() == frames, "one picture per flame frame (%d)" % imgs.size())
 	var datas: Array = []
 	var mipped := true
