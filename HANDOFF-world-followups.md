@@ -105,10 +105,12 @@ B. **Grow the core to ~8 km²** (~14-20 h). Outline east and west (the Gulf
      ms after, about +13 %; the plan alone is 1356 ms.
    - Review fixes: a mission REPLAY mid-flight finished the bail's fall at
      the start point (`stand_at` now clears it); a forced exit over a roof
-     falls to open ground (`open_ground_near`); rail yard wagon count fits
+     falls to open ground (`open_ground_near`), but a wreck sitting on a
+     roof (under LOW over it) has no fall; rail yard wagon count fits
      short tracks. City proper is ~6.9 km² after B (8.4 with the fringe);
      ~8 km² of city needs stage C. Open: one open-land cell can add 240
-     trees in one main-thread add (phone hitch unmeasured; MultiMesh later).
+     trees in one main-thread add (phone hitch unmeasured; MultiMesh later);
+     `open_ground_near` ignores water (bails over water did already).
 C. **Sloped districts** (~40-70 h, Sachin's yes): the foothills north of
    the city as hill districts (hill_n's contour rings, Vinewood-style):
    city ground on a height field, roads graded, buildings stepped onto it,
@@ -134,13 +136,11 @@ Stage A build (approach in the archive):
 
 ## Recorded for later phases (reviewer Low #7)
 
-- The reserved rail corridor (phase 4) crosses Lantern Blvd where it meets
-  the Morrow Bridge's north approach (city x ~330). Trains (#111) need a
-  grade separation there; it is not built and not approved.
-- Solvera Line grade separations: the map has a flyover or overpass at each
-  crossing (tools/mountain_world_map.py); country.json carries those in the
-  play area as `planned` structures. Track and road stay at grade until the
-  grade-separation phase (#110, not approved).
+- The rail corridor crosses Lantern Blvd at the Morrow Bridge's north
+  approach (city x ~330): trains (#111) need a grade separation there.
+- Solvera Line flyovers/overpasses (tools/mountain_world_map.py) are
+  `planned` structures in country.json; track and road stay at grade until
+  #110 (grade separation, not approved).
 
 ## Traps
 
