@@ -117,3 +117,16 @@ Recommendation: Sonnet xhigh builders + Opus high main session and per-package
 Opus review, provisionally; confirm with a finalist run (son-xhigh, son-max,
 opus-med, opus-high; 3 repeats x 3 packages, ~$100-150, half a day) on Sachin's
 word.
+
+## Anthropic article (2026-10-22, Sachin asked 2026-10-30)
+"Building agents: When to fold subagents into your main agent loop"
+(claude.com/resources/articles/...). Keep subagents for: context bloat,
+parallel work with fresh disposable context, tool-selection trouble; also
+verification. Otherwise one loop with skills/tool search; split by context,
+not problem type; handoffs are a "telephone game". Fit to us: CLAUDE.md
+already builds in the main session and keeps agents for big reads, parallel
+separate-file packages >= 20 min, and the independent review. The two bench
+packages (3-27 min) are below that bar; P2's wrong formula came from the
+main session's brief (a lossy handoff). Proposal (Sachin decides, desktop
+file): small packages stay in the main session; builders (Sonnet xhigh) only
+for long parallel separate-file packages.
