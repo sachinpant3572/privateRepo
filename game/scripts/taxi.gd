@@ -471,7 +471,10 @@ func _pulled_up_by(player) -> bool:
 	if cab._ahead.is_colliding() and cab._ahead.get_collider() == player:
 		return true
 	var stop: Vector3 = cab.path[cab.path.size() - 1]
-	return cab.global_position.distance_to(stop) < PULL_UP_STOP and cab.global_position.distance_to(player.global_position) < PULL_UP
+	# Flat distances: the path points are at y 0, the cab and player on the hills.
+	var here := Vector2(cab.global_position.x, cab.global_position.z)
+	var there := Vector2(player.global_position.x, player.global_position.z)
+	return here.distance_to(Vector2(stop.x, stop.z)) < PULL_UP_STOP and here.distance_to(there) < PULL_UP
 
 
 func _riding_now() -> bool:

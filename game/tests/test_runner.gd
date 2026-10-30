@@ -100,7 +100,7 @@ func _run() -> void:
 		"test_traffic_drives_into_the_country", "test_traffic_turns_round_at_barricades",
 		"test_country_kit_builds_every_kind",
 		"test_country_plots_square_to_their_roads", "test_estates_and_clusters", "test_grounds_kit_builds_every_part",
-		"test_bellerive_hills", "test_mount_calder", "test_hill_districts", "test_freight_line_crosses_cleanly", "test_rail_crossings_are_grade_separated", "test_golden_flats_farmland", "test_every_home_has_a_way_in", "test_homes_by_wealth",
+		"test_bellerive_hills", "test_mount_calder", "test_hill_districts", "test_hill_heights_are_flat_checks", "test_freight_line_crosses_cleanly", "test_rail_crossings_are_grade_separated", "test_golden_flats_farmland", "test_every_home_has_a_way_in", "test_homes_by_wealth",
 		"test_new_home_kinds_and_live_cars", "test_people_walk_the_suburbs", "test_suburb_home_cars_are_live",
 		"test_road_surfaces_and_roadworks", "test_traffic_flows_past_roadworks", "test_boundaries_vary_by_household",
 		"test_game_log_file_and_rotation", "test_game_log_snapshot_and_events", "test_game_log_report_copy_and_off",
@@ -6437,8 +6437,10 @@ func test_hill_districts() -> void:
 		var hi := -INF
 		var right := Vector2(cos(float(l[2])), -sin(float(l[2])))
 		var back := Vector2(sin(float(l[2])), cos(float(l[2])))
-		for u in [-1.0, 0.0, 1.0]:
-			for v in [-1.0, 0.0, 1.0]:
+		# Middle, back and sides only: the front meets the road's grading,
+		# as on the mountain lots.
+		for u: float in [-1.0, 0.0, 1.0]:
+			for v: float in [0.0, 1.0]:
 				var q := Vector2(l[0], l[1]) + right * u * (float(l[3]) * 0.5 - 1.0) + back * v * (float(l[4]) * 0.5 - 1.0)
 				var h := Terrain.height(q.x, q.y)
 				lo = minf(lo, h)
@@ -6456,6 +6458,94 @@ func test_hill_districts() -> void:
 		if Geometry2D.is_point_in_polygon(Vector2(w[0].x, w[0].z), poly):
 			walks += 1
 	_check(walks >= 3, "%d sidewalk loops on the hills" % walks)
+
+
+## Flat checks on the hills: path and sidewalk points are at y 0 while people
+## and cars stand on the ground (Terrain.height), so a 3D distance to them
+## never closes there. Getting out of a car lands on the hill, not at y 0;
+## a cab at its stop counts as pulled up; a pedestrian moves on to the next
+## loop point.
+func test_hill_heights_are_flat_checks() -> void:
+	await _new_game(false)
+	var c = game.city.country
+	var poly := PackedVector2Array()
+	for s in c.suburbs:
+		if s.zone == "hillside":
+			for q in s.poly:
+				poly.append(Vector2(q[0], q[1]))
+	var at := Vector2.INF
+	for rd in c.roads:
+		if c.edge_class(int(rd.e0)) != "street":
+			continue
+		for n in rd.nodes:
+			var q: Vector2 = c.node_pos[n]
+			if Terrain.height(q.x, q.y) > 60.0 and Geometry2D.is_point_in_polygon(q, poly):
+				at = q
+				break
+		if at != Vector2.INF:
+			break
+	_check(at != Vector2.INF, "a hill street node over 60 m to stand on")
+	if at == Vector2.INF:
+		return
+	var ground := Terrain.height(at.x, at.y)
+	# Out of a car on the hill.
+	var p = game.player
+	_place_player_at(Vector3(at.x, ground, at.y + 12.0))
+	await _frames(30)
+	var car = Vehicle.new()
+	car.city = game.city
+	car.position = Vector3(at.x, ground + 0.3, at.y)
+	game.add_child(car)
+	await _frames(2)
+	var home: Vector3 = car.global_position
+	p.vehicle = car
+	p.exit_vehicle()
+	var dy := absf(p.global_position.y - ground)
+	_check(dy < 0.3, "out of a car on a %.0f m hill the player stands on the ground (%.2f m off)" % [ground, dy])
+	# Another car on the first-choice side (the driver's: -x) and the player is put elsewhere.
+	var blocker = Vehicle.new()
+	blocker.city = game.city
+	blocker.position = home + Vector3(-1.8, 0.3, 0)
+	game.add_child(blocker)
+	await _frames(2)
+	p.vehicle = car
+	p.exit_vehicle()
+	var from_car: Vector3 = p.global_position - home
+	_check(from_car.x > -0.5 and absf(p.global_position.y - ground) < 0.3,
+		"with a car on the first side the player steps out another side (%.1f, %.1f m off the car)" % [from_car.x, absf(p.global_position.y - ground)])
+	blocker.queue_free()
+	# The cab at its stop (path points are at y 0).
+	var taxi = game.taxi
+	var cab = Vehicle.new()
+	cab.kind = "taxi"
+	cab.city = game.city
+	cab.position = Vector3(at.x + 6.0, ground + 0.3, at.y - 6.0)
+	game.add_child(cab)
+	_place_player_at(Vector3(at.x + 9.0, ground, at.y - 6.0))
+	await _frames(3)
+	taxi.cab = cab
+	cab.path = PackedVector3Array([Vector3(cab.global_position.x + 2.0, 0.0, cab.global_position.z)])
+	cab.path_index = 0
+	_check(taxi._pulled_up_by(p), "a cab at its stop %.0f m up the hill, 3 m from the player, counts as pulled up" % cab.global_position.y)
+	taxi.cab = null
+	cab.queue_free()
+	# A pedestrian on a loop of y 0 points over the hill.
+	var Pedestrian = preload("res://scripts/pedestrian.gd")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var fake_city := GDScript.new()
+	fake_city.source_code = "extends RefCounted\nvar sidewalk_loops: Array = []\n"
+	fake_city.reload()
+	var city = fake_city.new()
+	city.sidewalk_loops.append(PackedVector3Array([Vector3(at.x - 30.0, 0, at.y + 30.0), Vector3(at.x, 0, at.y + 30.0), Vector3(at.x + 30.0, 0, at.y + 30.0)]))
+	var ped = Pedestrian.new()
+	ped.setup(city, rng, 0, 1)
+	ped.step = 1
+	ped.position = Vector3(at.x + 0.3, Terrain.height(at.x, at.y + 30.0), at.y + 30.0)
+	add_child(ped)
+	await _frames(10)
+	_check(ped.point_index == 2, "a pedestrian at a loop point %.0f m up the hill moves on to the next (point %d)" % [ped.global_position.y, ped.point_index])
+	ped.queue_free()
 
 
 ## The freight line off the pass and its docks spur (second review): every

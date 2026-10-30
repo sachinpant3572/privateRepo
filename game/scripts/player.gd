@@ -270,8 +270,10 @@ func _free_spot_beside(car, curb_first := false) -> Vector3:
 	var sides := [b.x * 1.8, -b.x * 1.8] if curb_first else [-b.x * 1.8, b.x * 1.8]
 	for offset in sides + [b.z * 3.0, -b.z * 3.0]:
 		var spot: Vector3 = origin + offset
-		spot.y = 0.0
+		spot.y = Terrain.height(spot.x, spot.z)
 		query.transform = Transform3D(Basis(), spot + Vector3(0, 0.9, 0))
 		if space.intersect_shape(query, 1).is_empty():
 			return spot
-	return Vector3(origin.x, 0.0, origin.z) + (b.x if curb_first else -b.x) * 1.8
+	var fallback: Vector3 = origin + (b.x if curb_first else -b.x) * 1.8
+	fallback.y = Terrain.height(fallback.x, fallback.z)
+	return fallback

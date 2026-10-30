@@ -243,7 +243,9 @@ func _think(delta: float) -> void:
 func _wander(delta: float, speed: float) -> void:
 	var loop: PackedVector3Array = city.sidewalk_loops[loop_index]
 	var target := loop[point_index]
-	if global_position.distance_to(target) < 0.8:
+	var to_target := target - global_position
+	to_target.y = 0.0
+	if to_target.length() < 0.8:
 		point_index = posmod(point_index + step, loop.size())
 		_detour_side = 1.0
 	var dir := target - global_position
