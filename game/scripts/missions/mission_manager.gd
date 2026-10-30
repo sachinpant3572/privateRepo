@@ -133,10 +133,7 @@ func start(id: String, teleport := false) -> void:
 	if teleport:
 		var p: Vector3 = m.start_point()
 		game.city.stream_now(p)
-		if game.player.vehicle != null:
-			game.player.exit_vehicle()
-		game.player.global_position = p
-		game.player.reset_physics_interpolation()
+		game.player.stand_at(p)
 		game.camera.snap()
 	if m.start_hour() >= 0.0:
 		game.atmosphere.hour = m.start_hour()

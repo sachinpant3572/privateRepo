@@ -320,6 +320,23 @@ static func _ground(x: float, z: float) -> float:
 	return g
 
 
+## The nearest open ground to `p` (no roof over the land), rings out to 80 m;
+## `p` itself if none is found.
+func open_ground_near(p: Vector3) -> Vector3:
+	if not is_inside_tree():
+		return p
+	var space := get_world_3d().direct_space_state
+	for r in [0.0, 6.0, 12.0, 20.0, 30.0, 45.0, 60.0, 80.0]:
+		for k in (1 if r == 0.0 else 12):
+			var q := p + Vector3(r, 0.0, 0.0).rotated(Vector3.UP, TAU * k / 12.0)
+			var g := _ground(q.x, q.z)
+			var ray := PhysicsRayQueryParameters3D.create(Vector3(q.x, g + 200.0, q.z), Vector3(q.x, g - 0.5, q.z), L.WORLD, [get_rid()])
+			var hit := space.intersect_ray(ray)
+			if hit.is_empty() or float(hit.position.y) <= g + ROOF:
+				return Vector3(q.x, 0.0, q.z)
+	return p
+
+
 ## The top of a roof (or anything solid) under it, or -INF.
 func _roof_under(p: Vector3) -> float:
 	if not is_inside_tree():

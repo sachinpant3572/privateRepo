@@ -308,7 +308,8 @@ func test_city_has_open_land() -> void:
 		_check(area > want * 0.4 and area < want * 1.5, "%s covers %.0f m2 (its site %.0f m2)" % [site.id, area, want])
 		if site.lake > 0.0:
 			wet += 1
-	_check(plan.faces[plan.set_piece_face("halcyon_park")].area > 100000.0, "Halcyon Park is a central park (over 10 ha)")
+	var halcyon: int = plan.set_piece_face("halcyon_park")
+	_check(halcyon >= 0 and plan.faces[halcyon].area > 100000.0, "Halcyon Park is a central park (over 10 ha)")
 	_check(plan.lakes.size() == wet and plan.lake_face.size() == wet, "a lake in each park that has one: %d of %d" % [plan.lakes.size(), wet])
 	for k in plan.lakes.size():
 		var poly: PackedVector2Array = plan.faces[plan.lake_face[k]].poly
@@ -5950,6 +5951,7 @@ func test_golden_flats_farmland() -> void:
 		if wt.id == "morrow":
 			for q in wt.line:
 				morrow.append(Vector2(q[0], q[1]) - city.map_origin)
+	_check(morrow.size() >= 2, "the Morrow's line is in the world data (%d points)" % morrow.size())
 	var fords := 0
 	for road in expressway:
 		for k in road.nodes.size() - 1:
@@ -10987,6 +10989,40 @@ func test_heli_exit_only_when_low() -> void:
 	var g := Terrain.height(player.global_position.x, player.global_position.z) - Terrain.drop(player.global_position.x, player.global_position.z)
 	_check(lost > 55.0 and lost < 85.0, "the 12 m drop costs %.0f health" % lost)
 	_check(absf(player.global_position.y - g) < 0.3, "and they come down to the ground (%.2f m over it)" % (player.global_position.y - g))
+	# Thrown out of it (a wreck) 40 m over the roof: the fall is to open
+	# ground beside the building, not into it.
+	player.revive(player.global_position)
+	player.enter_vehicle(heli)
+	city.stream_now(roof)
+	heli.global_position = roof + Vector3(0.0, 40.0, 0.0)
+	heli.velocity = Vector3.ZERO
+	heli.rpm = 1.0
+	heli.landed = false
+	heli.reset_physics_interpolation()
+	game.camera.snap()
+	await _frames(5)
+	_check(heli.exit_check() == "roof", "40 m over the roof it is still over the roof (on_roof %s, %.1f m up)" % [heli.on_roof, heli.altitude])
+	player.exit_vehicle(true)
+	var at: Vector3 = player.global_position
+	var down := PhysicsRayQueryParameters3D.create(Vector3(at.x, roof.y + 60.0, at.z), Vector3(at.x, Terrain.height(at.x, at.z) - 0.5, at.z), HeliLayers.WORLD)
+	var over: Dictionary = space.intersect_ray(down)
+	_check(over.is_empty() or over.position.y <= Terrain.height(at.x, at.z) + 1.0, "thrown over a roof, the fall is to open ground, not inside the building")
+	await _frames(240)
+	_check(player.health < player.max_health - 25.0, "and the drop hurts more than a thrown exit (%.0f left)" % player.health)
+	# A mission REPLAY from the phone while flying 40 m up: they arrive on
+	# their feet, unhurt.
+	player.revive(player.global_position)
+	player.enter_vehicle(heli)
+	_hold_heli_at(heli, pad, 40.0, heli.rotation.y)
+	await _frames(20)
+	_check(heli.exit_check() == "bail", "40 m up over open ground (%.1f m)" % heli.altitude)
+	var mm = game.missions
+	mm.abandon()
+	mm.start("m01_homecoming", true)
+	await _frames(240)
+	_check(player.vehicle == null and player.health == player.max_health and player.knocked_time <= 0.0, \
+			"a replay from 40 m up lands them unhurt and standing (health %.0f)" % player.health)
+	mm.abandon()
 
 
 ## Streaming: flying flat out near the ceiling from downtown out over the

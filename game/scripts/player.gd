@@ -205,12 +205,16 @@ func exit_vehicle(thrown := false) -> void:
 	var was_passenger := passenger
 	passenger = false
 	# Out of a helicopter in the air: a jump, and the fall to the ground.
-	var bail: bool = car.has_method("exit_check") and car.exit_check() == "bail"
+	# Thrown out over a roof (a wreck), the fall is to open ground nearby.
+	var check: String = car.exit_check() if car.has_method("exit_check") else ""
+	var bail: bool = check == "bail" or (thrown and check == "roof")
 	var from_y: float = car.global_position.y
 	if not was_passenger:
 		car.release_player()
 	# Passengers step out on the curb side.
 	global_position = _free_spot_beside(car, was_passenger)
+	if check == "roof":
+		global_position = car.open_ground_near(global_position)
 	reset_physics_interpolation()
 	visible = true
 	_set_standing_layers()
@@ -235,6 +239,20 @@ func respawn(at: Vector3) -> void:
 	_fall = 0.0
 	revive(at)
 	controllable = true
+
+
+## Put down at `at` on its feet: out of any vehicle, with no fall from a bail
+## to finish (a mission replay moves the player mid-flight).
+func stand_at(at: Vector3) -> void:
+	if vehicle != null:
+		exit_vehicle()
+	_fall = 0.0
+	_fall_v = 0.0
+	if not dead and knocked_time > 0.0:
+		knocked_time = 0.0
+		_set_standing_layers()
+	global_position = at
+	reset_physics_interpolation()
 
 
 func _free_spot_beside(car, curb_first := false) -> Vector3:

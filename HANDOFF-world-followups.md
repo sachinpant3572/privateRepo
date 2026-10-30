@@ -108,6 +108,12 @@ B. **Grow the core to ~8 km²** (~14-20 h). Outline east and west (the Gulf
      (`_open_land`'s prune merges it); the game seed is clean. City build
      (seed 1234, headless): 1794 / 1675 ms before (d4ec25e), 2044 / 1873
      ms after, about +13 %; the plan alone is 1356 ms.
+   - Review fixes: a mission REPLAY mid-flight finished the bail's fall at
+     the start point (`stand_at` now clears it); a forced exit over a roof
+     falls to open ground (`open_ground_near`); rail yard wagon count fits
+     short tracks. City proper is ~6.9 km² after B (8.4 with the fringe);
+     ~8 km² of city needs stage C. Open: one open-land cell can add 240
+     trees in one main-thread add (phone hitch unmeasured; MultiMesh later).
 C. **Sloped districts** (~40-70 h, Sachin's yes): the foothills north of
    the city as hill districts (hill_n's contour rings, Vinewood-style):
    city ground on a height field, roads graded, buildings stepped onto it,

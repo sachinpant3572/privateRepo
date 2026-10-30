@@ -2328,8 +2328,10 @@ static func _rail_yard(ctx: Ctx) -> void:
 		var a := Vector3(-half_len, 0.05, w) if along_x else Vector3(w, 0.05, -half_len)
 		var b := Vector3(half_len, 0.05, w) if along_x else Vector3(w, 0.05, half_len)
 		Props.rails(mb, a, b, rng.randf() < 0.3)
-		if rng.randf() < 0.6:
-			var n := rng.randi_range(3, int(half_len / 8.0))
+		# A string of 15 m wagons that fits the track (at least three).
+		var most := mini(int(half_len / 8.0), int((half_len * 2.0 - 8.0) / 15.0))
+		if rng.randf() < 0.6 and most >= 3:
+			var n := rng.randi_range(3, most)
 			var at := rng.randf_range(-half_len + 8.0, half_len - n * 15.0)
 			var col: Color = [Color(0.45, 0.25, 0.15), Color(0.2, 0.3, 0.45), Color(0.35, 0.35, 0.3)][rng.randi() % 3]
 			for k in n:
