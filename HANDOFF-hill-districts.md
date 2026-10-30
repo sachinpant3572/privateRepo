@@ -147,6 +147,9 @@ gameplay choice for Sachin; the blast still makes "crash").
   torn into licks by a second noise (more with age), yellow-white where dense.
   Burnt shell: RIM/STEEL colours and TRIM patches at bumper height (not
   tyres: TYRE is 0.04 from TRIM) get metallic 0.6, roughness 0.3.
+  The rim/steel colour keys are tight (0.006-0.012): at 0.05-0.1 a silver
+  paint (0.75,0.75,0.72; roadster 0.75,0.77,0.8 is 0.017 from RIM) turned
+  the whole shell into steel.
 
 ## Open questions
 
