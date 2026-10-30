@@ -59,3 +59,13 @@ uses the same tokens. Not a measurement.
   that check never runs in the suite (weaker test). No shader check.
 - P1 opus-low: all 4 gates pass, +52/-11; first test had SCRIPT ERROR yet PASS
   (caught), fixed via public flame_images(); no shader check.
+- P1 opus-high: all 4 gates pass, +78/-19; first test run failed 2 checks
+  (get_layer_data null headless), fixed via _flame_images() helper; restores
+  cache; no shader-declaration check in its test.
+- P2 hidden far-corner test (base 846616f fails it 3/20): PASS son-xhigh,
+  son-max, opus-med; partial (3 pass/8 fail, half-diagonal margin ~0.82 vs 1.48
+  needed) son-high, opus-low, opus-high; FAIL 3/20 son-low, son-med (half
+  longest side = what the brief literally said). Passing = caught the brief's
+  error.
+- P2 builder tokens: son-low 91k, son-med 97k, opus-low 95k, opus-med 114k,
+  opus-high 123k, son-max 148k, son-xhigh 159k.
