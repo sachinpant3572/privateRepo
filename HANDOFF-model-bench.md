@@ -74,3 +74,11 @@ uses the same tokens. Not a measurement.
   opus-high 5 (10), son-low 3 (15), son-med 3 (15). Only son-max's test fails
   on a half-diagonal/half-side formula. son-high (trial 2) is byte-identical
   to the original 70ef924. Grader $ in the cost table.
+- P1 hidden test (array, 6 layers, 64x128, mips, sampler2DArray + vec3, shape,
+  cached): all 8 PASS. son-low's own test logs SCRIPT ERROR (get_width on null,
+  headless get_layer_data) yet prints PASS (never ran its gates). Shader-only
+  revert (sampler2DArray -> sampler2D): only son-max's own test FAILs; the
+  other 7 still PASS (a SHADER ERROR is logged, the tests don't notice).
+- Cost confound P1: lock waits > 5 min expire the agent's prompt cache, so P1
+  cache writes (0.35-1.14M tokens) mostly measure waiting, not the model. P2
+  (short queue for low/med/opus) is the cleaner cost comparison.
