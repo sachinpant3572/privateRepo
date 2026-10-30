@@ -9059,7 +9059,7 @@ func test_explosion_makes_pieces_and_cleans_up() -> void:
 	# then, not at the first fire), then the specks go.
 	var warm: Node3D = Fx.prewarm_fire()
 	var mats: int = FireFx._mats.size()
-	_check(warm != null and warm.get_child_count() == mats + 3 and mats >= 4, "every fire material is drawn at load (%s specks for %d materials + 3)" % [warm.get_child_count() if warm != null else -1, mats])
+	_check(warm != null and warm.get_child_count() == mats + 4 and mats >= 4, "every fire material is drawn at load (%s specks for %d materials + 4)" % [warm.get_child_count() if warm != null else -1, mats])
 	await _frames(45)
 	_check(not is_instance_valid(warm), "the prewarm specks are gone after half a second")
 	var quality: String = FireFx.level

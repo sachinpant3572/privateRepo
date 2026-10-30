@@ -231,7 +231,8 @@ func prewarm_fire() -> Node3D:
 		var p := FireFx.emitter(1, 0.5, q)
 		p.color = Color(1.0, 1.0, 1.0, 0.0)
 		holder.add_child(p)
-	for mat in boom.mesh_materials():
+	# The burnt-out car shell too (Vehicle.burnt_material).
+	for mat in boom.mesh_materials() + [Vehicle.burnt_material()]:
 		var speck := MeshInstance3D.new()
 		var box := BoxMesh.new()
 		box.size = Vector3.ONE * 0.002
