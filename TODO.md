@@ -1,5 +1,37 @@
 # TODO
 
+## Thursday, Oct 30, 2026: hill country behind Bellerive (proposal, awaiting his word)
+
+Sachin, 2026-10-30: "I think Hills area should be increased to at least 3 km2, as it is
+too small right now not even the same as Gta San Andreas maps Hills. We can add cults,
+villages, towns, trailer towns, truck stops, petrol pumps, racing activities, illegal
+racing etc strategically at appropirate places, highways, town roads, unpaved roads,
+shortcuts, stunt jumps/places, forests, shady areas, mystery places, creepy areas,
+scenic places, eateries, acitivities like cycling, parachuting, bungee jumping, cable
+car etc to it comfortably then. What do you think?"
+Then: "We could have multiple mountain peaks with different views, roads etc, a stretch
+of hilly region behind the city to explore, do things, chill, have fun etc."
+Then: "Also, events that happen only in small towns or counties + secret govt/milotary
+research labs in mountains, far away from the city, religious cults, hunters, animals,
+flora and fauna, can add hunting activity too, hikers, runners, etc too"
+
+Status: **proposal, not approved to build**. Stage C (#118) finishes first. Proposed
+order, rough costs:
+0. Hill-country design map placing everything below on the 8 peaks (~2-4 h).
+1. Land: hills to >= 3 km2 (about 5.1 km2 of usable ground exists), more peaks with
+   roads and viewpoints (~8-14 h).
+2. Places: villages, towns, trailer towns, truck stops, petrol pumps, eateries, scenic,
+   shady, creepy and mystery spots, an original cult compound (fictional beliefs, no real
+   religion), a secret research lab in a closed valley behind the range with one guarded
+   road (ties in with the agency and nuclear plant above) (~20-35 h).
+3. Life: wildlife (deer, coyotes, mountain lions, rabbits; models, animation, wander,
+   flee, attack) ~25-45 h; hunting on top (licence, seasons, a hunting store, selling
+   pelts) ~10-20 h; flora bands by height on top of #91 ~6-10 h; hikers, runners and
+   hunters on the trails as NPC roles ~8-15 h; small-town events (fair, rodeo, market,
+   festival, speed trap) on the calendar ~15-30 h.
+4. Activities: racing and illegal racing, stunt jumps, cycling, parachuting, bungee
+   (~35-70 h); the cable car is #113 (not approved).
+
 ## Thursday, Oct 30, 2026: industry, secret sites, a busy airport and everyday-life services
 
 Sachin, 2026-10-30: "Add to TODO, build a Quarry in map, away from the city, behind
