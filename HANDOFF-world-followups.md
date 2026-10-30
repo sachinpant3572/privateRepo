@@ -63,6 +63,18 @@ gta_vi_leonida_fan_avatarsd.jpg):
 
 ## Liberty City size (#116): design (to write before building)
 
+Sachin, 2026-10-30, on the sloped-districts option (+40-70 h): "Lets do
+these as part of the expansion we are doing to make it as big as Liberty
+city. Our city grid only seems to have buildings, no lakes or big parks, or
+ponds ... they all have multiple things in between parts from just houses,
+corporate buildings." So sloped districts are in #116's scope.
+
+Checked (2026-10-30, /tmp/plan.json): it is not just the map view. The plan
+has 613 land blocks and one park block (Liberty Green, ~3,000 m²), plus
+City Hall grounds, Moreau Square, the Esplanade and 8 traffic circles. It
+has no lake, pond, big park, golf course, cemetery, stadium, rail yard,
+container port or airport inside the city.
+
 Open. Draft direction: new boroughs across water with large blocks
 (120-250 m, buildings filling them, mid-block alleys not streets), 1-2 big
 parks, docks; existing districts thinned (drop minor streets where blocks
