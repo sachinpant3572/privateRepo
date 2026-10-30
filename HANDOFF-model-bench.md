@@ -39,3 +39,9 @@ uses the same tokens. Not a measurement.
 - P1 son-low: stopped INCOMPLETE. Edits done but gates 2-4 were not run (it gave
   up waiting on the shared Godot lock). Its first before-shot run wrote no PNGs
   (dir not made). The main session reruns its gates in the hidden checks.
+- P2 son-xhigh: far corner x max(min,max) x curve peak (matches reviewed fix),
+  +105 lines, 159k tokens, 63 min wall (lock waits), no first-run fails;
+  flagged the blast flash billboard. Stopped p1-son-low (it kept re-sending).
+- Confound: the shared Godot lock queue (up to ~8 deep) cost wall time and made
+  some builders' background waits time out; wall time is not a model measure.
+
