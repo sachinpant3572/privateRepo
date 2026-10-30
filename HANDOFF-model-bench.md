@@ -57,3 +57,5 @@ uses the same tokens. Not a measurement.
 - P1 son-med: all 4 gates pass; first test had a SCRIPT ERROR yet printed PASS
   (caught); its fix makes the uniqueness check skip headless (0 layers read), so
   that check never runs in the suite (weaker test). No shader check.
+- P1 opus-low: all 4 gates pass, +52/-11; first test had SCRIPT ERROR yet PASS
+  (caught), fixed via public flame_images(); no shader check.
