@@ -652,7 +652,7 @@ void fragment() {
 	float lum = dot(src, vec3(0.3, 0.59, 0.11));
 	float big = vnoise(p * 1.6) * 0.65 + vnoise(p * 4.1) * 0.35;
 	float fine = vnoise(p * 11.0);
-	vec3 scorch = vec3(0.33, 0.28, 0.23);
+	vec3 scorch = vec3(0.23, 0.155, 0.1);
 	vec3 soot = vec3(0.14, 0.125, 0.11);
 	vec3 ash = vec3(0.5, 0.48, 0.45);
 	// Scorched paint, brown and black in blotches.
