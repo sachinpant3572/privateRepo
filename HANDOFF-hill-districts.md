@@ -100,6 +100,10 @@ on Opus with Sonnet trial packages). Stage D (the bay) is NOT approved.
   trace at 0.15 (straighter up the slope). Kept at the mild end so every car
   and truck climbs them (vehicle.gd SLOPE_PULL; Firebreak tracks are 25 %).
   Test: hill streets 13 % (+0.015), short (<= 200 m) ones 20 % (+0.015), <= 6.
+- Run 7 (steep climbs): terraces 26 (2 cut off), climbs 27 (3.0 km), lots
+  178; steep: Flint Rise, Jasper Rise, Opal Way, Garnet Rise, Feldspar Way,
+  0.157-0.193 measured over 32 m on the grid. Hill tests pass (101 checks).
+  Shots: tests/country_shots.tscn c30-c35 (ONLY=...).
 
 ## Open questions
 
