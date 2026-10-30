@@ -48,3 +48,6 @@ uses the same tokens. Not a measurement.
 - P1 son-max: all 4 gates pass, +81/-21, own test fails on old code (mutation),
   checks shader declares sampler2DArray; added _flame_layers() helper (headless
   get_layer_data is null); flagged saved-count gate misleading without mkdir.
+- P1 son-xhigh: all 4 gates pass, +63/-15; first-run SCRIPT ERROR (get_layer_data
+  null headless) caught and fixed via flame_images() helper; noted PASS row can
+  hide a SCRIPT ERROR; no shader-declaration check in its test.
