@@ -76,7 +76,7 @@ const OPEN_LAND := [
 	{"id": "morrow_cemetery", "kind": "cemetery", "at": Vector2(1150, 1690), "size": Vector2(200, 170), "lake": 0.0},
 	{"id": "bellerive_bowl", "kind": "stadium", "at": Vector2(1615, 320), "size": Vector2(290, 340), "lake": 0.0},
 	{"id": "ironwharf_containers", "kind": "containers", "at": Vector2(1320, 930), "size": Vector2(250, 120), "lake": 0.0},
-	{"id": "ironwharf_rail_yard", "kind": "railyard", "at": Vector2(860, 925), "size": Vector2(260, 110), "lake": 0.0},
+	{"id": "ironwharf_rail_yard", "kind": "railyard", "at": Vector2(1062, 923), "size": Vector2(100, 120), "lake": 0.0},
 ]
 ## The unnamed or minor arterials (the seam roads are laid out by name).
 const ARTERIALS := [
@@ -227,13 +227,13 @@ const PATCHES := [
 	{"id": "quarter_e", "bank": "north", "seed": Vector2(520, 750), "angle": 30.0, "origin": Vector2(510, 880), "bend": 0.0,
 		"su": [64.0, 78.0], "sv": [64.0, 78.0], "fam": "uv", "cls": "quarter", "cut": [0.0, 0.0], "lane": 0.06, "max": [0.0, 0.0, 0.0]},
 	# The Wards: long east-west blocks (South LA's bungalow grid); the
-	# streets run on through Crescent Boulevard.
-	# Some of their cross streets are dropped, so blocks run to ~120-180 m
-	# (Liberty City's and Manhattan's long blocks), not all ~60 m.
+	# streets run on through Crescent Boulevard. (Dropping some of their
+	# cross streets for longer blocks left streets stopping short; bigger
+	# blocks come with the grown city's own districts.)
 	{"id": "wards", "bank": "north", "seed": Vector2(1000, 600), "grid": [4, 6], "angle": 0.0,
-		"su": [90.0, 90.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.3], "lane": 0.0, "max": [190.0, 190.0, 20000.0]},
+		"su": [90.0, 90.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
 	{"id": "wards_n", "bank": "north", "seed": Vector2(1000, 150), "grid": [4, 6], "angle": 0.0,
-		"su": [90.0, 90.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.3], "lane": 0.0, "max": [190.0, 190.0, 20000.0]},
+		"su": [90.0, 90.0], "sv": [60.0, 60.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
 	# Cable Hill (San Francisco's painted rows) and Jade Gate (its
 	# Chinatown), north of Presidio Avenue at the foot of the hills. Their
 	# streets carry on south through Gilt and Midtown.

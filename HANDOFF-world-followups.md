@@ -45,6 +45,9 @@ approved by this.
   (508,-3006) is a switchback leg 14 m from the next with ~11 m between
   them, below the 8 m height grid; Firebreak 30.6 % at its junction with
   West Ridge Track's start (150,-4034). Both are trails, not traffic roads.
+- **Hill road pieces 4 -> 3.5 m** (country_tiles HILL_PIECE): at the Canyon
+  Freeway / Crest Drive junction (2223,-1247) the ground twists ~1 m per
+  8 m cell, and a 4 m triangle's chord sat 5.5 cm off it (test 5 cm).
 - **City exits 139 -> 133** after the open land: the city edge moved
   north near Halcyon (y -166 -> -220) and shifted in the east.
 
@@ -114,6 +117,23 @@ B. **Grow the core to ~8 km²** (~14-20 h). Outline east and west (the Gulf
    world_map districts; open land: golf course, airport edge. (4) tests:
    km² range, exits, block counts; check city build time on load.
    Plot helper: scratchpad planplot.py (plan.json -> png).
+   Stage B layout (2026-10-30, decided before editing; worktree /tmp/bwt):
+   - River banks are picked by side (`_chain`: nearest chain the river does
+     / does not lie between from (300,300)); mean height swapped them once
+     the core crossed the west leg.
+   - New arterial lines without moving old streets: ART_X gains -1300,
+     -1000 (west) and 2480, 2820, 3150 (east); ART_Y_SOUTH gains -580..860
+     in front. `_splits` keys shift by the count prepended (as -580 did).
+   - West inner strip (river to x -390) cut off by a seam at x -390:
+     Magnolia Heights (north of Crescent, style heights) and Blackwater
+     Bayou (south, style bayou), both world_map districts already.
+   - West bank: seam x -330 parts it from Morrow Point; Tallow Bank (new,
+     industrial, big blocks); Aurum and Crescent cross the west leg on
+     bridges (class bridge) where the country's Route 40 / Route 1 bridges
+     were. Presidio runs on there with no bridge.
+   - East: seam on Mangrove (x 2130) north of Crescent; Verdant Park (new,
+     style heights) with a golf course (open land, kind golf). The airport
+     marker (local 1750,300) sits on the stadium: left for later.
 C. **Sloped districts** (~40-70 h, Sachin's yes): the foothills north of
    the city as hill districts (hill_n's contour rings, Vinewood-style):
    city ground on a height field, roads graded, buildings stepped onto it,
@@ -149,9 +169,11 @@ Stage A build (2026-10-30, approach before editing):
   superblock), so the outline still trims its north row; covering it made
   Presidio a 450 m straight city edge. `_grow_blocks` never takes an
   open-land block for a landmark (the Ferry Building took the rail yard).
-  Bigger residential blocks: wards already join blocks (cut 0.3); the rest
-  waits for stage B's new big-block patches (re-cutting now moves every
-  landmark lot and test-pinned block shape).
+  Bigger residential blocks: a wards `cut` 0.3 was tried and reverted (it
+  left streets stopping short, breaking the streets-run-through rule); big
+  blocks come with stage B's new patches (re-cutting the old ones moves
+  every landmark lot and test-pinned block shape). The rail yard moved to
+  x 1010-1115 so the Ferry Building keeps its lot (face 116, 129 x 98).
 
 ## Recorded for later phases (reviewer Low #7)
 

@@ -6038,6 +6038,7 @@ func test_bellerive_hills() -> void:
 	# The road you see is the ground cars ride on (Terrain.height), with the
 	# grass under it and the lane lines just on top, along the hill roads.
 	var off_road := 0.0
+	var off_at := Vector2.ZERO
 	var line_low := INF
 	var line_high := -INF
 	var samples := 0
@@ -6061,14 +6062,17 @@ func test_bellerive_hills() -> void:
 				var edge_line: Vector2 = mid + side * (geo.middle + geo.lanes * geo.lane_w + 0.15 if c.edge_class(e) == "highway" else hw - 0.5)
 				c.stream_now(Vector3(lane.x, 0.0, lane.y))
 				samples += 1
-				off_road = maxf(off_road, absf(_surface_top(c, lane) - Terrain.height(lane.x, lane.y)))
+				var off := absf(_surface_top(c, lane) - Terrain.height(lane.x, lane.y))
+				if off > off_road:
+					off_road = off
+					off_at = lane
 				# Lines stop short of junctions.
 				if c.edge_class(e) in ["highway", "road"] and c.degree(c.edge_a[e]) == 2 and c.degree(c.edge_b[e]) == 2:
 					var lift := _surface_top(c, edge_line) - Terrain.height(edge_line.x, edge_line.y)
 					line_low = minf(line_low, lift)
 					line_high = maxf(line_high, lift)
 	_check(samples > 20, "hill roads sampled (%d edges)" % samples)
-	_check(off_road < 0.05, "the hill roads' surface is the ground cars ride on, with no grass through it (worst %.3f m off)" % off_road)
+	_check(off_road < 0.05, "the hill roads' surface is the ground cars ride on, with no grass through it (worst %.3f m off at %s)" % [off_road, off_at.round()])
 	_check(line_low > 0.02 and line_high < 0.15, "their edge lines show just above the road (%.3f to %.3f m)" % [line_low, line_high])
 	# Up Crest Drive: from a node, toward the higher of its neighbours.
 	var road: Dictionary = {}

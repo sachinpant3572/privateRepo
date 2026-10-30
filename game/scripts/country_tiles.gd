@@ -28,7 +28,7 @@ const HILL_TRI := 9.0
 ## Longest edge of a road, junction or path triangle, and longest piece
 ## of a lane marking, on the hills, so they follow the ground the cars
 ## ride on (Terrain.height) instead of cutting a chord through it.
-const HILL_PIECE := 4.0
+const HILL_PIECE := 3.5
 ## How far markings sit above the road on the hills, over what is left of
 ## the chord between their ends.
 const HILL_MARK_LIFT := 0.05
