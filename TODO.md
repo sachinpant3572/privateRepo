@@ -32,6 +32,30 @@ order, rough costs:
 4. Activities: racing and illegal racing, stunt jumps, cycling, parachuting, bungee
    (~35-70 h); the cable car is #113 (not approved).
 
+Sachin, 2026-10-30: "There will be lakes, rivers, ponds flowing between, or inside the
+mountain appropriately, + springs (3 -4 hot cold both, strategically), rave parties in
+mountains, bridges above the rivers or lakes + between mountains themselves, 1-2 train
+bridges too, 5start hotels and restaurants with their good as well as twisted history
+and staff. Add these too to TODO for the Mountain, but keep Rivers, Lakes, Bridges,
+Train tracks, Tunnels, roads, shortcuts, animals, and huge forest on priority."
+
+**Priority (his word), first when the hill country is approved:**
+- Rivers, lakes and ponds that flow between and inside the range, along valleys
+  the terrain allows (the Morrow gorge is the first).
+- Bridges over rivers and lakes and between peaks, plus 1-2 rail bridges. This
+  needs the grade separation in #110 (not approved) to draw them.
+- Train tracks through the range (#111, not approved).
+- Tunnels (#110; underground spaces cannot be drawn yet).
+- Roads, unpaved roads and shortcuts.
+- Animals (wildlife, step 3 above).
+- One huge forest across the back of the range.
+
+**After those:**
+- 3-4 springs, hot and cold, placed for views and trails.
+- Rave parties in remote clearings, at night, on the event calendar.
+- 5-star mountain hotels and restaurants, each with its staff and a history,
+  good and twisted (original names; story hooks for missions).
+
 ## Thursday, Oct 30, 2026: industry, secret sites, a busy airport and everyday-life services
 
 Sachin, 2026-10-30: "Add to TODO, build a Quarry in map, away from the city, behind
