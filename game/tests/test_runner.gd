@@ -6460,6 +6460,10 @@ func test_hill_districts() -> void:
 	_check(walks >= 3, "%d sidewalk loops on the hills" % walks)
 
 
+func _ground_at(q: Vector3) -> float:
+	return Terrain.height(q.x, q.z) - Terrain.drop(q.x, q.z)
+
+
 ## Flat checks on the hills: path and sidewalk points are at y 0 while people
 ## and cars stand on the ground (Terrain.height), so a 3D distance to them
 ## never closes there. Getting out of a car lands on the hill, not at y 0;
@@ -6500,8 +6504,8 @@ func test_hill_heights_are_flat_checks() -> void:
 	var home: Vector3 = car.global_position
 	p.vehicle = car
 	p.exit_vehicle()
-	var dy := absf(p.global_position.y - ground)
-	_check(dy < 0.3, "out of a car on a %.0f m hill the player stands on the ground (%.2f m off)" % [ground, dy])
+	var dy := absf(p.global_position.y - _ground_at(p.global_position))
+	_check(ground > 30.0 and dy < 0.05, "out of a car on a %.0f m hill the player stands on the ground (%.2f m off)" % [ground, dy])
 	# Another car on the first-choice side (the driver's: -x) and the player is put elsewhere.
 	var blocker = Vehicle.new()
 	blocker.city = game.city
@@ -6511,8 +6515,9 @@ func test_hill_heights_are_flat_checks() -> void:
 	p.vehicle = car
 	p.exit_vehicle()
 	var from_car: Vector3 = p.global_position - home
-	_check(from_car.x > -0.5 and absf(p.global_position.y - ground) < 0.3,
-		"with a car on the first side the player steps out another side (%.1f, %.1f m off the car)" % [from_car.x, absf(p.global_position.y - ground)])
+	dy = absf(p.global_position.y - _ground_at(p.global_position))
+	_check(from_car.x > -0.5 and dy < 0.05,
+		"with a car on the first side the player steps out another side (%.1f off the car, %.2f m off the ground)" % [from_car.x, dy])
 	blocker.queue_free()
 	# The cab at its stop (path points are at y 0).
 	var taxi = game.taxi
@@ -6544,7 +6549,7 @@ func test_hill_heights_are_flat_checks() -> void:
 	ped.position = Vector3(at.x + 0.3, Terrain.height(at.x, at.y + 30.0), at.y + 30.0)
 	add_child(ped)
 	await _frames(10)
-	_check(ped.point_index == 2, "a pedestrian at a loop point %.0f m up the hill moves on to the next (point %d)" % [ped.global_position.y, ped.point_index])
+	_check(ped.global_position.y > 5.0 and ped.point_index == 2, "a pedestrian at a loop point %.0f m up the hill moves on to the next (point %d)" % [ped.global_position.y, ped.point_index])
 	ped.queue_free()
 
 

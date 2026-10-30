@@ -48,7 +48,7 @@ on Opus with Sonnet trial packages). Stage D (the bay) is NOT approved.
 
 | Package | Review findings (severity) | First-run gate fails | Main fix time |
 |---|---|---|---|
-| (pending) | | | |
+| 1. Hill height fixes (pedestrian `_wander`, taxi `_pulled_up_by`, player `_free_spot_beside`, new test; ~9 min, 105k tokens) | 0 High, 1 Medium (test measured the player against the street node's height, 0.3 m slack: slope-dependent), 1 Low in package (exit spot ignored `Terrain.drop`), 2 Low in nearby code (heli `open_ground_near` y 0, vehicle `drive_path` 3D dot) | Parse errors on untyped `:=` (2), run hung to timeout (exit 124); clean on rerun. Reverting the fixes failed 4 of 5 checks, as it should | ~10 min (all 4 findings fixed) |
 
 ## Build results (2026-10-30)
 

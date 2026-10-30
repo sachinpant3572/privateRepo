@@ -438,6 +438,7 @@ func drive_path(points: PackedVector3Array, throttle_amount := 0.6) -> void:
 	var fwd := -global_basis.z
 	while path_index < path.size() - 1:
 		var to := path[path_index] - global_position
+		to.y = 0.0 # path points sit at y 0; on a hill the car does not
 		if to.dot(fwd) >= 0.0 or Vector2(to.x, to.z).length() > 30.0:
 			break
 		path_index += 1

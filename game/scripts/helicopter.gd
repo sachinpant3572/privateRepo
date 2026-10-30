@@ -338,7 +338,7 @@ func open_ground_near(p: Vector3) -> Vector3:
 			var ray := PhysicsRayQueryParameters3D.create(Vector3(q.x, g + 200.0, q.z), Vector3(q.x, g - 0.5, q.z), L.WORLD, [get_rid()])
 			var hit := space.intersect_ray(ray)
 			if hit.is_empty() or float(hit.position.y) <= g + ROOF:
-				return Vector3(q.x, 0.0, q.z)
+				return Vector3(q.x, g, q.z)
 	return p
 
 
