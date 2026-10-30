@@ -616,6 +616,72 @@ static func xray_material(color := Color(1.0, 0.85, 0.25, 0.6)) -> StandardMater
 	return _xray_materials[color]
 
 
+static var _burnt: ShaderMaterial
+
+## A burnt-out shell, as real ones look once the fire is out: the paint gone
+## to bare steel, ash grey with rust-brown blooms, soot streaked over it and
+## gathered low on the panels and in the arches; glass gone to a dark cabin;
+## tyres, trim and seats charred. Patches follow the car (model space).
+const BURNT_SHADER := """
+shader_type spatial;
+render_mode diffuse_burley;
+varying vec3 p;
+varying vec3 n;
+void vertex() {
+	p = VERTEX;
+	n = NORMAL;
+}
+float bhash(vec3 q) {
+	q = fract(q * 0.3183099 + 0.1);
+	q *= 17.0;
+	return fract(q.x * q.y * q.z * (q.x + q.y + q.z));
+}
+float vnoise(vec3 x) {
+	vec3 i = floor(x);
+	vec3 f = fract(x);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(mix(bhash(i), bhash(i + vec3(1, 0, 0)), f.x),
+			mix(bhash(i + vec3(0, 1, 0)), bhash(i + vec3(1, 1, 0)), f.x), f.y),
+		mix(mix(bhash(i + vec3(0, 0, 1)), bhash(i + vec3(1, 0, 1)), f.x),
+			mix(bhash(i + vec3(0, 1, 1)), bhash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}
+void fragment() {
+	vec3 src = COLOR.rgb;
+	float lum = dot(src, vec3(0.3, 0.59, 0.11));
+	float big = vnoise(p * 1.6) * 0.65 + vnoise(p * 4.1) * 0.35;
+	float fine = vnoise(p * 11.0);
+	vec3 ash = vec3(0.56, 0.54, 0.5);
+	vec3 rust = vec3(0.5, 0.29, 0.16);
+	vec3 soot = vec3(0.1, 0.095, 0.09);
+	vec3 c = mix(ash, rust, smoothstep(0.42, 0.68, big));
+	c = mix(c, ash * 1.12, smoothstep(0.7, 0.9, fine) * 0.5);
+	// Soot streaks, heavier low on the body and on the sides than the top.
+	float low = 1.0 - smoothstep(0.25, 0.9, p.y);
+	float side = 1.0 - abs(normalize(n).y);
+	float streak = smoothstep(0.45, 0.75, vnoise(vec3(p.x * 3.0, p.y * 0.8, p.z * 3.0)));
+	c = mix(c, soot, clamp(low * 0.55 + side * streak * 0.4, 0.0, 0.75));
+	// Glass (VehicleKit.GLASS) is gone: the cabin shows dark and sooty.
+	float glass = 1.0 - smoothstep(0.02, 0.06, distance(src, vec3(0.15, 0.19, 0.25)));
+	// Black parts (tyres, trim, the dash) burn to char.
+	float dark = 1.0 - smoothstep(0.06, 0.13, lum);
+	c = mix(c, soot * (0.8 + fine * 0.6), max(glass * 0.9, dark * 0.85));
+	ALBEDO = pow(c, vec3(2.2));
+	ROUGHNESS = 0.92;
+	METALLIC = 0.15;
+	SPECULAR = 0.3;
+}
+"""
+
+
+static func burnt_material() -> ShaderMaterial:
+	if _burnt == null:
+		var shader := Shader.new()
+		shader.code = BURNT_SHADER
+		_burnt = ShaderMaterial.new()
+		_burnt.shader = shader
+	return _burnt
+
+
 static func cutaway_material() -> ShaderMaterial:
 	if _cutaway_material == null:
 		var shader := Shader.new()
