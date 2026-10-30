@@ -84,6 +84,7 @@ fire_fx.gd). Est. ~$6-9 and 1-1.5 h in all; cheaper option: package 1 only.
 | 2. Cull margin `FireFx.fit_cull` (3 min; Sonnet $0.56, at Opus prices $0.83; review $1.77) | 0 High, 1 Medium (half the AABB diagonal is too small for flames anchored at their base: `_core` 0.82 set vs 1.48 needed, `_body` 1.89 vs 3.34, `_wide` 1.32 vs 2.33; its test used the same wrong idea), 2 Low (test skipped the scale curve and the fire growing; fx.gd's own small emitters left as is) | None | ~10 min (far-corner margin, test recomputes independently and after `_k = 1`; old formula now fails it) |
 
 Verdict: builds $2.12 on Sonnet vs $3.43 at Opus prices (-38%), but with the per-package Opus reviews ($2.65) $4.77, +39% over Opus-only builds (the final review is common to both). Neither package reached Opus-high quality alone (a test passing over a SCRIPT ERROR; a wrong cull formula); both did after review. Per the rule, builders go back to Opus.
+Final review (blasts + both packages): no High; Medium = no shots of the array (taken: fire day High/night Low, 16/16, flames draw, soft edges); Lows fixed (flee from the latest blast, range comment, test adds a cop and a hit mid-duck, empty-curve guard); patrons and medics now leave or cower at a blast, left as is (matches gunshots).
 
 ## Build results (2026-10-30)
 
