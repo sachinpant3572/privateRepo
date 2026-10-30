@@ -33,4 +33,9 @@ uses the same tokens. Not a measurement.
   packages, ~$150-300 and most of a day (needs Sachin's word).
 
 ## Results
-(pending)
+(in progress; raw notes, filled into a table at the end)
+- P2 son-max: far corner x curve peak (matches the reviewed fix), +152 lines,
+  148k tokens, 41 min, no first-run fails; flagged FireFx.curve clamps peaks >1.
+- P1 son-low: stopped INCOMPLETE. Edits done but gates 2-4 were not run (it gave
+  up waiting on the shared Godot lock). Its first before-shot run wrote no PNGs
+  (dir not made). The main session reruns its gates in the hidden checks.
