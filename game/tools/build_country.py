@@ -324,6 +324,15 @@ HILL_CONNECT = 0.10         # grade the climbs are traced at on the smoothed gro
 HILL_GRADE = 0.12           # hill streets are graded to this (the 0.13 cap less the grid's excess)
 HILL_RISE = 0.11            # most a climb may rise end to end over its length (its ends are pinned:
                             # the terrace on the ground, a mountain road at its graded height)
+# A few short, steep climbs for variety, as real hill towns have: most of San
+# Francisco's streets keep under ~10 %, a few blocks run 20-31 % (Filbert St,
+# 22nd St); Los Angeles' Eldred St 33 %, Pittsburgh's Canton Ave 37 %. Ours
+# stay at the mild end of those, a block or two long.
+HILL_STEEP = 0.20           # their cap (graded to it less the grid's excess, as HILL_GRADE)
+HILL_STEEP_RISE = 0.18      # most such a climb rises end to end
+HILL_STEEP_LEN = 160.0      # longest such a climb (m)
+HILL_STEEP_MAX = 6          # how many
+HILL_STEEP_EVERY = 4        # every so many climb starts tries straight up the slope at HILL_STEEP_RISE
 HILL_PAD_TOL = 0.2          # a hill home's pad: most its back and sides may lie off level (m)
 HILL_GAP = 220.0            # between a terrace's climbs
 HILL_NAMES = ["Toyon Terrace", "Sagewood Terrace", "Manzanita Crest", "Columbine Terrace", "Buckeye Drive",
@@ -1239,12 +1248,30 @@ class Country:
             j = int(round(min(max((p[0] - xs[0]) / HILL_CELL, 0), len(xs) - 1)))
             return gx[i, j], gy[i, j]
 
-        def trace(p0, own, side, up):
+        def rise(line):
+            """How far a climb rises end to end over its length: its start on
+            the terrace's ground, its end on the way it meets (at that way's
+            graded height where it is a graded mountain road)."""
+            end = line.coords[-1]
+            z_end = self.mtn.profile_at(end)
+            z_end = self.mtn.raw_at(end) if z_end is None else z_end
+            return abs(self.mtn.raw_at(line.coords[0]) - z_end) / line.length
+
+        steep = []  # the steep climbs (by identity)
+
+        def allowed(c):
+            """A climb that can be graded: under HILL_RISE end to end, or one
+            of the few short steep ones while there is room for another."""
+            r = rise(c)
+            return r <= HILL_RISE or (r <= HILL_STEEP_RISE and c.length <= HILL_STEEP_LEN
+                                      and len(steep) < HILL_STEEP_MAX)
+
+        def trace(p0, own, side, up, g=HILL_CONNECT):
             """A climb from p0 on terrace `own` to the first other way it
-            meets, at HILL_CONNECT where the ground is steeper, else straight
+            meets, at grade g where the ground is steeper, else straight
             down (or up) the fall line; None where it leaves the hills,
             nears a freeway, turns back onto its own terrace or meets a way
-            too far above or below it to grade (HILL_RISE)."""
+            too far above or below it to grade (allowed)."""
             tgt = unary_union([l for l in st_lines if l is not own] + base_lines + climbs)
             path = [p0]
             for step in range(80):
@@ -1254,8 +1281,8 @@ class Country:
                 if m < 1e-6:
                     return None
                 dx, dy = (ax / m, ay / m) if up else (-ax / m, -ay / m)
-                if m > HILL_CONNECT:
-                    th = math.acos(HILL_CONNECT / m) * side
+                if m > g:
+                    th = math.acos(g / m) * side
                     c, s_ = math.cos(th), math.sin(th)
                     dx, dy = dx * c - dy * s_, dx * s_ + dy * c
                 q = (p[0] + dx * 4.0, p[1] + dy * 4.0)
@@ -1265,12 +1292,7 @@ class Country:
                         hp = self._points(hit) or [c for g in lines_of(hit) for c in g.coords]
                         path.append(min(hp, key=lambda c: dist(c, p)))
                         out = LineString(path)
-                        if out.length < 20.0:
-                            return None
-                        end = out.coords[-1]
-                        z_end = self.mtn.profile_at(end)
-                        z_end = self.mtn.raw_at(end) if z_end is None else z_end
-                        return out if abs(self.mtn.raw_at(p0) - z_end) <= HILL_RISE * out.length else None
+                        return out if out.length >= 20.0 and allowed(out) else None
                 if not reach.contains(Point(q)) or fast_p.contains(Point(q)):
                     return None
                 if step > 3 and own.distance(Point(q)) < 3.0:
@@ -1286,10 +1308,15 @@ class Country:
                 n += 1
                 if any(dist(p0, q) < 120.0 for q in starts):
                     continue
-                c = trace(p0, line, 1 if n % 2 else -1, False)
+                # Now and then one straight up the slope, steep where it is.
+                c = trace(p0, line, 1 if n % 2 else -1, False, HILL_STEEP_RISE - 0.03) if (
+                    len(climbs) % HILL_STEEP_EVERY == HILL_STEEP_EVERY - 1) else None
+                c = c or trace(p0, line, 1 if n % 2 else -1, False)
                 if c is not None:
                     climbs.append(c)
                     starts.append(p0)
+                    if rise(c) > HILL_RISE:
+                        steep.append(c)
         base = unary_union(base_lines)
 
         def cut_off():
@@ -1335,6 +1362,8 @@ class Country:
                 if best:
                     climbs.append(best[0])
                     starts.append(best[1])
+                    if rise(best[0]) > HILL_RISE:
+                        steep.append(best[0])
                     added += 1
             if not added:
                 break
@@ -1349,7 +1378,8 @@ class Country:
             self.add(list(line.coords), "street", HILL_NAMES[a] if a < len(HILL_NAMES) else "", "hill")
             kept_src.append(self.sources[-1])
         for a, line in enumerate(climbs):
-            self.add(list(line.coords), "street", HILL_CLIMB_NAMES[a] if a < len(HILL_CLIMB_NAMES) else "", "hill")
+            tag = "steep" if any(line is q for q in steep) else "hill"
+            self.add(list(line.coords), "street", HILL_CLIMB_NAMES[a] if a < len(HILL_CLIMB_NAMES) else "", tag)
         # A terrace that ends on nothing gets a turning circle; where none
         # fits it is cut back to its last climb (join_ends would tie it to
         # the terrace below with a straight, ungraded link).
@@ -1375,10 +1405,12 @@ class Country:
         self.zones = [(z, p.difference(hz) if z == "mountain" else p) for z, p in self.zones] + [("hillside", hz)]
         self.zone_poly = dict(self.zones)
         self.zone_strip["hillside"] = Polygon()
-        print("hill districts: %.2f km2, terraces %d (%.1f km, %d cut off), climbs %d (%.1f km)" % (
+        print("hill districts: %.2f km2, terraces %d (%.1f km, %d cut off), climbs %d (%.1f km), steep %s" % (
             region.area / 1e6, len(kept), sum(t[0].length for t in kept) / 1000.0,
             sum(1 for a in lost if a < len(st_lines)),
-            len(climbs), sum(c.length for c in climbs) / 1000.0))
+            len(climbs), sum(c.length for c in climbs) / 1000.0,
+            ["%s %.0f m %.3f" % (HILL_CLIMB_NAMES[a] if a < len(HILL_CLIMB_NAMES) else "", c.length, rise(c))
+             for a, c in enumerate(climbs) if any(c is q for q in steep)]))
 
     def _hill_ends(self, full, run, joinable):
         """A terrace run on its full contour, each end carried on along the
@@ -1543,7 +1575,7 @@ class Country:
         for s in self.sources:
             if s[3] in skip or not CLASSES[s[1]]["graph"] or self.mtn.poly.distance(s[0]) > 1.0:
                 continue
-            gr = self.mtn.grade(s[0], s[1], cap=HILL_GRADE if s[3] == "hill" else None)
+            gr = self.mtn.grade(s[0], s[1], cap={"hill": HILL_GRADE, "steep": HILL_STEEP - 0.01}.get(s[3]))
             if gr > 0.0:
                 self.mtn_grades.append((s[2] or s[3], round(gr, 3)))
 

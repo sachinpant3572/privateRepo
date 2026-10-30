@@ -6387,6 +6387,7 @@ func test_hill_districts() -> void:
 	var top := 0.0
 	var unreached := 0
 	var over: Array = []
+	var steep := {}
 	for rd in c.roads:
 		var nodes: PackedInt32Array = rd.nodes
 		var on := 0
@@ -6416,12 +6417,17 @@ func test_hill_districts() -> void:
 			var a: Vector2 = c.node_pos[nodes[k]]
 			var b: Vector2 = c.node_pos[nodes[j]]
 			var g: float = absf(Terrain.height(b.x, b.y) - Terrain.height(a.x, a.y)) / (s[j] - s[k])
-			if g > 0.13 + 0.015:
+			# A few short climbs may run steep, as real hill towns' do
+			# (HILL_STEEP in tools/build_country.py); the rest keep to 13 %.
+			if g > 0.13 + 0.015 and (g > 0.20 + 0.015 or s[-1] > 200.0):
 				over.append("%s %.3f at (%.0f, %.0f)" % [rd.name, g, a.x, a.y])
+			elif g > 0.13 + 0.015:
+				steep[rd.name] = true
 	_check(streets >= 40 and length >= 7000.0, "%d hill streets, %.1f km" % [streets, length / 1000.0])
 	_check(top >= 100.0, "they climb to %.0f m" % top)
 	_check(unreached == 0, "every hill street node is reached from the city (%d not)" % unreached)
-	_check(over.is_empty(), "hill streets keep to 13%% (%d over: %s)" % [over.size(), over.slice(0, 4)])
+	_check(over.is_empty(), "hill streets keep to 13%%, short steep ones to 20%% (%d over: %s)" % [over.size(), over.slice(0, 4)])
+	_check(steep.size() <= 6, "a few steep hill streets, not many (%d: %s)" % [steep.size(), steep.keys()])
 	# Homes on flat pads, by height band, each with a way in.
 	var homes := 0
 	var kinds := {}
