@@ -45,3 +45,6 @@ uses the same tokens. Not a measurement.
 - Confound: the shared Godot lock queue (up to ~8 deep) cost wall time and made
   some builders' background waits time out; wall time is not a model measure.
 
+- P1 son-max: all 4 gates pass, +81/-21, own test fails on old code (mutation),
+  checks shader declares sampler2DArray; added _flame_layers() helper (headless
+  get_layer_data is null); flagged saved-count gate misleading without mkdir.
