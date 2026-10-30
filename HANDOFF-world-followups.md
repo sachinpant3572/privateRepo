@@ -105,7 +105,9 @@ B. **Grow the core to ~8 km²** (~14-20 h). Outline east and west (the Gulf
      a cab's curb stop is capped at the lanes' edge less half a cab
      (CURB_SHIFT put it on the sidewalk of the 28 m street at Union
      Station). Residual: seed 1 only, the_pit sits in the containers site
-     (`_open_land`'s prune merges it); the game seed is clean.
+     (`_open_land`'s prune merges it); the game seed is clean. City build
+     (seed 1234, headless): 1794 / 1675 ms before (d4ec25e), 2044 / 1873
+     ms after, about +13 %; the plan alone is 1356 ms.
 C. **Sloped districts** (~40-70 h, Sachin's yes): the foothills north of
    the city as hill districts (hill_n's contour rings, Vinewood-style):
    city ground on a height field, roads graded, buildings stepped onto it,
