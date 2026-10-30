@@ -621,7 +621,8 @@ static var _burnt: ShaderMaterial
 ## A burnt-out shell, as real ones look once the fire is out: the paint gone
 ## to bare steel, ash grey with rust-brown blooms, soot streaked over it and
 ## gathered low on the panels and in the arches; glass gone to a dark cabin;
-## tyres, trim and seats charred. Patches follow the car (model space).
+## tyres, trim and seats charred; rims and the steel under melted bumpers
+## bare and faintly shiny. Patches follow the car (model space).
 const BURNT_SHADER := """
 shader_type spatial;
 render_mode diffuse_burley;
@@ -665,10 +666,19 @@ void fragment() {
 	// Black parts (tyres, trim, the dash) burn to char.
 	float dark = 1.0 - smoothstep(0.06, 0.13, lum);
 	c = mix(c, soot * (0.8 + fine * 0.6), max(glass * 0.9, dark * 0.75));
+	// Bare steel keeps a dull shine: the wheel rims (VehicleKit.RIM) and steel
+	// parts (STEEL), and, in patches, the steel bars where the plastic
+	// bumpers and sills (TRIM, not the tyres) melted off.
+	float rim = 1.0 - smoothstep(0.05, 0.1, distance(src, vec3(0.74, 0.76, 0.79)));
+	float bare = 1.0 - smoothstep(0.04, 0.08, distance(src, vec3(0.6, 0.62, 0.64)));
+	float trim = 1.0 - smoothstep(0.012, 0.022, distance(src, vec3(0.07, 0.07, 0.08)));
+	float bar = trim * smoothstep(0.2, 0.3, p.y) * (1.0 - smoothstep(0.75, 0.85, p.y)) * smoothstep(0.4, 0.55, big);
+	float steel = max(max(rim, bare), bar);
+	c = mix(c, vec3(0.44, 0.43, 0.42) * (0.85 + fine * 0.3), steel);
 	ALBEDO = c;
-	ROUGHNESS = 0.92;
-	METALLIC = 0.15;
-	SPECULAR = 0.3;
+	ROUGHNESS = mix(0.92, 0.3, steel);
+	METALLIC = mix(0.15, 0.6, steel);
+	SPECULAR = mix(0.3, 0.65, steel);
 }
 """
 

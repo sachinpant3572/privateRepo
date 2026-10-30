@@ -136,6 +136,17 @@ gameplay choice for Sachin; the blast still makes "crash").
   as they are (a constant ash with no pow matched a plain StandardMaterial of
   the same grey; with pow it read 31 % vs 84 %). Fixed with no pow, plus
   lighter soot. SHOTS=wreck_lit shows it by its fire, lamps, headlight, day.
+- Fire v2 (Sachin, 2026-10-30: "Improve fire layers, right now they look like
+  simple cones" + glint on exposed steel, "Lets do this too"). Root bug: the
+  particle billboard materials lacked `billboard_keep_scale`, so Godot dropped
+  every particle's scale (Godot source: BILLBOARD_PARTICLES only multiplies the
+  scale back with that flag): every flame stayed one fixed size. Fixed in
+  FireFx.material/chunk_mesh (smoke and blast sizes now apply too). Flames now
+  use FLAME_SHADER (FireFx.flame_material): 6 tongue pictures (single, thin,
+  twins, fork, triple, low bed) bent by scrolling noise (more at the tip),
+  torn into licks by a second noise (more with age), yellow-white where dense.
+  Burnt shell: RIM/STEEL colours and TRIM patches at bumper height (not
+  tyres: TYRE is 0.04 from TRIM) get metallic 0.6, roughness 0.3.
 
 ## Open questions
 

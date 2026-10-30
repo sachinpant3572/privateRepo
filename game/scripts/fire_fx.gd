@@ -35,6 +35,7 @@ static var lights_used := 0
 
 static var _tex := {}
 static var _mats := {}
+static var _flame_shader: Shader
 
 
 static func cfg() -> Dictionary:
@@ -50,6 +51,9 @@ static func set_level(q: String, real := true) -> void:
 ## fire or blast in play does not stall a frame to make them.
 static func warm() -> void:
 	flame()
+	flame_noise()
+	flame_material(2)
+	flame_material(3)
 	cloud()
 	cloud(true)
 	dot()
@@ -84,33 +88,61 @@ static func _make(img: Image) -> ImageTexture:
 	return ImageTexture.create_from_image(img)
 
 
-## Four flame tongues side by side (64 x 128 each): taller than wide, a
-## rounded base, a flickering tip leaning one way or the other. White, the
-## alpha is the shape; colour comes from the particles' ramp.
+## Six flame pictures side by side (64 x 128 each): one, two or three
+## tongues each (a broad one, a tall thin one, twins, a fork, a ragged low
+## bed), taller than wide, rounded at the base, tips leaning. White, the
+## alpha is the shape; colour comes from the particles' ramp and the flame
+## shader (FLAME_SHADER), which also bends and tears them as they rise.
+const FLAME_FRAMES := 6
+const _TONGUES := [
+	[[0.5, 0.42, 1.0, -0.1]],
+	[[0.5, 0.3, 1.0, 0.12]],
+	[[0.35, 0.27, 0.96, -0.14], [0.66, 0.24, 0.74, 0.1]],
+	[[0.5, 0.4, 0.78, 0.05], [0.43, 0.17, 1.0, -0.16], [0.6, 0.13, 0.9, 0.18]],
+	[[0.27, 0.21, 0.7, -0.12], [0.52, 0.27, 1.0, 0.03], [0.75, 0.19, 0.62, 0.15]],
+	[[0.5, 0.45, 0.66, 0.0], [0.62, 0.17, 1.0, 0.12]],
+]
+
+
 static func flame() -> ImageTexture:
 	if _tex.has("flame"):
 		return _tex["flame"]
 	var w := 64
 	var h := 128
-	var img := Image.create(w * 4, h, true, Image.FORMAT_RGBA8)
+	var img := Image.create(w * FLAME_FRAMES, h, true, Image.FORMAT_RGBA8)
 	var edge := _noise(11, 0.06)
 	var body := _noise(23, 0.035)
-	for f in 4:
-		var lean: float = [-0.1, 0.07, -0.04, 0.12][f]
+	for f in FLAME_FRAMES:
 		for y in h:
-			var t := 1.0 - float(y) / float(h - 1) # 0 base .. 1 tip
-			var cx: float = 0.5 + lean * pow(t, 1.6) + 0.05 * body.get_noise_2d(f * 97.0, y * 1.2) * t
-			var hw := 0.40 * pow(1.0 - t, 0.75) * sqrt(smoothstep(0.0, 0.16, t))
+			var tt := 1.0 - float(y) / float(h - 1) # 0 base .. 1 top
 			for x in w:
 				var u := float(x) / float(w - 1)
 				var n := edge.get_noise_2d(f * 131.0 + x * 1.0, y * 1.0)
-				var d := absf(u - cx) / maxf(hw * (1.0 + 0.45 * n * (0.4 + t)), 0.001)
-				var a := 1.0 - smoothstep(0.3, 1.0, d)
+				var a := 0.0
+				for tg in _TONGUES[f]:
+					var t: float = tt / tg[2]
+					if t >= 1.0:
+						continue
+					var cx: float = tg[0] + tg[3] * pow(t, 1.6) + 0.05 * body.get_noise_2d(f * 97.0 + tg[0] * 50.0, y * 1.2) * t
+					var hw: float = tg[1] * pow(1.0 - t, 0.75) * sqrt(smoothstep(0.0, 0.16, t))
+					var d := absf(u - cx) / maxf(hw * (1.0 + 0.45 * n * (0.4 + t)), 0.001)
+					a = maxf(a, (1.0 - smoothstep(0.3, 1.0, d)) * (1.0 - 0.35 * smoothstep(0.75, 1.0, t)))
 				a *= 0.8 + 0.2 * body.get_noise_2d(f * 57.0 + x * 2.0, y * 2.0)
-				a *= 1.0 - 0.35 * smoothstep(0.75, 1.0, t)
 				img.set_pixel(w * f + x, y, Color(1, 1, 1, clampf(a, 0.0, 1.0)))
 	_tex["flame"] = _make(img)
 	return _tex["flame"]
+
+
+## Tiling noise (64 x 64, grey) that the flame shader scrolls up through the
+## tongues to bend and tear them.
+static func flame_noise() -> ImageTexture:
+	if _tex.has("flame_noise"):
+		return _tex["flame_noise"]
+	var n := _noise(57, 1.0 / 16.0)
+	var img := n.get_seamless_image(64, 64)
+	img.convert(Image.FORMAT_L8)
+	_tex["flame_noise"] = _make(img)
+	return _tex["flame_noise"]
 
 
 ## Four cloud puffs (64 x 64 each): a ragged round edge, lighter and darker
@@ -210,6 +242,9 @@ static func material(tex: Texture2D, frames := 1, additive := false, prio := 0) 
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	# Without this a particle billboard drops the particle's scale (Godot
+	# normalises it away), so scale_amount and its curve would do nothing.
+	m.billboard_keep_scale = true
 	m.vertex_color_use_as_albedo = true
 	m.albedo_texture = tex
 	m.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
@@ -235,6 +270,78 @@ static func quad(size: Vector2, tex: Texture2D, frames := 1, additive := false, 
 	return q
 
 
+## Flame tongues as they really move: the picture (one of `flame()`'s,
+## picked per particle) is bent by noise scrolling up through it, little at
+## the base and a lot at the tip, and torn by a second noise, so the top
+## breaks into separate licks that come and go; the older the particle, the
+## more it tears. Dense low parts burn yellow-white, thin edges take the
+## particle's ramp colour. Additive, billboard, keeps the particle's scale.
+const FLAME_SHADER := """
+shader_type spatial;
+render_mode blend_add, unshaded, depth_draw_never, cull_disabled, shadows_disabled;
+uniform sampler2D shape : filter_linear_mipmap;
+uniform sampler2D noise : filter_linear_mipmap, repeat_enable;
+uniform float frames = 6.0;
+varying vec2 cell;
+varying float frame;
+varying float seed;
+varying float age;
+void vertex() {
+	mat4 w = mat4(normalize(INV_VIEW_MATRIX[0]), normalize(INV_VIEW_MATRIX[1]), normalize(INV_VIEW_MATRIX[2]), MODEL_MATRIX[3]);
+	w = w * mat4(vec4(cos(INSTANCE_CUSTOM.x), -sin(INSTANCE_CUSTOM.x), 0.0, 0.0), vec4(sin(INSTANCE_CUSTOM.x), cos(INSTANCE_CUSTOM.x), 0.0, 0.0), vec4(0.0, 0.0, 1.0, 0.0), vec4(0.0, 0.0, 0.0, 1.0));
+	MODELVIEW_MATRIX = VIEW_MATRIX * w * mat4(vec4(length(MODEL_MATRIX[0].xyz), 0.0, 0.0, 0.0), vec4(0.0, length(MODEL_MATRIX[1].xyz), 0.0, 0.0), vec4(0.0, 0.0, length(MODEL_MATRIX[2].xyz), 0.0), vec4(0.0, 0.0, 0.0, 1.0));
+	MODELVIEW_NORMAL_MATRIX = mat3(MODELVIEW_MATRIX);
+	frame = clamp(floor(INSTANCE_CUSTOM.z * frames), 0.0, frames - 1.0);
+	seed = fract(INSTANCE_CUSTOM.z * frames * 7.13);
+	age = INSTANCE_CUSTOM.y;
+	cell = UV;
+}
+void fragment() {
+	float up = 1.0 - cell.y;
+	float t = TIME;
+	float n1 = texture(noise, vec2(cell.x * 0.8 + seed * 5.0, cell.y * 0.7 + t * 1.3)).r - 0.5;
+	float n2 = texture(noise, vec2(cell.x * 1.9 - seed * 3.0, cell.y * 1.6 + t * 2.4)).r - 0.5;
+	float bend = (n1 * 0.36 + n2 * 0.16) * (0.08 + up * up * 1.2);
+	vec2 s = clamp(vec2(cell.x + bend, cell.y + n2 * 0.08 * up), vec2(0.004), vec2(0.996));
+	float a = texture(shape, vec2((frame + s.x) / frames, s.y)).a;
+	float e = texture(noise, vec2(cell.x * 1.4 + seed * 9.0, cell.y * 1.1 + t * 2.0)).r;
+	float cut = mix(0.0, 0.62, up * up) + 0.18 * age;
+	a *= smoothstep(cut - 0.1, cut + 0.1, e + a * 0.35);
+	float heat = clamp(a * 1.5 - up * 0.7, 0.0, 1.0);
+	vec3 col = COLOR.rgb * (0.7 + 0.5 * a);
+	ALBEDO = mix(col, vec3(1.0, 0.94, 0.72), heat * heat * 0.55);
+	ALPHA = clamp(a * COLOR.a, 0.0, 1.0);
+}
+"""
+
+
+## The flame shader's material; `prio` as in `material`.
+static func flame_material(prio := 2) -> ShaderMaterial:
+	var key := "flame_%d" % prio
+	if _mats.has(key):
+		return _mats[key]
+	if _flame_shader == null:
+		_flame_shader = Shader.new()
+		_flame_shader.code = FLAME_SHADER
+	var m := ShaderMaterial.new()
+	m.shader = _flame_shader
+	m.render_priority = prio
+	m.set_shader_parameter("shape", flame())
+	m.set_shader_parameter("noise", flame_noise())
+	m.set_shader_parameter("frames", float(FLAME_FRAMES))
+	_mats[key] = m
+	return m
+
+
+## A flame quad of `size` m whose bottom sits on the particle.
+static func flame_quad(size: Vector2, prio := 2) -> QuadMesh:
+	var q := QuadMesh.new()
+	q.size = size
+	q.center_offset = Vector3(0.0, size.y * 0.5, 0.0)
+	q.material = flame_material(prio)
+	return q
+
+
 ## A plain flat dark chunk (no texture).
 static func chunk_mesh(size: Vector2) -> QuadMesh:
 	var key := "chunk"
@@ -243,6 +350,7 @@ static func chunk_mesh(size: Vector2) -> QuadMesh:
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		m.billboard_keep_scale = true
 		m.vertex_color_use_as_albedo = true
 		_mats[key] = m
 	var q := QuadMesh.new()

@@ -52,15 +52,14 @@ func _ready() -> void:
 	_rng.randomize()
 	_size = car._size
 	var c := FireFx.cfg()
-	var flame := FireFx.flame()
 	# Over the engine, at the front.
 	position = Vector3(0.0, minf(_size.y * 0.7, 1.4), -_size.z * 0.3)
 	var half := Vector3(_size.x * 0.3, 0.1, minf(_size.z * 0.15, 0.8))
-	_core = _flames(c.core, 0.42, Vector2(0.55, 0.95), flame, half, [Color(1.0, 0.97, 0.7, 0.95), Color(1.0, 0.8, 0.3, 0.85), Color(1.0, 0.5, 0.1, 0.0)], 3)
-	_body = _flames(c.body, 0.75, Vector2(1.0, 1.55), flame, half * 1.3, [Color(1.0, 0.72, 0.2, 0.85), Color(1.0, 0.4, 0.07, 0.8), Color(0.2, 0.03, 0.01, 0.0)], 2, [0.0, 0.4, 1.0])
+	_core = _flames(c.core, 0.42, Vector2(0.55, 0.95), half, [Color(1.0, 0.97, 0.7, 0.95), Color(1.0, 0.8, 0.3, 0.85), Color(1.0, 0.5, 0.1, 0.0)], 3)
+	_body = _flames(c.body, 0.75, Vector2(1.0, 1.55), half * 1.3, [Color(1.0, 0.72, 0.2, 0.85), Color(1.0, 0.4, 0.07, 0.8), Color(0.2, 0.03, 0.01, 0.0)], 2, [0.0, 0.4, 1.0])
 	if c.wide > 0:
 		# Late in the burn the cabin and the rest of the car burn too.
-		_wide = _flames(c.wide, 0.7, Vector2(0.85, 1.3), flame, Vector3(_size.x * 0.42, 0.1, _size.z * 0.3), [Color(1.0, 0.65, 0.18, 0.8), Color(0.95, 0.32, 0.06, 0.75), Color(0.2, 0.03, 0.01, 0.0)], 2, [0.0, 0.45, 1.0])
+		_wide = _flames(c.wide, 0.7, Vector2(0.85, 1.3), Vector3(_size.x * 0.42, 0.1, _size.z * 0.3), [Color(1.0, 0.65, 0.18, 0.8), Color(0.95, 0.32, 0.06, 0.75), Color(0.2, 0.03, 0.01, 0.0)], 2, [0.0, 0.45, 1.0])
 		_wide.position = Vector3(0, -0.15, _size.z * 0.3)
 		_wide.emitting = false
 	if c.ember > 0:
@@ -120,8 +119,8 @@ func _exit_tree() -> void:
 
 ## A flame layer: tongues rising from a box. `ramp_colors` runs from the
 ## base (bright) to the tip (dark red, clear).
-func _flames(n: int, life: float, size: Vector2, tex: Texture2D, half: Vector3, ramp_colors: Array, prio: int, offsets := [0.0, 0.5, 1.0]) -> CPUParticles3D:
-	var p := FireFx.emitter(n, life, FireFx.quad(size, tex, 4, true, prio, true))
+func _flames(n: int, life: float, size: Vector2, half: Vector3, ramp_colors: Array, prio: int, offsets := [0.0, 0.5, 1.0]) -> CPUParticles3D:
+	var p := FireFx.emitter(n, life, FireFx.flame_quad(size, prio))
 	FireFx.random_frame(p)
 	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
 	p.emission_box_extents = half
