@@ -403,7 +403,7 @@ func build(win: Rect2, margin: float, seed_v: int, river_line: PackedVector2Arra
 	_compact()
 	_find_faces()
 	t = _lap("graph", t)
-	_thin()
+	_thin(landmarks)
 	_open_land(landmarks)
 	_ease_crowds()
 	_simplify()
@@ -2146,8 +2146,10 @@ func _full_link(e: int) -> Array:
 
 ## Drops some district streets and makes others pedestrian lanes, as each
 ## district's rules say. Dropping a street joins the blocks either side,
-## within the district's size limits, and never cuts junctions off.
-func _thin() -> void:
+## within the district's size limits, and never cuts junctions off. A
+## block holding a landmark, or in an OPEN_LAND site, is never joined:
+## both have their own block rules (_grow_blocks, _open_land).
+func _thin(landmarks: Array) -> void:
 	var links: Array = []
 	var seen := {}
 	for n in node_pos.size():
@@ -2164,10 +2166,17 @@ func _thin() -> void:
 	var group := PackedInt32Array()
 	var pts: Array = []
 	var areas := PackedFloat32Array()
+	var kept := PackedByteArray()
 	for f in faces.size():
 		group.append(f)
 		pts.append(faces[f].poly)
 		areas.append(faces[f].area)
+		var keep := false
+		for lm in landmarks:
+			keep = keep or Geometry2D.is_point_in_polygon(lm[1], faces[f].poly)
+		for site in OPEN_LAND:
+			keep = keep or Rect2(site.at - site.size * 0.5, site.size).has_point(faces[f].center)
+		kept.append(1 if keep else 0)
 	for l in links:
 		var e0: int = l[0][0]
 		var p: Dictionary = PATCHES[edge_patch[e0]]
@@ -2188,6 +2197,8 @@ func _thin() -> void:
 				continue
 			var gf := _find(group, slots.x)
 			var gg := _find(group, slots.y)
+			if kept[gf] == 1 or kept[gg] == 1:
+				continue
 			if gf == gg or areas[gf] + areas[gg] > p.max[2]:
 				continue
 			var joined: PackedVector2Array = pts[gf] + pts[gg]
