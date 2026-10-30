@@ -85,7 +85,14 @@ B. **Grow the core to ~8 km²** (~14-20 h). Outline east and west (the Gulf
      the landing (1753,1657); land clipping drops the collinear vertex, and
      the nearest junction can sit 40 m off (country lead-in fails).
    - Landmarks moved out of the west lobe: Krewe Hall (-1620,860), Hale
-     estate (-1650,-250). The east lobe took most Verdant Hills fields.
+     estate (-1650,-250, now sun-turned so one estate turns). The east
+     lobe took most Verdant Hills fields (177 -> 66; field floor now 50).
+   - Core corner (-250,1135) -> (-250,1095): keeps the docks freight spur
+     out of the city; Bayou Drive's bank stops 40 m short of any rail it
+     would cross under 30 deg (the spur's loop at (-238,1199)).
+   - Country: a merged junction keeps the city exit's position (averaging
+     put one 7.3 m off plan node 448); a shallow axial estate (no room for
+     a court behind) shrinks its house up to 8 m to fit tennis beside it.
    - Tests re-measured: downtown falloff by block centre (generator's
      measure); roof x-ray picks a shelter whose roof runs along the view;
      Golden Flats: the expressway fords the Morrow nowhere.
