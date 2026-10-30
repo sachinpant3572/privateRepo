@@ -6,6 +6,7 @@ extends Node
 ##   xvfb-run godot --rendering-driver opengl3 res://tests/country_shots.tscn -- <out_dir>
 
 const MainScene = preload("res://main.tscn")
+const Terrain = preload("res://scripts/terrain.gd")
 
 ## [file, local x (or a country landmark id), local z, view size (metres
 ## tall), hour].
