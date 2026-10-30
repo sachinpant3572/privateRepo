@@ -2583,6 +2583,15 @@ class Country:
         self.road_prep = prep(self.road_area)
         self.lot_grid = PolyGrid()
         self.plot_grid = PolyGrid()
+        # Heliport aprons (data/heliports.json, scripts/heliports.gd) and
+        # their margin stay clear: no lot, plot or tree on them.
+        for hp in json.loads((ROOT / "data" / "heliports.json").read_text())["heliports"]:
+            hx, hz = hp["size"][0] * 0.5 + 5.0, hp["size"][1] * 0.5 + 5.0
+            cy, sy = math.cos(-hp["yaw"]), math.sin(-hp["yaw"])
+            apron = Polygon([(hp["pos"][0] + x * cy - z * sy, hp["pos"][1] + x * sy + z * cy)
+                             for x, z in ((-hx, -hz), (hx, -hz), (hx, hz), (-hx, hz))])
+            self.lot_grid.add(apron)
+            self.plot_grid.add(apron)
         self.plots = []
         # The road pieces lots and plots front onto.
         self.front_lines = [LineString(pc["pts"]) for pc in self.pieces]

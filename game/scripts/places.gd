@@ -94,6 +94,11 @@ static func build(city) -> Array:
 		for type in types:
 			for n in MIX[district][type]:
 				var pick = _pick(city, candidates.get(district, []), type, places, used_faces, rng)
+				# A district short of blocks (Ironwharf's yards and
+				# landmarks) gets each type once on another parcel of a
+				# block that already has a place, door MIN_GAP from it.
+				if pick == null and n == 0:
+					pick = _pick_shared(city, candidates.get(district, []), type, places)
 				if pick == null:
 					break
 				var place := _make(city, pick, type, district, rng, used_names)
@@ -238,6 +243,22 @@ static func _pick(city, list: Array, type: String, places: Array, used_faces: Di
 				ok.append(c)
 		if not ok.is_empty():
 			return ok[rng.randi() % ok.size()]
+	return null
+
+
+## The first candidate on a block that already has a place whose door
+## is MIN_GAP from every place's door and that fits `type`, or null.
+static func _pick_shared(city, list: Array, type: String, places: Array):
+	var need: Vector2 = TYPES[type].size
+	for c in list:
+		var r: Rect2 = c[2]
+		if r.size.x < need.x + 1.0 or r.size.y < need.y + 2.0:
+			continue
+		if places.any(func(p): return p.face == c[0] and p.parcel == c[1]):
+			continue
+		var door2: Vector2 = city.plan.front_frame2d(c[0]) * Vector2(r.get_center().x, r.end.y + DOOR_OUT)
+		if places.all(func(p): return Vector2(p.door.x, p.door.z).distance_to(door2) >= MIN_GAP):
+			return c
 	return null
 
 

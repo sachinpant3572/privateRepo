@@ -5260,11 +5260,12 @@ func test_people_walk_the_suburbs() -> void:
 	# The east side loop with the most suburb sidewalk round it: most of
 	# them close blocks along the city's edge street, by its own sidewalks.
 	# Measured in metres of sidewalk, not points (the city's loops and the
-	# suburbs' are sampled at different spacings).
+	# suburbs' are sampled at different spacings). Any z: the east lobe
+	# (#116) took the old band's suburbs (z 100..900) into the city.
 	var at := Vector3.INF
 	var share := -1.0
 	for w in c.walks:
-		if w[0].x > 1700.0 and w[0].z > 100.0 and w[0].z < 900.0:
+		if w[0].x > 1700.0:
 			var mine := 0.0
 			var all := 0.0
 			for li in city.sidewalk_loops.size():
