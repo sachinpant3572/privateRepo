@@ -127,6 +127,10 @@ gameplay choice for Sachin; the blast still makes "crash").
   (~1 in 500; the circle reads "hills" at 394/400 points), now a fixed 100-draw
   `_pick_kind` check; the city traffic count read 4 of 5 at one instant (passes
   alone), now waits up to 8 s for traffic to refill like the pedestrian check.
+- Burnt car (2026-10-30, "too black"): the flat 0.12 grey is replaced by
+  `MeshBuilder.burnt_material()`: grey ash with rust patches from 3D noise and
+  soot low down and on the glass. It lives in MeshBuilder because the Fx
+  autoload must preload it for prewarm (fx.gd can't see vehicle.gd).
 
 ## Open questions
 
