@@ -36,6 +36,17 @@ approved by this.
   (108 % after that) crosses over the rail and curls back 7-9 m beside it,
   7 m above the rail's strip; each rail crossing now records `hug` (how far
   along the rail the road stays within 20 m) and the rail span covers it.
+  Wheaton now 15.1 % (cap 13 %).
+- **Summit Fire Road** (mountain.py): graded after Calder (ROAD_ORDER), and
+  a road end within JOIN_REACH (20 m) of an earlier road takes its height
+  (it stopped 16 m short of Calder's middle and took the terrain instead).
+  265 % (fake) -> 32 % -> 31.2 %, worst near its Calder end (1105,-1258).
+- **Known planning limits, not fixed**: West Ridge Track 50.7 % at
+  (508,-3006) is a switchback leg 14 m from the next with ~11 m between
+  them, below the 8 m height grid; Firebreak 30.6 % at its junction with
+  West Ridge Track's start (150,-4034). Both are trails, not traffic roads.
+- **City exits 139 -> 133** after the open land: the city edge moved
+  north near Halcyon (y -166 -> -220) and shifted in the east.
 
 ## Reference maps (Sachin, 2026-10-30)
 
@@ -109,6 +120,14 @@ Stage A build (2026-10-30, approach before editing):
 - wards / wards_n get `cut` so their blocks grow (bigger blocks).
 - Tests: each site came out as one block of its kind and size; lakes in
   their block; landmark blocks kept; land area still in range.
+- Built (stage A): sites as above, all 9 one block each; ponds 2,000-2,500
+  m², Halcyon lake ~19,000 m². Halcyon covers y -120..140 (not the whole
+  superblock), so the outline still trims its north row; covering it made
+  Presidio a 450 m straight city edge. `_grow_blocks` never takes an
+  open-land block for a landmark (the Ferry Building took the rail yard).
+  Bigger residential blocks: wards already join blocks (cut 0.3); the rest
+  waits for stage B's new big-block patches (re-cutting now moves every
+  landmark lot and test-pinned block shape).
 
 ## Recorded for later phases (reviewer Low #7)
 

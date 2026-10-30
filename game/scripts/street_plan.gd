@@ -68,11 +68,11 @@ const PARK_SIZE := Vector2(204, 132)
 ## share of the block's lot (0 for none). Sites sit between arterials, so
 ## none crosses them, and keep clear of the landmarks.
 const OPEN_LAND := [
-	{"id": "halcyon_park", "kind": "parkland", "at": Vector2(1235, -40), "size": Vector2(440, 350), "lake": 0.55},
-	{"id": "lamplighter_park", "kind": "parkland", "at": Vector2(40, 900), "size": Vector2(160, 150), "lake": 0.3},
-	{"id": "heron_park", "kind": "parkland", "at": Vector2(260, 1560), "size": Vector2(170, 150), "lake": 0.35},
-	{"id": "cane_row_park", "kind": "parkland", "at": Vector2(850, 1450), "size": Vector2(160, 140), "lake": 0.3},
-	{"id": "parque_luna", "kind": "parkland", "at": Vector2(1850, 1000), "size": Vector2(170, 150), "lake": 0.3},
+	{"id": "halcyon_park", "kind": "parkland", "at": Vector2(1235, 10), "size": Vector2(440, 260), "lake": 0.55},
+	{"id": "lamplighter_park", "kind": "parkland", "at": Vector2(40, 900), "size": Vector2(160, 150), "lake": 0.4},
+	{"id": "heron_park", "kind": "parkland", "at": Vector2(260, 1560), "size": Vector2(170, 150), "lake": 0.5},
+	{"id": "cane_row_park", "kind": "parkland", "at": Vector2(850, 1450), "size": Vector2(160, 140), "lake": 0.5},
+	{"id": "parque_luna", "kind": "parkland", "at": Vector2(1850, 1000), "size": Vector2(170, 150), "lake": 0.55},
 	{"id": "morrow_cemetery", "kind": "cemetery", "at": Vector2(1150, 1690), "size": Vector2(200, 170), "lake": 0.0},
 	{"id": "bellerive_bowl", "kind": "stadium", "at": Vector2(1615, 320), "size": Vector2(290, 340), "lake": 0.0},
 	{"id": "ironwharf_containers", "kind": "containers", "at": Vector2(1320, 930), "size": Vector2(250, 120), "lake": 0.0},
@@ -2457,6 +2457,11 @@ func _grow_blocks(wants: Array) -> bool:
 	var claimed := {}
 	for w in wants:
 		var f := face_of(w[0])
+		if f >= 0:
+			claimed[f] = true
+	# Open land is not taken to make room for a landmark.
+	for site in OPEN_LAND:
+		var f := face_of(site.at)
 		if f >= 0:
 			claimed[f] = true
 	var changed := false
