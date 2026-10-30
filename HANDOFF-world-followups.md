@@ -64,51 +64,32 @@ B. **Grow the core to ~8 km²** (~14-20 h). Outline east and west (the Gulf
    is south, the range north), more ART lines, new patches with big blocks
    (industrial and port dsep ~[400, 140]), a golf course and an airport edge
    as open land, then re-run urban, country and their tests.
-   Where it can grow (checked 2026-10-30 on world_map.json): water on
-   three sides. The Morrow runs down the core's west side (local x -750
-   -> -350, y -650..1350), turns east under it and south to the Gulf at
-   x ~1550; the Gulf is south, the coast diagonal south-east, the range
-   north. Room: (1) **west across the Morrow**, local x ~-1500..-450, y
-   ~-300..1700 (~2 km²; flat, no terrain grid there), on the plan's
-   "south" piece (the bend's outer side), reached by bridges carrying
-   Magnolia, Aurum and Crescent west; (2) **north-east** into Verdant
-   Hills, x ~1500..2700, y ~-500..300 (~1 km²). With the foothills in C
-   that reaches ~8 km². Country terrain grid: origin (-864,-5112), 8 m,
-   541 x 606 (ends at y -264). East: the coast runs (2250,1150) ->
-   (3450,250), so land east of the core to x ~3000-3300 at y -600..600.
-   Build approach (stage B, before editing): (1) world_map core = current
-   core union a west lobe (x -1600..-300 incl. the river) and an east lobe
-   (x 2000..3100, y -600..700), wobbled, then `build_country.py --urban`;
-   plan bounds follow the core bbox. (2) street_plan: ARTERIALS with bank
-   "south" for the west borough (x and y lines, new road names), new
-   patches (west industrial dsep ~[400,140], west residential, east
-   patch on bank "north"), Magnolia/Crescent/Aurum carried over the
-   Morrow's west leg as bridges like the Morrow Bridge (b0/b1 code in
-   _layout). (3) districts in city.gd (patch prefix -> district) and
-   world_map districts; open land: golf course, airport edge. (4) tests:
-   km² range, exits, block counts; check city build time on load.
-   Plot helper: scratchpad planplot.py (plan.json -> png).
-   Stage B build (2026-10-30): urban 8.94 km², plan blocks 6.69 km²
-   (outline 7.53), 150 city exits.
-   - River banks are picked by side (`_chain`: the chain the river does /
-     does not lie between from (300,300)); mean height swapped them.
-   - ART_X gains -1300, -1000 (west) and 2480, 2820, 3150 (east: Juniper,
-     Sycamore Avenues, Fairway Drive; without ARTERIALS entries the east
-     blocks were 220-350 m); ART_Y_SOUTH gains -580..860 in front, so
-     `_splits` keys shift by the count prepended.
-   - West: seam x -390 parts Magnolia Heights / Blackwater Bayou from the
-     river strip; seam x -330 parts Tallow Bank (industrial, big blocks)
-     from Morrow Point; Aurum and Crescent cross the west leg on bridges.
-     The civic void west of City Hall stops at Laurel (it made a 370 x
-     240 m slab).
-   - East: Verdant Park (seam on Mangrove x 2130) with a golf course
-     (OPEN_LAND kind golf, city_cells `_golf`: lake, clubhouse, 4-9 holes).
-     Airport marker (local 1750,300) sits on the stadium: left for later.
-   - Ocean Drive (now 2500 m) carries a vertex at the Serena Causeway
-     landing (1753,1657): the field street that met it there went, and the
-     country causeway found no exit 42 m off its line.
-   - The street field was NOT regenerated: no new patch is a field patch,
-     and regenerating could shift old districts.
+   Design detail (where it can grow, build approach): the archive.
+   Stage B build (2026-10-30): core 6.89 km², urban 8.42 km², plan land
+   faces 6.10 km², 156 city exits. Outline rules learned:
+   - `_trim_to_outline` keeps a block by its centre, then drops one-
+     neighbour spurs and refills three-neighbour notches: an edge step must
+     be 2 blocks deep or long, or a corner (a corner block has 2).
+   - Outline past ART_Y_SOUTH[0] (-580) makes tall faces out to the plan
+     bounds; the west lobe's north edge stays at -520, with a corner notch
+     (col x -1209..-1104, row -473..-335) breaking a 429 m north run.
+   - East lobe pulled back from the coast (y >= -500, notch to -390);
+     Fairway Drive dropped; golf at (2295,-40) between Mangrove and Juniper.
+   - River banks are picked by side (`_chain`); ART_X gains -1300, -1000,
+     2460 (Juniper), 2780 (Sycamore); `_splits` keys shift by the count
+     prepended to ART_Y_SOUTH.
+   - West: seams x -390 / -330 part Magnolia Heights, Blackwater Bayou,
+     Tallow Bank (industrial) and Morrow Point; Aurum and Crescent cross
+     the west leg on bridges. Civic void stops at Laurel.
+   - Serena Causeway: `_split_at_landing` gives Ocean Drive a junction at
+     the landing (1753,1657); land clipping drops the collinear vertex, and
+     the nearest junction can sit 40 m off (country lead-in fails).
+   - Landmarks moved out of the west lobe: Krewe Hall (-1620,860), Hale
+     estate (-1650,-250). The east lobe took most Verdant Hills fields.
+   - Tests re-measured: downtown falloff by block centre (generator's
+     measure); roof x-ray picks a shelter whose roof runs along the view;
+     Golden Flats: the expressway fords the Morrow nowhere.
+   - The street field was NOT regenerated (no new field patch).
 C. **Sloped districts** (~40-70 h, Sachin's yes): the foothills north of
    the city as hill districts (hill_n's contour rings, Vinewood-style):
    city ground on a height field, roads graded, buildings stepped onto it,

@@ -95,3 +95,30 @@ Stage A build (2026-10-30, approach before editing):
 - wards / wards_n get `cut` so their blocks grow (bigger blocks).
 - Tests: each site came out as one block of its kind and size; lakes in
   their block; landmark blocks kept; land area still in range.
+
+## Stage B design detail (#116, moved 2026-10-30)
+
+Where it can grow (checked 2026-10-30 on world_map.json): water on
+three sides. The Morrow runs down the core's west side (local x -750
+-> -350, y -650..1350), turns east under it and south to the Gulf at
+x ~1550; the Gulf is south, the coast diagonal south-east, the range
+north. Room: (1) **west across the Morrow**, local x ~-1500..-450, y
+~-300..1700 (~2 km²; flat, no terrain grid there), on the plan's
+"south" piece (the bend's outer side), reached by bridges carrying
+Magnolia, Aurum and Crescent west; (2) **north-east** into Verdant
+Hills, x ~1500..2700, y ~-500..300 (~1 km²). With the foothills in C
+that reaches ~8 km². Country terrain grid: origin (-864,-5112), 8 m,
+541 x 606 (ends at y -264). East: the coast runs (2250,1150) ->
+(3450,250), so land east of the core to x ~3000-3300 at y -600..600.
+Build approach (stage B, before editing): (1) world_map core = current
+core union a west lobe (x -1600..-300 incl. the river) and an east lobe
+(x 2000..3100, y -600..700), wobbled, then `build_country.py --urban`;
+plan bounds follow the core bbox. (2) street_plan: ARTERIALS with bank
+"south" for the west borough (x and y lines, new road names), new
+patches (west industrial dsep ~[400,140], west residential, east
+patch on bank "north"), Magnolia/Crescent/Aurum carried over the
+Morrow's west leg as bridges like the Morrow Bridge (b0/b1 code in
+_layout). (3) districts in city.gd (patch prefix -> district) and
+world_map districts; open land: golf course, airport edge. (4) tests:
+km² range, exits, block counts; check city build time on load.
+Plot helper: scratchpad planplot.py (plan.json -> png).
