@@ -82,3 +82,38 @@ uses the same tokens. Not a measurement.
 - Cost confound P1: lock waits > 5 min expire the agent's prompt cache, so P1
   cache writes (0.35-1.14M tokens) mostly measure waiting, not the model. P2
   (short queue for low/med/opus) is the cleaner cost comparison.
+- P1 blinded Opus-high grade (fix min): son-max 9 (2; only test catching the
+  shader revert), son-xhigh 8 (4), opus-med 8 (4), opus-high 8 (5), opus-low 7
+  (5), son-high 6 (8; keeps 260 KB images), son-med 5 (10; Medium: uniqueness
+  check a no-op headless), son-low 3 (15; High: SCRIPT ERROR, gates unrun).
+  All 8 ignore create_from_images' result (Low each).
+- Bench cost: 14 builders + 2 graders $39.93 (raw, with lock-wait cache
+  rewrites); main-session overhead not included.
+
+## Final table (both packages; n=1 per cell)
+Build $ = builder cost with cache writes capped at 130k (lock-wait rewrites
+removed; P2 low/med/opus untouched). Review = trial 2 Opus-high per-package
+reviews ($0.88 + $1.77). Fix $ = grader's fix minutes x ~$0.10/min main session
+(estimate). Sonnet high = trial 2 runs.
+
+| Builder | Grades P1/P2 | Build $ | Fix min | Total $ (build+review+fix) |
+|---|---|---|---|---|
+| Sonnet low | 3 / 3 | 1.93 | 30 | 7.58 |
+| Sonnet medium | 5 / 3 | 1.72 | 25 | 6.87 |
+| Sonnet high | 6 / 5 | 2.12 | 18 | 6.57 |
+| Sonnet xhigh | 8 / 8 | 3.10 | 9 | 6.65 |
+| Sonnet max | 9 / 9 | 8.40 | 5 | 11.55 |
+| Opus low | 7 / 5 | 2.07 | 15 | 6.22 |
+| Opus medium | 8 / 7 | 3.02 | 10 | 6.67 |
+| Opus high | 8 / 5 | 3.28 | 15 | 7.43 |
+
+Reading: higher effort mainly buys catching a wrong brief (P2: xhigh, max,
+opus-med corrected the half-side formula; opus-high and son-high used
+half-diagonal). Totals for the mid combos sit within ~$1 of each other, which
+n=1 cannot separate. Wall time: xhigh/max far slower (P2 39k/168k output
+tokens vs 21k for opus-high). Opus low/medium sit below the CLAUDE.md effort
+floor (high).
+Recommendation: Sonnet xhigh builders + Opus high main session and per-package
+Opus review, provisionally; confirm with a finalist run (son-xhigh, son-max,
+opus-med, opus-high; 3 repeats x 3 packages, ~$100-150, half a day) on Sachin's
+word.
