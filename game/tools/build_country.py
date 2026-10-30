@@ -48,7 +48,7 @@ from road_classes import CLASSES, CITY_RANK  # noqa: E402
 import farmland  # noqa: E402
 import wealth  # noqa: E402
 from mountain import Mountain, roads as mountain_roads, lines as mountain_lines, OBSERVATORY, OBSERVATORY_SIZE, OBSERVATORY_ROAD_END, LETTERS, LETTERS_SIZE, MASTS, MAST_SIZE  # noqa: E402
-from mountain import GRADE, SUMMIT_SITES, PEAKS, CABLE, CABLE_MID_SIZE  # noqa: E402
+from mountain import GRADE, SUMMIT_SITES, PEAKS, CABLE, CABLE_MID_SIZE, CELL as MTN_CELL  # noqa: E402
 import numpy as np  # noqa: E402
 import contourpy  # noqa: E402
 
@@ -315,7 +315,9 @@ HILL_PART_MIN = 40000.0     # smallest piece of land worth a district (m2)
 HILL_PITCH = 76.0           # between two terraces (two lot depths)
 HILL_RUN = 120.0            # shortest terrace
 HILL_REACH = 70.0           # a terrace end carries on along its contour this far to meet a road
-HILL_CONNECT = 0.12         # grade of the climbs between terraces (street cap 0.13)
+HILL_CONNECT = 0.10         # grade the climbs are traced at on the smoothed ground (street cap
+                            # 0.13: each street is graded on its own ground, so they come out steeper)
+HILL_PAD_TOL = 0.2          # a hill home's pad: most its back and sides may lie off level (m)
 HILL_GAP = 220.0            # between a terrace's climbs
 HILL_NAMES = ["Toyon Terrace", "Sagewood Terrace", "Manzanita Crest", "Columbine Terrace", "Buckeye Drive",
               "Chamise Terrace", "Kestrel Crest", "Madrone Drive", "Yarrow Terrace", "Sumac Crest",
@@ -1985,6 +1987,7 @@ class Country:
         # The masts share one compound on the summit, level with the end of
         # the fire road (or the higher ground, if that is higher).
         summit = max([self.mtn.raw_at(m) for m in MASTS] + [self.mtn.profile_near(MASTS[0], 30.0) or 0.0])
+        owners = [None] * len(pads)  # the lot each pad is for
         for l in self.lots:
             if l["kind"] == "hill_letters" or not near.contains(Point(l["x"], l["y"])):
                 continue
@@ -1995,6 +1998,7 @@ class Country:
             else:
                 h = front_height(l["x"], l["y"], l["yaw"], l["d"])
             pads.append((lot_poly(l["x"], l["y"], l["yaw"], l["w"], l["d"]), h))
+            owners.append(l)
         # The summit's sites, each level at its own ground (the car park at
         # the end of Mount Calder Road), and the cable car's mid-station.
         self.mtn_sites = {}
@@ -2010,7 +2014,36 @@ class Country:
         for v in self.mtn_sites.values():
             pads.append((box(v["x"] - v["w"] * 0.5, v["y"] - v["d"] * 0.5, v["x"] + v["w"] * 0.5, v["y"] + v["d"] * 0.5), v["z"]))
         self.terrain = self.mtn.grid(pads)
+        # A hill home whose pad cannot lie level at its back and sides goes:
+        # a pad or road at another height within about a cell of it shares
+        # the 8 m grid's cells with it. The worst goes first, one of each
+        # close group a round, and the grid is made again. Its front meets
+        # its road's grading, as on the mountain.
+        dropped = 0
+        for _round in range(4):
+            tilted = sorted(((self._pad_tilt(l), k) for k, l in enumerate(owners)
+                             if l is not None and l["zone"] == "hillside"), reverse=True)
+            drop = []
+            for t, k in tilted:
+                if t > HILL_PAD_TOL and not any(pads[k][0].distance(pads[j][0]) < 3.0 * MTN_CELL for j in drop):
+                    drop.append(k)
+            if not drop:
+                break
+            gone = {id(owners[k]) for k in drop}
+            self.lots = [l for l in self.lots if id(l) not in gone]
+            pads = [pd for k, pd in enumerate(pads) if k not in drop]
+            owners = [o for k, o in enumerate(owners) if k not in drop]
+            dropped += len(drop)
+            self.terrain = self.mtn.grid(pads)
+        print("hill homes off level dropped: %d" % dropped)
         self.mtn_pads = pads
+
+    def _pad_tilt(self, l):
+        """How far a lot's ground lies off level 1 m inside its back and
+        sides and at its middle (the final grid, as the game reads it)."""
+        hs = [self.mtn.height(frame_point((l["x"], l["y"]), l["yaw"], u * (l["w"] * 0.5 - 1.0), v * (l["d"] * 0.5 - 1.0)))
+              for u in (-1.0, 0.0, 1.0) for v in (0.0, 1.0)]
+        return max(hs) - min(hs)
 
     def _heights_roads(self):
         """Magnolia Heights and Blackwater Bayou: the flats (drives round the
