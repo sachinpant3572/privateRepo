@@ -205,9 +205,10 @@ func exit_vehicle(thrown := false) -> void:
 	var was_passenger := passenger
 	passenger = false
 	# Out of a helicopter in the air: a jump, and the fall to the ground.
-	# Thrown out over a roof (a wreck), the fall is to open ground nearby.
+	# Thrown out high over a roof (a wreck), the fall is to open ground
+	# nearby; wrecked while sitting on the roof, they get down unhurt by a fall.
 	var check: String = car.exit_check() if car.has_method("exit_check") else ""
-	var bail: bool = check == "bail" or (thrown and check == "roof")
+	var bail: bool = check == "bail" or (thrown and check == "roof" and car.height_over_floor() > car.LOW)
 	var from_y: float = car.global_position.y
 	if not was_passenger:
 		car.release_player()
@@ -237,6 +238,7 @@ func respawn(at: Vector3) -> void:
 	if vehicle != null:
 		exit_vehicle()
 	_fall = 0.0
+	_fall_v = 0.0
 	revive(at)
 	controllable = true
 

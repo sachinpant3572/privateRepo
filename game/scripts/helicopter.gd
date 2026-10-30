@@ -320,6 +320,11 @@ static func _ground(x: float, z: float) -> float:
 	return g
 
 
+## Height over what it would land on (the ground, a roof or a deck).
+func height_over_floor() -> float:
+	return global_position.y - _floor
+
+
 ## The nearest open ground to `p` (no roof over the land), rings out to 80 m;
 ## `p` itself if none is found.
 func open_ground_near(p: Vector3) -> Vector3:

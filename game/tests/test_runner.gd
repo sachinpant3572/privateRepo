@@ -10989,11 +10989,43 @@ func test_heli_exit_only_when_low() -> void:
 	var g := Terrain.height(player.global_position.x, player.global_position.z) - Terrain.drop(player.global_position.x, player.global_position.z)
 	_check(lost > 55.0 and lost < 85.0, "the 12 m drop costs %.0f health" % lost)
 	_check(absf(player.global_position.y - g) < 0.3, "and they come down to the ground (%.2f m over it)" % (player.global_position.y - g))
-	# Thrown out of it (a wreck) 40 m over the roof: the fall is to open
-	# ground beside the building, not into it.
+	# A mission REPLAY from the phone while flying 40 m up: they arrive at
+	# the mission's start on their feet, with no fall left to finish.
+	player.revive(player.global_position)
+	player.enter_vehicle(heli)
+	_hold_heli_at(heli, pad, 40.0, heli.rotation.y)
+	await _frames(20)
+	_check(heli.exit_check() == "bail", "40 m up over open ground (%.1f m)" % heli.altitude)
+	var mm = game.missions
+	mm.abandon()
+	mm.start("m01_homecoming", true)
+	var start: Vector3 = mm.active.start_point()
+	_check(player.vehicle == null and player._fall == 0.0 and player.knocked_time <= 0.0, "a replay leaves no bail fall pending")
+	await _frames(240)
+	var off := Vector2(player.global_position.x - start.x, player.global_position.z - start.z).length()
+	_check(not game.respawning and player.health == player.max_health and player.knocked_time <= 0.0 and off < 20.0, \
+			"a replay from 40 m up lands them unhurt and standing at the start (health %.0f, %.0f m off)" % [player.health, off])
+	mm.abandon()
+	# Wrecked while sitting on the roof: down to open ground, hurt only by
+	# the crash (no fall from the roof).
 	player.revive(player.global_position)
 	player.enter_vehicle(heli)
 	city.stream_now(roof)
+	heli.global_position = roof + Vector3(0.0, 1.0, 0.0)
+	heli.velocity = Vector3.ZERO
+	heli.rpm = 1.0
+	heli.landed = false
+	heli.reset_physics_interpolation()
+	game.camera.snap()
+	await _frames(5)
+	_check(heli.exit_check() == "roof" and heli.height_over_floor() < heli.LOW, "sitting on the roof (%.1f m over it)" % heli.height_over_floor())
+	player.exit_vehicle(true)
+	await _frames(120)
+	_check(not player.dead and player.health == player.max_health - 25.0, "wrecked on the roof, the pilot lives with the crash's harm (%.0f)" % player.health)
+	# Thrown out of it (a wreck) 40 m over the roof: the fall is to open
+	# ground beside the building, not into it. (Last: the drop kills.)
+	player.revive(player.global_position)
+	player.enter_vehicle(heli)
 	heli.global_position = roof + Vector3(0.0, 40.0, 0.0)
 	heli.velocity = Vector3.ZERO
 	heli.rpm = 1.0
@@ -11009,20 +11041,6 @@ func test_heli_exit_only_when_low() -> void:
 	_check(over.is_empty() or over.position.y <= Terrain.height(at.x, at.z) + 1.0, "thrown over a roof, the fall is to open ground, not inside the building")
 	await _frames(240)
 	_check(player.health < player.max_health - 25.0, "and the drop hurts more than a thrown exit (%.0f left)" % player.health)
-	# A mission REPLAY from the phone while flying 40 m up: they arrive on
-	# their feet, unhurt.
-	player.revive(player.global_position)
-	player.enter_vehicle(heli)
-	_hold_heli_at(heli, pad, 40.0, heli.rotation.y)
-	await _frames(20)
-	_check(heli.exit_check() == "bail", "40 m up over open ground (%.1f m)" % heli.altitude)
-	var mm = game.missions
-	mm.abandon()
-	mm.start("m01_homecoming", true)
-	await _frames(240)
-	_check(player.vehicle == null and player.health == player.max_health and player.knocked_time <= 0.0, \
-			"a replay from 40 m up lands them unhurt and standing (health %.0f)" % player.health)
-	mm.abandon()
 
 
 ## Streaming: flying flat out near the ceiling from downtown out over the
