@@ -5332,11 +5332,22 @@ func test_suburb_home_cars_are_live() -> void:
 	var city = game.city
 	var c = city.country
 	var first: int = city.parked_spots.size()
+	# The east side loop with the most houses that park live cars round it
+	# (stage B moved them north; the first loop found sat by beach hotels).
 	var at := Vector3.INF
+	var most := 0
 	for w in c.walks:
-		if w[0].x > 1700.0 and w[0].z > 200.0 and w[0].z < 900.0:
-			at = w[0]
-			break
+		var q: Vector3 = w[0]
+		if q.x > 1700.0:
+			var homes := 0
+			for l in c.lots:
+				if l.size() > 7 and str(l[7]) in preload("res://scripts/country_tiles.gd").LIVE_CAR_ZONES \
+						and c.kinds[int(l[5])] in ["house", "exec_house", "bungalow_barred"] \
+						and Vector2(l[0] - q.x, l[1] - q.z).length() < 150.0:
+					homes += 1
+			if homes > most:
+				most = homes
+				at = q
 	_check(at != Vector3.INF, "an east side loop to stand on")
 	if at == Vector3.INF:
 		return
@@ -8022,7 +8033,10 @@ func test_road_surfaces_and_roadworks() -> void:
 		var x := q.dot(dir)
 		if x > wk.x0 - 1.0 and x < wk.x1 + 1.0:
 			widest = maxf(widest, q.dot(right) * sd)
-		if (x - xb) * sd > 6.0:
+		# Out of the works, or out of them and held at the junction's stop
+		# line (works by a junction end short of the 6 m mark).
+		var near_end: bool = x < 16.0 if sd < 0.0 else x > length - 16.0
+		if (x - xb) * sd > 6.0 or ((x - xb) * sd > 0.0 and near_end and absf(car.speed) < 0.5):
 			past = true
 			break
 	var burst := barriers.filter(func(s): return s.get_meta("brk").get("down", false)).size()
