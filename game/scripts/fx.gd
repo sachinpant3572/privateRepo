@@ -18,6 +18,7 @@ const Puffs = preload("res://scripts/puffs.gd")
 const Boom = preload("res://scripts/explosion.gd")
 const FireFx = preload("res://scripts/fire_fx.gd")
 const Terrain = preload("res://scripts/terrain.gd")
+const MeshBuilder = preload("res://scripts/mesh_builder.gd")
 
 ## Off in headless runs (tests), where slowing time would only slow tests.
 var enabled := true
