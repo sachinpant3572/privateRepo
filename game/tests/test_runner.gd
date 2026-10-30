@@ -894,13 +894,15 @@ func test_perspective_camera() -> void:
 			continue
 		query.position = at + cam.global_basis.z * base
 		var inside := not space.intersect_point(query, 1).is_empty()
-		if not inside and (blocked_spot != null or inside_spots >= 6):
+		# Tower spots come first and fill the six inside spots, so the
+		# search for a hidden player carries on through the random ones.
+		if not inside and blocked_spot != null:
 			continue
 		_place_player_at(at)
 		await _frames(3)
 		if blocked_spot == null and cam._view_blocked(game.player.global_position):
 			blocked_spot = at
-		if not inside:
+		if not inside or inside_spots >= 6:
 			continue
 		inside_spots += 1
 		query.position = cam.global_position
