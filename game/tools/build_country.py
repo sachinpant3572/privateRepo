@@ -1280,7 +1280,7 @@ class Country:
         base = unary_union(base_lines)
 
         def cut_off():
-            """Terraces in a group of ways that reaches no road, by group."""
+            """Terraces and climbs in a group of ways that reaches no road, by group."""
             every = st_lines + climbs
             root = list(range(len(every)))
 
@@ -1296,7 +1296,7 @@ class Country:
                         root[find(a)] = find(int(b))
             good = {find(a) for a in range(len(every)) if every[a].distance(base) < 1.0}
             groups = {}
-            for a in range(len(st_lines)):
+            for a in range(len(every)):
                 if find(a) not in good:
                     groups.setdefault(find(a), []).append(a)
             return groups
@@ -1307,6 +1307,8 @@ class Country:
             for members in groups.values():
                 best = None
                 for a in members:
+                    if a >= len(st_lines):
+                        continue
                     line = st_lines[a]
                     for s in np.arange(15.0, line.length - 15.0, 30.0):
                         p0 = line.interpolate(s).coords[0]
@@ -1323,8 +1325,11 @@ class Country:
                     added += 1
             if not added:
                 break
+        # A cut-off group is dropped whole: its climbs too, or their loose
+        # ends would get straight, ungraded join_ends links.
         lost = {a for members in cut_off().values() for a in members}
         kept = [t for a, t in enumerate(terraces) if a not in lost]
+        climbs = [c for a, c in enumerate(climbs) if len(st_lines) + a not in lost]
         # Terraces first, so _grade_rest grades the climbs onto them.
         kept_src = []
         for a, (line, _kinds) in enumerate(kept):

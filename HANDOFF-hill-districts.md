@@ -67,6 +67,15 @@ on Opus with Sonnet trial packages). Stage D (the bay) is NOT approved.
   middle/back/sides 1 m in) and drops those off by > HILL_PAD_TOL 0.2 m,
   worst first, one per 24 m group a round, remaking the grid (<= 4 rounds).
   test_hill_districts checks the same rows at 0.3 m.
+- Run 3 (65d235a): terraces 25 (5.7 km, 3 cut off), climbs 32 (3.3 km),
+  22 lots dropped, hillside lots 183, walks 92. Basalt/Onyx Rise measured
+  0.26-0.27: the climbs of the 3 cut-off terraces were still built, and
+  join_ends tied their loose ends to the nearest street with straight,
+  ungraded links. Fix: a cut-off group is dropped whole (its climbs too).
+- Crest Drive (mountain road, 0.143 before stage C) measured 0.148 in run 3:
+  its shape is unchanged, but its end now reaches 10.5 m further to meet
+  Harrier Rise, so grade() resamples its 4 m points and the 60 m smoothing
+  lands a little differently by the hairpin at (1760,-1130).
 
 ## Open questions
 
