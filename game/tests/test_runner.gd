@@ -6832,33 +6832,40 @@ func test_every_home_has_a_way_in() -> void:
 		longest = maxf(longest, r.z)
 	_check(house >= 0 and longest > 3.0, "a tile build runs a street house's drive out to its road (house %d, longest route out %.1f m)" % [house, longest])
 	# On the hills the route bends from the lot's pad down (or up) to the
-	# road: on the house whose road edge lies furthest off its pad, route
-	# tops (0.05 up) at the road edge sit on the ground there, none on the pad.
+	# road: on the five houses whose road edge lies furthest off their pads,
+	# route tops (0.05 up) at the road edge sit on the ground there, none on
+	# the pad. (Several, since a drive can meet its road where the ground
+	# happens to lie level with the pad and tell nothing.)
 	var Terrain = preload("res://scripts/terrain.gd")
-	var hill := -1
-	var off := 0.0
+	var gaps: Array = []
 	for i in c.lots.size():
 		var l: Array = c.lots[i]
 		if c.kinds[int(l[5])] != "house" or l[9][1] < 2.0 or Terrain.height(l[0], l[1]) <= 0.0:
 			continue
 		var yaw := float(l[2])
+		var worst := 0.0
 		for k in 3:
 			var lx := (k - 1) * (float(l[3]) * 0.5 - 0.3)
 			var lz := -float(l[4]) * 0.5 - (float(l[9][k]) - 0.6)
 			var e := Vector2(l[0], l[1]) + Vector2(lx * cos(yaw) + lz * sin(yaw), -lx * sin(yaw) + lz * cos(yaw))
-			var gap := absf(Terrain.height(e.x, e.y) - Terrain.height(l[0], l[1]))
-			if gap > off:
-				hill = i
-				off = gap
+			worst = maxf(worst, absf(Terrain.height(e.x, e.y) - Terrain.height(l[0], l[1])))
+		gaps.append([worst, i])
+	gaps.sort_custom(func(x, y): return x[0] > y[0])
+	gaps = gaps.slice(0, 5)
+	var off: float = gaps[0][0] if not gaps.is_empty() else 0.0
 	var on_ground := 0
 	var on_pad := 0
-	if hill >= 0:
+	var built_tiles := {}
+	for g in gaps:
+		var hill: int = g[1]
 		var l: Array = c.lots[hill]
 		for key: Vector2i in c.tiles:
 			for i in c.tiles[key].l:
 				if int(i) == hill:
 					tile_key = key
-		var built: Dictionary = preload("res://scripts/country_tiles.gd").build(c, tile_key)
+		if not built_tiles.has(tile_key):
+			built_tiles[tile_key] = preload("res://scripts/country_tiles.gd").build(c, tile_key)
+		var built: Dictionary = built_tiles[tile_key]
 		var pad := Terrain.height(l[0], l[1])
 		var to_local := Transform3D(Basis(Vector3.UP, float(l[2])), Vector3(l[0], 0.0, l[1])).affine_inverse()
 		Kit.reach = l[9]
@@ -6885,8 +6892,8 @@ func test_every_home_has_a_way_in() -> void:
 			elif absf(v.y - (pad + 0.05)) < 0.01:
 				on_pad += 1
 		Kit.reach = [0.0, 0.0, 0.0]
-	_check(hill >= 0 and off > 0.15 and on_ground > 0 and on_pad == 0,
-		"a hill house's drive meets its road (road edge %.2f m off the pad; route tops there on the ground %d, on the pad %d)" % [off, on_ground, on_pad])
+	_check(gaps.size() == 5 and off > 0.15 and on_ground > 0 and on_pad == 0,
+		"hill houses' drives meet their roads (5 lots, road edge up to %.2f m off the pad; route tops there on the ground %d, on the pad %d)" % [off, on_ground, on_pad])
 	var problems: Array[String] = []
 	# The same with the left third of the front blocked (rails, water): no
 	# route leaves through it. A farm's own buildings draw none of their own
