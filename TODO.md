@@ -56,6 +56,16 @@ Train tracks, Tunnels, roads, shortcuts, animals, and huge forest on priority."
 - 5-star mountain hotels and restaurants, each with its staff and a history,
   good and twisted (original names; story hooks for missions).
 
+Sachin, 2026-10-30: "Because 3km2 is going to be a huge area, we have to balance out
+secluded areas for calm and peace, and the activities going on, add an illegal forest
+tree cutting/delivering job too."
+- **Balance**: the design map marks quiet zones (no events, races or raves; trails,
+  springs, viewpoints, wildlife) apart from the busy ones (towns, truck stops, race
+  routes, rave clearings), with buffers between, so calm places stay calm.
+- **Illegal logging job**: fell trees deep in the forest, load a log truck, haul it
+  out on unpaved roads to a buyer at a shady sawmill, dodging rangers (wanted level if
+  seen). Needs the huge forest and unpaved roads above.
+
 ## Thursday, Oct 30, 2026: industry, secret sites, a busy airport and everyday-life services
 
 Sachin, 2026-10-30: "Add to TODO, build a Quarry in map, away from the city, behind
