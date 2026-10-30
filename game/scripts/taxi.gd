@@ -691,7 +691,11 @@ func _curb_stop(from: int, to: int, at: Vector3) -> Array:
 	if float(lanes.get("park", 0.0)) > 0.0:
 		off = off.normalized() * (float(lanes.middle) + n * float(lanes.lane_w) + float(lanes.park) * 0.5)
 	else:
-		off *= CURB_SHIFT
+		# Kept on the road: on a wide street the curb lane's middle times
+		# CURB_SHIFT is past the curb, and the cab stopped on the sidewalk.
+		var edge: float = float(lanes.get("middle", 0.6)) + n * float(lanes.get("lane_w", 3.6)) \
+				- VehicleKit.size_of("taxi").x * 0.5 - 0.2
+		off = off.normalized() * minf(off.length() * CURB_SHIFT, edge)
 	var dir: Vector3 = city.node_pos(to) - city.node_pos(from)
 	var yaw := atan2(-dir.x, -dir.z)
 	# A car parked on the spot, or the player standing on it: the nearest
