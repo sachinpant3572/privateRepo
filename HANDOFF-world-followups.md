@@ -31,6 +31,11 @@ approved by this.
   shelf, near the rail's level), waypoint moved to (-704,-3250), and the
   grader's shared-stretch pins must be in reach of the rail crossings
   (mountain.py). The old line ran 548 m within 8 m of the rail.
+- **Level crossings and hugging roads** (mountain.py): a road at a level
+  crossing holds the rail's height out to LEVEL_REACH (20 m) from it. Wheaton
+  (108 % after that) crosses over the rail and curls back 7-9 m beside it,
+  7 m above the rail's strip; each rail crossing now records `hug` (how far
+  along the rail the road stays within 20 m) and the rail span covers it.
 
 ## Reference maps (Sachin, 2026-10-30)
 

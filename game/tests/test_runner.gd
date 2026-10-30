@@ -34,6 +34,7 @@ func _run() -> void:
 		"test_city_follows_world_map",
 		"test_street_plan_is_a_california_grid",
 		"test_city_outline_is_organic",
+		"test_city_has_open_land",
 		"test_bellerive_borrows_dc_ny_and_california",
 		"test_wanted_level_decays_out_of_sight",
 		"test_player_walks",
@@ -279,6 +280,50 @@ func test_city_follows_world_map() -> void:
 ## north-south/east-west grid, boulevards running right through it on a
 ## regular pitch, few diagonals, mostly rectangular blocks. The old warped
 ## plan failed every one of these (17% of streets on the compass).
+## Open land between the blocks (Sachin, 2026-10-30: "Our city grid only
+## seems to have buildings, no lakes or big parks, or ponds ... they all have
+## multiple things in between parts from just houses, corporate buildings"):
+## each site in OPEN_LAND is one block of its kind and about its size, the
+## parks' lakes lie inside their blocks, and no landmark lost its block.
+func test_city_has_open_land() -> void:
+	await _new_game(false)
+	var city = game.city
+	var plan = city.plan
+	var seen := {}
+	var wet := 0
+	for site in plan.OPEN_LAND:
+		var f: int = plan.set_piece_face(site.id)
+		var style: String = city.block_style(f) if f >= 0 else "none"
+		_check(style == site.kind, "%s is a %s block, got %s" % [site.id, site.kind, style])
+		if f < 0:
+			continue
+		_check(not seen.has(f), "%s has a block of its own" % site.id)
+		seen[f] = site.id
+		var want: float = site.size.x * site.size.y
+		var area: float = plan.faces[f].area
+		_check(area > want * 0.4 and area < want * 1.5, "%s covers %.0f m2 (its site %.0f m2)" % [site.id, area, want])
+		if site.lake > 0.0:
+			wet += 1
+	_check(plan.faces[plan.set_piece_face("halcyon_park")].area > 100000.0, "Halcyon Park is a central park (over 10 ha)")
+	_check(plan.lakes.size() == wet and plan.lake_face.size() == wet, "a lake in each park that has one: %d of %d" % [plan.lakes.size(), wet])
+	for k in plan.lakes.size():
+		var poly: PackedVector2Array = plan.faces[plan.lake_face[k]].poly
+		var out := 0
+		for q in plan.lakes[k]:
+			if not Geometry2D.is_point_in_polygon(q, poly):
+				out += 1
+		var a := 0.0
+		for i in plan.lakes[k].size():
+			a += plan.lakes[k][i].cross(plan.lakes[k][(i + 1) % plan.lakes[k].size()])
+		_check(out == 0 and absf(a) * 0.5 > 1500.0, "lake %d lies in its park (%d points out), %.0f m2" % [k, out, absf(a) * 0.5])
+		_check(plan.lake_at(plan.lakes[k][0].lerp(plan.lakes[k][16], 0.5)) == k, "lake %d is found by lake_at" % k)
+	# The landmarks keep their blocks: none fell inside the open land.
+	for lm in city._map_landmarks:
+		if lm.get("spot", true):
+			var f: int = plan.face_of(lm.local)
+			_check(not seen.has(f), "landmark %s is not inside %s" % [lm.id, seen.get(f, "")])
+
+
 func test_city_outline_is_organic() -> void:
 	# Sachin: "Belleriv looks like a perfectly squared/rectangle city. This
 	# is now how ideal cities looks, even if they are fully architected."

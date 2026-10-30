@@ -132,6 +132,12 @@ func _run() -> void:
 		await _lv(game)
 		get_tree().quit()
 		return
+	if OS.get_environment("SHOTS") == "open":
+		# The open land in the city (HANDOFF-world-followups.md stage A):
+		# parks with lakes, the cemetery, the stadium, the dock yards.
+		await _open(game)
+		get_tree().quit()
+		return
 	if OS.get_environment("SHOTS") == "roads":
 		# Just the wide roads (quick look while working on them).
 		await _roads(game)
@@ -894,6 +900,27 @@ func _lv(game) -> void:
 		await _frames(240)
 		print("district ", stop[0], " ", game.city.district_at(pos).get("name", "?"))
 		await _shot(stop[0] + ".png")
+	game.camera.fixed_focus = null
+	game.camera.room_size = 0.0
+
+
+func _open(game) -> void:
+	var zoom := {"halcyon_park": 150.0, "bellerive_bowl": 130.0, "morrow_cemetery": 90.0,
+		"ironwharf_containers": 90.0, "ironwharf_rail_yard": 90.0}
+	var n := 0
+	for site in preload("res://scripts/street_plan.gd").OPEN_LAND:
+		var f: int = game.city.plan.set_piece_face(site.id)
+		var at: Vector2 = game.city.plan.faces[f].center if f >= 0 else site.at
+		var pos := Vector3(at.x, Terrain.height(at.x, at.y), at.y)
+		game.city.stream_now(pos)
+		game.player.global_position = pos
+		game.player.reset_physics_interpolation()
+		game.camera.fixed_focus = pos
+		game.camera.room_size = zoom.get(site.id, 75.0)
+		game.camera.snap()
+		await _frames(240)
+		n += 1
+		await _shot("open_%d_%s.png" % [n, site.id])
 	game.camera.fixed_focus = null
 	game.camera.room_size = 0.0
 
