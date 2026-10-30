@@ -830,7 +830,10 @@ func test_city_runs_with_population() -> void:
 	await _frames(180)
 	await _within(func(): return game.population.peds.size() >= 10, 5.0)
 	_check(game.population.peds.size() >= 10, "pedestrians spawned, got %d" % game.population.peds.size())
-	_check(game.population.cars.size() >= 5, "traffic spawned, got %d" % game.population.cars.size())
+	# Traffic refills at two tries a tick, and a try fails when the lane is
+	# taken or the street is a quiet one, so give it the same few seconds.
+	await _within(func(): return game.population.cars.size() >= 5, 8.0)
+	_check(game.population.cars.size() >= 5, "traffic spawned, got %d (run ended at %s)" % [game.population.cars.size(), car.global_position.round()])
 	_check(fastest[0] > 15.0, "the run gets up to speed (%.1f m/s)" % fastest[0])
 	_check(spawned > 10 and popped == 0, "%d spawned while driving, %d of them in view" % [spawned, popped])
 	_check(counts[2] == 0, "%d people or cars vanished in view" % counts[2])
@@ -2212,7 +2215,18 @@ func test_birds_by_day_not_at_night() -> void:
 			_check(hid and birds.view.visible, "birds hide indoors and show again back outside")
 		atm.hour = 2.0
 		await _frames(2)
-	_check(misplaced.is_empty() and kinds.city.get("pigeon", 0) + kinds.city.get("crow", 0) > 0 and not kinds.city.has("egret") and kinds.beach.get("gull", 0) > 0 and kinds.bayou.get("egret", 0) + kinds.bayou.get("heron", 0) > 0 and kinds.hills.get("hawk", 0) > 0, "kinds by place: %s, each a kind of its ground %s" % [kinds, misplaced])
+	_check(misplaced.is_empty() and kinds.city.get("pigeon", 0) + kinds.city.get("crow", 0) > 0 and not kinds.city.has("egret") and kinds.beach.get("gull", 0) > 0 and kinds.bayou.get("egret", 0) + kinds.bayou.get("heron", 0) > 0 and kinds.hills.size() > 0, "kinds by place: %s, each a kind of its ground %s" % [kinds, misplaced])
+	# Hawks over the hills: the flocks above are a random draw that can miss
+	# them, so the draw itself is checked (at most 2 hawk flocks at a time).
+	var flying := 0
+	for f in birds.flocks:
+		if f.kind == "hawk":
+			flying += 1
+	var hawks := 0
+	for i in 100:
+		if birds._pick_kind(places.hills) == "hawk":
+			hawks += 1
+	_check((hawks >= 20 and hawks <= 60) if flying < 2 else hawks == 0, "hawks are drawn over the hills (%d in 100, %d flying)" % [hawks, flying])
 	# Back in town: the day ends, the day birds leave and the bats come out.
 	var town := Vector3(300, 0, 250)
 	game.player.global_position = town + Vector3(0, 0.5, 0)

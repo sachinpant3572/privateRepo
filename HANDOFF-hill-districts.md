@@ -123,6 +123,11 @@ gameplay choice for Sachin; the blast still makes "crash").
   (`flat_bulbs`, ends pinned, cap 0), cut and filled like real hillside
   cul-de-sacs. test_hill_districts checks the arcs are level within 0.5 m.
 
+- Full-suite flakes (2026-10-30): the birds test's hills sample drew no hawk
+  (~1 in 500; the circle reads "hills" at 394/400 points), now a fixed 100-draw
+  `_pick_kind` check; the city traffic count read 4 of 5 at one instant (passes
+  alone), now waits up to 8 s for traffic to refill like the pedestrian check.
+
 ## Open questions
 
 ## Traps
