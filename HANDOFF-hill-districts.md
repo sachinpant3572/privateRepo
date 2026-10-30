@@ -62,6 +62,24 @@ Fire Lows left as they are: the scorch outliving a respawn (clear() only in
 tests; it fades in 50 s) and the unused "explosion" sense (senses.gd: a
 gameplay choice for Sachin; the blast still makes "crash").
 
+Trial 1 cost (session logs, API list prices as the weight; cache reads cost
+$0.20/MTok on both models, so Sonnet only halves input/output): Sonnet runs
+$6.58 (same tokens at Opus prices $10.73), extra per-package Opus reviews
+$3.25, main-session fixes ~$7-9 (estimated share of mixed windows).
+Sonnet path ~$17-19 vs Opus-only ~$11-13 at high: ~40-60 % more.
+
+## Sonnet trial 2 (Sachin, 2026-10-30: "Yes please" to a retest with briefs)
+
+Packages: the two Lows left from the fire v2 review, small and patterned.
+Sonnet 5.5 at high, briefs list the Godot traps, the agent runs its own
+focused tests and shots, one Opus review per package. Sequential (both touch
+fire_fx.gd). Est. ~$6-9 and 1-1.5 h in all; cheaper option: package 1 only.
+1. Flame atlas mip bleed: frames become a Texture2DArray (one layer each).
+2. Billboard cull margin on FireFx emitters, after verifying in Godot source.
+
+| Package | Review findings (severity) | First-run gate fails | Main fix time |
+|---|---|---|---|
+
 ## Build results (2026-10-30)
 
 Run-by-run build history (runs 1-7, grades, pads, turning circles):
