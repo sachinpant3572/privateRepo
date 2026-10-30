@@ -105,6 +105,12 @@ func _run() -> void:
 		await _crash(game)
 		get_tree().quit()
 		return
+	if OS.get_environment("SHOTS") == "fire":
+		# Car fire early and late, the explosion at 0.1 s, 0.4 s, 2 s and the
+		# scorched wreck, by day and night at High and Low (fx_*.png).
+		await _fire(game)
+		get_tree().quit()
+		return
 	if OS.get_environment("SHOTS") == "farm":
 		# Just Golden Flats' farmland (quick look while working on it).
 		await _farm(game)
@@ -703,6 +709,78 @@ func _crash(game) -> void:
 	await _shot("94_crash_wreck.png")
 	game.camera.fixed_focus = null
 	game.camera.room_size = 0.0
+
+
+## A burning sedan: a small engine fire, the whole car alight, then the
+## explosion at 0.1 s, 0.4 s, 2 s and the wreck with its scorch mark, by day
+## and by night at High, and by day and night at Low. Run it with
+## `--fixed-fps 60` so each frame is 1/60 s of game time. `FIRE_ONLY=day_high,...`
+## runs just those.
+func _fire(game) -> void:
+	var at := Vector2(690, 470)
+	var pos := Vector3(at.x, Terrain.height(at.x, at.y), at.y)
+	game.city.stream_now(pos)
+	game.player.global_position = pos + Vector3(-30, 0, 20)
+	var only := OS.get_environment("FIRE_ONLY")
+	for run in [["day_high", 11.0, "high"], ["night_high", 22.5, "high"], ["day_low", 11.0, "low"], ["night_low", 22.5, "low"]]:
+		if only != "" and not (run[0] in only.split(",")):
+			continue
+		game.Graphics.pick(game.settings, run[2])
+		game.apply_settings()
+		game.atmosphere.hour = run[1]
+		var tag: String = run[0]
+		game.camera.fixed_focus = pos + Vector3(0, 0, 1.0)
+		game.camera.room_size = 9.0
+		game.camera.snap()
+		var other = Vehicle.new()
+		other.kind = "sedan"
+		other.body_color = Color(0.2, 0.35, 0.7)
+		game.add_child(other)
+		other.global_position = pos + Vector3(8.5, 0, 0)
+		var car = Vehicle.new()
+		car.kind = "sedan"
+		car.body_color = Color(0.75, 0.75, 0.72)
+		game.add_child(car)
+		car.global_position = pos
+		car.rotation.y = PI / 2.0
+		await _frames(40)
+		car._damage(car.health - car.max_health * car.FIRE_AT * 0.97, true)
+		await _frames(45)
+		await _shot("fx_%s_1_early.png" % tag)
+		var fire = car._fire
+		for i in 900:
+			if fire._k > 0.8:
+				break
+			await _frames(1)
+		await _shot("fx_%s_2_late.png" % tag)
+		game.camera.room_size = 20.0
+		game.camera.snap()
+		for i in 900:
+			if fire.exploded:
+				break
+			await _frames(1)
+		await _frames(5)
+		await _shot("fx_%s_3_blast_0.1s.png" % tag)
+		await _frames(18)
+		await _shot("fx_%s_4_blast_0.4s.png" % tag)
+		await _frames(30)
+		await _shot("fx_%s_5_blast_0.9s.png" % tag)
+		await _frames(72)
+		await _shot("fx_%s_6_smoke_2s.png" % tag)
+		await _frames(300)
+		game.camera.room_size = 14.0
+		await _shot("fx_%s_7_wreck_7s.png" % tag)
+		await _frames(1200)
+		await _shot("fx_%s_8_scorch_27s.png" % tag)
+		print("fire %s: explosion pieces on %d" % [tag, Fx.boom.pieces_on()])
+		car.queue_free()
+		other.queue_free()
+		await _frames(5)
+	game.camera.fixed_focus = null
+	game.camera.room_size = 0.0
+	game.Graphics.pick(game.settings, "high")
+	game.apply_settings()
+	game.atmosphere.hour = 11.0
 
 
 ## A car with its lights on at night, on the flat and pointing up and down
