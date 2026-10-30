@@ -44,6 +44,8 @@ const MARGIN := 110.0
 ## demo) can widen them.
 static var LOAD_RADIUS := 105.0
 static var UNLOAD_RADIUS := 150.0
+## Seconds between picks of the next cell to build while flying (0.2 else).
+const AIR_TICK := 0.05
 const CELL_GRID := 50.0
 ## Map districts by street plan patch (patch ids start with these).
 ## Country junction ids are offset by this in the road API below, so one
@@ -188,20 +190,30 @@ func _process(delta: float) -> void:
 	_stream_tick -= delta
 	if _stream_tick > 0.0:
 		return
-	_stream_tick = 0.2
+	# Flying (#82): the camera says how far round the middle of the screen
+	# the ground shows; the radii grow to it and cells are picked more often.
+	var air := 0.0
+	if is_instance_valid(view_source) and view_source.has_method("stream_radius"):
+		air = view_source.stream_radius()
+	var load_r := maxf(LOAD_RADIUS, air)
+	var unload_r := maxf(UNLOAD_RADIUS, air + UNLOAD_RADIUS - LOAD_RADIUS)
+	_stream_tick = 0.2 if air <= 0.0 else AIR_TICK
 	var focus := focus_node.global_position if is_instance_valid(focus_node) else spawn_point
 	var view := focus
 	if is_instance_valid(view_source) and view_source.has_method("stream_point"):
 		var s: Vector3 = view_source.stream_point()
-		if Vector2(s.x - focus.x, s.z - focus.z).length() < 150.0:
+		if Vector2(s.x - focus.x, s.z - focus.z).length() < maxf(150.0, air):
 			view = s
+	if country != null:
+		country.air_radius = air
+		country.air_view = view
 	var p := Vector2(focus.x, focus.z)
 	var pv := Vector2(view.x, view.z)
 	for cell in _loaded.keys():
-		if _box_distance(cells[cell].box, p) > UNLOAD_RADIUS and _box_distance(cells[cell].box, pv) > UNLOAD_RADIUS:
+		if _box_distance(cells[cell].box, p) > unload_r and _box_distance(cells[cell].box, pv) > unload_r:
 			_unload(cell)
 	if _task < 0:
-		for cell in _cells_near(view, LOAD_RADIUS) + _cells_near(focus, LOAD_RADIUS * 0.6):
+		for cell in _cells_near(view, load_r) + _cells_near(focus, LOAD_RADIUS * 0.6):
 			if not _loaded.has(cell):
 				_start_task(cell)
 				break

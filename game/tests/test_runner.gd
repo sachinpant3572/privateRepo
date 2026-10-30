@@ -118,6 +118,10 @@ func _run() -> void:
 		"test_ultra_preset_has_msaa",
 		"test_camera_near_plane_keeps_depth_precision",
 		"test_ground_layers_never_share_a_plane",
+		# Helicopters (#82).
+		"test_heli_takes_off_and_hovers", "test_heli_lands_softly_on_its_pad", "test_heli_hard_landings_hurt_and_wreck",
+		"test_heli_walls_and_mountain_stop_it", "test_heli_exit_only_when_low", "test_heli_stream_keeps_up",
+		"test_heli_touch_controls", "test_heliport_pads_are_clear",
 	]
 	# ONLY=name1,name2 runs just those (handy while working on one test).
 	var only := OS.get_environment("ONLY")
@@ -2584,7 +2588,7 @@ func _free_game() -> void:
 	Controls.override_vector = null
 	Controls.scheme = "stick"
 	Controls.tilt_override = null
-	for action in ["attack", "interact", "sprint", "gas", "brake", "steer_left", "steer_right"]:
+	for action in ["attack", "interact", "sprint", "gas", "brake", "steer_left", "steer_right", "climb", "descend"]:
 		Input.action_release(action)
 	if game != null:
 		game.queue_free()
@@ -10507,3 +10511,446 @@ func test_ground_layers_never_share_a_plane() -> void:
 	_check(all_in and CityCells.PAVER_LAYERS.size() == 4, "every quarter paving kind has its own layer")
 	var top: float = 0.005 + 0.0015 * (CityCells.PAVER_LAYERS.size() - 1) + 0.01
 	_check(top < 0.025 - 0.0015, "the highest quarter paving (top %.4f m) stays under the zebra (0.025 m)" % top)
+
+
+# --- Helicopters (#82) ---------------------------------------------------------
+
+const Helicopter = preload("res://scripts/helicopter.gd")
+const Heliports = preload("res://scripts/heliports.gd")
+const HeliLayers = preload("res://scripts/layers.gd")
+
+
+## In the Jade Gate heliport's Skylark, north up, its rotor still; returns it.
+func _board_heli():
+	await _new_game(false)
+	var heli = game.heliports.helis[0]
+	_place_player_at(heli.global_position + Vector3(4.0, 0.0, 0.0))
+	await _frames(2)
+	game.player.enter_vehicle(heli)
+	await _frames(3)
+	return heli
+
+
+## Puts the piloted `heli` `height` m over the ground at `at` (x, z), still,
+## facing `yaw`, its rotor running.
+func _hold_heli_at(heli, at: Vector3, height: float, yaw: float) -> void:
+	heli.global_position = Vector3(at.x, Helicopter._ground(at.x, at.z) + height, at.z)
+	heli.rotation.y = yaw
+	heli.velocity = Vector3.ZERO
+	heli.rpm = 1.0
+	heli.landed = false
+	heli.altitude = height
+	heli.above_land = height
+	heli.reset_physics_interpolation()
+	game.player.global_position = heli.global_position
+	game.camera.snap()
+
+
+## The stick that flies the north-up view's way along ground direction `d`.
+func _stick_toward(d: Vector3) -> Vector2:
+	var ax: Array = game.camera.input_axes()
+	var f := Vector3(d.x, 0.0, d.z).normalized()
+	return Vector2(f.dot(ax[0]), -f.dot(ax[1]))
+
+
+## Up to `frames` physics frames, until `heli` sits on its skids.
+func _until_landed(heli, frames: int) -> void:
+	for i in frames:
+		if heli.landed:
+			return
+		await _frames(1)
+
+
+## Take-off: the rotor spools up from boarding (the skids stay down a
+## while), then it lifts and climbs at its climb rate and leaves the cars'
+## world; let go and it hovers, holding its height and place; held UP stops
+## at the ceiling over the land.
+func test_heli_takes_off_and_hovers() -> void:
+	var heli = await _board_heli()
+	_check(heli.landed and heli.rpm < 0.06 and heli.is_in_group("vehicles"), "on its pad among the vehicles, the rotor just starting (rpm %.2f)" % heli.rpm)
+	Input.action_press("gas") # the touch UP pedal
+	await _frames(60)
+	_check(heli.landed and heli.rpm > 0.1 and heli.rpm < 0.5, "a second on the rotor is spooling up (rpm %.2f), skids still down" % heli.rpm)
+	var t := 1.0
+	while heli.landed and t < 8.0:
+		await _frames(1)
+		t += 1.0 / 60.0
+	_check(not heli.landed and t > 1.5 and t < 4.0, "lifts off after %.1f s of spool-up" % t)
+	var climb := 0.0
+	while heli.altitude < 30.0 and t < 15.0:
+		await _frames(1)
+		t += 1.0 / 60.0
+		climb = maxf(climb, heli.velocity.y)
+	Input.action_release("gas")
+	var rate := float(heli._spec.climb)
+	_check(heli.altitude >= 30.0, "climbs to 30 m (%.0f m after %.1f s)" % [heli.altitude, t])
+	_check(climb > 0.85 * rate and climb < rate + 0.5, "climbs at %.1f m/s (its rate %.0f)" % [climb, rate])
+	_check(not heli.is_in_group("vehicles") and heli.is_in_group("helicopters"), "out of the cars' world while it flies")
+	await _frames(120) # the climb's overshoot settles
+	var start: Vector3 = heli.global_position
+	var bob := 0.0
+	var wander := 0.0
+	for i in 180:
+		await _frames(1)
+		bob = maxf(bob, absf(heli.global_position.y - start.y))
+		wander = maxf(wander, Vector2(heli.global_position.x - start.x, heli.global_position.z - start.z).length())
+	_check(bob < 0.3 and wander < 0.3, "hands off it hovers: height within %.2f m, place within %.2f m over 3 s" % [bob, wander])
+	_check(heli.rpm == 1.0, "the rotor at full speed in the hover")
+	_hold_heli_at(heli, start, Helicopter.CEILING - 12.0, heli.rotation.y)
+	Input.action_press("climb")
+	var top := 0.0
+	for i in 300:
+		await _frames(1)
+		top = maxf(top, heli.above_land)
+	Input.action_release("climb")
+	_check(top > Helicopter.CEILING - 3.0 and top < Helicopter.CEILING + 1.0,
+		"UP held near the top stops at %.1f m over the land (ceiling %.0f m)" % [top, Helicopter.CEILING])
+
+
+## Landing: DOWN from a hover over its pad sinks it fast, then the cushion
+## slows it so it sets down softly on the pad's paint, unharmed; the pilot
+## gets out normally, the rotor runs down and it stays parked.
+func test_heli_lands_softly_on_its_pad() -> void:
+	var heli = await _board_heli()
+	var pad: Vector3 = heli.global_position
+	_hold_heli_at(heli, pad, 40.0, heli.rotation.y)
+	await _frames(30)
+	Input.action_press("descend")
+	var t := 0.0
+	var fastest := 0.0
+	var touch := 0.0
+	while not heli.landed and t < 20.0:
+		touch = heli.velocity.y
+		await _frames(1)
+		t += 1.0 / 60.0
+		fastest = minf(fastest, heli.velocity.y)
+	Input.action_release("descend")
+	_check(heli.landed and t < 12.0, "DOWN sets it down from 40 m in %.1f s" % t)
+	_check(fastest < -8.0, "sinking fast on the way down (%.1f m/s)" % -fastest)
+	_check(touch > -Helicopter.LAND_SPEED, "touching down softly at %.1f m/s (hurts past %.0f)" % [-touch, Helicopter.LAND_SPEED])
+	_check(heli.health == heli.max_health, "no harm done (health %.0f)" % heli.health)
+	var off := Vector2(heli.global_position.x - pad.x, heli.global_position.z - pad.z).length()
+	_check(off < 1.0 and absf(heli.global_position.y - pad.y) < 0.05,
+		"back on its pad's paint (%.2f m off, %.2f m up)" % [off, heli.global_position.y - pad.y])
+	await _press("interact")
+	_check(game.player.vehicle == null and heli.exit_check() == "", "on the ground: an ordinary exit")
+	await _frames(60 * 9)
+	_check(heli.rpm == 0.0 and heli.landed and heli.health == heli.max_health, "the rotor runs down (rpm %.2f) and it stays parked" % heli.rpm)
+
+
+## Hard landings: dropped 3 m with the rotor still it comes down hard and is
+## hurt, not wrecked; dropped 25 m it is wrecked and burns.
+func test_heli_hard_landings_hurt_and_wreck() -> void:
+	await _new_game(false)
+	var heli = game.heliports.helis[0]
+	var pad: Vector3 = heli.global_position
+	heli.global_position = pad + Vector3(0.0, 3.0, 0.0)
+	heli.landed = false
+	await _frames(2)
+	await _until_landed(heli, 180)
+	_check(heli.landed and heli.health < heli.max_health - 20.0 and heli.health > 30.0 and not heli.wrecked,
+		"dropped 3 m: down hard and hurt (health %.0f of %.0f), not wrecked" % [heli.health, heli.max_health])
+	heli.global_position = pad + Vector3(0.0, 25.0, 0.0)
+	heli.landed = false
+	await _frames(2)
+	await _until_landed(heli, 300)
+	_check(heli.wrecked and heli._fire != null, "dropped 25 m: wrecked and on fire (health %.0f, wrecked %s, fire %s)" % [heli.health, heli.wrecked, heli._fire != null])
+
+
+## Solid: flown at a downtown tower it stops at the wall, hurt by the blow
+## and never past it; flown at Mount Calder's upper slope (Terrain, no
+## collider) it stops against the hillside and never goes under the ground.
+func test_heli_walls_and_mountain_stop_it() -> void:
+	var heli = await _board_heli()
+	var city = game.city
+	_hold_heli_at(heli, city.spawn_point, 15.0, 0.0)
+	city.stream_now(city.spawn_point)
+	await _frames(5)
+	var space: PhysicsDirectSpaceState3D = game.get_world_3d().direct_space_state
+	var ball := PhysicsShapeQueryParameters3D.new()
+	var sphere := SphereShape3D.new()
+	sphere.radius = 7.0
+	ball.shape = sphere
+	ball.collision_mask = HeliLayers.WORLD | HeliLayers.PROPS
+	# A tower with 30 m of open air before one face, 15 m up.
+	var from := Vector3.ZERO
+	var wall := Vector3.ZERO
+	var out := Vector3.ZERO
+	for cell in city.get_children():
+		for body in cell.get_children():
+			if out != Vector3.ZERO or not body is StaticBody3D:
+				continue
+			for c in body.get_children():
+				if out != Vector3.ZERO or not (c is CollisionShape3D and c.shape is BoxShape3D and c.shape.size.y > 40.0):
+					continue
+				var half: Vector3 = c.shape.size * 0.5
+				var mid: Vector3 = c.global_position
+				for side: Array in [[c.global_basis.x, half.x], [-c.global_basis.x, half.x], [c.global_basis.z, half.z], [-c.global_basis.z, half.z]]:
+					var s: Vector3 = side[0].normalized()
+					var p: Vector3 = mid + s * (float(side[1]) + 30.0)
+					p.y = Helicopter._ground(p.x, p.z) + 15.0
+					if mid.y + half.y < p.y + 10.0:
+						continue
+					ball.transform = Transform3D(Basis(), p)
+					if not space.intersect_shape(ball, 1).is_empty():
+						continue
+					var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(p, Vector3(mid.x, p.y, mid.z), HeliLayers.WORLD | HeliLayers.PROPS))
+					if hit.is_empty() or hit.collider != body:
+						continue
+					from = p
+					wall = hit.position
+					out = s
+					break
+	_check(out != Vector3.ZERO, "found a downtown tower with open air before it")
+	if out == Vector3.ZERO:
+		return
+	_hold_heli_at(heli, from, 15.0, atan2(out.x, out.z))
+	Controls.override_vector = _stick_toward(-out)
+	var nearest := INF
+	for i in 300:
+		await _frames(1)
+		nearest = minf(nearest, (heli.global_position - wall).dot(out))
+	Controls.override_vector = null
+	_check(nearest > 0.0 and nearest < 15.0, "flown at the tower it stops %.1f m short of the wall (started 30 m off)" % nearest)
+	_check(heli.health < heli.max_health and not heli.wrecked, "the blow hurts it (health %.0f)" % heli.health)
+	# Mount Calder: from 20 m over its upper slope, flown at the summit.
+	var peak: Array = city.country.mountain.peaks.mount_calder
+	var summit := Vector3(float(peak[0]), 0.0, float(peak[1]))
+	var away := Vector3(city.spawn_point.x - summit.x, 0.0, city.spawn_point.z - summit.z).normalized()
+	var at := summit
+	while Terrain.height(at.x, at.z) > 650.0 and at.distance_to(summit) < 4000.0:
+		at += away * 10.0
+	heli.health = heli.max_health
+	_hold_heli_at(heli, at, 20.0, atan2(away.x, away.z))
+	Controls.override_vector = _stick_toward(-away)
+	var under := -INF
+	for i in 480:
+		await _frames(1)
+		var q: Vector3 = heli.global_position
+		under = maxf(under, Helicopter._ground(q.x, q.z) - q.y)
+	Controls.override_vector = null
+	var p: Vector3 = heli.global_position
+	var ahead := p - away * 8.0
+	_check(under < 0.05, "over the mountain it never goes under the ground (worst %.2f m)" % under)
+	_check(Helicopter._ground(ahead.x, ahead.z) > p.y + Helicopter.STEP, "it stops against the rising slope (%.0f m up, the ground 8 m on %.0f m)" % [p.y, Helicopter._ground(ahead.x, ahead.z)])
+	_check(heli.health < heli.max_health, "running into the hillside hurts it (health %.0f)" % heli.health)
+
+
+## Getting out: 3 m up or less it is an ordinary exit (EXIT) and the empty
+## helicopter settles unharmed; over a roof nobody can get out (people don't
+## stand on roofs here); higher up the button reads BAIL, and the jump costs
+## health by the drop.
+func test_heli_exit_only_when_low() -> void:
+	var heli = await _board_heli()
+	var player = game.player
+	var labels: Dictionary = game.hud.touch.labels
+	var pad: Vector3 = heli.global_position
+	_hold_heli_at(heli, pad, 2.0, heli.rotation.y)
+	await _frames(20)
+	_check(heli.exit_check() == "" and labels.get("interact") == "EXIT", "2 m up (%.1f m): EXIT" % heli.altitude)
+	var hp: float = player.health
+	await _press("interact")
+	await _frames(30)
+	_check(player.vehicle == null and player.health == hp, "out from 2 m without a scratch")
+	await _until_landed(heli, 300)
+	_check(heli.landed and heli.health == heli.max_health, "the empty helicopter settles onto its pad unharmed")
+	# A roof: the widest low block near the spawn.
+	var city = game.city
+	_place_player_at(city.spawn_point)
+	city.stream_now(city.spawn_point)
+	await _frames(5)
+	var space: PhysicsDirectSpaceState3D = game.get_world_3d().direct_space_state
+	var roof := Vector3.ZERO
+	var best := 0.0
+	for cell in city.get_children():
+		for body in cell.get_children():
+			if not body is StaticBody3D:
+				continue
+			for c in body.get_children():
+				if not (c is CollisionShape3D and c.shape is BoxShape3D):
+					continue
+				var size: Vector3 = c.shape.size
+				var area := minf(size.x, size.z)
+				if size.y < 8.0 or size.y > 60.0 or area <= best:
+					continue
+				var mid: Vector3 = c.global_position
+				var top: float = mid.y + size.y * 0.5
+				var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(Vector3(mid.x, top + 40.0, mid.z), Vector3(mid.x, top - 1.0, mid.z), HeliLayers.WORLD))
+				if hit.is_empty() or absf(hit.position.y - top) > 0.3:
+					continue
+				best = area
+				roof = Vector3(mid.x, top, mid.z)
+	_check(best > 14.0, "found a flat roof %.0f m across" % best)
+	player.enter_vehicle(heli)
+	heli.global_position = roof + Vector3(0.0, 2.0, 0.0)
+	heli.velocity = Vector3.ZERO
+	heli.rpm = 1.0
+	heli.landed = false
+	heli.reset_physics_interpolation()
+	game.camera.snap()
+	await _frames(20)
+	_check(heli.on_roof and heli.exit_check() == "roof", "2 m over a roof: no getting out (on_roof %s)" % heli.on_roof)
+	await _press("interact")
+	_check(player.vehicle == heli and game.hud._district.text.contains("open ground"), "EXIT over the roof keeps the pilot in and says why")
+	# 12 m over open ground: a bail-out.
+	_hold_heli_at(heli, pad, 12.0, heli.rotation.y)
+	await _frames(20)
+	_check(heli.exit_check() == "bail" and labels.get("interact") == "BAIL", "12 m up: BAIL (%.1f m)" % heli.altitude)
+	hp = player.health
+	await _press("interact")
+	_check(player.vehicle == null, "BAIL gets the pilot out at 12 m")
+	await _frames(150)
+	var lost: float = hp - player.health
+	var g := Terrain.height(player.global_position.x, player.global_position.z) - Terrain.drop(player.global_position.x, player.global_position.z)
+	_check(lost > 55.0 and lost < 85.0, "the 12 m drop costs %.0f health" % lost)
+	_check(absf(player.global_position.y - g) < 0.3, "and they come down to the ground (%.2f m over it)" % (player.global_position.y - g))
+
+
+## Streaming: flying flat out near the ceiling from downtown out over the
+## country, the ground at the screen's 20:9 corners always lies inside the
+## streaming radius, and once the build queues have run every city cell and
+## country tile there is built; the city keeps under 70 cells loaded.
+func test_heli_stream_keeps_up() -> void:
+	var heli = await _board_heli()
+	var city = game.city
+	var country = city.country
+	var cam = game.camera
+	var start: Vector3 = city.spawn_point
+	var port: Vector3 = game.heliports.ports[0].pos
+	var d := Vector3(port.x - start.x, 0.0, port.z - start.z).normalized()
+	_hold_heli_at(heli, start, Helicopter.CEILING - 10.0, atan2(-d.x, -d.z))
+	heli.velocity = d * float(heli._spec.max_speed) * 0.9
+	Controls.override_vector = _stick_toward(d)
+	city.stream_now(cam.stream_point())
+	var rect: Rect2 = cam.get_viewport().get_visible_rect()
+	var wide_x: float = maxf((rect.size.y * 20.0 / 9.0 - rect.size.x) * 0.5, 0.0)
+	var screen := [Vector2(-wide_x, 0.0), Vector2(rect.end.x + wide_x, 0.0), Vector2(-wide_x, rect.end.y), Vector2(rect.end.x + wide_x, rect.end.y), rect.get_center()]
+	var stats := {"beyond": 0, "corners": 0, "holes": 0, "tiles": 0, "tile_holes": 0, "cells": 0, "fastest": 0.0}
+	for f in 480:
+		await _frames(1)
+		stats.fastest = maxf(stats.fastest, Vector2(heli.velocity.x, heli.velocity.z).length())
+		if f % 15 != 0:
+			continue
+		var ground: float = cam._focus.y - cam._air
+		var sp: Vector3 = cam.stream_point()
+		var hits: Array = []
+		for c: Vector2 in screen:
+			# The engine's own projection (here, in the physics step, from the
+			# camera's current transform), as a check on the camera's sums.
+			var o: Vector3 = cam.project_ray_origin(c)
+			var n: Vector3 = cam.project_ray_normal(c)
+			var hit: Vector3 = o + n * minf((o.y - ground) / maxf(-n.y, 0.05), cam.far)
+			hits.append(hit)
+			if Vector2(hit.x - sp.x, hit.z - sp.z).length() > cam.stream_radius() + 0.5:
+				stats.beyond += 1
+		# Builds run on worker threads in wall-clock time: let the city's and
+		# the country's own streaming finish their queues before judging.
+		for n in 300:
+			city._finish_task()
+			city._stream_tick = 0.0
+			city._process(0.0)
+			country._finish_task()
+			country._tick = 0.0
+			country._process(0.0)
+			if city._task < 0 and country._task < 0:
+				break
+		stats.cells = maxi(stats.cells, city.loaded_cells().size())
+		for hit: Vector3 in hits:
+			var cell: int = city.cell_at(hit)
+			if cell >= 0:
+				stats.corners += 1
+				if city.cell_node(cell) == null:
+					stats.holes += 1
+			var key: Vector2i = country.tile_key(hit)
+			if country.tiles.has(key):
+				stats.tiles += 1
+				if country.tile_node(key) == null:
+					stats.tile_holes += 1
+	Controls.override_vector = null
+	_check(stats.fastest > 0.85 * float(heli._spec.max_speed), "flat out (%.0f m/s), %.0f m over the land" % [stats.fastest, heli.above_land])
+	_check(stats.beyond == 0, "the screen's corners always lie inside the streaming radius (%d outside)" % stats.beyond)
+	_check(stats.corners > 20 and stats.holes == 0, "every city cell at a corner is built (%d of %d missing)" % [stats.holes, stats.corners])
+	_check(stats.tiles > 10 and stats.tile_holes == 0, "every country tile at a corner is built (%d of %d missing)" % [stats.tile_holes, stats.tiles])
+	_check(stats.cells < 70, "at most %d city cells loaded at once" % stats.cells)
+
+
+## Touch: in the air the layout is the stick whatever the driving layout,
+## with UP, DOWN and EXIT and no DRIFT; UP and DOWN (and Q, Z) are the
+## collective; the HUD reads speed and height. North up the stick flies it
+## where it points and it turns to face that way; with the view turning
+## behind it, up flies ahead and a lean turns it.
+func test_heli_touch_controls() -> void:
+	var heli = await _board_heli()
+	Controls.scheme = "tilt"
+	await _frames(3)
+	var touch = game.hud.touch
+	var acts: Array = touch.buttons().map(func(b): return b.action)
+	_check(touch.flying and touch.scheme == "stick" and touch.stick_on(), "flying, the touch layout is the stick (driving layout tilt)")
+	_check(acts.has("gas") and acts.has("brake") and acts.has("interact") and not acts.has("sprint"), "UP, DOWN and EXIT, no DRIFT: %s" % [acts])
+	_check(touch.labels.get("gas") == "UP" and touch.labels.get("brake") == "DOWN" and touch.labels.get("interact") == "EXIT", "labelled UP, DOWN and EXIT")
+	for pair: Array in [["gas", 1.0], ["climb", 1.0], ["brake", -1.0], ["descend", -1.0]]:
+		Input.action_press(pair[0])
+		_check(Controls.collective() == pair[1], "%s is collective %+.0f" % pair)
+		Input.action_release(pair[0])
+	_check(Controls.collective() == 0.0, "nothing held: collective 0")
+	var prompt: String = game.hud._prompt.text
+	_check(prompt.contains("km/h") and prompt.contains("ALT"), "the HUD reads speed and height: '%s'" % prompt)
+	Controls.scheme = "stick"
+	# North up: stick right flies east, and it turns to face east.
+	_hold_heli_at(heli, heli.global_position, 60.0, 0.0)
+	Controls.override_vector = _stick_toward(Vector3.RIGHT)
+	await _frames(240)
+	var nose: Vector3 = -heli.global_basis.z
+	_check(heli.velocity.x > 15.0 and absf(heli.velocity.z) < 4.0, "north up, stick right: flies east (%.1f, %.1f m/s)" % [heli.velocity.x, heli.velocity.z])
+	_check(nose.x > 0.95, "and turns to face east (nose %.2f, %.2f)" % [nose.x, nose.z])
+	# The view behind it: up flies along the nose, a lean right turns right.
+	Controls.override_vector = null
+	game.camera.turn_view = true
+	_hold_heli_at(heli, heli.global_position, 60.0, 0.0)
+	Controls.override_vector = Vector2(0.0, -1.0)
+	await _frames(120)
+	var along: float = heli.velocity.dot(-heli.global_basis.z)
+	_check(along > 10.0, "view turning: stick up flies ahead (%.1f m/s)" % along)
+	var yaw0: float = heli.rotation.y
+	Controls.override_vector = Vector2(0.7, -0.7)
+	await _frames(60)
+	var turned := wrapf(heli.rotation.y - yaw0, -PI, PI)
+	_check(turned < -0.3, "a lean right turns it right (%.2f rad in a second)" % turned)
+	Controls.override_vector = null
+	game.camera.turn_view = false
+
+
+## The heliports (data/heliports.json) stand on clear, flat, open ground in
+## reach of a road; once their ground streams in nothing solid stands on or
+## round an apron; each pad has its helicopter parked on it, and each port
+## is marked on the maps with an H.
+func test_heliport_pads_are_clear() -> void:
+	await _new_game(false)
+	var rows: Array = Heliports.rows()
+	_check(rows.size() >= 1 and game.heliports.ports.size() == rows.size(), "%d heliport(s) built from the data" % rows.size())
+	var space: PhysicsDirectSpaceState3D = game.get_world_3d().direct_space_state
+	var markers: Array = game.map_markers().filter(func(m): return m.get("icon", "") == "H")
+	var pads := 0
+	for i in rows.size():
+		var row: Dictionary = rows[i]
+		var why: Array = Heliports.problems(game.city, row)
+		_check(why.is_empty(), "%s is on clear, flat ground by a road: %s" % [row.id, why])
+		var port: Dictionary = game.heliports.ports[i]
+		_place_player_at(port.pos + Vector3(0.0, 0.0, float(row.size[1]) * 0.5 + 6.0))
+		game.city.stream_now(port.pos)
+		await _frames(5)
+		var box := BoxShape3D.new()
+		box.size = Vector3(float(row.size[0]) + 2.0 * Heliports.MARGIN, 6.0, float(row.size[1]) + 2.0 * Heliports.MARGIN)
+		var q := PhysicsShapeQueryParameters3D.new()
+		q.shape = box
+		q.collision_mask = HeliLayers.WORLD | HeliLayers.PROPS
+		q.transform = Transform3D(Basis(Vector3.UP, float(row.yaw)), port.pos + Vector3(0.0, 3.3, 0.0))
+		var solid := space.intersect_shape(q, 4)
+		_check(solid.is_empty(), "%s: nothing solid on or round the apron (%d found)" % [row.id, solid.size()])
+		_check(markers.any(func(m): return m.pos.distance_to(port.pos) < 1.0), "%s marked with an H on the maps" % row.id)
+		for at: Vector3 in port.pads:
+			pads += 1
+			var on: Array = game.heliports.helis.filter(func(h): return Vector2(h.global_position.x - at.x, h.global_position.z - at.z).length() < 0.1 and h.landed)
+			_check(on.size() == 1, "%s: a helicopter parked on the pad at (%.0f, %.0f)" % [row.id, at.x, at.z])
+	var kinds: Array = game.heliports.helis.map(func(h): return h.kind)
+	_check(game.heliports.helis.size() == pads and kinds.has("heli") and kinds.has("police_heli"), "%d helicopters on %d pads: %s" % [game.heliports.helis.size(), pads, kinds])

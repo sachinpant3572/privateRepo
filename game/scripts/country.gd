@@ -24,6 +24,9 @@ const DATA_PATH := "res://data/country.json"
 static var LOAD_RADIUS := 130.0
 static var UNLOAD_RADIUS := 210.0
 const LOOKAHEAD := 1.2
+## Seconds between picks of the next tile to build while flying (as the
+## city's AIR_TICK; 0.15 else).
+const AIR_TICK := 0.05
 const NODE_GRID := 50.0
 ## Off a road's paving on the hills, the drop under a car or person (see
 ## ground_drop) grows to the ground's over this many metres.
@@ -114,6 +117,10 @@ var _task := -1
 var _task_key := Vector2i.ZERO
 var _task_result: Dictionary
 var _tick := 0.0
+## Flying (#82, set by the city each pick): the ground in the middle of the
+## screen and how far round it the screen reaches; 0 on the ground.
+var air_radius := 0.0
+var air_view := Vector3.ZERO
 
 
 func load_data(seed_v := 1234) -> void:
@@ -238,12 +245,20 @@ func _process(delta: float) -> void:
 		return
 	_tick = 0.15
 	var focus := _focus_point()
+	var load_r := LOAD_RADIUS
+	var unload_r := UNLOAD_RADIUS
+	if air_radius > 0.0:
+		# Flying: round the ground the screen shows, out to its corners.
+		_tick = AIR_TICK
+		focus = air_view
+		load_r = maxf(LOAD_RADIUS, air_radius)
+		unload_r = maxf(UNLOAD_RADIUS, air_radius + UNLOAD_RADIUS - LOAD_RADIUS)
 	var p := Vector2(focus.x, focus.z)
 	for key in _loaded.keys():
-		if _tile_distance(key, p) > UNLOAD_RADIUS:
+		if _tile_distance(key, p) > unload_r:
 			_unload(key)
 	if _task < 0:
-		var key = _next_missing(focus)
+		var key = _next_missing(focus, load_r)
 		if key != null:
 			_start_task(key)
 
@@ -306,8 +321,8 @@ func tiles_near(pos: Vector3, radius: float) -> Array:
 	return found
 
 
-func _next_missing(focus: Vector3):
-	for key in tiles_near(focus, LOAD_RADIUS):
+func _next_missing(focus: Vector3, radius := -1.0):
+	for key in tiles_near(focus, radius if radius > 0.0 else LOAD_RADIUS):
 		if not _loaded.has(key):
 			return key
 	return null

@@ -35,6 +35,8 @@ const CEILING := 250.0
 const SINK := 12.0
 const CUSHION := 4.0
 const TOUCH_SPEED := 1.5
+## How hard the collective chases the wanted climb rate (1/s).
+const HOLD := 6.0
 ## Horizontal: the most the tilt gives (m/s²), how quickly the tilt follows
 ## the stick (m/s³), how hard it chases the wanted speed (1/s) and the drag
 ## (per m/s of speed).
@@ -62,12 +64,14 @@ const STEP := 0.8
 const LOW := 3.0
 ## A support this far over the land under it is a roof.
 const ROOF := 1.0
+## Into a wall (or a hillside) slower than this (m/s) it only slides along:
+## no bounce and no harm, so holding the stick against a tower after the
+## blow doesn't grind it down.
+const NUDGE := 5.0
 ## Drawn rotor speeds at full rpm (rad/s); the blur disc shows above DISC_AT.
 const ROTOR_SPIN := 14.0
 const TAIL_SPIN := 30.0
 const DISC_AT := 0.45
-## The police one hangs this high over who it follows.
-const FOLLOW_HEIGHT := 55.0
 
 ## Hard standings over the land it sets down on (heliports.gd's aprons, no
 ## colliders): [centre Vector2, yaw, half size Vector2, top].
@@ -84,8 +88,6 @@ var above_land := 0.0
 var landed := true
 ## The support under the skids is a roof (well over the land).
 var on_roof := false
-## Police: the node it shadows from above (police_manager.gd), or null.
-var follow: Node3D = null
 ## What the pilot asks for: horizontal velocity, turn rate, climb rate.
 var _v_des := Vector3.ZERO
 var _yaw_want := 0.0
@@ -103,6 +105,8 @@ var _shadow: MeshInstance3D
 var _shadow_mat: StandardMaterial3D
 var _pivot := 1.3
 var _hit_frame := -100
+## Something solid (a wall top, a prop) took the skids this frame.
+var _stood := false
 
 
 func _ready() -> void:
@@ -145,7 +149,7 @@ func _ready() -> void:
 	_land = _land_under(global_position)
 	_floor = _land
 	if global_position.y > _land + LOW:
-		# Placed in the air (the police one, tests): flying already.
+		# Placed in the air (tests, probes): flying already.
 		rpm = 1.0
 		landed = false
 		altitude = global_position.y - _land
@@ -164,11 +168,8 @@ func _physics_process(delta: float) -> void:
 	_v_des = Vector3.ZERO
 	_yaw_want = 0.0
 	_vy_want = 0.0
-	if piloted:
-		if driver == Driver.PLAYER:
-			_pilot_input()
-		elif follow != null and is_instance_valid(follow):
-			_police_pilot()
+	if piloted and driver == Driver.PLAYER:
+		_pilot_input()
 	rpm = move_toward(rpm, 1.0 if piloted else 0.0, delta / (SPOOL_UP if piloted else SPOOL_DOWN))
 	_fly(delta, piloted)
 	motion = Vector3(velocity.x, 0.0, velocity.z)
@@ -209,19 +210,6 @@ func _pilot_input() -> void:
 		_yaw_want = clampf(gap * 2.5, -float(_spec.yaw), float(_spec.yaw))
 
 
-## Police: hangs FOLLOW_HEIGHT over `follow`, keeping up with it.
-func _police_pilot() -> void:
-	var t := follow.global_position
-	var lead: Vector3 = follow.get("motion") if follow.get("motion") is Vector3 else follow.get("velocity")
-	var to := Vector3(t.x - global_position.x, 0.0, t.z - global_position.z) + Vector3(lead.x, 0.0, lead.z) * 1.5
-	_v_des = (to * 0.5).limit_length(float(_spec.max_speed))
-	var goal := maxf(t.y, _land) + FOLLOW_HEIGHT
-	_vy_want = clampf((goal - global_position.y) * 0.4, -SINK, float(_spec.climb))
-	if _v_des.length() > 4.0:
-		var gap := wrapf(atan2(-_v_des.x, -_v_des.z) - rotation.y, -PI, PI)
-		_yaw_want = clampf(gap * 2.0, -float(_spec.yaw), float(_spec.yaw))
-
-
 func _fly(delta: float, piloted: bool) -> void:
 	var pos := global_position
 	# Lift: the rotor's thrust at this rpm, more in ground effect, less hurt.
@@ -229,16 +217,23 @@ func _fly(delta: float, piloted: bool) -> void:
 	lift *= 1.0 + GROUND_EFFECT * clampf(1.0 - altitude / (2.0 * float(_spec.rotor)), 0.0, 1.0)
 	lift *= lerpf(0.6, 1.0, clampf(health / max_health, 0.0, 1.0))
 	var want_vy := _vy_want
+	var vy := velocity.y
+	# The slowing the cushion asks for as the ground comes up, given ahead
+	# so the descent keeps to it instead of trailing it.
+	var brake := 0.0
 	if piloted:
 		if want_vy < 0.0:
-			want_vy = maxf(want_vy, -sqrt(TOUCH_SPEED * TOUCH_SPEED + 2.0 * CUSHION * maxf(altitude, 0.0)))
+			var cushion := -sqrt(TOUCH_SPEED * TOUCH_SPEED + 2.0 * CUSHION * maxf(altitude, 0.0))
+			if cushion > want_vy:
+				want_vy = cushion
+				brake = clampf(CUSHION * vy / cushion, 0.0, 2.0 * CUSHION)
 		want_vy = minf(want_vy, maxf((CEILING - above_land) * 0.5, 0.0))
 		if landed and _vy_want <= 0.0:
 			want_vy = -1.0 # sits on its skids
+			brake = 0.0
 	elif not wrecked:
 		want_vy = -1.5 # nobody at the controls: it settles while the rotor runs down
-	var vy := velocity.y
-	var thrust := 0.0 if wrecked else clampf((want_vy - vy) * 3.0 + G, 0.0, lift)
+	var thrust := 0.0 if wrecked else clampf((want_vy - vy) * HOLD + G + brake, 0.0, lift)
 	vy += (thrust - G) * delta
 	# Horizontal: the tilt follows the stick's wish, eased, as far as the
 	# rotor has the power; nothing while the skids are down.
@@ -279,6 +274,7 @@ func _fly(delta: float, piloted: bool) -> void:
 				_strike(closing, probe + Vector3.UP * 1.0, out)
 	velocity = Vector3(vh.x, vy, vh.z)
 	var before := velocity
+	_stood = false
 	move_and_slide()
 	_collisions(before)
 	# On the ground (or a roof): the skids stop it there.
@@ -288,6 +284,8 @@ func _fly(delta: float, piloted: bool) -> void:
 	var roof := _roof_under(pos)
 	on_roof = roof > _land + ROOF
 	floor_y = maxf(floor_y, roof)
+	if _stood:
+		floor_y = maxf(floor_y, global_position.y)
 	_floor = floor_y
 	if pos.y < floor_y:
 		var n := Vector3.UP if roof >= _land else Terrain.normal(pos.x, pos.z)
@@ -297,7 +295,9 @@ func _fly(delta: float, piloted: bool) -> void:
 		velocity.y = maxf(velocity.y, 0.0)
 	altitude = global_position.y - floor_y
 	above_land = global_position.y - _land
-	landed = altitude < 0.05 and velocity.y <= 0.05
+	# Down only once the skids took it (a centimetre up at speed it is
+	# still falling: the touchdown comes next frame).
+	landed = altitude < 0.05 and absf(velocity.y) <= 0.05
 
 
 ## The highest drawn ground under the skids.
@@ -347,7 +347,7 @@ func _touchdown(into: float, slide: float) -> void:
 
 ## Hit a hillside (or anything) at `impact` m/s, at `at`, pushed along `n`.
 func _strike(impact: float, at: Vector3, n: Vector3) -> void:
-	if impact < 3.0 or Engine.get_physics_frames() - _hit_frame < 6:
+	if impact < NUDGE or Engine.get_physics_frames() - _hit_frame < 6:
 		return
 	_hit_frame = Engine.get_physics_frames()
 	Fx.crash(at, impact, driver == Driver.PLAYER)
@@ -378,22 +378,27 @@ func _collisions(before: Vector3) -> void:
 		var impact := maxf(-before.dot(n), 0.0)
 		var vehicle: bool = other != null and other.has_method("bump")
 		if n.y > 0.7 and not vehicle:
+			_stood = true
 			_touchdown(impact, Vector3(before.x, 0.0, before.z).length())
+			continue
+		if not vehicle:
+			# A wall: it stops there and slides along it (move_and_slide
+			# leaves the speed into it, which would build up frame on frame
+			# and strike again); a blow of NUDGE or more comes back a little.
+			velocity -= n * minf(velocity.dot(n), 0.0)
+			if impact >= NUDGE:
+				velocity += Vector3(n.x, 0.0, n.z) * impact * 0.35
+				_strike(impact, col.get_position(), n)
 			continue
 		if impact < 3.0:
 			continue
-		if vehicle:
-			var players: bool = driver == Driver.PLAYER or other.get("driver") == Driver.PLAYER
-			Fx.crash(col.get_position(), impact, players)
-			var mine := mass / (mass + float(other.mass))
-			_damage(impact * 1.2 * (1.0 - mine))
-			other.bump(before * 1.2 * mine, col.get_position())
-			_jolt(col.get_position(), n * impact)
-			_crumple(col.get_position(), n, impact)
-		else:
-			# Off a wall: what it ran in with comes back a little.
-			velocity += Vector3(n.x, 0.0, n.z) * impact * 0.35
-			_strike(impact, col.get_position(), n)
+		var players: bool = driver == Driver.PLAYER or other.get("driver") == Driver.PLAYER
+		Fx.crash(col.get_position(), impact, players)
+		var mine := mass / (mass + float(other.mass))
+		_damage(impact * 1.2 * (1.0 - mine))
+		other.bump(before * 1.2 * mine, col.get_position())
+		_jolt(col.get_position(), n * impact)
+		_crumple(col.get_position(), n, impact)
 
 
 ## Wrecked: the fire (it goes up the next frame, car_fire.gd), pieces flying
