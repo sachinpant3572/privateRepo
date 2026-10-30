@@ -97,6 +97,15 @@ B. **Grow the core to ~8 km²** (~14-20 h). Outline east and west (the Gulf
      measure); roof x-ray picks a shelter whose roof runs along the view;
      Golden Flats: the expressway fords the Morrow nowhere.
    - The street field was NOT regenerated (no new field patch).
+   - Suite fixes: heliport aprons kept clear in the country; a district
+     with one block shares it for its shop; `_thin` rolls by a link's
+     midpoint (new streets shifted one stream and re-cut the docks) and
+     never joins a landmark or open-land block (re-dump the plan before a
+     country rebuild); interact boards a waiting cab before a shop door;
+     a cab's curb stop is capped at the lanes' edge less half a cab
+     (CURB_SHIFT put it on the sidewalk of the 28 m street at Union
+     Station). Residual: seed 1 only, the_pit sits in the containers site
+     (`_open_land`'s prune merges it); the game seed is clean.
 C. **Sloped districts** (~40-70 h, Sachin's yes): the foothills north of
    the city as hill districts (hill_n's contour rings, Vinewood-style):
    city ground on a height field, roads graded, buildings stepped onto it,
