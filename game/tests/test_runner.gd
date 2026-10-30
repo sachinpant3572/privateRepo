@@ -100,7 +100,7 @@ func _run() -> void:
 		"test_traffic_drives_into_the_country", "test_traffic_turns_round_at_barricades",
 		"test_country_kit_builds_every_kind",
 		"test_country_plots_square_to_their_roads", "test_estates_and_clusters", "test_grounds_kit_builds_every_part",
-		"test_bellerive_hills", "test_mount_calder", "test_freight_line_crosses_cleanly", "test_rail_crossings_are_grade_separated", "test_golden_flats_farmland", "test_every_home_has_a_way_in", "test_homes_by_wealth",
+		"test_bellerive_hills", "test_mount_calder", "test_hill_districts", "test_freight_line_crosses_cleanly", "test_rail_crossings_are_grade_separated", "test_golden_flats_farmland", "test_every_home_has_a_way_in", "test_homes_by_wealth",
 		"test_new_home_kinds_and_live_cars", "test_people_walk_the_suburbs", "test_suburb_home_cars_are_live",
 		"test_road_surfaces_and_roadworks", "test_traffic_flows_past_roadworks", "test_boundaries_vary_by_household",
 		"test_game_log_file_and_rotation", "test_game_log_snapshot_and_events", "test_game_log_report_copy_and_off",
@@ -6365,6 +6365,97 @@ func test_mount_calder() -> void:
 	# The cable car: from the city's north edge, by a mid-station, to the top.
 	var st: Array = m.cable.stations
 	_check(st.size() == 3 and float(st[0].z) < 5.0 and float(st[2].z) > 900.0, "the cable car climbs from the city to the top (%s)" % [st])
+
+
+## #116 stage C: the hill districts on the foothills (HANDOFF-hill-districts.md).
+func test_hill_districts() -> void:
+	await _new_game(false)
+	var c = game.city.country
+	var poly := PackedVector2Array()
+	for s in c.suburbs:
+		if s.zone == "hillside":
+			for q in s.poly:
+				poly.append(Vector2(q[0], q[1]))
+	var area := 0.0
+	for k in poly.size():
+		area += poly[k].cross(poly[(k + 1) % poly.size()])
+	area = absf(area) * 0.5e-6
+	_check(area >= 0.85, "the hill districts cover %.2f km2" % area)
+	# Hill streets: streets with most of their nodes on the hillside.
+	var streets := 0
+	var length := 0.0
+	var top := 0.0
+	var unreached := 0
+	var over: Array = []
+	for rd in c.roads:
+		var nodes: PackedInt32Array = rd.nodes
+		var on := 0
+		for n in nodes:
+			if Geometry2D.is_point_in_polygon(c.node_pos[n], poly):
+				on += 1
+		if c.edge_class(int(rd.e0)) != "street" or on * 2 < nodes.size():
+			continue
+		streets += 1
+		var s: Array[float] = [0.0]
+		for k in range(1, nodes.size()):
+			s.append(s[-1] + c.node_pos[nodes[k]].distance_to(c.node_pos[nodes[k - 1]]))
+		length += s[-1]
+		for n in nodes:
+			top = maxf(top, Terrain.height(c.node_pos[n].x, c.node_pos[n].y))
+			if c.usable[n] != 1:
+				unreached += 1
+		# Over 32 m of road, as in test_mount_calder, with its slack.
+		var j := 0
+		for k in nodes.size():
+			while j < nodes.size() - 1 and s[j] - s[k] < 32.0:
+				j += 1
+			if s[j] - s[k] < 32.0:
+				break
+			if c.bridge_edges.has(int(rd.e0) + k):
+				continue
+			var a: Vector2 = c.node_pos[nodes[k]]
+			var b: Vector2 = c.node_pos[nodes[j]]
+			var g: float = absf(Terrain.height(b.x, b.y) - Terrain.height(a.x, a.y)) / (s[j] - s[k])
+			if g > 0.13 + 0.015:
+				over.append("%s %.3f at (%.0f, %.0f)" % [rd.name, g, a.x, a.y])
+	_check(streets >= 40 and length >= 7000.0, "%d hill streets, %.1f km" % [streets, length / 1000.0])
+	_check(top >= 100.0, "they climb to %.0f m" % top)
+	_check(unreached == 0, "every hill street node is reached from the city (%d not)" % unreached)
+	_check(over.is_empty(), "hill streets keep to 13%% (%d over: %s)" % [over.size(), over.slice(0, 4)])
+	# Homes on flat pads, by height band, each with a way in.
+	var homes := 0
+	var kinds := {}
+	var tilted: Array = []
+	for i in c.lots.size():
+		var l: Array = c.lots[i]
+		if l[7] != "hillside":
+			continue
+		homes += 1
+		var info: Dictionary = c.lot_info(i)
+		kinds[info.kind] = true
+		var lo := INF
+		var hi := -INF
+		var right := Vector2(cos(float(l[2])), -sin(float(l[2])))
+		var back := Vector2(sin(float(l[2])), cos(float(l[2])))
+		for u in [-1.0, 0.0, 1.0]:
+			for v in [-1.0, 0.0, 1.0]:
+				var q := Vector2(l[0], l[1]) + right * u * (float(l[3]) * 0.5 - 1.0) + back * v * (float(l[4]) * 0.5 - 1.0)
+				var h := Terrain.height(q.x, q.y)
+				lo = minf(lo, h)
+				hi = maxf(hi, h)
+		if hi - lo > 0.3 and tilted.size() < 4:
+			tilted.append("%s %.2f m at (%.0f, %.0f)" % [info.kind, hi - lo, l[0], l[1]])
+		elif hi - lo > 0.3:
+			tilted.append("")
+	_check(homes >= 150, "%d homes on the hills" % homes)
+	_check(kinds.has("house") and kinds.has("exec_house") and kinds.has("rowhouse_row"), "rows low down, houses higher up (%s)" % [kinds.keys()])
+	_check(tilted.is_empty(), "every hill home stands on a flat pad (%d tilted: %s)" % [tilted.size(), tilted.slice(0, 4)])
+	# People walk the hill streets' sidewalks.
+	var walks := 0
+	for w in c.walks:
+		if Geometry2D.is_point_in_polygon(Vector2(w[0].x, w[0].z), poly):
+			walks += 1
+	_check(walks >= 3, "%d sidewalk loops on the hills" % walks)
 
 
 ## The freight line off the pass and its docks spur (second review): every
