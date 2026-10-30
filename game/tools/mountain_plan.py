@@ -408,9 +408,13 @@ LOW_DECK = 4.0  # a low bridge's ends stand no higher than this (the water is at
 SPECS = [
     # Route 9 River Road: along the Morrow's east bank under the range's
     # west wall, round its north foot to Route 7 (2100, -4050).
+    # Kept 30 m off the rail pass where it can (the rail's rigid shelf owns
+    # the ground within ~15 m of it and the road would drape over its edge):
+    # the gorge has room for both except at the crossings. The rail is planned
+    # without the roads, so the route reads it from the last plan.
     dict(id="route_9", cls="highway", name="Route 9 River Road", tag="route", keep_head=[(200, -100)],
-         way=[(100, -1150), (-480, -1950), (-700, -2400), (-720, -3250), (-400, -3850), (300, -4250), (900, -4300),
-              (2100, -4050)], gmax=0.055, low=4.0, bridge=BRIDGE),
+         way=[(100, -1150), (-480, -1950), (-720, -3250), (-400, -3850), (300, -4250), (900, -4300),
+              (2100, -4050)], gmax=0.055, low=4.0, bridge=BRIDGE, avoid=(("rail_pass", 30.0, 10.0),)),
     # Wheaton and Dam roads now end on Route 9, over the river. Wheaton's
     # bridge is in the play area, so it is a low one (the game lays a deck
     # at the water's level); Dam Road's and Pinecrest's cross outside it
@@ -513,6 +517,9 @@ def plan_line(mtn, spec, done, log=print):
             P.mark(P.box().difference(keep), reach=0.0)
         if spec.get("shelf"):
             P.pen = np.where(P.H < spec["shelf"], 1.0, 0.0)
+        for other, reach, extra in spec.get("avoid", ()):
+            # Extra cost near another line (one already planned).
+            P.mark(LineString(done[other]["pts"]), extra=extra, reach=reach)
         for p in (a, b):
             if P.block.ravel()[P.cell_of(p)]:
                 raise RuntimeError("waypoint %s is in the water or the city" % (tuple(round(v) for v in p),))

@@ -134,13 +134,14 @@ assert abs(rp[0][0] - o[4][0]) < 1 and abs(rp[0][1] - o[4][1]) < 1, (rp[0], o[4]
 # carries on straight south from the branch (a turnout), down to the Morrow's east bank
 # FREIGHT_BANK m off the river's centreline, over the expressway on land, and
 # along the bank into the city's freight strip on the north bank (street_plan.gd
-# FREIGHT_STRIP: water's edge 80 m, River Road 106 m) to Rampart Avenue; past
+# FREIGHT_STRIP: water's edge 80 m, River Road's kerb 96.8 m; the track runs
+# down its middle) to Rampart Avenue; past
 # Rampart the docks and Ironwharf take it in the quay street.
 FREIGHT_BRANCH = 740.0
 FREIGHT_R = 200.0
 SPUR_BEND = (-340.0, -960.0)
 SPUR_ON_BANK = (-545.0, -615.0)
-FREIGHT_BANK = 92.0
+FREIGHT_BANK = 88.0
 FREIGHT_END_X = 680.0
 SPUR_R = 200.0  # m: the bank's corners turn on arcs this wide (the offset has sharp corners)
 SPUR_GENTLE = (-50.0, 1142.0)  # on the bank past the Morrow's sharp bend (river vertex (-50, 1234))
@@ -211,6 +212,40 @@ for k in changed:
             w["landmarks"].append({"id": lid, "name": "%s bridge" % wname, "type": "bridge",
                                    "pos": [round(q.x + OX), round(q.y + OY)], "phase": r.get("phase", 2), "route": k,
                                    "minor": True, "detail": True})
+
+# Grade separation on the Solvera Line (high speed: no level crossings). It
+# flies over the freight lines (the newer line on its own viaduct), and every
+# road, track or trail goes over it. Not counted: where two rail lines share a
+# vertex (Sable Junction's station: a junction), where a road ends on the line,
+# and the rail pass on the range (mountain.py's own bridges and tunnels).
+SEPARATE = {"highway": "overpass", "road": "overpass", "lane": "overpass", "track": "overpass",
+            "trail": "footbridge", "rail": "flyover"}
+w["landmarks"] = [l for l in w["landmarks"] if l.get("type") not in ("flyover", "overpass", "footbridge")]
+sol = routes["solvera_line"]
+sol_line = LineString(sol["line"])
+rail_pass = LineString([(x + OX, y + OY) for x, y in lines["rail_pass"]["pts"]])
+for o in w["routes"]:
+    kind = SEPARATE.get(o["type"])
+    if o["id"] == "solvera_line" or kind is None:
+        continue
+    ol = LineString(o["line"])
+    hit = sol_line.intersection(ol)
+    done_at = []
+    for q in [hit] if hit.geom_type == "Point" else [g for g in getattr(hit, "geoms", []) if g.geom_type == "Point"]:
+        if kind == "flyover" and any(math.dist(v, (q.x, q.y)) < 1.0 for v in sol["line"]):
+            continue  # a junction
+        if min(math.dist(o["line"][0], (q.x, q.y)), math.dist(o["line"][-1], (q.x, q.y))) < 1.0:
+            continue  # the road ends on the line
+        if rail_pass.distance(q) < 30.0 or any(math.dist(d, (q.x, q.y)) < 30.0 for d in done_at):
+            continue
+        done_at.append((q.x, q.y))
+        over, under = ("solvera_line", o["id"]) if kind == "flyover" else (o["id"], "solvera_line")
+        names = {rr["id"]: rr["name"] for rr in w["routes"]}
+        w["landmarks"].append({"id": "%s_over_%s_%d" % (over, under, round(q.x)), "type": kind,
+                               "name": "%s %s" % (names[over].split(" (")[0], kind),
+                               "pos": [round(q.x), round(q.y)], "over": over, "under": under,
+                               "phase": max(int(sol.get("phase", 2)), int(o.get("phase", 2))),
+                               "minor": True, "detail": True})
 
 # The range's peaks.
 NAMES = {"mount_calder": "Mount Calder", "raven_peak": "Raven Peak", "east_peak": "Eastgate Peak",

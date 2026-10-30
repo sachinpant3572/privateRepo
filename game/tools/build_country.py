@@ -1105,6 +1105,7 @@ class Country:
         self._carry_on()
         self._grade_rest()
         self._rail_finish()
+        self._planned_crossings()
 
     def _settle(self):
         """A suburb street left stopping on nothing (cut short by a zone's
@@ -1593,6 +1594,33 @@ class Country:
                 half = hw + 12.0
                 out.append((sq - half, sq + half, "u"))
         return out
+
+    def _planned_crossings(self):
+        """The Solvera Line's grade separations in the play area (world_map.json
+        flyover / overpass / footbridge landmarks, tools/mountain_world_map.py)
+        as planned structures for the grade-separation pass: the deck runs
+        along the route on top, centred on the crossing. Until that pass the
+        track and road stay at grade, so heights are not set (z 0)."""
+        routes = {r["id"]: r for r in self.world["routes"]}
+        deck = {"flyover": 120.0, "overpass": 48.0, "footbridge": 24.0}
+        n = 0
+        for lm in self.world["landmarks"]:
+            if lm.get("type") not in deck or lm["over"] not in routes:
+                continue
+            p = Point(self.L([lm["pos"]])[0])
+            if not self.A.contains(p):
+                continue
+            line = LineString(self.L(routes[lm["over"]]["line"]))
+            s = line.project(p)
+            a, b = max(0.0, s - deck[lm["type"]] * 0.5), min(line.length, s + deck[lm["type"]] * 0.5)
+            k = max(1, math.ceil((b - a) / 8.0))
+            pts = [[round(c, 2) for c in line.interpolate(a + (b - a) * i / k).coords[0]] + [0.0] for i in range(k + 1)]
+            self.structures.append({"kind": lm["type"], "way": routes[lm["over"]]["name"],
+                                    "crossing": routes[lm["under"]]["name"], "cls": "rail" if lm["type"] == "flyover" else "road",
+                                    "length": round(b - a, 1), "pts": pts, "portals": [pts[0], pts[-1]],
+                                    "bridge": True, "planned": True})
+            n += 1
+        print("planned grade separations in the play area:", n)
 
     def _note_structures(self, line, cls, name, spans, prof=None):
         """Each span of the line just graded (or of `prof`) as a structure:
@@ -2148,7 +2176,12 @@ class Country:
         and strip fields on the farmland left clear, and each pivot's
         sprinkler spans as plots of their own."""
         for e in self.canal_ends:
-            if not self._place_near((e[0] - 30.0, e[1] - 20.0), "pump_house", "", "golden_flats", reach=90.0):
+            if self._place_near((e[0] - 30.0, e[1] - 20.0), "pump_house", "", "golden_flats", reach=90.0):
+                continue
+            # No road near this canal's head: the pump house stands by the
+            # canal on its own (its keeper comes along the bank).
+            if not any(self.try_lot(q[0], q[1], 0.0, "pump_house", "", "golden_flats")
+                       for q in self._spiral((e[0] - 20.0, e[1]), 60.0, 4.0)):
                 print("WARNING: no room for a pump house at", e)
         taken = [self.road_area.buffer(farmland.CLEAR), self.canal_area.buffer(3.0)]
         taken += [lot_poly(l["x"], l["y"], l["yaw"], l["w"], l["d"]).buffer(farmland.CLEAR) for l in self.lots]
@@ -3752,10 +3785,13 @@ class Country:
         # carry each such end on to it, or the blocks along the city never
         # close.
         frames = unary_union(frame)
+        link_pos = [l["pos"] for l in self.links]
         for pc in self.pieces:
             for q in (pc["pts"][0], pc["pts"][-1]):
                 d = frames.distance(Point(q))
-                if 1e-3 < d < FRAME_IN + 2.0:
+                # Only a linked end: a road that merely ends near the edge
+                # street does not join it, and no sidewalk crosses the gap.
+                if 1e-3 < d < FRAME_IN + 2.0 and any(dist(q, l) < 0.5 for l in link_pos):
                     n = nearest_points(frames, Point(q))[0]
                     t = (d + 0.5) / d  # a little past it, so the union nodes them
                     lines.append(LineString([q, (q[0] + (n.x - q[0]) * t, q[1] + (n.y - q[1]) * t)]))
@@ -4010,8 +4046,12 @@ class Country:
                 continue
             pts = resample(LineString(pc["pts"]), 4.0)
             hs = [self.mtn.height(q) for q in pts]
-            g = max([abs(b - a) / max(dist(p, q), 0.1) for a, b, p, q in zip(hs, hs[1:], pts, pts[1:])] or [0.0])
-            off = max([abs(h - (self.mtn.profile_at(q) or 0.0)) for h, q in zip(hs, pts)] or [0.0])
+            # Only where the road lies on its graded profile: a bridge deck or
+            # a tunnel has none, and the ground under it is not the road.
+            zs = [self.mtn.profile_at(q) for q in pts]
+            g = max([abs(b - a) / max(dist(p, q), 0.1) for a, b, p, q, za, zb in zip(hs, hs[1:], pts, pts[1:], zs, zs[1:])
+                     if za is not None and zb is not None] or [0.0])
+            off = max([abs(h - z) for h, z in zip(hs, zs) if z is not None] or [0.0])
             w = worst.setdefault(pc["name"], [0.0, 0.0, 0.0])
             worst[pc["name"]] = [max(w[0], g), max(w[1], off), max(w[2], max(hs))]
         # Each pad is flat under its whole lot (2 m samples).

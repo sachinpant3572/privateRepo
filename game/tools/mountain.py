@@ -35,6 +35,10 @@ CELL = 8.0
 MAX_H = 1100.0
 GRID_PAD = 7  # cells round the range's outline (its city and east sides reach ~0 within 6)
 GRID_TAPER = 6.0  # outer cells easing what is left down to 0 at the grid's edge
+# The play area cuts the range's north side at y -4808 with the ground still
+# ~21 m up: the grid runs on this far north, where the ground has come down
+# to ~0 on its own, so no cliff stands just past the fence.
+GRID_PAD_NORTH = 38
 
 # Mount Calder (HANDOFF-world-mountain.md W-1): the massif north of the city,
 # its summit 2.2 km from the city's north edge. A cone with a rounded summit
@@ -629,7 +633,7 @@ class Mountain:
         bridge the ground is left alone."""
         x0, y0, x1, y1 = self.poly.bounds
         pad = GRID_PAD * CELL
-        x0, y0 = math.floor(x0 / CELL) * CELL - pad, math.floor(y0 / CELL) * CELL - pad
+        x0, y0 = math.floor(x0 / CELL) * CELL - pad, math.floor(y0 / CELL) * CELL - GRID_PAD_NORTH * CELL
         nx = int(math.ceil((x1 + pad - x0) / CELL)) + 1
         ny = int(math.ceil((y1 + pad - y0) / CELL)) + 1
         gx, gy = np.meshgrid(x0 + np.arange(nx) * CELL, y0 + np.arange(ny) * CELL)

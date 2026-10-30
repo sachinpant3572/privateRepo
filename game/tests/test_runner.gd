@@ -99,7 +99,7 @@ func _run() -> void:
 		"test_traffic_drives_into_the_country", "test_traffic_turns_round_at_barricades",
 		"test_country_kit_builds_every_kind",
 		"test_country_plots_square_to_their_roads", "test_estates_and_clusters", "test_grounds_kit_builds_every_part",
-		"test_bellerive_hills", "test_mount_calder", "test_freight_line_crosses_cleanly", "test_golden_flats_farmland", "test_every_home_has_a_way_in", "test_homes_by_wealth",
+		"test_bellerive_hills", "test_mount_calder", "test_freight_line_crosses_cleanly", "test_rail_crossings_are_grade_separated", "test_golden_flats_farmland", "test_every_home_has_a_way_in", "test_homes_by_wealth",
 		"test_new_home_kinds_and_live_cars", "test_people_walk_the_suburbs", "test_suburb_home_cars_are_live",
 		"test_road_surfaces_and_roadworks", "test_traffic_flows_past_roadworks", "test_boundaries_vary_by_household",
 		"test_game_log_file_and_rotation", "test_game_log_snapshot_and_events", "test_game_log_report_copy_and_off",
@@ -5193,19 +5193,25 @@ func test_people_walk_the_suburbs() -> void:
 	var first: int = city.sidewalk_loops.size() - c.walks.size()
 	# The east side loop with the most suburb sidewalk round it: most of
 	# them close blocks along the city's edge street, by its own sidewalks.
+	# Measured in metres of sidewalk, not points (the city's loops and the
+	# suburbs' are sampled at different spacings).
 	var at := Vector3.INF
 	var share := -1.0
 	for w in c.walks:
 		if w[0].x > 1700.0 and w[0].z > 100.0 and w[0].z < 900.0:
-			var mine := 0
-			var all := 0
+			var mine := 0.0
+			var all := 0.0
 			for li in city.sidewalk_loops.size():
-				for q in city.sidewalk_loops[li]:
-					if q.distance_to(w[0]) < 120.0:
-						all += 1
-						mine += 1 if li >= first else 0
-			if all > 0 and float(mine) / all > share:
-				share = float(mine) / all
+				var loop: Array = city.sidewalk_loops[li]
+				for k in loop.size():
+					var q: Vector3 = loop[k]
+					var q2: Vector3 = loop[(k + 1) % loop.size()]
+					if (q + q2).distance_to(w[0] * 2.0) < 240.0:
+						var seg := q.distance_to(q2)
+						all += seg
+						mine += seg if li >= first else 0.0
+			if all > 0.0 and mine / all > share:
+				share = mine / all
 				at = w[0]
 	_check(at != Vector3.INF, "an east side loop to stand on")
 	if at == Vector3.INF:
@@ -6345,6 +6351,55 @@ func test_freight_line_crosses_cleanly() -> void:
 					if d < 4.0 and near.size() < 4 and not near.has(at.round()):
 						near.append(at.round())
 	_check(near.is_empty(), "they keep 4 m off every lot (%s)" % str(near))
+
+
+## The Solvera Line (high speed) has no level crossing: every road, track or
+## rail line it crosses on the map has a flyover, overpass or footbridge
+## there (tools/mountain_world_map.py), except where two rail lines meet at a
+## shared station (a junction), where a road ends on the line, and on the
+## rail pass (mountain.py's own bridges and tunnels). In the play area each
+## one is a planned structure in the country data.
+func test_rail_crossings_are_grade_separated() -> void:
+	var world: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/world_map.json"))
+	var sep := []
+	for lm: Dictionary in world.landmarks:
+		if lm.type in ["flyover", "overpass", "footbridge"]:
+			sep.append(Vector2(lm.pos[0], lm.pos[1]))
+	var pass_pts := PackedVector2Array()
+	var lines: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://tools/mountain_lines.json"))
+	for q: Array in lines.rail_pass.pts:
+		pass_pts.append(Vector2(q[0], q[1]) + Vector2(6150.0, 6650.0)) # local to world
+	var sol: Array = []
+	for r: Dictionary in world.routes:
+		if r.id == "solvera_line":
+			sol = r.line
+	var level := []
+	var count := 0
+	for o: Dictionary in world.routes:
+		if o.id == "solvera_line" or not o.type in ["highway", "road", "lane", "track", "trail", "rail"]:
+			continue
+		var o0 := Vector2(o.line[0][0], o.line[0][1])
+		var o1 := Vector2(o.line[-1][0], o.line[-1][1])
+		for i in range(1, sol.size()):
+			var a := Vector2(sol[i - 1][0], sol[i - 1][1])
+			var b := Vector2(sol[i][0], sol[i][1])
+			for j in range(1, o.line.size()):
+				var x = Geometry2D.segment_intersects_segment(a, b, Vector2(o.line[j - 1][0], o.line[j - 1][1]), Vector2(o.line[j][0], o.line[j][1]))
+				if x == null or x.distance_to(o0) < 1.0 or x.distance_to(o1) < 1.0 or _near_line(x, pass_pts, 30.0):
+					continue
+				if o.type == "rail" and (x.distance_to(a) < 1.0 or x.distance_to(b) < 1.0):
+					continue # a junction at a shared station
+				count += 1
+				if not sep.any(func(s): return s.distance_to(x) < 30.0) and level.size() < 6:
+					level.append("%s at %s" % [o.id, x.round()])
+	_check(count >= 6, "the Solvera Line crosses other routes (%d)" % count)
+	_check(level.is_empty(), "every crossing is grade-separated (%s)" % str(level))
+	var c: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/country.json"))
+	var planned := 0
+	for st: Dictionary in c.structures:
+		if st.get("planned", false) and st.kind in ["flyover", "overpass", "footbridge"]:
+			planned += 1
+	_check(planned >= 2, "the ones in the play area are planned structures (%d)" % planned)
 
 
 func _near_line(p: Vector2, line: PackedVector2Array, r: float) -> bool:
