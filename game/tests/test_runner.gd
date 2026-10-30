@@ -76,7 +76,7 @@ func _run() -> void:
 		"test_touch_layout_moves_resizes_and_resets",
 		"test_settings_controls_cards_and_layout_editor",
 		"test_scripted_car_gets_unstuck", "test_heavy_vehicle_pushes_harder", "test_spawns_need_room", "test_overlap_resolves", "test_heavy_pushes_parked", "test_pinned_car_holds_still", "test_xray_only_when_hidden", "test_cars_prewarmed", "test_hero_seen_under_roofs", "test_cab_stop_skips_parked_car",
-		"test_vehicle_classes_cover_every_kind", "test_suspension_bounces_and_settles", "test_side_hit_spins_and_dents", "test_hard_crash_throws_panel", "test_crash_throws_rider", "test_car_fire_then_explodes", "test_explosion_makes_pieces_and_cleans_up", "test_burnt_steel_keys_miss_paints",
+		"test_vehicle_classes_cover_every_kind", "test_suspension_bounces_and_settles", "test_side_hit_spins_and_dents", "test_hard_crash_throws_panel", "test_crash_throws_rider", "test_car_fire_then_explodes", "test_explosion_makes_pieces_and_cleans_up", "test_burnt_steel_keys_miss_paints", "test_flame_frames_are_layers", "test_people_react_to_an_explosion",
 		"test_vehicle_handling_differs",
 		"test_traffic_drives_every_kind",
 		"test_vehicle_models_in_budget_and_grounded", "test_three_wheelers_and_big_trucks",
@@ -7829,6 +7829,53 @@ func test_player_speeds_up_and_slows_down() -> void:
 	_check(stopped < 0.05, "and then he stands (%.2f)" % stopped)
 
 
+## "Use this explosions and make them react please" (Sachin, 2026-10-30): a
+## blast reaches people as an "explosion" (not a crash): near it they duck or
+## (the elderly) cower and then run, further off they run, the brave gang
+## member only looks, and out of earshot nobody notices.
+func test_people_react_to_an_explosion() -> void:
+	await _new_game(false)
+	var p = game.player
+	_place_player(_home(), Vector3(7.5, 0, 7.5))
+	var blast: Vector3 = p.global_position + Vector3(0, 0, -4)
+	# [category, personality, where from the blast, first reaction, then]
+	var crowd := [
+		["general", "calm", Vector3(8, 0, 0), "duck", "flee"], ["elderly", "calm", Vector3(-6, 0, -9), "cower", "flee"],
+		["general", "calm", Vector3(0, 0, -40), "flee", "flee"], ["gang", "brave", Vector3(-40, 0, 0), "look", ""],
+		["general", "calm", Vector3(95, 0, 0), "", ""],
+	]
+	var peds := []
+	for row in crowd:
+		var ped = game.population.spawn_ped_at(blast + row[2])
+		ped.walk_speed = 0.0
+		ped.run_speed = 5.2
+		ped.category = row[0]
+		ped.personality = row[1]
+		ped.brave = row[1] == "brave"
+		peds.append(ped)
+	await _frames(2)
+	Fx.explosion(blast, 1.0)
+	for i in peds.size():
+		_check(peds[i].pending_reaction() == crowd[i][3],
+			"%.0f m away the %s %s hears the blast and is about to '%s', got '%s'" % [Vector3(crowd[i][2]).length(), crowd[i][1], crowd[i][0], crowd[i][3], peds[i].pending_reaction()])
+	await _frames(30)
+	for i in peds.size():
+		var want: String = crowd[i][3]
+		_check(peds[i].reaction == want and (want == "" or peds[i].reaction_kind == "explosion"),
+			"the %s is reacting to the explosion with '%s', got '%s' (%s)" % [crowd[i][0], want, peds[i].reaction, peds[i].reaction_kind])
+	var start := []
+	for ped in peds:
+		start.append(ped.global_position)
+	await _frames(330)
+	for i in peds.size():
+		var then: String = crowd[i][4]
+		if then == "":
+			continue
+		var moved: float = Vector2(peds[i].global_position.x - start[i].x, peds[i].global_position.z - start[i].z).length()
+		_check(peds[i].reaction == "flee" and moved > 3.0,
+			"after '%s' the %s runs from the blast ('%s', %.1f m)" % [crowd[i][3], crowd[i][0], peds[i].reaction, moved])
+
+
 func test_crowd_reacts_to_a_punch() -> void:
 	await _new_game(false)
 	var p = game.player
@@ -9081,6 +9128,39 @@ func test_burnt_steel_keys_miss_paints() -> void:
 					worst = "%s near %s" % [paint, key]
 	_check(self_far < 0.006, "the steel parts' own colours still match their keys in full (%.4f off at most)" % self_far)
 	_check(near > 0.012, "every paint sits clear of the burnt shell's steel keys (nearest %.4f: %s)" % [near, worst])
+
+
+func test_flame_frames_are_layers() -> void:
+	# The flame pictures are layers of one Texture2DArray, each with its own
+	# mipmaps, so a small far flame never blends one frame into the next.
+	var FireFx = load("res://scripts/fire_fx.gd")
+	var tex = FireFx.flame()
+	_check(tex is Texture2DArray, "the flame pictures are one texture array")
+	if not (tex is Texture2DArray):
+		return
+	var arr: Texture2DArray = tex
+	var frames: int = FireFx.FLAME_FRAMES
+	_check(arr.get_layers() == frames, "one layer per flame frame (%d of %d)" % [arr.get_layers(), frames])
+	_check(arr.get_width() == 64 and arr.get_height() == 128, "the flame layers are 64 x 128 (%d x %d)" % [arr.get_width(), arr.get_height()])
+	_check(arr.has_mipmaps(), "the flame layers have mipmaps")
+	# The headless renderer cannot hand a layer back, so compare the images
+	# the array was made from.
+	var imgs: Array = FireFx._tex["flame_images"]
+	_check(imgs.size() == frames, "one picture per flame frame (%d)" % imgs.size())
+	var datas: Array = []
+	var mipped := true
+	for img: Image in imgs:
+		mipped = mipped and img.has_mipmaps() and img.get_width() == 64 and img.get_height() == 128
+		datas.append(img.get_data())
+	_check(mipped, "every flame picture is 64 x 128 with its own mipmaps")
+	var same := false
+	for i in datas.size():
+		for j in range(i + 1, datas.size()):
+			if datas[i] == datas[j]:
+				same = true
+	_check(not same, "no two flame layers are the same picture")
+	var m: ShaderMaterial = FireFx.flame_material(2)
+	_check(m.get_shader_parameter("shape") == tex, "the flame material draws that same texture array")
 
 
 func test_explosion_makes_pieces_and_cleans_up() -> void:

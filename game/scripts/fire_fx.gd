@@ -88,11 +88,13 @@ static func _make(img: Image) -> ImageTexture:
 	return ImageTexture.create_from_image(img)
 
 
-## Six flame pictures side by side (64 x 128 each): one, two or three
-## tongues each (a broad one, a tall thin one, twins, a fork, a ragged low
-## bed), taller than wide, rounded at the base, tips leaning. White, the
-## alpha is the shape; colour comes from the particles' ramp and the flame
-## shader (FLAME_SHADER), which also bends and tears them as they rise.
+## Six flame pictures (64 x 128 each), one per layer of an array texture so
+## each has its own mipmaps and a far, small flame never blends in its
+## neighbour: one, two or three tongues each (a broad one, a tall thin
+## one, twins, a fork, a ragged low bed), taller than wide, rounded at the
+## base, tips leaning. White, the alpha is the shape; colour comes from the
+## particles' ramp and the flame shader (FLAME_SHADER), which also bends
+## and tears them as they rise.
 const FLAME_FRAMES := 6
 const _TONGUES := [
 	[[0.5, 0.42, 1.0, -0.1]],
@@ -104,15 +106,16 @@ const _TONGUES := [
 ]
 
 
-static func flame() -> ImageTexture:
+static func flame() -> Texture2DArray:
 	if _tex.has("flame"):
 		return _tex["flame"]
 	var w := 64
 	var h := 128
-	var img := Image.create(w * FLAME_FRAMES, h, true, Image.FORMAT_RGBA8)
+	var images: Array[Image] = []
 	var edge := _noise(11, 0.06)
 	var body := _noise(23, 0.035)
 	for f in FLAME_FRAMES:
+		var img := Image.create(w, h, true, Image.FORMAT_RGBA8)
 		for y in h:
 			var tt := 1.0 - float(y) / float(h - 1) # 0 base .. 1 top
 			for x in w:
@@ -128,8 +131,13 @@ static func flame() -> ImageTexture:
 					var d := absf(u - cx) / maxf(hw * (1.0 + 0.45 * n * (0.4 + t)), 0.001)
 					a = maxf(a, (1.0 - smoothstep(0.3, 1.0, d)) * (1.0 - 0.35 * smoothstep(0.75, 1.0, t)))
 				a *= 0.8 + 0.2 * body.get_noise_2d(f * 57.0 + x * 2.0, y * 2.0)
-				img.set_pixel(w * f + x, y, Color(1, 1, 1, clampf(a, 0.0, 1.0)))
-	_tex["flame"] = _make(img)
+				img.set_pixel(x, y, Color(1, 1, 1, clampf(a, 0.0, 1.0)))
+		img.generate_mipmaps()
+		images.append(img)
+	var arr := Texture2DArray.new()
+	arr.create_from_images(images)
+	_tex["flame_images"] = images # the headless renderer cannot hand layers back (tests read these)
+	_tex["flame"] = arr
 	return _tex["flame"]
 
 
@@ -270,16 +278,17 @@ static func quad(size: Vector2, tex: Texture2D, frames := 1, additive := false, 
 	return q
 
 
-## Flame tongues as they really move: the picture (one of `flame()`'s,
-## picked per particle) is bent by noise scrolling up through it, little at
-## the base and a lot at the tip, and torn by a second noise, so the top
-## breaks into separate licks that come and go; the older the particle, the
-## more it tears. Dense low parts burn yellow-white, thin edges take the
-## particle's ramp colour. Additive, billboard, keeps the particle's scale.
+## Flame tongues as they really move: the picture (one layer of `flame()`'s
+## array texture, picked per particle) is bent by noise scrolling up
+## through it, little at the base and a lot at the tip, and torn by a
+## second noise, so the top breaks into separate licks that come and go;
+## the older the particle, the more it tears. Dense low parts burn
+## yellow-white, thin edges take the particle's ramp colour. Additive,
+## billboard, keeps the particle's scale.
 const FLAME_SHADER := """
 shader_type spatial;
 render_mode blend_add, unshaded, depth_draw_never, cull_disabled, shadows_disabled;
-uniform sampler2D shape : filter_linear_mipmap;
+uniform sampler2DArray shape : filter_linear_mipmap;
 uniform sampler2D noise : filter_linear_mipmap, repeat_enable;
 uniform float frames = 6.0;
 varying vec2 cell;
@@ -303,7 +312,7 @@ void fragment() {
 	float n2 = texture(noise, vec2(cell.x * 1.9 - seed * 3.0, cell.y * 1.6 + t * 2.4)).r - 0.5;
 	float bend = (n1 * 0.36 + n2 * 0.16) * (0.08 + up * up * 1.2);
 	vec2 s = clamp(vec2(cell.x + bend, cell.y + n2 * 0.08 * up), vec2(0.004), vec2(0.996));
-	float a = texture(shape, vec2((frame + s.x) / frames, s.y)).a;
+	float a = texture(shape, vec3(s.x, s.y, frame)).a;
 	float e = texture(noise, vec2(cell.x * 1.4 + seed * 9.0, cell.y * 1.1 + t * 2.0)).r;
 	float cut = mix(0.0, 0.62, up * up) + 0.18 * age;
 	a *= smoothstep(cut - 0.1, cut + 0.1, e + a * 0.35);
