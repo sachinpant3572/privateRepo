@@ -51,6 +51,7 @@ const VIEWS := [
 	["c32_hill_terraces_east", 1818.0, -685.0, 90.0, 12.5],
 	["c33_hill_mid", 433.0, -647.0, 110.0, 12.5],
 	["c34_hill_night", 335.0, -919.0, 90.0, 21.5],
+	["c35_steep_street", 2234.0, -1102.0, 80.0, 12.5],
 ]
 
 var out_dir := "user://"
