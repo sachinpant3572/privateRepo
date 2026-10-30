@@ -35,6 +35,7 @@ const LANDMARK_COLORS := {
 	"square": Color(0.45, 0.72, 0.4),
 	"parkland": Color(0.45, 0.72, 0.4),
 	"cemetery": Color(0.4, 0.6, 0.42),
+	"golf": Color(0.5, 0.75, 0.4),
 	"stadium": Color(0.62, 0.62, 0.64),
 	"containers": Color(0.58, 0.6, 0.66),
 	"railyard": Color(0.6, 0.55, 0.48),

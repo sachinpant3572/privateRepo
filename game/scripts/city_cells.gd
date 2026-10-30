@@ -74,6 +74,9 @@ const STEEL := Color(0.3, 0.36, 0.4)
 const BALLAST := Color(0.44, 0.41, 0.37)
 ## District banners on downtown street lights.
 const BANNERS := [Color(0.85, 0.62, 0.18), Color(0.12, 0.5, 0.58), Color(0.7, 0.16, 0.22)]
+## The grown city's district styles (#116) built with an older district's
+## buildings until they have their own.
+const STYLE_LOOK := {"heights": "brownstone", "bayou": "wards", "industrial": "docks"}
 const ZEBRA_STYLES := ["downtown", "quarter", "station", "tower", "police", "hospital", "park", "club"]
 ## Road surfaces (Sachin: "some roads are newly paved ... some roads are old
 ## worn out but still solid, some are too washed out but still good, some
@@ -977,11 +980,12 @@ static func _land_block(ctx: Ctx, style: String) -> void:
 	var district: String = city.district_style(ctx.face)
 	if district == "wards" and city.faces_square(ctx.face):
 		district = "painted"
+	district = STYLE_LOOK.get(district, district)
 	var grounds: bool = ctx.plan.set_piece(ctx.face) == "grounds"
 	ctx.edge = ctx.plan.edge_distance(ctx.plan.faces[ctx.face].center, true)
 	var lawn: bool = style in LAWNS or grounds
 	if style in OPEN_LAND:
-		var ground: Color = LOT_GROUND.green if style in ["parkland", "cemetery"] else YARD
+		var ground: Color = LOT_GROUND.green if style in ["parkland", "cemetery", "golf"] else YARD
 		_flat_in_front(ctx, ctx.ff, ctx.lot, KERB + 0.01, _paved(ground))
 		_use_parcel(ctx, ctx.rect)
 		_open_land(ctx, style)
@@ -1894,8 +1898,8 @@ static func _liberty_green(ctx: Ctx) -> void:
 # --- Open land (street_plan.gd OPEN_LAND) ------------------------------------------
 
 ## The open-land kinds: blocks of parkland, a cemetery, a stadium, a
-## container yard and a rail yard (no buildings on lots).
-const OPEN_LAND := ["parkland", "cemetery", "stadium", "containers", "railyard"]
+## container yard, a rail yard and a golf course (no buildings on lots).
+const OPEN_LAND := ["parkland", "cemetery", "stadium", "containers", "railyard", "golf"]
 const GRAVEL := Color(0.5, 0.45, 0.38)
 const HEADSTONE := Color(0.62, 0.62, 0.6)
 const CYPRESS := Color(0.13, 0.27, 0.15)
@@ -1915,6 +1919,8 @@ static func _open_land(ctx: Ctx, style: String) -> void:
 			_container_yard(ctx)
 		"railyard":
 			_rail_yard(ctx)
+		"golf":
+			_golf(ctx)
 
 
 ## A flat strip (path, track bed) from a to b in the parcel frame.
@@ -1946,19 +1952,11 @@ static func _parkland(ctx: Ctx) -> void:
 	var hz := ctx.hz
 	var plan = ctx.plan
 	var local := _at(ctx, Vector3(0, KERB, 0), 0.0)
-	var inv := ctx.frame.affine_inverse()
-	var lake := PackedVector2Array()
-	for k in plan.lakes.size():
-		if plan.lake_face[k] == ctx.face:
-			for q in plan.lakes[k]:
-				var l: Vector3 = inv * Vector3(q.x, 0, q.y)
-				lake.append(Vector2(l.x, l.z))
+	var lake := _lake_local(ctx)
 	var clear: Array = [] # [a, b, half width] the trees keep off
 	var lake_c := Vector2.ZERO
 	var lake_r := 0.0
 	if lake.size() >= 3:
-		if Geometry2D.is_polygon_clockwise(lake):
-			lake.reverse()
 		for q in lake:
 			lake_c += q / lake.size()
 		for q in lake:
@@ -2044,6 +2042,123 @@ static func _parkland(ctx: Ctx) -> void:
 			else:
 				Props.street_tree(mb, local, Vector3(p.x, 0, p.y), rng)
 			budget -= 1
+	_done(ctx, local, false, ctx.props)
+
+
+## The plan's lake on this block in the parcel frame (anticlockwise), or
+## an empty array.
+static func _lake_local(ctx: Ctx) -> PackedVector2Array:
+	var inv := ctx.frame.affine_inverse()
+	var lake := PackedVector2Array()
+	for k in ctx.plan.lakes.size():
+		if ctx.plan.lake_face[k] == ctx.face:
+			for q in ctx.plan.lakes[k]:
+				var l: Vector3 = inv * Vector3(q.x, 0, q.y)
+				lake.append(Vector2(l.x, l.z))
+	if lake.size() >= 3 and Geometry2D.is_polygon_clockwise(lake):
+		lake.reverse()
+	return lake
+
+
+const FAIRWAY := Color(0.42, 0.68, 0.33)
+const PUTTING := Color(0.5, 0.78, 0.4)
+const BUNKER := Color(0.86, 0.8, 0.62)
+
+
+## A golf course (LA's Rancho Park, Miami's Biltmore links): rough lawn,
+## holes laid round a water hazard (a tee, a fairway, a green with its flag
+## and a bunker each), a clubhouse and car park on the front street, a cart
+## path round the holes and trees in the rough between them.
+static func _golf(ctx: Ctx) -> void:
+	var mb = ctx.mb
+	var rng := ctx.rng
+	var hx := ctx.hx
+	var hz := ctx.hz
+	var local := _at(ctx, Vector3(0, KERB, 0), 0.0)
+	var clear: Array = [] # [a, b, half width] the trees keep off
+	# The water hazard: a muddy bank and a low rope fence round it.
+	var lake := _lake_local(ctx)
+	var lake_c := Vector2.ZERO
+	var lake_r := 0.0
+	if lake.size() >= 3:
+		for q in lake:
+			lake_c += q / lake.size()
+		for q in lake:
+			lake_r = maxf(lake_r, q.distance_to(lake_c))
+		var rim: PackedVector2Array = Geometry2D.offset_polygon(lake, 1.6)[0]
+		mb.flat(rim, 0.05, BUNKER.darkened(0.35))
+		mb.flat(lake, 0.08, POND.lightened(0.25))
+		for k in rim.size():
+			var a := rim[k]
+			var b := rim[(k + 1) % rim.size()]
+			Props.fence(mb, local, Vector3(a.x, 0.05, a.y), Vector3(b.x, 0.05, b.y), Color(0.85, 0.85, 0.8), 0.6)
+		clear.append([lake_c, lake_c, lake_r + 5.0])
+	# The clubhouse and its car park along the front street.
+	var club := Vector3(-hx * 0.35, 0, hz - 17.0)
+	mb.box(club + Vector3(0, 3.0, 0), Vector3(30.0, 6.0, 14.0), Color(0.93, 0.9, 0.82))
+	mb.box(club + Vector3(0, 6.25, 0), Vector3(33.0, 0.5, 17.0), Color(0.45, 0.25, 0.2))
+	mb.box(club + Vector3(0, 0.08, -9.5), Vector3(24.0, 0.16, 5.0), PLAZA)
+	local.append([club + Vector3(0, 3.0, 0), Vector3(30.0, 6.0, 14.0)])
+	var lot := Vector3(hx * 0.2, 0, hz - 15.0)
+	mb.box(lot + Vector3(0, 0.025, 0), Vector3(44.0, 0.03, 22.0), _paved(Color(0.3, 0.3, 0.31)))
+	for x in range(-20, 21, 3):
+		for zz in [-6.0, 6.0]:
+			mb.box(lot + Vector3(x, 0.045, zz), Vector3(0.12, 0.02, 5.0), Color(0.9, 0.9, 0.85))
+	clear.append([Vector2(club.x - 18.0, club.z), Vector2(lot.x + 24.0, lot.z), 14.0])
+	# The holes: tee to green along a loop round the hazard, behind the
+	# clubhouse; a hole whose fairway would cross the water is left out.
+	var c := Vector2(0, -10.0)
+	var r := Vector2(maxf(hx - 30.0, 20.0), maxf(hz - 52.0, 20.0))
+	var n := clampi(int(TAU * (r.x + r.y) * 0.5 / 105.0), 4, 9)
+	var ring := PackedVector2Array()
+	var ph := rng.randf() * TAU
+	for i in n:
+		var a := ph + TAU * i / n
+		ring.append(c + Vector2(cos(a) * r.x, sin(a) * r.y))
+	for i in n:
+		var tee := ring[i]
+		var pin := ring[(i + 1) % n]
+		var d := (pin - tee).normalized()
+		tee += d * 8.0
+		pin -= d * 10.0
+		if lake_r > 0.0 and Geometry2D.get_closest_point_to_segment(lake_c, tee, pin).distance_to(lake_c) < lake_r + 14.0:
+			continue
+		var side := Vector2(-d.y, d.x)
+		mb.box(Vector3(tee.x, 0.1, tee.y), Vector3(5.0, 0.2, 5.0), PUTTING)
+		_open_strip(mb, Vector3(tee.x, 0, tee.y) + Vector3(d.x, 0, d.y) * 8.0, Vector3(pin.x, 0, pin.y), 22.0, FAIRWAY, 0.02)
+		mb.cylinder(Vector3(pin.x, 0.03, pin.y), 10.0, 0.04, PUTTING, 18)
+		var bk := pin + side * (13.0 if i % 2 == 0 else -13.0) - d * 3.0
+		mb.cylinder(Vector3(bk.x, 0.035, bk.y), 4.5, 0.04, BUNKER, 12)
+		mb.cylinder(Vector3(pin.x, 0.07, pin.y), 0.04, 2.3, Color(0.95, 0.95, 0.95), 4)
+		mb.box(Vector3(pin.x + 0.35, 2.05, pin.y), Vector3(0.7, 0.45, 0.03), Color(0.85, 0.12, 0.1))
+		clear.append([tee, pin, 14.0])
+		clear.append([bk, bk, 7.0])
+	# A cart path round the outside of the holes.
+	var path := PackedVector2Array()
+	for i in 36:
+		var a := TAU * i / 36.0
+		path.append(c + Vector2(cos(a) * (r.x + 17.0), sin(a) * (r.y + 17.0)))
+	for i in path.size():
+		var a := path[i]
+		var b := path[(i + 1) % path.size()]
+		if absf(a.x) > hx - 3.0 or absf(a.y) > hz - 3.0 or absf(b.x) > hx - 3.0 or absf(b.y) > hz - 3.0:
+			continue
+		_open_strip(mb, Vector3(a.x, 0, a.y), Vector3(b.x, 0, b.y), 2.6, PLAZA)
+	# Trees in the rough: clumps between the holes and a row along the edge.
+	var budget := clampi(int(hx * hz / 220.0), 20, 160)
+	var tries := 0
+	while budget > 0 and tries < 400:
+		tries += 1
+		var p := Vector2(rng.randf_range(-hx + 4.0, hx - 4.0), rng.randf_range(-hz + 4.0, hz - 4.0))
+		if _near_any(p, clear, 2.0):
+			continue
+		if lake.size() >= 3 and Geometry2D.is_point_in_polygon(p, lake):
+			continue
+		if rng.randf() < 0.6:
+			Props.oak(mb, local, Vector3(p.x, 0, p.y), rng)
+		else:
+			Props.palm(mb, local, Vector3(p.x, 0, p.y), rng)
+		budget -= 1
 	_done(ctx, local, false, ctx.props)
 
 

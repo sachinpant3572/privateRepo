@@ -1741,8 +1741,22 @@ class Country:
         z = self.zone_poly
         hz, bayou = z["heights"], z["bayou_town"]
         # Bayou Drive runs along both banks of the bayou through Blackwater
-        # Bayou, so the streets that reach the water end on it.
-        for piece in lines_of(self.water.buffer(BAYOU_DRIVE_SET).boundary.intersection(bayou.buffer(0.5))):
+        # Bayou, so the streets that reach the water end on it. It stops
+        # short where it would cross a rail line at under 30 degrees (the
+        # docks spur's loop by the bank once the city edge drew back, #116).
+        bank = self.water.buffer(BAYOU_DRIVE_SET).boundary.intersection(bayou.buffer(0.5))
+        cuts = []
+        for line in lines_of(bank):
+            for rl in self.rails:
+                x = line.intersection(rl[0])
+                for p in [g for g in getattr(x, "geoms", [x]) if g.geom_type == "Point"]:
+                    da = _along(line, line.project(p))[1]
+                    db = _along(rl[0], rl[0].project(p))[1]
+                    if abs(da[0] * db[0] + da[1] * db[1]) > math.cos(math.radians(30.0)):
+                        cuts.append(p.buffer(40.0))
+        if cuts:
+            bank = bank.difference(unary_union(cuts))
+        for piece in lines_of(bank):
             if piece.length > 60.0:
                 # Where it reaches the city it is led in to an exit.
                 piece = self._to_exit(piece, "avenue", BAYOU_DRIVE_NAME)
@@ -2385,8 +2399,15 @@ class Country:
         groups = {}
         for k in range(len(node_pos)):
             groups.setdefault(find(k), []).append(k)
+        # A merged junction stays on the city exit when it holds one: the
+        # average can drift it past the test's 6 m from the plan junction.
+        exit_pts = [l["pos"] for l in self.links]
         new_pos = {}
         for root, members in groups.items():
+            at_exit = [node_pos[m] for m in members if any(dist(node_pos[m], q) < 3.0 for q in exit_pts)]
+            if at_exit:
+                new_pos[root] = tuple(at_exit[0])
+                continue
             new_pos[root] = (sum(node_pos[m][0] for m in members) / len(members),
                              sum(node_pos[m][1] for m in members) / len(members))
         out = []
@@ -2749,7 +2770,10 @@ class Country:
                 if key in tried:
                     continue
                 tried.add(key)
-                if self.estate_at(q, size, ident, "", 0, grand=True):
+                # A grand estate's house turns its garden to the sun and the
+                # view too (_view_turn): since the west lobe (#116) covers the
+                # hillside estates that did, the Hale Estate is the one.
+                if self.estate_at(q, size, ident, "", 0, grand=True, sun=True):
                     return True
         return False
 
@@ -4315,6 +4339,11 @@ def estate_layout(W, D, turn, style, rng, grand=False):
     parts = [part("lawn", 0.0, 0.0, W, D)]
     if turn == 0.0:
         hs = min(hs, D - m - 16.0)
+        # Too shallow for a court behind the house and a little narrow for
+        # one beside it: the house gives up to 8 m of width to fit it beside.
+        fit = W - 2.0 * (m + 2.0 + 18.5)
+        if fit < hs and fit >= hs - 8.0 and D - m - hs - TENNIS_BACK < 12.0:
+            hs = fit
         front = min(max((D - hs) * 0.45, 12.0), 30.0)
         side = W * 0.5 - m - hs * 0.5 - 2.0
         # No room for a tennis court beside the house: shorten the front

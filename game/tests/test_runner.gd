@@ -333,6 +333,10 @@ func test_city_outline_is_organic() -> void:
 	# is now how ideal cities looks, even if they are fully architected."
 	# Sachin, 2026-10-29: "Make Bellerive the size of Las Venturas then, but
 	# with California + San Fierro + Florida mix." (Las Venturas: ~4.1 km².)
+	# Sachin, 2026-10-30, on the Liberty City size (~8 km²): "Lets do these
+	# as part of the expansion we are doing to make it as big as Liberty
+	# city." Stage B (the west bank and Verdant Park) brings it to ~7 km²;
+	# the foothill districts (stage C) bring the rest.
 	await _new_game(false)
 	var city = game.city
 	var plan = city.plan
@@ -355,7 +359,7 @@ func test_city_outline_is_organic() -> void:
 		y += 20.0
 	var km2 := land * 400.0 / 1e6
 	var fill := land * 400.0 / box.get_area()
-	_check(km2 > 3.9 and km2 < 4.5, "the city is Las Venturas' size: %.2f km2 of land" % km2)
+	_check(km2 > 6.5 and km2 < 9.0, "the city is on its way to Liberty City's size: %.2f km2 of land" % km2)
 	_check(fill < 0.8, "the outline is no box: the land fills %.0f%% of its bounding box" % (fill * 100.0))
 	# No long straight edge (a river bank may run on, and Ocean Drive; they
 	# follow the river and the Gulf shore).
@@ -403,14 +407,21 @@ func test_city_outline_is_organic() -> void:
 					var t: Vector3 = c.global_position
 					if not str(city.district_at(t).get("id", "")) in ["gilt_district", "midtown"]:
 						continue
-					var d: float = plan.edge_distance(Vector2(t.x, t.z))
-					if d < 110.0:
+					# The generator's measure: the block centre's distance (the sea
+					# front is no edge) against its falloff band (Cells.EDGE_LOW).
+					# Since stage B's west lobe downtown meets the edge only at its
+					# north-east corner, where big blocks reach 150 m in.
+					var f: int = plan.face_of(Vector2(t.x, t.z))
+					if f < 0:
+						continue
+					var d: float = plan.edge_distance(plan.faces[f].center, true)
+					if d < 100.0:
 						near.append(c.shape.size.y)
-					elif d > 200.0:
+					elif d >= 150.0:
 						far.append(c.shape.size.y)
 	var mean := func(a: Array) -> float: return a.reduce(func(s, v): return s + v, 0.0) / maxf(a.size(), 1)
 	_check(near.size() >= 5 and far.size() >= 20 and mean.call(near) < mean.call(far) * 0.8,
-		"downtown is lower near the edge: %.0f m on average within 110 m (%d), %.0f m past 200 m (%d)" % [mean.call(near), near.size(), mean.call(far), far.size()])
+		"downtown is lower near the edge: %.0f m on average in blocks within 100 m (%d), %.0f m in blocks 150 m in (%d)" % [mean.call(near), near.size(), mean.call(far), far.size()])
 
 
 ## Even-odd point-in-polygon on a ray along +x, half-open at the vertices.
@@ -2157,8 +2168,9 @@ func test_birds_by_day_not_at_night() -> void:
 	atm.set_weather("clear", true)
 	var birds = atm.birds
 	# The farm sample is the Golden Flats west of the range ((584, -1824) is
-	# up Mount Calder's flank since phase 2).
-	var places := {"city": Vector2(300, 250), "beach": Vector2(-2033, 1791), "bayou": Vector2(-966, 366), "hills": Vector2(1200, -1300), "farm": Vector2(-900, -1100)}
+	# up Mount Calder's flank since phase 2); the bayou sample is Saltgrass
+	# west of the city ((-966, 366) is in the west lobe since stage B).
+	var places := {"city": Vector2(300, 250), "beach": Vector2(-2033, 1791), "bayou": Vector2(-1900, 500), "hills": Vector2(1200, -1300), "farm": Vector2(-900, -1100)}
 	var wrong := []
 	for h in places:
 		var got: String = birds.habitat_at(places[h])
@@ -4112,9 +4124,14 @@ func test_roads_have_two_lanes_each_way() -> void:
 		if float(g.middle) + float(g.lanes) * float(g.lane_w) + float(g.park) > float(g.w) * 0.5 + 0.01:
 			bad.append([g.id, "lanes do not fit"])
 	_check(bad.is_empty(), "country: the freeway 8 lanes, highways 6, avenues and streets 4, county roads and tracks 2 %s" % [bad])
+	# A road's class is its longest piece's (a short link at a city exit
+	# takes the exit's class: Crest Drive meets the east lobe since stage B).
 	var cls_of := {}
+	var longest := {}
 	for r in c.roads:
-		cls_of[r.name] = c.classes[r.cls].id
+		if r.nodes.size() > longest.get(r.name, 0):
+			longest[r.name] = r.nodes.size()
+			cls_of[r.name] = c.classes[r.cls].id
 	_check(cls_of.get("Bellerive Beltway") == "freeway" and cls_of.get("Canyon Freeway") == "highway" and cls_of.get("Crest Drive") == "road",
 		"the Beltway is the 8-lane freeway, the Canyon Freeway 6 lanes, Crest Drive 2 (%s, %s, %s)" % [cls_of.get("Bellerive Beltway"), cls_of.get("Canyon Freeway"), cls_of.get("Crest Drive")])
 	# Parked cars sit in the parking strip, clear of the curb lane.
@@ -5673,7 +5690,9 @@ func _turn_off_road(c, l: Array) -> float:
 ## estates and clusters; a plot's lots stay inside it.
 ## The counts are loose floors: the urban outline (2026-10-29) sets how much
 ## suburb there is, and Mount Calder's range (phase 2) took the hill vineyards
-## and orchards up its flank (603 fields before it, 177 after).
+## and orchards up its flank (603 fields before it, 177 after). Stage B's
+## east lobe (#116, Verdant Park) covers most of the Verdant Hills farmland
+## left (66 fields after); the Golden Flats pivots are counted apart.
 func test_country_plots_square_to_their_roads() -> void:
 	await _new_game(false)
 	var c = game.city.country
@@ -5681,7 +5700,7 @@ func test_country_plots_square_to_their_roads() -> void:
 	for p: Array in c.plots:
 		var ty: String = c.plot_types[int(p[5])]
 		counts[ty] = counts.get(ty, 0) + 1
-	_check(counts.get("estate", 0) >= 3 and counts.get("cluster", 0) >= 20 and counts.get("farmyard", 0) >= 10 and counts.get("field", 0) >= 150,
+	_check(counts.get("estate", 0) >= 3 and counts.get("cluster", 0) >= 20 and counts.get("farmyard", 0) >= 10 and counts.get("field", 0) >= 50,
 			"the country has estates, clusters, farmyards and fields, got %s" % counts)
 	var worst_lot := 0.0
 	var fronting := 0
@@ -5904,7 +5923,24 @@ func test_golden_flats_farmland() -> void:
 		for n in road.nodes:
 			joined = joined or belt.has(n)
 	_check(joined, "the expressway joins the Beltway")
-	_check(_bridged(c, "Golden Flats Expressway"), "the expressway bridges the Morrow")
+	# Where it crosses the Morrow it is on a bridge. Since stage B (#116) the
+	# Beltway crosses the river's north leg and the expressway leaves it on
+	# the west bank, so it may not cross at all.
+	var morrow := PackedVector2Array()
+	for wt in world.water:
+		if wt.id == "morrow":
+			for q in wt.line:
+				morrow.append(Vector2(q[0], q[1]) - city.map_origin)
+	var fords := 0
+	for road in expressway:
+		for k in road.nodes.size() - 1:
+			var a: Vector2 = c.pos(road.nodes[k])
+			var b: Vector2 = c.pos(road.nodes[k + 1])
+			for i in morrow.size() - 1:
+				if Geometry2D.segment_intersects_segment(a, b, morrow[i], morrow[i + 1]) != null:
+					var e: int = c.edge_between(road.nodes[k], road.nodes[k + 1])
+					fords += 1 if e < 0 or c.edge_bridge[e] == 0 else 0
+	_check(fords == 0, "the expressway crosses the Morrow only on a bridge, %d fords" % fords)
 	# Pivots, their spans as plots, the field zones in the tiles.
 	_check(c.pivots.size() >= 12, "centre-pivot circles, got %d" % c.pivots.size())
 	var spans := 0
@@ -8355,9 +8391,21 @@ func test_hero_seen_under_roofs() -> void:
 	_check(not sight.is_empty() and sight.all(func(b): return b.collision_mask == 0 and b.get_children().all(func(c): return not c.has_meta("brk"))), "downtown cells have sight-only roofs, colliding with nothing and never breakable (%d)" % sight.size())
 	if sight.is_empty():
 		return
-	var roof: Vector3 = sight[0].get_child(0).global_position
+	# A shelter whose roof runs along the view (the camera looks down from
+	# +z; across a 1.7 m roof the ray from the hero's knees clears its
+	# edge). The hero faces along it, out of its open end (+x: the pole
+	# stands at -x, the back wall at +z). Which shelters stand where moves
+	# with the plan.
+	var roof_shape: Node3D = sight[0].get_child(0)
+	for b in sight:
+		if absf(sin(b.get_child(0).global_rotation.y)) > 0.9:
+			roof_shape = b.get_child(0)
+			break
+	var roof: Vector3 = roof_shape.global_position
+	var along: float = roof_shape.global_rotation.y - PI * 0.5
 	var under := Vector3(roof.x, roof.y - 2.45, roof.z)
 	_place_player_at(under)
+	p.rotation.y = along
 	await _frames(10)
 	_check(cam._view_blocked(p.global_position), "standing under a shelter roof opens the see-through hole")
 	_check(cam.covered(cam.get_world_3d().direct_space_state, cam.global_position, p), "and the x-ray counts the roof as cover")
@@ -8365,7 +8413,7 @@ func test_hero_seen_under_roofs() -> void:
 	_check(mat.get_shader_parameter("body_radius") == cam.BODY_CUT and cam.BODY_CUT > 0.8, "the small body hole is always open over the player")
 	# Opening of mission 1: the camera comes down in front of the hero.
 	var far_off: float = cam.global_position.distance_to(p.global_position)
-	p.rotation.y = 0.0
+	p.rotation.y = along
 	_check(cam.set_close_up(p), "a clear angle onto the hero's face is found")
 	await _frames(90)
 	var rel: Vector3 = cam.global_position - p.global_position

@@ -64,7 +64,7 @@ const PARK_SIZE := Vector2(204, 132)
 ## Open land inside the city (Liberty City's Middle Park, LA's Griffith and
 ## Exposition parks, the port's yards): the district streets inside each
 ## site are dropped so its blocks join into one (kind: "parkland", "cemetery",
-## "stadium", "railyard", "containers"). `lake` is the lake's size as a
+## "stadium", "railyard", "containers", "golf"). `lake` is the lake's size as a
 ## share of the block's lot (0 for none). Sites sit between arterials, so
 ## none crosses them, and keep clear of the landmarks.
 const OPEN_LAND := [
@@ -77,6 +77,9 @@ const OPEN_LAND := [
 	{"id": "bellerive_bowl", "kind": "stadium", "at": Vector2(1615, 320), "size": Vector2(290, 340), "lake": 0.0},
 	{"id": "ironwharf_containers", "kind": "containers", "at": Vector2(1320, 930), "size": Vector2(250, 120), "lake": 0.0},
 	{"id": "ironwharf_rail_yard", "kind": "railyard", "at": Vector2(1062, 923), "size": Vector2(100, 120), "lake": 0.0},
+	# Verdant Park's golf course, the superblock between Mangrove and
+	# Juniper Avenues, Presidio and Aurum.
+	{"id": "verdant_golf", "kind": "golf", "at": Vector2(2295, -40), "size": Vector2(310, 340), "lake": 0.38},
 ]
 ## The unnamed or minor arterials (the seam roads are laid out by name).
 const ARTERIALS := [
@@ -94,6 +97,20 @@ const ARTERIALS := [
 	{"y": 1400.0, "bank": "south", "cls": "boulevard", "road": "morrow"},
 	{"y": 1610.0, "bank": "south", "cls": "avenue", "road": "gulfview"},
 	{"y": 1760.0, "bank": "south", "cls": "avenue", "road": "pelican"},
+	# The grown city (#116): Laurel Avenue parts Magnolia Heights and the
+	# bayou from Gilt and the Lantern Quarter; on the west bank Tallow
+	# Avenue parts Tallow Bank from Morrow Point, Foundry Avenue runs down
+	# it, and Presidio, Aurum and Crescent carry on across the river.
+	{"x": -390.0, "bank": "north", "cls": "avenue", "road": "laurel"},
+	{"x": -330.0, "bank": "south", "cls": "avenue", "road": "tallow"},
+	{"x": -1000.0, "bank": "south", "cls": "avenue", "road": "foundry"},
+	{"y": -220.0, "bank": "south", "cls": "avenue", "road": "presidio"},
+	{"y": 140.0, "bank": "south", "cls": "boulevard", "road": "aurum"},
+	{"y": 500.0, "bank": "south", "cls": "boulevard", "road": "crescent"},
+	# Verdant Park, east of Mangrove: Juniper Avenue, and Sycamore Avenue
+	# near its east edge.
+	{"x": 2460.0, "bank": "north", "cls": "avenue", "road": "juniper"},
+	{"x": 2780.0, "bank": "north", "cls": "avenue", "road": "sycamore"},
 ]
 ## Lot rectangle (along the front, deep) each landmark needs; blocks too
 ## small for theirs are joined with a neighbour.
@@ -148,6 +165,9 @@ const ROAD_NAMES := {
 	"plaza_luna": "Plaza Luna", "plaza_sol": "Plaza del Sol", "dune_ave": "Dune Avenue", "sandpiper": "Sandpiper Drive",
 	"palm_circle": "Palm Circle", "bayou_drive": "Bayou Drive", "willow_way": "Willow Way", "heron_circle": "Heron Circle",
 	"shoreline": "Shoreline Drive", "cane_row": "Cane Row", "point_circle": "Point Circle",
+	"laurel": "Laurel Avenue", "tallow": "Tallow Avenue", "foundry": "Foundry Avenue",
+	"aurum_bridge": "Aurum Bridge", "crescent_bridge": "Crescent Bridge",
+	"juniper": "Juniper Avenue", "sycamore": "Sycamore Avenue",
 }
 
 ## The citywide arterial grid (California: the boulevards run straight
@@ -156,9 +176,16 @@ const ROAD_NAMES := {
 ## local metres, beyond the bounds
 ## too, as the ends of the outer superblocks. North of the river the lines
 ## at y 140, 500 and 860 are arterials; south of it, y 1400.
-const ART_X := [-390.0, -80.0, 330.0, 690.0, 1010.0, 1460.0, 1770.0, 2130.0]
+## The grown city (#116) added -1300 and -1000 for the west bank, 2460
+## and 2780 for Verdant Park, and the west bank's y lines north of the
+## river's bend (-580 to 860) to ART_Y_SOUTH; _splits keys the old lines'
+## intervals as before.
+const ART_X := [-1300.0, -1000.0, -390.0, -80.0, 330.0, 690.0, 1010.0, 1460.0, 1770.0, 2130.0, 2460.0, 2780.0]
 const ART_Y_NORTH := [-580.0, -220.0, 140.0, 500.0, 860.0, 1220.0, 1580.0]
-const ART_Y_SOUTH := [1040.0, 1240.0, 1400.0, 1610.0, 1760.0, 1990.0]
+const ART_Y_SOUTH := [-580.0, -220.0, 140.0, 500.0, 860.0, 1040.0, 1240.0, 1400.0, 1610.0, 1760.0, 1990.0]
+## How many lines each arterial list had put in front of its first line
+## when _splits' keys were fixed (ART_Y_NORTH grew -580 earlier).
+const ART_PREPENDED := {"x": 2, "ynorth": 1, "ysouth": 5}
 ## Brisa Beach runs along the Gulf on the diagonal (local metres; the coast
 ## is world_map's, from (1450, 2000) north-east to (2250, 1350)). Ocean
 ## Drive is the city's sea edge, 75 m inland, the hotels on its inland
@@ -269,6 +296,21 @@ const PATCHES := [
 	{"id": "point_e", "bank": "south", "seed": Vector2(800, 1400), "angle": 0.0,
 		"field": {"dsep": [270.0, 74.0], "roads": ["shoreline", "cane_row"], "circles": ["point_circle"]},
 		"su": [74.0, 74.0], "sv": [74.0, 74.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
+	# The grown city (#116). Along the river's west leg, west of Laurel
+	# Avenue: Magnolia Heights north of Crescent (the old money's houses on
+	# the bluff), Blackwater Bayou south of it.
+	{"id": "magnolia_w", "bank": "north", "seed": Vector2(-520, 0), "grid": [6, 4], "angle": 0.0,
+		"su": [100.0, 100.0], "sv": [90.0, 90.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
+	{"id": "bayou_w", "bank": "north", "seed": Vector2(-520, 750), "grid": [6, 4], "angle": 0.0,
+		"su": [100.0, 100.0], "sv": [90.0, 90.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
+	# Tallow Bank: the west bank over the Aurum and Crescent bridges, mills
+	# and warehouses on big blocks (100-200 x 120 m).
+	{"id": "tallow_w", "bank": "south", "seed": Vector2(-1050, 300), "grid": [3, 3], "angle": 0.0,
+		"su": [150.0, 150.0], "sv": [120.0, 120.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
+	# Verdant Park: big garden blocks east of Mangrove Avenue, round the
+	# golf course.
+	{"id": "verdant_e", "bank": "north", "seed": Vector2(2650, -100), "grid": [3, 4], "angle": 0.0,
+		"su": [115.0, 115.0], "sv": [90.0, 90.0], "fam": "uv", "cls": "street", "cut": [0.0, 0.0], "lane": 0.0, "max": [0.0, 0.0, 0.0]},
 ]
 
 var window := Rect2()
@@ -657,31 +699,33 @@ func _layout(src: Array) -> void:
 	# The seam roads run straight on the arterial grid: Lantern Boulevard and
 	# Rampart Avenue north-south down to the River Road, Crescent Boulevard
 	# east-west right across, Wharf Street east-west along the docks.
-	var b0 := _cross(PackedVector2Array([Vector2(ART_X[2], top), Vector2(ART_X[2], bottom)]), road_line)
-	var p4 := _cross(PackedVector2Array([Vector2(ART_X[3], top), Vector2(ART_X[3], bottom)]), road_line)
-	var lantern := PackedVector2Array([Vector2(ART_X[2], top), b0])
-	var rampart := PackedVector2Array([Vector2(ART_X[3], top), p4])
+	var b0 := _cross(PackedVector2Array([Vector2(ART_X[4], top), Vector2(ART_X[4], bottom)]), road_line)
+	var p4 := _cross(PackedVector2Array([Vector2(ART_X[5], top), Vector2(ART_X[5], bottom)]), road_line)
+	var lantern := PackedVector2Array([Vector2(ART_X[4], top), b0])
+	var rampart := PackedVector2Array([Vector2(ART_X[5], top), p4])
 	var west := bounds.position.x - 30.0
 	var east := bounds.end.x + 30.0
 	var crescent := PackedVector2Array([Vector2(west, ART_Y_NORTH[3]), Vector2(east, ART_Y_NORTH[3])])
-	var wharf := PackedVector2Array([Vector2(ART_X[3] - 5.0, ART_Y_NORTH[4]), Vector2(ART_X[5], ART_Y_NORTH[4])])
+	var wharf := PackedVector2Array([Vector2(ART_X[5] - 5.0, ART_Y_NORTH[4]), Vector2(ART_X[7], ART_Y_NORTH[4])])
 	# Founders Circle sits on Lantern Boulevard where Liberty Avenue sets
 	# off; the Esplanade runs west from it to City Hall, on the grounds'
 	# axis.
 	var grounds := _snap_to_grid(CIVIC_GROUNDS, "gilt_w")
-	circle_at = Vector2(ART_X[2], grounds.get_center().y)
+	circle_at = Vector2(ART_X[4], grounds.get_center().y)
 	# The few diagonals: Liberty Avenue, the old road out to the east (it
 	# meets the grid at Rampart and Crescent), and Magnolia Avenue, out to
 	# the hills in the west from the City Hall grounds' corner.
-	var lib_at := Vector2(ART_X[3], ART_Y_NORTH[3])
+	var lib_at := Vector2(ART_X[5], ART_Y_NORTH[3])
 	# Brisa Beach: Ocean Drive along the sea edge, Seagrape Avenue behind,
 	# both parallel to the coast (clipped to the land as roads below).
-	var ocean := PackedVector2Array([OCEAN_AT - GULF_DIR * 60.0, OCEAN_AT + GULF_DIR * 1400.0])
-	var seagrape := PackedVector2Array([SEAGRAPE_AT - GULF_DIR * 60.0, SEAGRAPE_AT + GULF_DIR * 1800.0])
+	# Ocean Drive carries a junction where Serena Causeway lands (its exit).
+	var landing: Vector2 = Geometry2D.line_intersects_line(CAUSEWAY_FROM, CAUSEWAY_DIR, OCEAN_AT, GULF_DIR)
+	var ocean := PackedVector2Array([OCEAN_AT - GULF_DIR * 60.0, landing, OCEAN_AT + GULF_DIR * 2500.0])
+	var seagrape := PackedVector2Array([SEAGRAPE_AT - GULF_DIR * 60.0, SEAGRAPE_AT + GULF_DIR * 2700.0])
 	# Liberty Avenue runs on south-east through Calle Luna to Seagrape.
 	var lib_far := lib_at + (lib_at - circle_at).normalized() * 3000.0
 	var liberty := PackedVector2Array([circle_at, lib_at, _cross(PackedVector2Array([lib_at, lib_far]), seagrape)])
-	var magnolia := PackedVector2Array([Vector2(west, 40.0), grounds.position])
+	var magnolia := PackedVector2Array([_cross(PackedVector2Array([grounds.position, Vector2(west, 40.0)]), road_line), grounds.position])
 	# River Road: along the bank up to Rampart. Past it the wharves have the
 	# water.
 	var river_road := PackedVector2Array()
@@ -697,6 +741,13 @@ func _layout(src: Array) -> void:
 	# Avenue goes on south.
 	var b1 := _cross(PackedVector2Array([b0, Vector2(b0.x, bottom)]), levee)
 	var point_ave := PackedVector2Array([b1, Vector2(b1.x, bottom)])
+	# The river's west leg: Aurum and Crescent Boulevards cross it on
+	# bridges like the Morrow Bridge (River Road to Levee Road); the
+	# boulevards stop at the bridge ends on both banks.
+	var bridge_ends := {}
+	for b in [[ART_Y_NORTH[2], "aurum"], [ART_Y_NORTH[3], "crescent"]]:
+		var w0 := _cross(PackedVector2Array([Vector2(ART_X[2], b[0]), Vector2(west, b[0])]), road_line)
+		bridge_ends[b[1]] = [w0, _cross(PackedVector2Array([w0, Vector2(west, b[0])]), levee)]
 	_holes = []
 	set_pieces = []
 	# Liberty Green: a rectangular park filling a few blocks in the Wards
@@ -716,14 +767,22 @@ func _layout(src: Array) -> void:
 	var road_cut := river_road.duplicate()
 	road_cut.insert(0, river_road[0] + (river_road[0] - river_road[1]).normalized() * 60.0)
 	road_cut.append(p4 + (p4 - river_road[river_road.size() - 2]).normalized() * 4.0)
-	var presidio := PackedVector2Array([Vector2(west, ART_Y_NORTH[1]), Vector2(ART_X[3], ART_Y_NORTH[1])])
-	var hib_end := _cross(PackedVector2Array([Vector2(ART_X[5], top), Vector2(ART_X[5], bottom)]), seagrape)
-	var hibiscus := PackedVector2Array([Vector2(ART_X[5], ART_Y_NORTH[3]), hib_end + Vector2(0, 5)])
+	var presidio := PackedVector2Array([Vector2(ART_X[2], ART_Y_NORTH[1]), Vector2(ART_X[5], ART_Y_NORTH[1])])
+	# The grown city's seams: Laurel Avenue (x -390) parts the strip along
+	# the west leg from Gilt and the Quarter, Crescent parts Magnolia
+	# Heights from the bayou, Mangrove Avenue parts Verdant Park from the
+	# Wards north of Crescent; Tallow Avenue parts the west bank from
+	# Morrow Point.
+	var laurel := PackedVector2Array([Vector2(ART_X[2], top), Vector2(ART_X[2], bottom)])
+	var mangrove := PackedVector2Array([Vector2(ART_X[9], top), Vector2(ART_X[9], ART_Y_NORTH[3])])
+	var hib_end := _cross(PackedVector2Array([Vector2(ART_X[7], top), Vector2(ART_X[7], bottom)]), seagrape)
+	var hibiscus := PackedVector2Array([Vector2(ART_X[7], ART_Y_NORTH[3]), hib_end + Vector2(0, 5)])
 	var north_parts: Array = [north]
-	for seam in [lantern, crescent, rampart, road_cut, wharf, presidio, hibiscus, seagrape, ocean]:
+	for seam in [lantern, crescent, rampart, road_cut, wharf, presidio, hibiscus, seagrape, ocean, laurel, mangrove]:
 		north_parts = _cut(north_parts, seam)
 	var beach := _piece(north_parts, OCEAN_AT + GULF_DIR * 500.0 + Vector2(-GULF_DIR.y, GULF_DIR.x) * 40.0)
 	var south_parts := _cut([south], PackedVector2Array([b1 - Vector2(0, 5), Vector2(b1.x, bottom)]))
+	south_parts = _cut(south_parts, PackedVector2Array([Vector2(-330.0, top), Vector2(-330.0, bottom)]))
 	# The field districts (their streets follow the street field): no
 	# straight arterial runs through them; each one that reaches them
 	# carries on there along the field (_field_lines), from where it
@@ -737,10 +796,12 @@ func _layout(src: Array) -> void:
 			if not zone.is_empty():
 				zones.append([zone, k])
 				_field_entries[k] = []
-	var roads: Array = [[lantern, "boulevard", "lantern"], [crescent, "boulevard", "crescent"], [rampart, "avenue", "rampart"],
+	var roads: Array = [[lantern, "boulevard", "lantern"], [PackedVector2Array([bridge_ends.crescent[0], crescent[1]]), "boulevard", "crescent"], [rampart, "avenue", "rampart"],
 			[liberty, "avenue", "liberty"], [magnolia, "avenue", "magnolia"], [wharf, "avenue", "wharf"], [river_road, "river", "river_road"],
 			[levee, "river", "levee"], [quay, "quay", "quay"], [PackedVector2Array([b0, b1]), "bridge", "bridge"],
 			[point_ave, "avenue", "point_ave"]]
+	for road in bridge_ends:
+		roads.append([PackedVector2Array(bridge_ends[road]), "bridge", road + "_bridge"])
 	# The curved roads: each is a thin strip in _holes too, so the district
 	# streets crossing it are cut there (and meet it) and those running
 	# alongside it are trimmed back.
@@ -757,6 +818,9 @@ func _layout(src: Array) -> void:
 	# (and out of Brisa Beach, which has its own grid).
 	for a in ARTERIALS:
 		var line := PackedVector2Array([Vector2(a.x, top), Vector2(a.x, bottom)]) if a.has("x") else PackedVector2Array([Vector2(a.get("from", west), a.y), Vector2(a.get("to", east), a.y)])
+		if a.has("y") and bridge_ends.has(a.road):
+			var ends: Array = bridge_ends[a.road]
+			line = PackedVector2Array([ends[0], line[1]]) if a.bank == "north" else PackedVector2Array([line[0], ends[1]])
 		for piece in Geometry2D.intersect_polyline_with_polygon(line, north if a.bank == "north" else south):
 			var parts: Array[PackedVector2Array] = [piece]
 			for zone in [[beach, -1]] + zones:
@@ -819,8 +883,10 @@ func _civic_centre(src: Array, grounds: Rect2) -> Array[PackedVector2Array]:
 	_voids.append(_rect_poly(mall.grow(-3.0)))
 	set_pieces.append({"id": "esplanade", "kind": "esplanade", "at": Vector2((mall.position.x + c.x - CIRCLE_R) * 0.5, c.y), "face": -1})
 	# The cross streets west of the grounds would stop short at them: those
-	# blocks run through to the next street instead.
-	_voids.append(_rect_poly(Rect2(bounds.position.x - 60.0, grounds.position.y + 6.0, grounds.position.x - bounds.position.x + 57.0, grounds.size.y - 12.0)))
+	# blocks run through to the next street instead, as far as Laurel
+	# Avenue (the grown city's districts west of it keep their streets).
+	var west := maxf(bounds.position.x - 60.0, ART_X[2] - 3.0)
+	_voids.append(_rect_poly(Rect2(west, grounds.position.y + 6.0, grounds.position.x - west - 3.0, grounds.size.y - 12.0)))
 	return [cut_disk, _rect_poly(grounds.grow(-3.0))]
 
 
@@ -1340,15 +1406,25 @@ func _splits(arts: Array, n: int, lo: float, hi: float, axis: String) -> Array:
 		for j in range(1, n):
 			var f := float(j) / n
 			var halfway := absf(f - 0.5) < 0.001
-			# Keyed by the interval's place before the north grew a row
-			# (-580), so the old streets keep their jitter.
-			var key := hash([seed_value, axis, i - (1 if arts == ART_Y_NORTH else 0), n, j])
+			# Keyed by the interval's place before lines were put in front
+			# (ART_PREPENDED), so the old streets keep their jitter.
+			var key := hash([seed_value, axis, i - _prepended(arts), n, j])
 			var block: float = (arts[i + 1] - arts[i]) / n
 			var nudge := 0.0 if halfway else (float(absi(key) % 1000) / 999.0 * 2.0 - 1.0) * SPLIT_JITTER * block
 			var at: float = lerpf(arts[i], arts[i + 1], f) + nudge
 			if at > lo and at < hi:
 				out.append([at, halfway])
 	return out
+
+
+static func _prepended(arts: Array) -> int:
+	if arts == ART_X:
+		return ART_PREPENDED.x
+	if arts == ART_Y_NORTH:
+		return ART_PREPENDED.ynorth
+	if arts == ART_Y_SOUTH:
+		return ART_PREPENDED.ysouth
+	return 0
 
 
 ## Adds the parts of street line `pts` inside `region` (and outside the
@@ -1571,17 +1647,29 @@ func _chain(band: PackedVector2Array, box: PackedVector2Array, north: bool) -> P
 			cur = PackedVector2Array()
 	if cur.size() > 0:
 		chains.append(cur)
+	# The inner side is the bank nearest the city's middle that the river
+	# does not lie between; the outer side is the nearest one it does. (Mean
+	# height told them apart until the city crossed the river's west leg.)
+	var mid := Vector2(300, 300)
 	var best := PackedVector2Array()
-	var best_y := INF if north else -INF
+	var best_d := INF
 	for c in chains:
 		if _length(c) < 300.0:
 			continue
-		var y := 0.0
-		for p in c:
-			y += p.y
-		y /= c.size()
-		if (north and y < best_y) or (not north and y > best_y):
-			best_y = y
+		var q: Vector2 = c[0]
+		for k in c.size() - 1:
+			var sp := Geometry2D.get_closest_point_to_segment(mid, c[k], c[k + 1])
+			if sp.distance_to(mid) < q.distance_to(mid):
+				q = sp
+		var across := false
+		for k in _river.size() - 1:
+			if Geometry2D.segment_intersects_segment(mid, q, _river[k], _river[k + 1]) != null:
+				across = true
+				break
+		if across == north:
+			continue
+		if q.distance_to(mid) < best_d:
+			best_d = q.distance_to(mid)
 			best = c
 	if best.size() > 1 and best[0].x > best[best.size() - 1].x:
 		best.reverse()
@@ -2415,6 +2503,7 @@ func _trim_to_outline(pins: Array) -> void:
 			if _adj[n].size() > 0:
 				out.append([node_pos[n], (node_pos[other(e, n)] - node_pos[n]).normalized(), edge_cls[e], edge_road[e]])
 	_compact()
+	_split_at_landing()
 	_find_faces()
 	exits = []
 	for x in out:
@@ -2436,6 +2525,37 @@ func _trim_to_outline(pins: Array) -> void:
 				best = k
 		if best >= 0 and not exits.any(func(x): return x.node == best):
 			exits.append({"node": best, "dir": CAUSEWAY_DIR, "cls": "avenue", "road": "causeway"})
+
+
+## Ocean Drive gets a junction where Serena Causeway lands, the causeway's
+## exit: the land clipping drops the Drive's straight-through vertex there,
+## so unless a street happens to meet it the nearest junction can sit
+## 40 m off the causeway's line, too far for the country's lead-in.
+func _split_at_landing() -> void:
+	var landing = Geometry2D.line_intersects_line(CAUSEWAY_FROM, CAUSEWAY_DIR, OCEAN_AT, GULF_DIR)
+	if landing == null:
+		return
+	for e in edge_a.size():
+		if edge_road[e] != "ocean":
+			continue
+		var a := node_pos[edge_a[e]]
+		var b := node_pos[edge_b[e]]
+		if a.distance_to(landing) < 12.0 or b.distance_to(landing) < 12.0:
+			return
+		if Geometry2D.get_closest_point_to_segment(landing, a, b).distance_to(landing) > 1.0:
+			continue
+		var n := node_pos.size()
+		node_pos.append(landing)
+		edge_a.append(n)
+		edge_b.append(edge_b[e])
+		edge_cls.append(edge_cls[e])
+		edge_road.append(edge_road[e])
+		edge_patch.append(edge_patch[e])
+		_fam.append(_fam[e])
+		edge_b[e] = n
+		_rebuild_adj()
+		_sort_adj()
+		return
 
 
 ## Next half-edge round the same face. Half-edge 2e runs a -> b, 2e + 1

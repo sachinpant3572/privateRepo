@@ -56,6 +56,7 @@ const TOWN_RADIUS := 420.0
 const PATCH_DISTRICTS := {
 	"gilt": "gilt_district", "midtown": "midtown", "quarter": "lantern_quarter", "wards": "floodline_wards",
 	"docks": "ironwharf", "point": "morrow_point", "hill": "cable_hill", "china": "jade_gate", "havana": "calle_luna", "brisa": "brisa_beach",
+	"magnolia": "magnolia_heights", "bayou": "blackwater_bayou", "tallow": "tallow_bank", "verdant": "verdant_park",
 }
 
 ## Window size in blocks, from the map.
@@ -433,7 +434,7 @@ func block_style(f: int) -> String:
 	if plan.is_park(f):
 		return "green"
 	var piece: String = plan.set_piece(f)
-	if piece in ["esplanade", "circle", "square", "parkland", "cemetery", "stadium", "containers", "railyard"]:
+	if piece in ["esplanade", "circle", "square", "parkland", "cemetery", "stadium", "containers", "railyard", "golf"]:
 		return piece
 	if _landmarks.has(f):
 		return _landmarks[f].type
