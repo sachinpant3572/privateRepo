@@ -1,5 +1,34 @@
 # TODO
 
+## Thursday, Oct 30, 2026: real grass on the hills, parks and lawns, with a Grass setting
+
+Sachin, 2026-10-30: "Can we add grass to the hills or other green areas in the game, and
+give 4 settings for grass, no grass, some grass, more grass, full grass, or name them
+appropriately. Add this to TODO, having grass is a sign of a fully modern game. Also,
+right now every green area looks devoid of grass, so."
+
+Now: green ground is a flat shaded surface (the GRASS surface code draws a mown-lawn
+pattern) with a few scattered tuft props from flora_kit (`tufts`, 3-5 blades per
+patch). There is no field of blades anywhere.
+
+Plan (not started, awaiting his word; rough cost 6-10 h with gates):
+- Blades as GPU-instanced MultiMesh clumps (a few crossed cards or 3-5 thin tris
+  each) laid in a ring of tiles round the camera, streamed with the city and country
+  tiles, faded out by distance so there is no hard edge.
+- Where: lawns and yards (short, mown, even), parks and verges (medium), hills and
+  open land (taller, clumpy; green on wet north faces and canyon floors, straw on dry
+  south faces, matching flora's green/dry mix), none on roads, pads, sidewalks, sand,
+  water or under buildings. Colour taken from the ground under it so it blends.
+- Wind sway in the vertex shader (one shared material, drawn at load like the fire
+  prewarm so Android does not hitch); blades bend away from the player and cars
+  passing through (optional, High and up).
+- Setting **Grass** in Settings > Graphics: **Off**, **Sparse**, **Lush**, **Dense**
+  (no grass, some, more, full). Each step raises density and draw distance. Graphics
+  presets: Low Off, Medium Sparse, High Lush, Ultra Dense; Sachin can pick any.
+- Gates: a frame-time probe on each step at the busiest green spot (perf_probe), a
+  test that no blades sit on roads/pads, screenshots of a lawn, a park and the hills at
+  each step, by day and night.
+
 ## Thursday, Oct 30, 2026: hill country behind Bellerive (proposal, awaiting his word)
 
 Sachin, 2026-10-30: "I think Hills area should be increased to at least 3 km2, as it is
