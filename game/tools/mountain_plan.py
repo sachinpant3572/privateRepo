@@ -417,16 +417,20 @@ SPECS = [
     dict(id="route_9", cls="highway", name="Route 9 River Road", tag="route", keep_head=[(200, -100)],
          way=[(100, -1150), (-480, -1950), (-704, -3250), (-400, -3850), (300, -4250), (900, -4300),
               (2100, -4050)], gmax=0.055, low=4.0, bridge=BRIDGE, avoid=(("rail_pass", 22.0, 30.0),)),
-    # Wheaton and Dam roads now end on Route 9, over the river. Wheaton's
+    # Wheaton and Dam roads now end on Route 9, over the river. They (and
+    # Pinecrest) cross the rail square, not along it: a road that runs within
+    # its shelf's ~15 m drapes over the shelf's edge. Wheaton's
     # bridge is in the play area, so it is a low one (the game lays a deck
     # at the water's level); Dam Road's and Pinecrest's cross outside it
     # (drawn, not driven).
     dict(id="wheaton_road", cls="road", name="Wheaton Road", tag="route", keep_head=[(-2250, -550), (-1550, -1750)],
          way=[(-950, -2350), ("on", "route_9", (-700, -2350))], gmax=0.08, bridge=BRIDGE, low_bridges=True,
+         avoid=(("rail_pass", 18.0, 30.0),),
          hairpin_r=12.0),
     dict(id="dam_road", cls="road", name="Dam Road", tag="route",
          keep_head=[(-2750, -3350), (-2250, -3230), (-1850, -3270), (-1450, -3230), (-1150, -3400)],
-         way=[(-950, -3650), ("on", "route_9", (-650, -3550))], gmax=0.08, bridge=BRIDGE),
+         way=[(-950, -3650), ("on", "route_9", (-650, -3550))], gmax=0.08, bridge=BRIDGE,
+         avoid=(("rail_pass", 18.0, 30.0),)),
     # Firebreak Road: off Route 9 to the Greenhold commune, the campground
     # and the fire lookout.
     dict(id="firebreak_road", cls="track", name="Firebreak Road", tag="route",
@@ -434,7 +438,8 @@ SPECS = [
          bridge=BRIDGE),
     # Pinecrest Logging Road: Dellwood's logging road over the Morrow to Fernmoor.
     dict(id="pinecrest_logging", cls="track", name="Pinecrest Logging Road", tag="route",
-         way=[(250, -4900), (750, -4720), (1800, -4300)], gmax=0.16, hairpin_r=8.0, bridge=BRIDGE),
+         way=[(250, -4900), (750, -4720), (1800, -4300)], gmax=0.16, hairpin_r=8.0, bridge=BRIDGE,
+         avoid=(("rail_pass", 18.0, 30.0),)),
     # Old Post Road: round the range's east foot from Larkspur.
     dict(id="old_post_road", cls="lane", name="Old Post Road", tag="route",
          way=[(2350, -950), (2450, -1500), (2650, -1950), (2850, -2050)], gmax=0.10, hairpin_r=12.0),

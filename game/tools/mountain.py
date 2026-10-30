@@ -518,20 +518,41 @@ class Mountain:
         # chosen together, in order along the road (a road and rail sharing
         # a gorge cross several times): each choice must be reachable at the
         # grade from the one before.
+        def across(i, other, so):
+            """The sine of the angle the road crosses the rail at (the rail's
+            span is that much longer when the road crosses aslant)."""
+            a = np.subtract(pts[min(i + 1, len(s) - 1)], pts[max(i - 1, 0)])
+            qa = other.interpolate(max(so - 2.0, 0.0)).coords[0]
+            qb = other.interpolate(min(so + 2.0, other.length)).coords[0]
+            b = np.subtract(qb, qa)
+            return abs(float(a[0] * b[1] - a[1] * b[0])) / max(float(np.linalg.norm(a) * np.linalg.norm(b)), 1e-9)
+
         free = []
         for i, h, other, so in sorted(rail_x, key=lambda q: q[0]):
             o = float(own[i])
             if abs(o - h) >= RAIL_CLEAR:
-                self.rail_cross.append((other, so, "b" if h > o else "t", _HALF.get(cls, 4.0)))
+                self.rail_cross.append((other, so, "b" if h > o else "t", _HALF.get(cls, 4.0), across(i, other, so)))
             else:
                 free.append((i, h, other, so, o))
+
+        def fit(i, o):
+            """The height nearest o that every pin can reach at the grade, or None."""
+            lo = max([hj - g * ds * abs(i - j) for j, hj in pins.items()] or [-1e9])
+            hi = min([hj + g * ds * abs(i - j) for j, hj in pins.items()] or [1e9])
+            return min(max(o, lo), hi) if lo <= hi else None
 
         def miss(v, i, j, hj):
             return max(0.0, abs(v - hj) - g * ds * abs(i - j))
         best = []  # per crossing, per option: (total cost, option, back pointer)
         for c, (i, h, _other, _so, o) in enumerate(free):
             row = []
-            for v, kind, extra in ((h, None, 0.0), (h - RAIL_CLEAR, "b", 2.0), (h + RAIL_CLEAR, "t", 2.0)):
+            # A fourth choice: over or under the rail by more than RAIL_CLEAR,
+            # at whatever height the other pins can reach (a road coming
+            # over the rail to a junction high on a gorge wall).
+            v4 = fit(i, o)
+            far = ((v4, "t", 4.0) if v4 is not None and v4 >= h + RAIL_CLEAR
+                   else (v4, "b", 4.0) if v4 is not None and v4 <= h - RAIL_CLEAR else (h, None, 0.0))
+            for v, kind, extra in ((h, None, 0.0), (h - RAIL_CLEAR, "b", 2.0), (h + RAIL_CLEAR, "t", 2.0), far):
                 cost = 10.0 * sum(miss(v, i, j, hj) for j, hj in pins.items()) + abs(v - o) + extra
                 back = None
                 if c:
@@ -542,13 +563,13 @@ class Mountain:
                 row.append((cost, (v, kind), back))
             best.append(row)
         if free:
-            k = min(range(3), key=lambda q: best[-1][q][0])
+            k = min(range(4), key=lambda q: best[-1][q][0])
             for c in range(len(free) - 1, -1, -1):
                 (v, kind), back = best[c][k][1], best[c][k][2]
                 i, _h, other, so, _o = free[c]
                 pins[i] = v
                 if kind:
-                    self.rail_cross.append((other, so, kind, _HALF.get(cls, 4.0)))
+                    self.rail_cross.append((other, so, kind, _HALF.get(cls, 4.0), across(i, other, so)))
                 k = back
         for i, h in pins.items():
             z[i] = h
