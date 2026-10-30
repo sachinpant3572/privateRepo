@@ -669,8 +669,9 @@ void fragment() {
 	// Bare steel keeps a dull shine: the wheel rims (VehicleKit.RIM) and steel
 	// parts (STEEL), and, in patches, the steel bars where the plastic
 	// bumpers and sills (TRIM, not the tyres) melted off.
-	float rim = 1.0 - smoothstep(0.05, 0.1, distance(src, vec3(0.74, 0.76, 0.79)));
-	float bare = 1.0 - smoothstep(0.04, 0.08, distance(src, vec3(0.6, 0.62, 0.64)));
+	// Tight keys: silver paints sit 0.017-0.07 from these (8-bit vertex colours round by < 0.004).
+	float rim = 1.0 - smoothstep(0.006, 0.012, distance(src, vec3(0.74, 0.76, 0.79)));
+	float bare = 1.0 - smoothstep(0.006, 0.012, distance(src, vec3(0.6, 0.62, 0.64)));
 	float trim = 1.0 - smoothstep(0.012, 0.022, distance(src, vec3(0.07, 0.07, 0.08)));
 	float bar = trim * smoothstep(0.2, 0.3, p.y) * (1.0 - smoothstep(0.75, 0.85, p.y)) * smoothstep(0.4, 0.55, big);
 	float steel = max(max(rim, bare), bar);
