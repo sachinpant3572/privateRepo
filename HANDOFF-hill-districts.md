@@ -64,72 +64,16 @@ gameplay choice for Sachin; the blast still makes "crash").
 
 ## Build results (2026-10-30)
 
-- Generator: 0.91 km2, terraces 28 (6.2 km), climbs 29 (2.7 km), hillside
-  lots 207 (house 110, rows/painted ladies/garden apartments 28 each, exec
-  13); "hillside" in WALK_ZONES gave 8 hill sidewalk loops (82 -> 90).
-- Climbs: traced at 0.12 on the smoothed ground, every one graded to the
-  0.13 cap and three measured 0.149-0.185 over 32 m (each street is graded
-  on its own raw ground, steeper than the smoothed one). Now traced at
-  HILL_CONNECT 0.10, leaving 3 points under the cap.
-- Pads: the 8 m grid blends a pad into any pad or road at another height
-  within about a cell. Mountain lots already in the game slope ~1 m at the
-  front (the road's grading runs into the front yard), accepted as the
-  standard; at the back and sides 22 of 207 hill lots were off level. Now
-  `mountain_terrain` measures each hill lot on the final grid (`_pad_tilt`,
-  middle/back/sides 1 m in) and drops those off by > HILL_PAD_TOL 0.2 m,
-  worst first, one per 24 m group a round, remaking the grid (<= 4 rounds).
-  test_hill_districts checks the same rows at 0.3 m.
-- Run 3 (65d235a): terraces 25 (5.7 km, 3 cut off), climbs 32 (3.3 km),
-  22 lots dropped, hillside lots 183, walks 92. Basalt/Onyx Rise measured
-  0.26-0.27: the climbs of the 3 cut-off terraces were still built, and
-  join_ends tied their loose ends to the nearest street with straight,
-  ungraded links. Fix: a cut-off group is dropped whole (its climbs too).
-- Crest Drive (mountain road, 0.143 before stage C) measured 0.148 in run 3:
-  its shape is unchanged, but its end now reaches 10.5 m further to meet
-  Harrier Rise, so grade() resamples its 4 m points and the 60 m smoothing
-  lands a little differently by the hairpin at (1760,-1130).
-- Run 4 (cut-off groups dropped whole): terraces 25 (3 cut off), climbs 27
-  (2.6 km), 17 dropped, lots 179; Basalt/Onyx fixed. Crest Drive still 0.148:
-  the ground there is identical to before stage C; only the centre line
-  moved (<= 0.22 m), and an exact 1 m resample reads 0.144 then, 0.151 now.
-  Mica Way 0.146 (6.7 m over a 46 m piece between two climbs). Cause, both:
-  a way graded right at its cap reads up to ~0.02 steeper on the 8 m grid,
-  the whole of the test's 0.015 slack. Fix (the test kept as is): hill
-  streets graded to HILL_GRADE 0.12, Crest Drive to MTN_CAP 0.125.
-- Run 5 (those caps): Crest Drive 0.143, Mica Way 0.130, both fixed. Gully
-  Rise (a 45 m climb, Bluff View Drive down to Crest Drive) 0.166: its ends
-  are pinned 7 m apart, 0.155 end to end, which no grading fits. Fix: trace()
-  rejects a climb whose ends (terrace on the raw ground, the way it meets at
-  its graded height via `mtn.profile_at`, mountain roads being graded first)
-  rise more than HILL_RISE 0.11 x its length. Run 6: 28 terraces (0 cut
-  off), 28 climbs, 177 hillside lots, hill tests pass.
-- Sachin, 2026-10-30: "We can have some steep hills too, is good for
-  variety, pnly if they match real life hills." Real hill towns: most streets
-  under ~10-15 %, a few blocks 20-31 % (SF Filbert St 31.5 %, 22nd St 31.5 %;
-  LA Eldred St 33 %; Pittsburgh Canton Ave 37 %). Decision: up to
-  HILL_STEEP_MAX 6 climbs <= 160 m may rise HILL_STEEP_RISE 0.18 end to end,
-  tagged "steep", graded to 0.19 (cap 0.20); every 4th climb start tries a
-  trace at 0.15 (straighter up the slope). Kept at the mild end so every car
-  and truck climbs them (vehicle.gd SLOPE_PULL; Firebreak tracks are 25 %).
-  Test: hill streets 13 % (+0.015), short (<= 200 m) ones 20 % (+0.015), <= 6.
-- Run 7 (steep climbs): terraces 26 (2 cut off), climbs 27 (3.0 km), lots
-  178; steep: Flint Rise, Jasper Rise, Opal Way, Garnet Rise, Feldspar Way,
-  0.157-0.193 measured over 32 m on the grid. Hill tests pass (101 checks).
-  Shots: tests/country_shots.tscn c30-c35 (ONLY=...).
-- Shot c35 showed grass through the asphalt of Madrone Drive's turning
-  circle. All 29 hill turning circles (none before stage C) followed the
-  slope across the contour, 2-10 m from side to side. Fix: `_grade_rest`
-  grades a hill circle's arcs level at its street end's height
-  (`flat_bulbs`, ends pinned, cap 0), cut and filled like real hillside
-  cul-de-sacs. test_hill_districts checks the arcs are level within 0.5 m.
+Run-by-run build history (runs 1-7, grades, pads, turning circles):
+HANDOFF-hill-districts-archive.md.
 
 - Full-suite flakes (2026-10-30): the birds test's hills sample drew no hawk
   (~1 in 500; the circle reads "hills" at 394/400 points), now a fixed 100-draw
   `_pick_kind` check; the city traffic count read 4 of 5 at one instant (passes
   alone), now waits up to 8 s for traffic to refill like the pedestrian check.
 - Burnt car (2026-10-30, "too black"): the flat 0.12 grey is replaced by
-  `MeshBuilder.burnt_material()`: grey ash with rust patches from 3D noise and
-  soot low down and on the glass. It lives in MeshBuilder because the Fx
+  `MeshBuilder.burnt_material()`: 3D-noise patches and soot low down and on
+  the glass (colours: see "No rust" below). It lives in MeshBuilder because the Fx
   autoload must preload it for prewarm (fx.gd can't see vehicle.gd).
   First version was ~3x too dark (near-black under lamps): it wrote
   `ALBEDO = pow(c, 2.2)`, but colours in this project's custom shaders go in
@@ -150,6 +94,15 @@ gameplay choice for Sachin; the blast still makes "crash").
   The rim/steel colour keys are tight (0.006-0.012): at 0.05-0.1 a silver
   paint (0.75,0.75,0.72; roadster 0.75,0.77,0.8 is 0.017 from RIM) turned
   the whole shell into steel.
+- No rust on wrecks (Sachin, 2026-10-30: "A car only rusts qhen it has been
+  there for too long, but not just after explosion. After explosion it becomes
+  brow-black mix." and "Rust should not be applied on destroyed cars, it should
+  only be applied on rusted cars that are intentionally put in places by us").
+  Sources (forums, salvage guides) agree: fresh = soot, scorched brown paint,
+  grey ash where the paint burnt off; flash rust comes days later. Shell now
+  scorch brown (0.36,0.25,0.17) / soot (0.13,0.11,0.095) blotches, ash grey on
+  top panels only. Placed rusted-car props (graveyards etc.) are an idea for
+  later, not approved.
 
 ## Open questions
 

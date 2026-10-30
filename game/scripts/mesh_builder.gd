@@ -618,9 +618,10 @@ static func xray_material(color := Color(1.0, 0.85, 0.25, 0.6)) -> StandardMater
 
 static var _burnt: ShaderMaterial
 
-## A burnt-out shell, as real ones look once the fire is out: the paint gone
-## to bare steel, ash grey with rust-brown blooms, soot streaked over it and
-## gathered low on the panels and in the arches; glass gone to a dark cabin;
+## A freshly burnt-out shell, as real ones look once the fire is out: the
+## paint scorched to a brown-black mix (no rust: bare steel only rusts days
+## later), grey ash flecks where the top panels burnt hottest, soot streaked
+## over it and gathered low on the panels and in the arches; glass gone to a dark cabin;
 ## tyres, trim and seats charred; rims and the steel under melted bumpers
 ## bare and faintly shiny. Patches follow the car (model space).
 const BURNT_SHADER := """
@@ -651,11 +652,15 @@ void fragment() {
 	float lum = dot(src, vec3(0.3, 0.59, 0.11));
 	float big = vnoise(p * 1.6) * 0.65 + vnoise(p * 4.1) * 0.35;
 	float fine = vnoise(p * 11.0);
-	vec3 ash = vec3(0.56, 0.54, 0.5);
-	vec3 rust = vec3(0.5, 0.29, 0.16);
-	vec3 soot = vec3(0.13, 0.12, 0.11);
-	vec3 c = mix(ash, rust, smoothstep(0.42, 0.68, big));
-	c = mix(c, ash * 1.12, smoothstep(0.7, 0.9, fine) * 0.5);
+	vec3 scorch = vec3(0.36, 0.25, 0.17);
+	vec3 soot = vec3(0.13, 0.11, 0.095);
+	vec3 ash = vec3(0.5, 0.48, 0.45);
+	// Scorched paint, brown and black in blotches.
+	vec3 c = mix(scorch, soot, smoothstep(0.38, 0.66, big));
+	c = mix(c, scorch * 1.15, smoothstep(0.7, 0.9, fine) * 0.35);
+	// Grey ash where the paint burnt right off: the hottest, top panels.
+	float top = smoothstep(0.5, 0.9, normalize(n).y);
+	c = mix(c, ash, top * smoothstep(0.5, 0.75, big * 0.5 + fine * 0.5) * 0.55);
 	// Soot streaks, heavier low on the body and on the sides than the top.
 	float low = 1.0 - smoothstep(0.25, 0.9, p.y);
 	float side = 1.0 - abs(normalize(n).y);
