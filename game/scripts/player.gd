@@ -20,10 +20,20 @@ const JULES := {
 	"hero": true, "stripes": Color(0.96, 0.96, 0.94),
 }
 
+## Bailing out of a helicopter (#82): a drop up to BAIL_SAFE metres is
+## shrugged off, each metre more costs BAIL_HURT health (about 17 m kills).
+const BAIL_SAFE := 2.5
+const BAIL_HURT := 7.0
+
 var vehicle = null
 ## Riding in the back of a cab (taxi.gd), not driving it.
 var passenger := false
 var controllable := true
+## A bail-out's fall: metres still to drop, speed down, and the height it
+## began at.
+var _fall := 0.0
+var _fall_v := 0.0
+var _fall_from := 0.0
 
 
 func _init() -> void:
@@ -48,10 +58,26 @@ func _physics_process(delta: float) -> void:
 			var game = get_tree().get_first_node_in_group("game") if passenger else null
 			if game != null and game.taxi != null:
 				game.taxi.request_exit() # the cab pulls up and you pay
+			elif vehicle.has_method("exit_check") and vehicle.exit_check() == "roof":
+				# Nobody stands on a roof here: land on open ground first.
+				var g = get_tree().get_first_node_in_group("game")
+				if g != null and g.hud != null:
+					g.hud.show_banner("Land on open ground to get out")
 			else:
 				exit_vehicle()
 		return
 	super(delta)
+	if _fall > 0.0:
+		# Bailed out of a helicopter: down to the ground, hurt by the drop.
+		_fall_v += 9.8 * delta
+		_fall -= _fall_v * delta
+		if _fall <= 0.0:
+			_fall = 0.0
+			GameLog.event("bail_landed", {"from": _fall_from})
+			take_hit(null, maxf(_fall_from - BAIL_SAFE, 0.0) * BAIL_HURT, Vector3.ZERO)
+			Fx.crash(global_position, _fall_v, true)
+		else:
+			global_position.y += _fall
 
 
 func _think(delta: float) -> void:
@@ -170,6 +196,9 @@ func exit_vehicle(thrown := false) -> void:
 		anim.pedal = -1.0
 	var was_passenger := passenger
 	passenger = false
+	# Out of a helicopter in the air: a jump, and the fall to the ground.
+	var bail: bool = car.has_method("exit_check") and car.exit_check() == "bail"
+	var from_y: float = car.global_position.y
 	if not was_passenger:
 		car.release_player()
 	# Passengers step out on the curb side.
@@ -179,6 +208,15 @@ func exit_vehicle(thrown := false) -> void:
 	_set_standing_layers()
 	if dead:
 		knock_down(0.0) # lie where they fell, out of the way
+	if bail:
+		var ground := Terrain.height(global_position.x, global_position.z) - Terrain.drop(global_position.x, global_position.z)
+		_fall_from = maxf(from_y + 0.5 - ground, 0.0)
+		_fall = _fall_from
+		_fall_v = 0.0
+		global_position.y = ground + _fall
+		reset_physics_interpolation()
+		knock_down(sqrt(2.0 * _fall / 9.8) + 1.2)
+		GameLog.event("bail", {"height": _fall_from})
 	if thrown:
 		take_hit(null, 25.0, Vector3.ZERO)
 
@@ -186,6 +224,7 @@ func exit_vehicle(thrown := false) -> void:
 func respawn(at: Vector3) -> void:
 	if vehicle != null:
 		exit_vehicle()
+	_fall = 0.0
 	revive(at)
 	controllable = true
 

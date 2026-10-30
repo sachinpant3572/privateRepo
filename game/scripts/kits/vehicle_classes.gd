@@ -49,6 +49,7 @@ const OF_KIND := {
 	"tuk_tuk": "three_wheeler", "cargo_trike": "three_wheeler",
 	"motorbike": "two_wheeler", "scooter": "two_wheeler",
 	"bicycle": "cycle",
+	"heli": "heli", "police_heli": "heli",
 }
 
 
