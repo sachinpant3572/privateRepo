@@ -6388,6 +6388,8 @@ func test_hill_districts() -> void:
 	var unreached := 0
 	var over: Array = []
 	var steep := {}
+	var circles := 0
+	var sloped: Array = []
 	for rd in c.roads:
 		var nodes: PackedInt32Array = rd.nodes
 		var on := 0
@@ -6401,6 +6403,17 @@ func test_hill_districts() -> void:
 		for k in range(1, nodes.size()):
 			s.append(s[-1] + c.node_pos[nodes[k]].distance_to(c.node_pos[nodes[k - 1]]))
 		length += s[-1]
+		# A turning circle (three unnamed arcs 13 m round) is cut and filled
+		# level, as hillside cul-de-sacs are; on the slope it climbed up to 10 m.
+		if rd.name == "" and absf(s[-1] - TAU * 13.0 / 3.0) < 1.5:
+			circles += 1
+			var blo := INF
+			var bhi := -INF
+			for n in nodes:
+				blo = minf(blo, Terrain.height(c.node_pos[n].x, c.node_pos[n].y))
+				bhi = maxf(bhi, Terrain.height(c.node_pos[n].x, c.node_pos[n].y))
+			if bhi - blo > 0.5:
+				sloped.append("%.1f m at (%.0f, %.0f)" % [bhi - blo, c.node_pos[nodes[0]].x, c.node_pos[nodes[0]].y])
 		for n in nodes:
 			top = maxf(top, Terrain.height(c.node_pos[n].x, c.node_pos[n].y))
 			if c.usable[n] != 1:
@@ -6428,6 +6441,7 @@ func test_hill_districts() -> void:
 	_check(unreached == 0, "every hill street node is reached from the city (%d not)" % unreached)
 	_check(over.is_empty(), "hill streets keep to 13%%, short steep ones to 20%% (%d over: %s)" % [over.size(), over.slice(0, 4)])
 	_check(steep.size() <= 6, "a few steep hill streets, not many (%d: %s)" % [steep.size(), steep.keys()])
+	_check(circles >= 30 and sloped.is_empty(), "%d turning-circle arcs on the hills lie level (%d not: %s)" % [circles, sloped.size(), sloped.slice(0, 4)])
 	# Homes on flat pads, by height band, each with a way in.
 	var homes := 0
 	var kinds := {}

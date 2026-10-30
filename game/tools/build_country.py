@@ -724,6 +724,7 @@ class Country:
         self.town_zones = []
         self.links = []
         self.bulbs = []  # cul-de-sac centres
+        self.flat_bulbs = []  # [turning circle's arcs, street end]: a hill one is cut and filled level
         self.reserved = []  # civic plots kept clear of streets: dicts (school, DMV, green)
         self.pier = None
         self.arterials = []  # east side: [LineString, "h" or "v"]
@@ -1392,7 +1393,9 @@ class Country:
                 e, q = (c[-1], c[-2]) if at_end else (c[0], c[1])
                 d = (e[0] - q[0], e[1] - q[1])
                 dn = math.hypot(*d) or 1.0
+                n0 = len(self.sources)
                 if self._bulb(e, (d[0] / dn, d[1] / dn), "street", own=cur):
+                    self.flat_bulbs.append(([t[0] for t in self.sources[n0:]], e))
                     continue
                 marks = [cur.project(Point(pt)) for cl in climbs for pt in (cl.coords[0], cl.coords[-1])
                          if cur.distance(Point(pt)) < 1.0]
@@ -1575,7 +1578,14 @@ class Country:
         for s in self.sources:
             if s[3] in skip or not CLASSES[s[1]]["graph"] or self.mtn.poly.distance(s[0]) > 1.0:
                 continue
-            gr = self.mtn.grade(s[0], s[1], cap={"hill": HILL_GRADE, "steep": HILL_STEEP - 0.01}.get(s[3]))
+            # A hill turning circle lies level at its street's end (it spans the
+            # slope across the contour; followed, it would climb up to 10 m).
+            fb = next((e for arcs, e in self.flat_bulbs if any(s[0] is a for a in arcs)), None)
+            h = self.mtn.profile_at(fb) if fb is not None else None
+            if h is not None:
+                gr = self.mtn.grade(s[0], s[1], ends={0: h, -1: h}, cap=0.0)
+            else:
+                gr = self.mtn.grade(s[0], s[1], cap={"hill": HILL_GRADE, "steep": HILL_STEEP - 0.01}.get(s[3]))
             if gr > 0.0:
                 self.mtn_grades.append((s[2] or s[3], round(gr, 3)))
 

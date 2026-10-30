@@ -104,6 +104,12 @@ on Opus with Sonnet trial packages). Stage D (the bay) is NOT approved.
   178; steep: Flint Rise, Jasper Rise, Opal Way, Garnet Rise, Feldspar Way,
   0.157-0.193 measured over 32 m on the grid. Hill tests pass (101 checks).
   Shots: tests/country_shots.tscn c30-c35 (ONLY=...).
+- Shot c35 showed grass through the asphalt of Madrone Drive's turning
+  circle. All 29 hill turning circles (none before stage C) followed the
+  slope across the contour, 2-10 m from side to side. Fix: `_grade_rest`
+  grades a hill circle's arcs level at its street end's height
+  (`flat_bulbs`, ends pinned, cap 0), cut and filled like real hillside
+  cul-de-sacs. test_hill_districts checks the arcs are level within 0.5 m.
 
 ## Open questions
 
