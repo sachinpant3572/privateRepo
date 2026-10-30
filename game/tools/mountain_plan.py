@@ -408,13 +408,15 @@ LOW_DECK = 4.0  # a low bridge's ends stand no higher than this (the water is at
 SPECS = [
     # Route 9 River Road: along the Morrow's east bank under the range's
     # west wall, round its north foot to Route 7 (2100, -4050).
-    # Kept 30 m off the rail pass where it can (the rail's rigid shelf owns
-    # the ground within ~15 m of it and the road would drape over its edge):
-    # the gorge has room for both except at the crossings. The rail is planned
-    # without the roads, so the route reads it from the last plan.
+    # Kept just clear of the rail pass where it can (the rail's rigid shelf
+    # owns the ground within ~15 m of it and the road would drape over its
+    # edge), but no further: 30 m off put it 15-20 m up the gorge wall, above
+    # where Wheaton and Dam roads come over the rail to it (no room on the
+    # wall to climb). The rail is planned without the roads, so the route
+    # reads it from the last plan.
     dict(id="route_9", cls="highway", name="Route 9 River Road", tag="route", keep_head=[(200, -100)],
-         way=[(100, -1150), (-480, -1950), (-720, -3250), (-400, -3850), (300, -4250), (900, -4300),
-              (2100, -4050)], gmax=0.055, low=4.0, bridge=BRIDGE, avoid=(("rail_pass", 30.0, 10.0),)),
+         way=[(100, -1150), (-480, -1950), (-704, -3250), (-400, -3850), (300, -4250), (900, -4300),
+              (2100, -4050)], gmax=0.055, low=4.0, bridge=BRIDGE, avoid=(("rail_pass", 22.0, 30.0),)),
     # Wheaton and Dam roads now end on Route 9, over the river. Wheaton's
     # bridge is in the play area, so it is a low one (the game lays a deck
     # at the water's level); Dam Road's and Pinecrest's cross outside it

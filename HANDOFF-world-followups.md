@@ -24,6 +24,13 @@ approved by this.
   takes `avoid=(("rail_pass", 30.0, 10.0),)`. Close running (< 28 m) fell
   from 2,460 m to 480 m: two crossings and the road over the rail tunnel.
   Everything after Route 9 (lines joining it) is re-planned with it.
+  That 30 m line climbed 15-20 m up the gorge wall above the rail, and
+  Wheaton and Dam roads (river, rail, then Route 9) could not climb to it:
+  Wheaton 219 %, Dam 113 %, Route 9 86 % where its (-720,-3250) waypoint
+  sat 10 m off the rail. Now: avoid 22 m at a high cost (just clear of the
+  shelf, near the rail's level), waypoint moved to (-704,-3250), and the
+  grader's shared-stretch pins must be in reach of the rail crossings
+  (mountain.py). The old line ran 548 m within 8 m of the rail.
 
 ## Reference maps (Sachin, 2026-10-30)
 

@@ -500,8 +500,13 @@ class Mountain:
                     if abs(float(np.dot(tan[i], ot))) < 0.7 * float(np.linalg.norm(ot)):
                         continue
                     share.setdefault(int(i), (float(np.interp(so, os_, oz)), id(other)))
+            # The rail crossings are pins too (chosen below, at grade or
+            # RAIL_CLEAR over or under): a shared stretch must be in reach of
+            # one of each crossing's heights.
             for i, (v, who) in sorted(share.items()):
-                if all(abs(v - hj) <= g * ds * abs(i - j) + 0.05 for j, hj in pins.items()):
+                if all(abs(v - hj) <= g * ds * abs(i - j) + 0.05 for j, hj in pins.items()) and all(
+                        min(abs(v - hr - o) for o in (0.0, -RAIL_CLEAR, RAIL_CLEAR)) <= g * ds * abs(i - j) + 0.05
+                        for j, hr, _o, _s in rail_x):
                     pins[i] = v
                     src[i] = who
         if flat_end > 0.0 and len(s) - 1 in pins:
