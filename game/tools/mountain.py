@@ -145,13 +145,16 @@ UNDER_DROP = 6.5  # a trail's underpass runs this far below the road over it
 # (in its cutting), this far apart (5.5 m clearance and the deck).
 RAIL_CLEAR = 7.0
 LEVEL_REACH = 20.0  # a road at a level crossing is flat this far either side of the rail
+# A road ending this close to an earlier one takes its height there (the
+# country joins the two; Summit Fire Road stops 16 m short of Calder's middle).
+JOIN_REACH = 20.0
 
 
 LINES = Path(__file__).resolve().parent / "mountain_lines.json"
 # The range's own roads (mountain_lines.json, laid by mountain_plan.py), in
 # build order: a later road's junctions take an earlier one's height. The
 # map routes it re-laid (tag "route") go back into world_map.json.
-ROAD_ORDER = ["freeway", "crest", "canyon", "observatory", "fire_road", "calder", "west_ridge_track",
+ROAD_ORDER = ["freeway", "crest", "canyon", "observatory", "calder", "fire_road", "west_ridge_track",
               "larkspur_track", "calder_trail", "raven_trail"]
 # The cable car: from Cable Hill at the city's edge, by a mid-station on the
 # south-west spur, to the summit's rim.
@@ -448,6 +451,10 @@ class Mountain:
         pins = {}
         for e, i in ((0, 0), (-1, len(s) - 1)):
             h = self.profile_at(tuple(pts[i]), rails)
+            if h is None:
+                near = [got for prof in self.profiles if not any(prof[0] is r for r in rails)
+                        for got in [self._profile_z(prof, tuple(pts[i]), lambda _hw: JOIN_REACH)] if got]
+                h = min(near)[1] if near else None
             if h is None and e in loose:
                 continue
             pins[i] = h if h is not None else float(ground[i])
