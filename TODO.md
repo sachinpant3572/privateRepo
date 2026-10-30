@@ -1,5 +1,42 @@
 # TODO
 
+## NEXT, first after Bellerive's city and mountain are fully done: MadOut2 lessons
+
+Sachin, 2026-10-30: "Also, add the MadOut2 findings to the TODO lost to be taken up as the
+first thing, after Belleriv (Only the City and the Mountain part is fully done."
+
+Order: this starts as soon as the Bellerive city and mountain work (#116, without the parts
+not yet approved, such as the bay and the hill country) is fully done, ahead of every other
+item below, the HIGH PRIORITY Chinatown Wars section included. Full findings, sources and
+labels: `MADOUT2_COMPARISON.md` (sections 5 and 6). Sizes are AI sessions of 3-5 hours.
+Each step still starts on Sachin's word, with its own plan, gates and review.
+
+What Solvera lacks next to MadOut2, most noticed first: guns and shootouts; any sound;
+repeatable ways to earn (races, jobs); things to buy and show off (cars, tuning, clothes,
+homes); a reason to come back daily; other players (not even leaderboards); volume (24 cars
+vs 70+, 3 missions vs 30+); wanted levels above 2 stars; real players' feedback.
+
+1. **Close the core loop before adding more world**: earn (repeatable jobs and street races on
+   existing roads, through the mission system), spend (buy cars, a tuning garage, a clothes
+   shop), show off. 8-12 sessions.
+2. **Guns and wanted levels 3-5** (already planned as phase 6). 6-8 sessions.
+3. **First audio pass**: engines, tyres, impacts, punches, ambience, UI, from CC0 or
+   code-synthesised sounds. 3-5 sessions.
+4. **Players early**: a Play closed test, then an open beta in one region, with crash
+   reports and simple analytics. 2-4 sessions plus store setup.
+5. **Daily and weekly tasks plus "light online"** (`MVP_DESIGN.md`): leaderboards, ghost
+   races, weekly events. 3-5 sessions plus a small backend.
+6. **Turn MadOut2's weak spots into ours to win**: rewarded ads only, a low-end frame-rate
+   gate on a real cheap phone, no fall-through bugs, good controls. Ongoing.
+7. **Store presence**: searchable title and description, localised listings, a short
+   trailer, photo mode. 1-2 sessions plus art.
+8. **Real-time multiplayer** only after the single-player loop works, as a separate
+   decision (months, not sessions).
+
+Cheaper start if only one step is taken: 3 (audio) plus the earn half of 1 (street races
+and one job), about 6-8 sessions; it fixes the two gaps a new player meets in the first
+five minutes.
+
 ## Thursday, Oct 30, 2026: real grass on the hills, parks and lawns, with a Grass setting
 
 Sachin, 2026-10-30: "Can we add grass to the hills or other green areas in the game, and
