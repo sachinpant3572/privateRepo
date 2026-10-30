@@ -154,6 +154,10 @@ const COVER_GRID := 5.0
 const MAX_COVER := 200
 ## Ground cover density (main.gd: half on Low quality).
 static var cover := 1.0
+## Ground kept bare of plants, stones and ponds: the heliports' aprons
+## (heliports.gd), each [centre Vector2, yaw, half size Vector2]. Set before
+## the first tile builds.
+static var clearings: Array = []
 const POND_GRID := 25.0
 const LIGHT_CLASSES := ["street", "avenue"]
 const POLE_CLASSES := ["road", "lane", "track"]
@@ -523,9 +527,13 @@ static func _zone_at(ctx: Ctx, p: Vector2) -> String:
 
 
 ## Whether p (with `room` metres round it) is clear of roads, lots, walls,
-## rails and driveways.
+## rails, driveways and the clearings.
 static func _clear(ctx: Ctx, p: Vector2, room: float) -> bool:
 	var c = ctx.country
+	for cl in clearings:
+		var q: Vector2 = (p - cl[0]).rotated(cl[1])
+		if absf(q.x) < cl[2].x + room and absf(q.y) < cl[2].y + room:
+			return false
 	if c.road_distance(p, 40.0 + room) < room:
 		return false
 	for i in ctx.lots_near:

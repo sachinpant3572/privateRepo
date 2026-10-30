@@ -1,0 +1,14 @@
+{
+	"version": 1,
+	"note": "Heliports (#82), local metres as in city.gd (map y = game z). pos: the apron's centre; yaw: radians (as rotation.y); size: [across, along] in metres; pads: [x, z, kind] in the apron's frame. scripts/heliports.gd builds them; test_heliport_pads_are_clear checks each is on clear, open, flat land by a road.",
+	"heliports": [
+		{
+			"id": "jade_gate_heliport",
+			"name": "Jade Gate Heliport",
+			"pos": [721.0, -77.0],
+			"yaw": 1.5708,
+			"size": [46.0, 26.0],
+			"pads": [[-11.5, 0.0, "heli"], [11.5, 0.0, "police_heli"]]
+		}
+	]
+}

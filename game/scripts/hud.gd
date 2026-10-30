@@ -237,7 +237,8 @@ func _process(delta: float) -> void:
 	sky_button.modulate = Color(1.0, 0.85, 0.3) if game.camera.looking_up else Color.WHITE
 	_phone_button.modulate = Color(1.0, 0.85, 0.3) if _phone_pulse and int(_blink * 3.0) % 2 == 0 else Color.WHITE
 	_update_dialogue(delta)
-	touch.set_mode(player.vehicle != null and not player.passenger, Controls.scheme, player.passenger)
+	var flying: bool = player.vehicle != null and not player.passenger and player.vehicle.get("flies") == true
+	touch.set_mode(player.vehicle != null and not player.passenger, Controls.scheme, player.passenger, flying)
 	var ride_id: int = player.vehicle.get_instance_id() if player.vehicle != null else 0
 	if ride_id != _ride_id:
 		_ride_id = ride_id
@@ -245,10 +246,24 @@ func _process(delta: float) -> void:
 	_ride_name_time -= delta
 	if player.passenger:
 		_prompt.text = "" # the taxi's own panel and ride bar
+	elif flying:
+		# A helicopter: speed and height over the ground (or the roof) under
+		# it; the pedals are the collective.
+		var heli = player.vehicle
+		_prompt.text = "%d km/h   ALT %d m" % [roundi(heli.motion.length() * 3.6), roundi(heli.altitude)]
+		if heli.landed and not heli.wrecked:
+			_prompt.text = ("On a roof: land on open ground to get out   " if heli.on_roof else "Hold UP (Q) to take off   ") + _prompt.text
+		if _ride_name_time > 0.0:
+			_prompt.text = heli.model_name() + "   " + _prompt.text
+		touch.set_label("gas", "UP")
+		touch.set_label("brake", "DOWN")
+		touch.set_label("interact", "BAIL" if heli.exit_check() == "bail" else "EXIT")
 	elif player.vehicle != null:
 		_prompt.text = "%d km/h" % roundi(player.vehicle.motion.length() * 3.6)
 		if _ride_name_time > 0.0:
 			_prompt.text = player.vehicle.model_name() + "   " + _prompt.text
+		touch.set_label("gas", "GAS")
+		touch.set_label("brake", "BRAKE")
 		touch.set_label("interact", "EXIT")
 		touch.set_label("sprint", "DRIFT")
 	elif context_prompt.size() == 2:

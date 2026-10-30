@@ -18,6 +18,7 @@ const Inventory = preload("res://scripts/inventory.gd")
 const Taxi = preload("res://scripts/taxi.gd")
 const Graphics = preload("res://scripts/graphics.gd")
 const GameLog = preload("res://scripts/game_log.gd")
+const Heliports = preload("res://scripts/heliports.gd")
 
 const RESPAWN_DELAY := 2.5
 
@@ -36,6 +37,7 @@ var graphics
 var missions
 var interiors
 var taxi
+var heliports
 ## The game log (Settings > Game > Log).
 var game_log
 var inventory = Inventory.new()
@@ -62,11 +64,18 @@ func _ready() -> void:
 	graphics.game = self
 	add_child(graphics)
 
+	# The heliports' aprons stay bare of the country's plants (#82).
+	Country.Tiles.clearings = Heliports.clearings()
 	city = City.new()
 	add_child(city)
 	city.build(1234)
 	atmosphere.night_changed.connect(city.set_glow_visible)
 	city.set_glow_visible(atmosphere.night_amount() > 0.02)
+	heliports = Heliports.new()
+	heliports.name = "Heliports"
+	add_child(heliports)
+	heliports.build(city)
+	atmosphere.night_changed.connect(heliports.set_glow_visible)
 
 	missions = MissionManager.new()
 	missions.game = self
@@ -241,6 +250,9 @@ func map_markers() -> Array:
 		list.append_array(missions.markers)
 	if taxi:
 		list.append_array(taxi.map_markers())
+	if heliports:
+		for port in heliports.ports:
+			list.append({"pos": port.pos, "color": Color(0.35, 0.8, 1.0), "label": port.name, "gps": false, "icon": "H"})
 	return list
 
 

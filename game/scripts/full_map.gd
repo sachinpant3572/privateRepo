@@ -227,6 +227,8 @@ func _draw() -> void:
 		var at := _to_screen(m.pos)
 		draw_circle(at, 13.0, Color(0.05, 0.05, 0.07))
 		draw_circle(at, 10.0, m.color)
+		if m.has("icon"):
+			draw_string(font, at + Vector2(-6, 7), m.icon, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(0.05, 0.05, 0.07))
 		draw_string_outline(font, at + Vector2(16, -10), m.label, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, 6, Color.BLACK)
 		draw_string(font, at + Vector2(16, -10), m.label, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, m.color.lightened(0.3))
 	var focus: Node3D = game.player.focus_node()

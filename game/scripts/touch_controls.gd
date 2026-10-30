@@ -55,6 +55,9 @@ var driving := false
 var scheme := "stick"
 ## In the back of a cab: no stick or buttons (the taxi panel has its own).
 var seated := false
+## Flying a helicopter (#82): the stick flies it and the pedals are the
+## collective (the HUD labels them UP and DOWN); no DRIFT.
+var flying := false
 ## Settings "touch_layout": {id: {"x", "y" (offset from the control's
 ## corner), "s" (size)}}. Shared with the settings, so edits show at once.
 var layout := {}
@@ -113,13 +116,16 @@ func set_label(action: String, text: String) -> void:
 
 ## Switches the layout; lets go of buttons the new one hasn't got (GAS
 ## held while getting out) and of the stick if it is gone.
-func set_mode(in_car: bool, layout_name: String, in_cab := false) -> void:
-	if in_car == driving and layout_name == scheme and in_cab == seated:
+func set_mode(in_car: bool, layout_name: String, in_cab := false, in_air := false) -> void:
+	if in_air:
+		layout_name = "stick"
+	if in_car == driving and layout_name == scheme and in_cab == seated and in_air == flying:
 		return
 	var was := _stick_item()
 	driving = in_car
 	scheme = layout_name
 	seated = in_cab
+	flying = in_air
 	var keep: Array = buttons().map(func(b): return b.action)
 	for index in _button_touches.keys():
 		if not keep.has(_button_touches[index]):
@@ -150,6 +156,8 @@ func buttons() -> Array:
 		return []
 	if not driving:
 		return BUTTONS
+	if flying:
+		return DRIVE_BUTTONS.filter(func(b): return b.action != "sprint")
 	return DRIVE_BUTTONS + ARROWS if scheme == "arrows" else DRIVE_BUTTONS
 
 

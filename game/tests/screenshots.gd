@@ -169,6 +169,13 @@ func _run() -> void:
 		await _traffic(game)
 		get_tree().quit()
 		return
+	if OS.get_environment("SHOTS") == "heli":
+		# Helicopters (#82): the heliport by day and at dusk, a take-off,
+		# downtown from low and high, Mount Calder from the air, the map
+		# (HANDOFF-helicopters.md).
+		await _heli(game)
+		get_tree().quit()
+		return
 	await _shot("1_on_foot.png")
 	game.waypoint = game.city.node_pos(game.city.nearest_node(game.city.landmark_front("lantern_square")))
 	await _frames(30)
@@ -1609,6 +1616,70 @@ func _convertibles(game) -> void:
 		car.queue_free()
 	game.camera.fixed_focus = null
 	game.camera.room_size = 0.0
+
+
+## Helicopters (#82): the heliport on foot by day and at dusk (pad, H,
+## lights, both helicopters), the take-off with the flying HUD, downtown
+## from 30 m and 200 m, Mount Calder's slope from 60 m, and the full map's
+## H marker (heli_1 to heli_7).
+func _heli(game) -> void:
+	var port: Dictionary = game.heliports.ports[0]
+	var centre: Vector3 = port.pos
+	var heli = game.heliports.helis[0]
+	var side: Vector3 = centre + Vector3(0.0, 0.0, float(port.size.y) * 0.5 + 5.0).rotated(Vector3.UP, float(port.yaw))
+	game.city.stream_now(centre)
+	game.player.global_position = Vector3(side.x, Terrain.height(side.x, side.z), side.z)
+	game.player.reset_physics_interpolation()
+	game.camera.fixed_focus = centre
+	game.camera.room_size = 60.0
+	game.camera.snap()
+	await _frames(90)
+	await _shot("heli_1_pad.png")
+	game.atmosphere.hour = 20.4
+	await _frames(60)
+	await _shot("heli_2_pad_dusk.png")
+	game.atmosphere.hour = 12.5
+	game.camera.fixed_focus = null
+	game.camera.room_size = 0.0
+	# Board and hold UP: the rotor spools, it lifts and climbs.
+	game.player.global_position = heli.global_position + Vector3(4.0, 0.0, 0.0)
+	game.player.reset_physics_interpolation()
+	await _frames(5)
+	game.player.enter_vehicle(heli)
+	Input.action_press("gas")
+	await _frames(240)
+	await _shot("heli_3_takeoff.png")
+	Input.action_release("gas")
+	# The full map, opened here so it centres on the heliport's H.
+	game.hud.full_map.open()
+	for i in 4:
+		await get_tree().process_frame
+	await _shot("heli_7_map.png")
+	game.hud.full_map.close()
+	# Hovering over downtown, low then high, and over the mountain.
+	var peak: Array = game.city.country.mountain.peaks.mount_calder
+	var summit := Vector3(float(peak[0]), 0.0, float(peak[1]))
+	var spawn: Vector3 = game.city.spawn_point
+	var away := Vector3(spawn.x - summit.x, 0.0, spawn.z - summit.z).normalized()
+	var slope := summit
+	while Terrain.height(slope.x, slope.z) > 600.0 and slope.distance_to(summit) < 4000.0:
+		slope += away * 10.0
+	for stop: Array in [["heli_4_downtown_30m", spawn, 30.0, 180], ["heli_5_downtown_200m", spawn, 200.0, 240], ["heli_6_mountain_60m", slope, 60.0, 240]]:
+		var at: Vector3 = stop[1]
+		var ground: float = Terrain.height(at.x, at.z) - Terrain.drop(at.x, at.z)
+		game.city.stream_now(Vector3(at.x, ground, at.z))
+		heli.global_position = Vector3(at.x, ground + float(stop[2]), at.z)
+		heli.rotation.y = atan2(away.x, away.z) # nose toward the summit
+		heli.velocity = Vector3.ZERO
+		heli.rpm = 1.0
+		heli.landed = false
+		heli.altitude = stop[2]
+		heli.above_land = stop[2]
+		heli.reset_physics_interpolation()
+		game.player.global_position = heli.global_position
+		game.camera.snap()
+		await _frames(stop[3])
+		await _shot(stop[0] + ".png")
 
 
 func _shot(file: String) -> void:

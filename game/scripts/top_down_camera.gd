@@ -227,6 +227,24 @@ const TURN_DRIVE_SIZE := 68.0
 const TURN_FLATTEN := 10.0
 const TURN_FULL_SPEED := 22.0
 var _flatten := 0.0
+## Flying (#82, helicopter.gd): the higher it climbs the more ground the view
+## takes in, as the camera backs off above it, up to AIR_FRAME metres down
+## the screen (times the zoom); higher still the lens narrows instead, so
+## the ground the streaming has to fill stays bounded however high it goes.
+## The view tips toward AIR_PITCH from AIR_LOW m up, fully by AIR_HIGH m,
+## which keeps the far edge of the screen near. The city and the country
+## stream round the ground in the middle of the screen out to the screen's
+## 20:9 corners (stream_radius), plus AIR_LEAD seconds of flying.
+const AIR_FRAME := 120.0
+const AIR_PITCH := 75.0
+const AIR_LOW := 8.0
+const AIR_HIGH := 80.0
+const AIR_LEAD := 0.8
+## The focus's height over the land (eased), the ground in the middle of
+## the screen and the streaming radius round it (0 on the ground).
+var _air := 0.0
+var _air_center := Vector3.ZERO
+var _air_radius := 0.0
 ## Look up (the HUD's SKY button, or L): on foot the view rises from over
 ## the player's shoulder to the sky (SkyDome.look_up_transform), for the
 ## sun, the stars out of town and the birds. Drag to look round; walking,
@@ -324,6 +342,9 @@ func _process(delta: float) -> void:
 		_pitch_t = 0.0
 	var look := pos
 	_player = pos
+	if not perspective and _air > 0.5:
+		# The flat view has no depth to grow with height: it widens instead.
+		want_size = maxf(want_size, minf(want_size + _air * 0.6, AIR_FRAME * zoom))
 	if zoom_override > 0.0:
 		want_size = zoom_override
 	if fixed_focus != null:
@@ -332,6 +353,7 @@ func _process(delta: float) -> void:
 	_focus = _focus.lerp(look + lead, 1.0 - exp(-6.0 * delta))
 	_ahead = look + lead * 2.0
 	size = lerpf(size, want_size, 1.0 - exp(-2.0 * delta))
+	_air = lerpf(_air, _air_height(node), 1.0 - exp(-3.0 * delta))
 	_update_yaw(node, delta)
 	_update_pitch(delta)
 	_frame(delta)
@@ -626,6 +648,11 @@ func _update_yaw(node: Node3D, delta: float) -> void:
 			_yaw_chasing = true
 			_yaw_forced = false
 			_yaw_quick = true
+		elif node.get("flies") == true and not _yaw_forced:
+			# A helicopter: its stick is its own (up flies ahead), so the view
+			# keeps behind the nose, hovering and turning on the spot too.
+			stepped = turn_steps
+			_yaw_goal = _step_goal(_heading(fwd), delta) if turn_steps else _heading(fwd)
 		elif speed > YAW_MIN_SPEED and not _yaw_forced:
 			var face := _heading(fwd)
 			var slip := wrapf(_heading(flat) - face, -PI, PI)
@@ -674,7 +701,9 @@ func _update_yaw(node: Node3D, delta: float) -> void:
 		return
 	var quick := _yaw_forced or _yaw_quick
 	var on_foot := node == target
-	var accel_max := YAW_ACCEL_QUICK if quick else (WALK_ACCEL_MAX if on_foot else YAW_ACCEL_MAX)
+	# A helicopter turns on the spot faster than a car can: the quick rates.
+	var flying: bool = node.get("flies") == true
+	var accel_max := YAW_ACCEL_QUICK if quick or flying else (WALK_ACCEL_MAX if on_foot else YAW_ACCEL_MAX)
 	if not _yaw_chasing:
 		_yaw_rate = move_toward(_yaw_rate, 0.0, accel_max * delta)
 	else:
@@ -685,10 +714,12 @@ func _update_yaw(node: Node3D, delta: float) -> void:
 			half = WALK_HALF
 		elif on_foot and not quick:
 			half = FOOT_HALF
+		elif flying and not quick:
+			half = YAW_HALF_FAST
 		var want := gap * log(2.0) / half
 		if absf(want) < YAW_RATE_MIN:
 			want = signf(gap) * minf(YAW_RATE_MIN, absf(gap) / delta)
-		var cap := WALK_RATE_MAX if walking else (YAW_RATE_QUICK if quick or on_foot else YAW_RATE_MAX)
+		var cap := WALK_RATE_MAX if walking else (YAW_RATE_QUICK if quick or on_foot or flying else YAW_RATE_MAX)
 		want = clampf(want, -cap, cap)
 		# Braking into the goal no harder than accel_max allows, so the view
 		# eases to a stop rather than overshooting it.
@@ -749,13 +780,64 @@ func snap() -> void:
 	_input_dir = Vector2.ZERO
 	_input_idle = INPUT_GRACE
 	_walked = false
+	_air = _air_height(node)
 	_update_pitch(0.0)
 	_frame(0.0)
 
 
 ## Where the streaming should centre: the ground in the middle of the screen.
 func stream_point() -> Vector3:
-	return _focus
+	return _air_center if _air_radius > 0.0 else _focus
+
+
+## Flying: how far round stream_point() the city and the country must be
+## loaded for the screen's corners (metres), or 0 on the ground.
+func stream_radius() -> float:
+	return _air_radius
+
+
+## How high a flying focus is over the land under it (0 for anything else).
+static func _air_height(node: Node3D) -> float:
+	return maxf(float(node.get("above_land")), 0.0) if node.get("flies") == true else 0.0
+
+
+## Flying: the ground in the middle of the screen (AIR_LEAD seconds ahead)
+## and how far the corners of a 20:9 screen reach on the ground from it.
+func _update_air_stream() -> void:
+	if _air <= 0.5 or not is_inside_tree():
+		_air_radius = 0.0
+		return
+	var ground := _focus.y - _air
+	var rect := get_viewport().get_visible_rect()
+	var wide := maxf((rect.size.y * 20.0 / 9.0 - rect.size.x) * 0.5, 0.0)
+	var center := _ground_hit(rect.get_center(), ground)
+	var r := 0.0
+	for c in [Vector2(-wide, 0.0), Vector2(rect.end.x + wide, 0.0), Vector2(-wide, rect.end.y), Vector2(rect.end.x + wide, rect.end.y)]:
+		var hit := _ground_hit(c, ground)
+		r = maxf(r, Vector2(hit.x - center.x, hit.z - center.z).length())
+	var node: Node3D = target.focus_node()
+	var v := _motion(node)
+	var ahead := Vector3(v.x, 0.0, v.z) * AIR_LEAD
+	_air_center = Vector3(center.x, ground, center.z) + ahead
+	_air_radius = r + ahead.length()
+
+
+## Where the line of sight through screen point `at` meets the level `ground`
+## (no further than the far plane). From the camera's own transform, not
+## project_ray_*(), which outside the physics step go through the
+## interpolated transform and so lag a frame (a whole teleport after snap()).
+func _ground_hit(at: Vector2, ground: float) -> Vector3:
+	var view := get_viewport().get_visible_rect().size
+	var ndc := Vector2(at.x / maxf(view.x, 1.0) * 2.0 - 1.0, 1.0 - at.y / maxf(view.y, 1.0) * 2.0)
+	var aspect := view.x / maxf(view.y, 1.0)
+	var o := global_position
+	var n := -global_basis.z
+	if projection == PROJECTION_PERSPECTIVE:
+		var t := tan(deg_to_rad(fov) * 0.5)
+		n = (global_basis * Vector3(ndc.x * t * aspect, ndc.y * t, -1.0)).normalized()
+	else:
+		o += global_basis * Vector3(ndc.x * size * 0.5 * aspect, ndc.y * size * 0.5, 0.0)
+	return o + n * minf((o.y - ground) / maxf(-n.y, 0.05), far)
 
 
 ## The ground the screen shows from the focus: [east-west half width, to the
@@ -847,6 +929,8 @@ func _update_pitch(delta: float) -> void:
 				_pitch_votes = 0
 		else:
 			_pitch_votes = 0
+	if _air > AIR_LOW and fixed_focus == null:
+		_pitch_want = maxf(_pitch_want, lerpf(ANGLES[0], AIR_PITCH, smoothstep(AIR_LOW, AIR_HIGH, _air)))
 	perspective_pitch = _pitch_want if delta <= 0.0 else lerpf(perspective_pitch, _pitch_want, 1.0 - exp(-2.5 * delta))
 
 
@@ -914,6 +998,14 @@ func _frame(delta: float) -> void:
 		var base := size * 0.5 / tan(deg_to_rad(PERSPECTIVE_FOV) * 0.5)
 		var need := _clear_back(_focus, base, 0)
 		var want := maxf(need, _clear_back(_ahead, base, 1))
+		# Flying: the ground is `drop` further along the view than the focus.
+		# Past AIR_FRAME of it down the screen the camera backs off further,
+		# narrowing the lens, so the helicopter keeps its size and the ground
+		# its AIR_FRAME.
+		var drop := _air / sin(deg_to_rad(perspective_pitch)) if _air > 0.5 else 0.0
+		var frame := AIR_FRAME * zoom
+		if drop > 0.0 and frame > size + 1.0:
+			want = maxf(want, size * drop / (frame - size))
 		if delta <= 0.0 or _back <= 0.0:
 			_back = want
 		else:
@@ -922,9 +1014,9 @@ func _frame(delta: float) -> void:
 		back = _back
 		fov = rad_to_deg(2.0 * atan(size * 0.5 / back))
 		near = maxf(1.0, NEAR_FADE * NEAR_CLIP * base)
-		far = back * 4.0
+		far = maxf(back * 4.0, (back + drop) * 2.5)
 		# Flatter than 65 degrees the top of the screen sees further out.
-		view_depth = back * maxf(1.0, sin(deg_to_rad(PITCH_LOW)) / sin(deg_to_rad(perspective_pitch)))
+		view_depth = (back + drop) * maxf(1.0, sin(deg_to_rad(PITCH_LOW)) / sin(deg_to_rad(perspective_pitch)))
 	else:
 		rotation = Vector3(deg_to_rad(-PITCH), yaw, 0.0)
 		projection = PROJECTION_ORTHOGONAL
@@ -936,6 +1028,7 @@ func _frame(delta: float) -> void:
 		far = DISTANCE + 120.0 + maxf(_focus.y - ground, 0.0) * 1.2 + clampf(ground * 0.4, 0.0, 300.0)
 		view_depth = DISTANCE
 	global_position = _focus + global_basis.z * back
+	_update_air_stream()
 
 
 ## The first distance from `base` outward along the camera's line from

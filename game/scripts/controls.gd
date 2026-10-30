@@ -12,6 +12,11 @@ const KEYS := {
 	"attack": [KEY_SPACE, KEY_J],
 	"interact": [KEY_E, KEY_F],
 	"hail": [KEY_T], # hail a taxi (taxi.gd; the HUD's TAXI button)
+	# A helicopter's collective (#82): up and down. The touch layout's GAS
+	# and BRAKE pedals, relabelled UP and DOWN, and the pad triggers do the
+	# same (collective()).
+	"climb": [KEY_Q, KEY_PAGEUP],
+	"descend": [KEY_Z, KEY_PAGEDOWN],
 	# Pedals and steering buttons: the touch layouts and gamepad triggers.
 	# On a keyboard, W/S and A/D double as them in the arrows and tilt
 	# layouts (gas(), brake(), steer()).
@@ -154,6 +159,15 @@ func brake() -> float:
 	if wheel_steering() or stick_steers():
 		b = maxf(b, Input.get_action_strength("move_down"))
 	return b
+
+
+## A helicopter's collective, -1 (down) .. 1 (up): Q/Z or PageUp/PageDown,
+## and the GAS/BRAKE pedals (touch UP/DOWN, pad triggers). W/S stay the
+## stick, which flies it.
+func collective() -> float:
+	var up := maxf(Input.get_action_strength("climb"), Input.get_action_strength("gas"))
+	var down := maxf(Input.get_action_strength("descend"), Input.get_action_strength("brake"))
+	return clampf(up - down, -1.0, 1.0)
 
 
 ## The wheel in the arrows and tilt layouts: -1 full left .. 1 full right.

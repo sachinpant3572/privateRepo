@@ -201,9 +201,15 @@ func _draw_overlay() -> void:
 		var at := _to_screen(m.pos, center)
 		var off := at - mid
 		if off.length() > r * 0.82:
-			# Off the map: an arrow on the rim pointing at it.
-			var edge: Vector2 = mid + off.normalized() * r * 0.82
-			MapImage.draw_arrow(_overlay, edge, off, 9.0, m.color)
+			# Off the map: an arrow on the rim pointing at it (not for a
+			# place marked with an icon, such as a heliport: only near).
+			if not m.has("icon"):
+				var edge: Vector2 = mid + off.normalized() * r * 0.82
+				MapImage.draw_arrow(_overlay, edge, off, 9.0, m.color)
+		elif m.has("icon"):
+			_overlay.draw_circle(at, 8.0, Color(0.05, 0.05, 0.07))
+			_overlay.draw_circle(at, 6.5, m.color)
+			_overlay.draw_string(ThemeDB.fallback_font, at + Vector2(-4.5, 5), m.icon, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.05, 0.05, 0.07))
 		else:
 			_draw_blip(at, m)
 	# The player (or their car), pointing where they face.
