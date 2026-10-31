@@ -684,8 +684,10 @@ func _free(inst: Instance) -> void:
 	for n in [inst.dress, inst.crowd]:
 		if is_instance_valid(n):
 			n.queue_free()
+	var driven = game.player.get("vehicle") if game != null and is_instance_valid(game.player) else null
 	for n in inst.extras:
-		if is_instance_valid(n):
+		# The player may have taken the trap's patrol car: it stays theirs.
+		if is_instance_valid(n) and n != driven:
 			n.queue_free()
 
 

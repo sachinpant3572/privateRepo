@@ -46,13 +46,9 @@ func _run() -> void:
 	add_child(game)
 	game.atmosphere.minutes_per_second = 0.0
 	game.atmosphere.weather_changes = false
-	var cal = Calendar.new()
-	cal.game = game
-	game.add_child(cal)
-	var ev = Events.new()
-	ev.game = game
-	ev.calendar = cal
-	game.add_child(ev)
+	# The game's own nodes: a second events node would build every event twice.
+	var cal = game.calendar
+	var ev = game.events
 	await _frames(30)
 	var only := OS.get_environment("ONLY")
 	var rodeo_day := 0
