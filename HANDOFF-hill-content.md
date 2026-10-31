@@ -77,7 +77,8 @@ on top; built in phases, each committed; `/effort xhigh` suits it.
 - Lab gate stands beside Kestrel Hollow Road, not astride it (review M1):
   lay it across the road (yaw along it, excused from the lot-on-road
   check) in the phase-4 rebuild. Its arm is drawn raised until then.
-- Bungee platform sits on a level pad: phase 3 needs a cliff-edge site.
+- Bungee: no sheer 60 m cliff within 600 m of the Calder lot, so P built
+  a 38 m arm over a 60 m drop (cheaper: ARM_MAX 20, 35-40 m drop).
 
 ## Handover (session 3, 2026-10-31) - start here
 Kept current at each milestone (Sachin 10-31: a handoff with proper
