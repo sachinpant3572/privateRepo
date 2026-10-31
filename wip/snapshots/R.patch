@@ -1,158 +1,194 @@
-diff --git a/game/scripts/hud.gd b/game/scripts/hud.gd
-index e96f4e9..952a89a 100644
---- a/game/scripts/hud.gd
-+++ b/game/scripts/hud.gd
-@@ -30,6 +30,7 @@ var _stars: Control
- var _perf: Label
- var bug_button: Button
- var _prompt: Label
-+var _race: Label
- var _message: Label
- var _message_tween: Tween
- var _district: Label
-@@ -170,6 +171,10 @@ func _ready() -> void:
- 	_message.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
- 	_message.modulate.a = 0.0
- 
-+	_race = _label(root, 26)
-+	_anchor(_race, Vector2(0.5, 0), Rect2(-330, 132, 660, 80))
-+	_race.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+diff --git a/HANDOFF-races.md b/HANDOFF-races.md
+new file mode 100644
+index 0000000..dca389f
+--- /dev/null
++++ b/HANDOFF-races.md
+@@ -0,0 +1,32 @@
++# HANDOFF: races (package R of the hill content, phase 3)
 +
- 	_district = _label(root, 30)
- 	_anchor(_district, Vector2(0.5, 0), Rect2(-300, 84, 600, 44))
- 	_district.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-@@ -227,6 +232,7 @@ func _process(delta: float) -> void:
- 	_shown_cash = move_toward(_shown_cash, game.cash, maxf(absf(game.cash - _shown_cash) * 3.0, 50.0) * delta)
- 	_cash.text = "$%d" % int(_shown_cash)
- 	_clock.text = game.atmosphere.clock_text()
-+	_race.text = game.races.hud_text() if game.races != null else ""
- 	_phone_button.visible = game.missions != null and game.missions.phone_unlocked
- 	# The gear takes PHONE's slot until the story unlocks the phone.
- 	settings_button.offset_left = -196.0 if _phone_button.visible else -76.0
-@@ -267,6 +273,10 @@ func _process(delta: float) -> void:
- 		touch.set_label("brake", "BRAKE")
- 		touch.set_label("interact", "EXIT")
- 		touch.set_label("sprint", "DRIFT")
-+		var race_prompt: Array = game.races.prompt() if game.races != null else []
-+		if not race_prompt.is_empty():
-+			_prompt.text = race_prompt[0]
-+			touch.set_label("interact", race_prompt[1])
- 	elif context_prompt.size() == 2:
- 		_prompt.text = context_prompt[0]
- 		touch.set_label("interact", context_prompt[1])
-@@ -281,6 +291,11 @@ func _process(delta: float) -> void:
- 		_prompt.text = hunt_prompt[0]
- 		touch.set_label("interact", hunt_prompt[1])
- 		touch.set_label("sprint", "RUN")
-+	elif game.races != null and not game.races.prompt().is_empty():
-+		var race_prompt: Array = game.races.prompt()
-+		_prompt.text = race_prompt[0]
-+		touch.set_label("interact", race_prompt[1])
-+		touch.set_label("sprint", "RUN")
- 	elif game.interiors != null and not game.interiors.prompt().is_empty():
- 		var place_prompt: Array = game.interiors.prompt()
- 		_prompt.text = place_prompt[0]
-diff --git a/game/scripts/main.gd b/game/scripts/main.gd
-index 11a5eaa..e6b006f 100644
---- a/game/scripts/main.gd
-+++ b/game/scripts/main.gd
-@@ -15,6 +15,7 @@ const Atmosphere = preload("res://scripts/atmosphere.gd")
- const MissionManager = preload("res://scripts/missions/mission_manager.gd")
- const Interiors = preload("res://scripts/interiors.gd")
- const Hunting = preload("res://scripts/hunting.gd")
-+const Races = preload("res://scripts/races.gd")
- const Inventory = preload("res://scripts/inventory.gd")
- const Taxi = preload("res://scripts/taxi.gd")
- const Graphics = preload("res://scripts/graphics.gd")
-@@ -40,6 +41,7 @@ var graphics
- var missions
- var interiors
- var hunting
-+var races
- var taxi
- var heliports
- var calendar
-@@ -90,6 +92,9 @@ func _ready() -> void:
- 	atmosphere.calendar = calendar
- 	hunting = Hunting.new()
- 	add_child(hunting)
-+	races = Races.new()
-+	races.game = self
-+	add_child(races)
- 
- 	missions = MissionManager.new()
- 	missions.game = self
-@@ -267,6 +272,8 @@ func map_markers() -> Array:
- 		list.append_array(missions.markers)
- 	if taxi:
- 		list.append_array(taxi.map_markers())
-+	if races:
-+		list.append_array(races.map_markers())
- 	if heliports:
- 		for port in heliports.ports:
- 			list.append({"pos": port.pos, "color": Color(0.35, 0.8, 1.0), "label": port.name, "gps": false, "icon": "H"})
-diff --git a/game/scripts/missions/mission_manager.gd b/game/scripts/missions/mission_manager.gd
-index e49a1f7..6a2e545 100644
---- a/game/scripts/missions/mission_manager.gd
-+++ b/game/scripts/missions/mission_manager.gd
-@@ -305,7 +305,7 @@ func save_game() -> void:
- 	if not save_enabled:
- 		return
- 	var data := {"version": SAVE_VERSION, "done": done, "cash": game.cash, "phone": phone_unlocked,
--		"settings": game.settings, "inventory": game.inventory.to_save(), "hunting": game.hunting.to_save(), "calendar": game.calendar.to_save()}
-+		"settings": game.settings, "inventory": game.inventory.to_save(), "hunting": game.hunting.to_save(), "races": game.races.to_save(), "calendar": game.calendar.to_save()}
- 	var f := FileAccess.open(save_path, FileAccess.WRITE)
- 	if f:
- 		f.store_string(JSON.stringify(data))
-@@ -327,6 +327,8 @@ func load_game() -> void:
- 	game.inventory.load_save(inv if typeof(inv) == TYPE_DICTIONARY else {})
- 	var hunt = data.get("hunting")
- 	game.hunting.load_save(hunt if typeof(hunt) == TYPE_DICTIONARY else {})
-+	var rc = data.get("races")
-+	game.races.load_save(rc if typeof(rc) == TYPE_DICTIONARY else {})
- 	var cal = data.get("calendar")
- 	game.calendar.load_save(cal if typeof(cal) == TYPE_DICTIONARY else {})
- 	GameLog.event("load", {"version": int(data.get("version", 1)), "done": done.size(), "cash": game.cash})
-@@ -340,6 +342,7 @@ func reset_progress() -> void:
- 	game.cash = 0
- 	game.inventory.bag.clear()
- 	game.hunting.load_save({})
-+	game.races.load_save({})
- 	game.calendar.load_save({})
- 	save_game()
- 	changed.emit()
-diff --git a/game/scripts/player.gd b/game/scripts/player.gd
-index ebd43a5..514dc20 100644
---- a/game/scripts/player.gd
-+++ b/game/scripts/player.gd
-@@ -58,6 +58,8 @@ func _physics_process(delta: float) -> void:
- 			var game = get_tree().get_first_node_in_group("game") if passenger else null
- 			if game != null and game.taxi != null:
- 				game.taxi.request_exit() # the cab pulls up and you pay
-+			elif _races_take_press():
-+				pass # the race start line or the Calder trial
- 			elif vehicle.has_method("exit_check") and vehicle.exit_check() == "roof":
- 				# Nobody stands on a roof here: land on open ground first.
- 				var g = get_tree().get_first_node_in_group("game")
-@@ -113,10 +115,18 @@ func _think(delta: float) -> void:
- 			pass
- 		elif game != null and game.hunting != null and game.hunting.try_interact():
- 			pass
-+		elif _races_take_press():
-+			pass # the bike hire stand
- 		elif game == null or game.interiors == null or not game.interiors.try_interact():
- 			try_enter_vehicle()
- 
- 
-+## E at a race start line, or at the bike hire stand (races.gd).
-+func _races_take_press() -> bool:
-+	var g = get_tree().get_first_node_in_group("game")
-+	return g != null and g.races != null and g.races.try_interact()
++Request (Sachin): "Build the content, and then the tunnels and bridges", then "phase 3 (races, stunt jumps, cycling, parachuting, bungee)".
++Branch worktree-agent-a8e49a24b2d9859ff. Not pushed. Four shared files are NOT edited here: apply HANDOFF-races.patch.
 +
++## What exists
++- `game/scripts/races.gd` (Node3D, `Races.new(); races.game = main; add_child(races)`). API: `prompt()` -> `[text, button]` or `[]`, `try_interact()` -> bool, `hud_text()`, `map_markers()`, `to_save()` / `load_save(d)` (best times day/night/bike, bike medal).
++- `game/scripts/race_course.gd`: static `hill(country, laps)` and `trail(country)`; builds the course at runtime from `game.city.country.roads`.
++- `game/tests/race_tests.gd` (15 tests, in TEST_MODULES), `race_shots.gd/.tscn` (8 shots).
++- `HANDOFF-races.patch`: the wiring for main.gd, hud.gd, player.gd, mission_manager.gd (`git apply --3way HANDOFF-races.patch`; checked with `git apply --check` on HEAD).
 +
- ## The node the camera and police should track.
- func focus_node() -> Node3D:
- 	return vehicle if vehicle != null else self
++## Design (decisions)
++- Day race: RACE_ROADS (East Hills Road, Whistler Track, Copperback Cut, Copperback Track) south of RACE_NORTH -3340, start by (2780, -2520). Route = 2-core ring of those roads plus a lead-in, sampled every 4 m and smoothed. 2 laps, a checkpoint about every 150 m, lap lines and the finish on one spot (ring junction, 136 m along the lead-in); the start arch stands 34 m along the lead-in.
++- Offered whenever it is not night (04:00 to 21:00). E near the start line starts the race instead of exiting the car (the patch puts races before exit). Prize 400 / 200 / 80 by place. Best time saved.
++- Night race 21:00 to 04:00 only: wager 100 to 500 (set_wager), winner takes the pot, faster rivals, one wanted star if a police unit sees you racing (police_manager's `_anyone_sees` rule: 35 m, ray on the world layer).
++- Rivals: 3 AI cars on `Vehicle.drive_path` (every 3rd route sample, corner speed profile v = sqrt(5 / curvature), brake 5.5). They ghost each other (collision exceptions plus `_ahead` ray exceptions, `_ghost_rivals`) so they never shunt the field; the player's car is solid. Day skills 0.86 / 0.9 / 0.95, night 1.0 / 1.05 / 1.1.
++- Rival recovery: waypoint skip when one is passed within 16 m; stall 5 s, 3 s off the line by 30 m, or no new route progress for 7 s (`IDLE_TIME`) puts the car back on the line (`recover_rival`); a wrecked rival is swapped for a fresh car at its path index.
++- Checkpoints count within 12 m (bike 11 m), in order; a skipped one does not count. Player abandons after 90 s without a checkpoint or 8 s out of the car.
++- Bike trial: Calder Trail downhill, $10 rental stand (3 bikes) at BIKE_SPOT (990, -1502), medals by average speed 4.6 / 5.6 / 6.6 m/s, cash 60 / 150 / 300 paid once per improvement, best time saved. Pace from an AI perfect run of 99 s.
++
++## Calibration (race_calib probe, deleted)
++- Day rivals average 15.8 to 17 m/s over the course; night 18 to 20 m/s. Ghost cars at skill 1.15 to 1.3 reach 20 to 22 m/s without crashing, so a good player can beat the field.
++
++## Traps
++- Rivals do not brake for the player (existing traffic AI rule), so they can rear-end a stationary player; tests park the player's car aside before running the field.
++- The wiring test (`test_races_wired_into_the_game`) is vacuous until main.gd makes `game.races`; in this branch it falls back to a standalone node. With the patch applied (checked in a scratch copy) it ran for real, 7 checks.
++- Godot runs share /tmp/godot.lock; never run the full suite from a package.
++- HUD strings stay at 30 characters or less (the race label is 660 px wide at size 26).
++
++## Open
++- Full suite not run here (main session). A shot pass after the patch lands would confirm the HUD prompt in a vehicle.
++- The start prompt shows only within 22 m of the arch; the map marker is the discoverable cue.
+diff --git a/HANDOFF-races.patch b/HANDOFF-races.patch
+new file mode 100644
+index 0000000..7a1ec19
+--- /dev/null
++++ b/HANDOFF-races.patch
+@@ -0,0 +1,147 @@
++--- a/game/scripts/hud.gd
+++++ b/game/scripts/hud.gd
++@@ -30,6 +30,7 @@
++ var _perf: Label
++ var bug_button: Button
++ var _prompt: Label
+++var _race: Label
++ var _message: Label
++ var _message_tween: Tween
++ var _district: Label
++@@ -170,6 +171,10 @@
++ 	_message.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
++ 	_message.modulate.a = 0.0
++ 
+++	_race = _label(root, 26)
+++	_anchor(_race, Vector2(0.5, 0), Rect2(-330, 132, 660, 80))
+++	_race.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+++
++ 	_district = _label(root, 30)
++ 	_anchor(_district, Vector2(0.5, 0), Rect2(-300, 84, 600, 44))
++ 	_district.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
++@@ -227,6 +232,7 @@
++ 	_shown_cash = move_toward(_shown_cash, game.cash, maxf(absf(game.cash - _shown_cash) * 3.0, 50.0) * delta)
++ 	_cash.text = "$%d" % int(_shown_cash)
++ 	_clock.text = game.atmosphere.clock_text()
+++	_race.text = game.races.hud_text() if game.races != null else ""
++ 	_phone_button.visible = game.missions != null and game.missions.phone_unlocked
++ 	# The gear takes PHONE's slot until the story unlocks the phone.
++ 	settings_button.offset_left = -196.0 if _phone_button.visible else -76.0
++@@ -267,6 +273,10 @@
++ 		touch.set_label("brake", "BRAKE")
++ 		touch.set_label("interact", "EXIT")
++ 		touch.set_label("sprint", "DRIFT")
+++		var race_prompt: Array = game.races.prompt() if game.races != null else []
+++		if not race_prompt.is_empty():
+++			_prompt.text = race_prompt[0]
+++			touch.set_label("interact", race_prompt[1])
++ 	elif context_prompt.size() == 2:
++ 		_prompt.text = context_prompt[0]
++ 		touch.set_label("interact", context_prompt[1])
++@@ -281,6 +291,11 @@
++ 		_prompt.text = hunt_prompt[0]
++ 		touch.set_label("interact", hunt_prompt[1])
++ 		touch.set_label("sprint", "RUN")
+++	elif game.races != null and not game.races.prompt().is_empty():
+++		var stand_prompt: Array = game.races.prompt()
+++		_prompt.text = stand_prompt[0]
+++		touch.set_label("interact", stand_prompt[1])
+++		touch.set_label("sprint", "RUN")
++ 	elif game.interiors != null and not game.interiors.prompt().is_empty():
++ 		var place_prompt: Array = game.interiors.prompt()
++ 		_prompt.text = place_prompt[0]
++--- a/game/scripts/main.gd
+++++ b/game/scripts/main.gd
++@@ -15,6 +15,7 @@
++ const MissionManager = preload("res://scripts/missions/mission_manager.gd")
++ const Interiors = preload("res://scripts/interiors.gd")
++ const Hunting = preload("res://scripts/hunting.gd")
+++const Races = preload("res://scripts/races.gd")
++ const Inventory = preload("res://scripts/inventory.gd")
++ const Taxi = preload("res://scripts/taxi.gd")
++ const Graphics = preload("res://scripts/graphics.gd")
++@@ -40,6 +41,7 @@
++ var missions
++ var interiors
++ var hunting
+++var races
++ var taxi
++ var heliports
++ var calendar
++@@ -90,6 +92,9 @@
++ 	atmosphere.calendar = calendar
++ 	hunting = Hunting.new()
++ 	add_child(hunting)
+++	races = Races.new()
+++	races.game = self
+++	add_child(races)
++ 
++ 	missions = MissionManager.new()
++ 	missions.game = self
++@@ -267,6 +272,8 @@
++ 		list.append_array(missions.markers)
++ 	if taxi:
++ 		list.append_array(taxi.map_markers())
+++	if races:
+++		list.append_array(races.map_markers())
++ 	if heliports:
++ 		for port in heliports.ports:
++ 			list.append({"pos": port.pos, "color": Color(0.35, 0.8, 1.0), "label": port.name, "gps": false, "icon": "H"})
++--- a/game/scripts/missions/mission_manager.gd
+++++ b/game/scripts/missions/mission_manager.gd
++@@ -312,7 +312,7 @@
++ 	if not save_enabled:
++ 		return
++ 	var data := {"version": SAVE_VERSION, "done": done, "cash": game.cash, "phone": phone_unlocked,
++-		"settings": game.settings, "inventory": game.inventory.to_save(), "hunting": game.hunting.to_save(), "calendar": game.calendar.to_save()}
+++		"settings": game.settings, "inventory": game.inventory.to_save(), "hunting": game.hunting.to_save(), "races": game.races.to_save(), "calendar": game.calendar.to_save()}
++ 	var f := FileAccess.open(save_path, FileAccess.WRITE)
++ 	if f:
++ 		f.store_string(JSON.stringify(data))
++@@ -334,6 +334,8 @@
++ 	game.inventory.load_save(inv if typeof(inv) == TYPE_DICTIONARY else {})
++ 	var hunt = data.get("hunting")
++ 	game.hunting.load_save(hunt if typeof(hunt) == TYPE_DICTIONARY else {})
+++	var rc = data.get("races")
+++	game.races.load_save(rc if typeof(rc) == TYPE_DICTIONARY else {})
++ 	var cal = data.get("calendar")
++ 	game.calendar.load_save(cal if typeof(cal) == TYPE_DICTIONARY else {})
++ 	GameLog.event("load", {"version": int(data.get("version", 1)), "done": done.size(), "cash": game.cash})
++@@ -347,6 +349,7 @@
++ 	game.cash = 0
++ 	game.inventory.bag.clear()
++ 	game.hunting.load_save({})
+++	game.races.load_save({})
++ 	game.calendar.load_save({})
++ 	save_game()
++ 	changed.emit()
++--- a/game/scripts/player.gd
+++++ b/game/scripts/player.gd
++@@ -58,6 +58,8 @@
++ 			var game = get_tree().get_first_node_in_group("game") if passenger else null
++ 			if game != null and game.taxi != null:
++ 				game.taxi.request_exit() # the cab pulls up and you pay
+++			elif _races_take_press():
+++				pass # the race start line or the Calder trial
++ 			elif vehicle.has_method("exit_check") and vehicle.exit_check() == "roof":
++ 				# Nobody stands on a roof here: land on open ground first.
++ 				var g = get_tree().get_first_node_in_group("game")
++@@ -113,10 +115,18 @@
++ 			pass
++ 		elif game != null and game.hunting != null and game.hunting.try_interact():
++ 			pass
+++		elif _races_take_press():
+++			pass # the bike hire stand
++ 		elif game == null or game.interiors == null or not game.interiors.try_interact():
++ 			try_enter_vehicle()
++ 
++ 
+++## E at a race start line, or at the bike hire stand (races.gd).
+++func _races_take_press() -> bool:
+++	var g = get_tree().get_first_node_in_group("game")
+++	return g != null and g.races != null and g.races.try_interact()
+++
+++
++ ## The node the camera and police should track.
++ func focus_node() -> Node3D:
++ 	return vehicle if vehicle != null else self
 diff --git a/wip/R/race_course.gd b/game/scripts/race_course.gd
 similarity index 99%
 rename from wip/R/race_course.gd
@@ -169,24 +205,216 @@ index 897d75a..511b2bf 100644
  	if lead_nodes.size() > 1:
  		heading = (country.pos(j1) - country.pos(lead_nodes[lead_nodes.size() - 2])).normalized()
  	var ring := _ring(country, core, j1, heading)
+diff --git a/game/scripts/race_course.gd.uid b/game/scripts/race_course.gd.uid
+new file mode 100644
+index 0000000..1aa7a0e
+--- /dev/null
++++ b/game/scripts/race_course.gd.uid
+@@ -0,0 +1 @@
++uid://denp81oscqdw0
 diff --git a/wip/R/races.gd b/game/scripts/races.gd
-similarity index 100%
+similarity index 93%
 rename from wip/R/races.gd
 rename to game/scripts/races.gd
-diff --git a/wip/R/race_calib.gd b/game/tests/race_calib.gd
-similarity index 100%
-rename from wip/R/race_calib.gd
-rename to game/tests/race_calib.gd
-diff --git a/wip/R/race_calib.tscn b/game/tests/race_calib.tscn
-similarity index 100%
-rename from wip/R/race_calib.tscn
-rename to game/tests/race_calib.tscn
+index 16217a6..b9b8424 100644
+--- a/wip/R/races.gd
++++ b/game/scripts/races.gd
+@@ -33,7 +33,7 @@ const START_RANGE := 22.0
+ const STAND_RANGE := 5.5
+ const TRIAL_RANGE := 30.0
+ ## A checkpoint counts when the car comes within this many metres of it.
+-const GATE_RADIUS := 15.0
++const GATE_RADIUS := 12.0
+ const BIKE_GATE_RADIUS := 11.0
+ const COUNT_TIME := 3.0
+ const RESULT_TIME := 8.0
+@@ -58,19 +58,24 @@ const OFF_VEHICLE_TIME := 8.0
+ ## line for 3 s, is put back on the course.
+ const STUCK_TIME := 5.0
+ const OFF_ROUTE := 30.0
++## ... or has not reached a new point of its line for IDLE_TIME s (circling,
++## wedged but still revving). A point within PASSED_RANGE m behind the car
++## counts as reached.
++const IDLE_TIME := 7.0
++const PASSED_RANGE := 16.0
+ ## Rubber band: a rival speeds up or slows by at most this share to stay in
+ ## touch with the player.
+ const BAND := 0.04
+ 
+ const DAY_RIVALS := [
+-	{"name": "Kessa Vane", "kind": "sedan", "paint": Color(0.78, 0.12, 0.1), "skill": 0.86, "off": 1.4},
+-	{"name": "Darrow Pike", "kind": "crossover", "paint": Color(0.95, 0.75, 0.1), "skill": 0.9, "off": -1.4},
++	{"name": "Kessa Vane", "kind": "sedan", "paint": Color(0.78, 0.12, 0.1), "skill": 0.86, "off": 1.6},
++	{"name": "Darrow Pike", "kind": "crossover", "paint": Color(0.95, 0.75, 0.1), "skill": 0.9, "off": -1.6},
+ 	{"name": "Ines Holloway", "kind": "compact", "paint": Color(0.15, 0.55, 0.3), "skill": 0.95, "off": 0.0},
+ ]
+ const NIGHT_RIVALS := [
+-	{"name": "Rix", "kind": "sports", "paint": Color(0.1, 0.1, 0.12), "skill": 0.95, "off": 1.4},
+-	{"name": "Moth", "kind": "muscle", "paint": Color(0.5, 0.08, 0.6), "skill": 1.0, "off": -1.4},
+-	{"name": "Solenne", "kind": "roadster", "paint": Color(0.9, 0.9, 0.92), "skill": 1.05, "off": 0.0},
++	{"name": "Rix", "kind": "sports", "paint": Color(0.1, 0.1, 0.12), "skill": 1.0, "off": 1.6},
++	{"name": "Moth", "kind": "muscle", "paint": Color(0.5, 0.08, 0.6), "skill": 1.05, "off": -1.6},
++	{"name": "Solenne", "kind": "roadster", "paint": Color(0.9, 0.9, 0.92), "skill": 1.1, "off": 0.0},
+ ]
+ 
+ const BEAM_SHADER := """
+@@ -99,7 +104,7 @@ var wager := 0
+ var stake := 0
+ ## The last race's result: {mode, place, time, prize, medal, best, new_best}.
+ var result := {}
+-## [{car, name, skill, off, passed, base, stall, far, finish, full, path}].
++## [{car, name, skill, off, passed, base, stall, far, idle, prog, finish, full, path}].
+ var rivals: Array = []
+ ## The checkpoint the player must pass next (the number passed so far).
+ var next_gate := 0
+@@ -343,7 +348,7 @@ func start_trial() -> bool:
+ 	var at := RaceCourse.at_arc(c, 1.5)
+ 	put_car(car, at.pos, RaceCourse.yaw_of(at.dir))
+ 	_clear_rivals()
+-	_say("Calder downhill trial: %d checkpoints" % c.gates.size())
++	_say("Downhill trial: %d checkpoints" % c.gates.size())
+ 	return true
+ 
+ 
+@@ -396,7 +401,8 @@ func _spawn_rivals(specs: Array) -> void:
+ 		put_car(car, slot.pos, slot.yaw)
+ 		var full := RaceCourse.offset_path(course.rival, float(s.off))
+ 		rivals.append({"car": car, "name": s.name, "skill": float(s.skill), "off": float(s.off), "spec": s, "passed": 0, "base": 0,
+-			"stall": 0.0, "far": 0.0, "finish": INF, "full": full, "path": full})
++			"stall": 0.0, "far": 0.0, "idle": 0.0, "prog": 0, "finish": INF, "full": full, "path": full})
++	_ghost_rivals()
+ 
+ 
+ func _new_rival_car(s: Dictionary):
+@@ -407,6 +413,18 @@ func _new_rival_car(s: Dictionary):
+ 	return car
+ 
+ 
++## The field does not collide with itself or brake for itself: cars on
++## parallel lines a lane apart would otherwise shunt each other into wrecks.
++## They still meet the player, traffic and the world.
++func _ghost_rivals() -> void:
++	for a in rivals:
++		for b in rivals:
++			if a != b and is_instance_valid(a.car) and is_instance_valid(b.car):
++				a.car.add_collision_exception_with(b.car)
++				if a.car.get("_ahead") != null:
++					a.car._ahead.add_exception(b.car)
++
++
+ func _go() -> void:
+ 	state = State.RACING
+ 	time = 0.0
+@@ -494,16 +512,16 @@ func _player_ok(delta: float) -> bool:
+ 	if car == null:
+ 		_off_vehicle += delta
+ 		if _off_vehicle > OFF_VEHICLE_TIME:
+-			cancel("You left your ride: race abandoned")
++			cancel("Race off: you left your ride")
+ 			return false
+ 	else:
+ 		_off_vehicle = 0.0
+ 		_player_car = car
+ 		if car.wrecked:
+-			cancel("Your ride is wrecked: race abandoned")
++			cancel("Race off: your ride is wrecked")
+ 			return false
+ 	if _since_gate > LOST_TIME:
+-		cancel("Lost the course: race abandoned")
++		cancel("Race off: you lost the course")
+ 		return false
+ 	return true
+ 
+@@ -577,6 +595,8 @@ func _finish() -> void:
+ # --- Rivals -----------------------------------------------------------------------
+ 
+ func _update_rivals(delta: float) -> void:
++	if rivals.is_empty() or mode == "bike":
++		return
+ 	var vlim: PackedFloat32Array = course.vlim
+ 	var rival_i: PackedInt32Array = course.rival_i
+ 	var gates: Array = course.gates
+@@ -602,9 +622,23 @@ func _update_rivals(delta: float) -> void:
+ 		else:
+ 			r.stall = 0.0
+ 		var path: PackedVector3Array = r.path
++		# A point the car has run past (a fast car swings wide of the 5 m the AI
++		# wants) is as good as reached: without this it circles the point.
++		var pi: int = car.path_index
++		if pi < path.size() - 1:
++			var to: Vector3 = path[pi] - car.global_position
++			var seg: Vector3 = path[pi + 1] - path[pi]
++			if to.x * seg.x + to.z * seg.z < 0.0 and Vector2(to.x, to.z).length() < PASSED_RANGE:
++				car.path_index = pi + 1
++		var absi: int = int(r.base) + car.path_index
++		if absi > int(r.prog):
++			r.prog = absi
++			r.idle = 0.0
++		else:
++			r.idle += delta
+ 		var want: Vector3 = path[clampi(car.path_index, 0, path.size() - 1)]
+ 		r.far = r.far + delta if _flat(car.global_position, want) > OFF_ROUTE else 0.0
+-		if r.stall > STUCK_TIME or r.far > 3.0:
++		if r.finish == INF and (r.stall > STUCK_TIME or r.far > 3.0 or r.idle > IDLE_TIME):
+ 			recover_rival(r)
+ 
+ 
+@@ -619,10 +653,12 @@ func recover_rival(r: Dictionary) -> void:
+ 	var d := Vector3(b.x - a.x, 0.0, b.z - a.z).normalized()
+ 	put_car(car, a, RaceCourse.yaw_of(d))
+ 	r.base = k
++	r.prog = k
+ 	r.path = full.slice(k)
+ 	car.drive_path(r.path, 0.7)
+ 	r.stall = 0.0
+ 	r.far = 0.0
++	r.idle = 0.0
+ 	recoveries += 1
+ 
+ 
+@@ -634,8 +670,11 @@ func _replace_rival(r: Dictionary) -> void:
+ 	r.car = fresh
+ 	r.stall = 0.0
+ 	r.far = 0.0
++	r.idle = 0.0
+ 	put_car(fresh, old.global_position, old.rotation.y)
++	fresh.path_index = old.path_index # so the rescue puts it back where the wreck was
+ 	old.queue_free()
++	_ghost_rivals()
+ 	recover_rival(r)
+ 
+ 
+@@ -702,7 +741,7 @@ func _police_tick(delta: float) -> void:
+ 	if police_sees():
+ 		_flagged = true
+ 		Wanted.report_crime(1)
+-		_say("Street racing: the police saw you")
++		_say("Street racing: police saw you")
+ 
+ 
+ ## Whether a police car or an officer has a clear line to the player within
+@@ -764,7 +803,7 @@ func rent_bike() -> bool:
+ 	put_car(bike, at.pos, RaceCourse.yaw_of(at.dir))
+ 	_rented = bike
+ 	game.player.enter_vehicle(bike)
+-	_say("Bike hired for $%d. Ride the Calder Trail down" % RENT_PRICE)
++	_say("Bike hired for $%d" % RENT_PRICE)
+ 	return true
+ 
+ 
+diff --git a/game/scripts/races.gd.uid b/game/scripts/races.gd.uid
+new file mode 100644
+index 0000000..e2b9e58
+--- /dev/null
++++ b/game/scripts/races.gd.uid
+@@ -0,0 +1 @@
++uid://c4r15x5tpe2xx
 diff --git a/game/tests/race_shots.gd b/game/tests/race_shots.gd
 new file mode 100644
-index 0000000..dc5c75d
+index 0000000..2e8e337
 --- /dev/null
 +++ b/game/tests/race_shots.gd
-@@ -0,0 +1,146 @@
+@@ -0,0 +1,150 @@
 +extends Node
 +## Screenshots of the races and the bike trial (scripts/races.gd): the start
 +## line with its prompt, the grid at the countdown, a checkpoint gate with the
@@ -242,7 +470,8 @@ index 0000000..dc5c75d
 +	game.player.enter_vehicle(car)
 +
 +	# 1. The start line by day, with the prompt.
-+	_on_course(car, hill, 6.0, 0.0)
++	game.camera.zoom_override = 40.0
++	_on_course(car, hill, 14.0, 0.0)
 +	await _frames(100)
 +	await _shot("race_1_start_prompt.png")
 +
@@ -252,17 +481,18 @@ index 0000000..dc5c75d
 +	await _shot("race_2_countdown.png")
 +
 +	# 3. A checkpoint gate with the rivals closing in.
++	game.camera.zoom_override = 55.0
 +	for i in 200:
 +		if races.state == races.State.RACING:
 +			break
 +		await _frames(1)
-+	_on_course(car, hill, float(hill.gates[0].arc) - 26.0, 2.6)
++	_on_course(car, hill, float(hill.gates[0].arc) - 24.0, 2.6)
 +	for i in 1500:
 +		await _frames(1)
 +		races._since_gate = 0.0
 +		var near := false
 +		for r in races.rivals:
-+			if r.car.global_position.distance_to(car.global_position) < 30.0:
++			if r.car.global_position.distance_to(car.global_position) < 22.0:
 +				near = true
 +		if near:
 +			break
@@ -271,7 +501,7 @@ index 0000000..dc5c75d
 +
 +	# 4. The night run: the arch relabelled, the prompt with the buy-in.
 +	game.atmosphere.hour = 23.0
-+	_on_course(car, hill, 6.0, 0.0)
++	_on_course(car, hill, 14.0, 0.0)
 +	await _frames(150)
 +	await _shot("race_4_night_start.png")
 +
@@ -279,7 +509,7 @@ index 0000000..dc5c75d
 +	races.try_interact()
 +	for i in 260:
 +		await _frames(1)
-+	_on_course(car, hill, float(hill.gates[0].arc) - 26.0, 2.6)
++	_on_course(car, hill, float(hill.gates[0].arc) - 24.0, 2.6)
 +	await _frames(40)
 +	await _shot("race_5_night_gate.png")
 +	races.cancel()
@@ -287,6 +517,7 @@ index 0000000..dc5c75d
 +	await _frames(30)
 +
 +	# 6. The bike stand, on foot.
++	game.camera.zoom_override = 34.0
 +	game.player.exit_vehicle()
 +	var stand: Vector3 = races.stand_pos()
 +	var p = game.player
@@ -302,10 +533,11 @@ index 0000000..dc5c75d
 +	await _frames(30)
 +	await _shot("race_7_bike_rented.png")
 +	races.try_interact()
++	game.camera.zoom_override = 55.0
 +	for i in 220:
 +		await _frames(1)
 +	var trail: Dictionary = races.trail_course()
-+	_on_course(game.player.vehicle, trail, float(trail.gates[0].arc) - 14.0, 0.0)
++	_on_course(game.player.vehicle, trail, float(trail.gates[0].arc) - 18.0, 0.0)
 +	await _frames(40)
 +	await _shot("race_8_trail_gate.png")
 +	get_tree().quit()
@@ -333,6 +565,13 @@ index 0000000..dc5c75d
 +func _frames(n: int) -> void:
 +	for i in n:
 +		await get_tree().physics_frame
+diff --git a/game/tests/race_shots.gd.uid b/game/tests/race_shots.gd.uid
+new file mode 100644
+index 0000000..b872658
+--- /dev/null
++++ b/game/tests/race_shots.gd.uid
+@@ -0,0 +1 @@
++uid://bi35d11ovxhvu
 diff --git a/game/tests/race_shots.tscn b/game/tests/race_shots.tscn
 new file mode 100644
 index 0000000..3cf2845
@@ -347,10 +586,10 @@ index 0000000..3cf2845
 +script = ExtResource("1")
 diff --git a/game/tests/race_tests.gd b/game/tests/race_tests.gd
 new file mode 100644
-index 0000000..4711200
+index 0000000..dea9f91
 --- /dev/null
 +++ b/game/tests/race_tests.gd
-@@ -0,0 +1,690 @@
+@@ -0,0 +1,713 @@
 +extends RefCounted
 +## Races and cycling (scripts/races.gd, scripts/race_course.gd): the hill
 +## loop built from the real roads, the start prompt, checkpoints and prizes,
@@ -537,7 +776,7 @@ index 0000000..4711200
 +func test_race_checkpoints_finish_and_prize(t) -> void:
 +	var races = await _races(t, 12.0)
 +	var game = t.game
-+	await _driver(t, races)
++	var car = await _driver(t, races)
 +	game.cash = 100
 +	t.check(await _start_day(t, races), "the race starts")
 +	var gates: Array = races.course.gates
@@ -556,9 +795,14 @@ index 0000000..4711200
 +	t.check(races.hud_text().contains("1st place"), "the panel shows the result, got %s" % [races.hud_text()])
 +	# The best time only improves: a slower run keeps it.
 +	var first: float = races.best["day"]
++	# The field is still driving: park the ride clear of it while the result shows.
++	var aside: Dictionary = RaceCourse.at_arc(races.course, 10.0)
++	races.put_car(car, aside.pos + RaceCourse.right_of(aside.dir) * 60.0, 0.0)
 +	await t._frames(8 * 60 + 30)
 +	t.check(races.state == Races.State.IDLE and races.rivals.is_empty(), "the result shows a few seconds, then the track is clear")
-+	await _start_day(t, races)
++	races.put_car(car, aside.pos, RaceCourse.yaw_of(aside.dir))
++	await t._frames(3)
++	t.check(await _start_day(t, races), "a second race starts")
 +	await t._frames(120)
 +	for i in gates.size():
 +		await _to_gate(t, races, i)
@@ -577,8 +821,8 @@ index 0000000..4711200
 +	var n: int = races.course.gates.size()
 +	await _to_gate(t, races, 3)
 +	t.check(races.next_gate == 0, "driving through checkpoint 4 first counts for nothing")
-+	await _to_gate(t, races, n - 1)
-+	t.check(races.state == Races.State.RACING and races.next_gate == 0, "the finish line does not count before the others")
++	await _to_gate(t, races, n - 3)
++	t.check(races.state == Races.State.RACING and races.next_gate == 0, "nor does a checkpoint late in the second lap")
 +	await _to_gate(t, races, 0)
 +	t.check(races.next_gate == 1, "checkpoint 1 counts")
 +	await _to_gate(t, races, 2)
@@ -607,7 +851,7 @@ index 0000000..4711200
 +		# `want - 1` rivals cross the line ahead of the player.
 +		for k in want - 1:
 +			races.rivals[k].passed = gates.size()
-+			races.rivals[k].finish = 1.0 + float(k)
++			races.rivals[k].finish = 0.1 + 0.1 * float(k) # ahead of the player's teleporting run
 +		for i in gates.size():
 +			await _to_gate(t, races, i)
 +			if races.state != Races.State.RACING:
@@ -625,6 +869,12 @@ index 0000000..4711200
 +## Runs the field with the player parked, until `done` says stop or `limit`
 +## seconds pass; keeps the player's race from timing out.
 +func _run_field(t, races, limit: float, done: Callable) -> void:
++	# The player's car is parked well clear of the road, out of the field's way.
++	var car = t.game.player.vehicle
++	if car != null and not car.has_meta("parked"):
++		car.set_meta("parked", true)
++		var at: Dictionary = RaceCourse.at_arc(races.hill_course(), 10.0)
++		races.put_car(car, at.pos + RaceCourse.right_of(at.dir) * 60.0, 0.0)
 +	var frames := int(limit * 60.0)
 +	for i in frames:
 +		races._since_gate = 0.0
@@ -656,6 +906,10 @@ index 0000000..4711200
 +			best = minf(best, Vector2(p.x, p.z).distance_to(Vector2(r.car.global_position.x, r.car.global_position.z)))
 +		t.check(best < 5.0, "%s stays on the line, %.1f m off" % [r.name, best])
 +	t.check(races.recoveries == 0, "no rival needed a rescue, %d" % races.recoveries)
++	# The field does not shunt itself: lanes a car-width apart used to wreck the
++	# cars on the first bends.
++	for r in races.rivals:
++		t.check(r.car.health >= r.car.max_health - 0.5 and not r.car.wrecked, "%s is undamaged after 15 s, health %.0f of %.0f" % [r.name, r.car.health, r.car.max_health])
 +	var order: Array = races.standings()
 +	t.check(order.size() == 4 and order[0].passed >= order[3].passed, "standings list the field by checkpoints passed")
 +	races.cancel()
@@ -711,7 +965,14 @@ index 0000000..4711200
 +	for p in line:
 +		best = minf(best, Vector2(p.x, p.z).distance_to(Vector2(car.global_position.x, car.global_position.z)))
 +	t.check(best < 8.0, "back on its line, %.1f m off" % best)
-+	# 3. A wreck gives way to a fresh car of the same model.
++	# 3. Still running, yet no new point of its line for IDLE_TIME (circling,
++	# wedged and revving): put back.
++	var rec2: int = races.recoveries
++	r.prog = 1000000
++	r.idle = races.IDLE_TIME - 0.05
++	await _run_field(t, races, 3.0, func(): return races.recoveries > rec2)
++	t.check(races.recoveries == rec2 + 1 and r.prog < 1000000, "a rival that makes no progress for %.0f s is put back (%d rescues)" % [races.IDLE_TIME, races.recoveries])
++	# 4. A wreck gives way to a fresh car of the same model.
 +	var old = r.car
 +	old.wrecked = true
 +	var model: String = r.spec.kind
@@ -771,7 +1032,7 @@ index 0000000..4711200
 +			break
 +		await t._frames(1)
 +	races.rivals[0].passed = gates.size()
-+	races.rivals[0].finish = 2.0
++	races.rivals[0].finish = 0.1
 +	for i in gates.size():
 +		await _to_gate(t, races, i)
 +		if races.state != Races.State.RACING:
@@ -896,8 +1157,9 @@ index 0000000..4711200
 +	races.put_car(bike, at.pos, RaceCourse.yaw_of(at.dir))
 +	races.try_interact()
 +	await t._frames(200)
++	t.check(races.state == Races.State.RACING, "a second trial is on")
 +	p.exit_vehicle()
-+	await t._frames(8 * 60)
++	await t._frames(9 * 60)
 +	t.check(races.state == Races.State.IDLE, "walking away from the bike abandons the trial")
 +
 +
@@ -1041,6 +1303,13 @@ index 0000000..4711200
 +	DirAccess.remove_absolute(ProjectSettings.globalize_path(mm.save_path))
 +	var markers: Array = game.map_markers().filter(func(m): return m.get("label", "") == "Hill race")
 +	t.check(markers.size() == 1, "the start line is on the map")
+diff --git a/game/tests/race_tests.gd.uid b/game/tests/race_tests.gd.uid
+new file mode 100644
+index 0000000..0093e3a
+--- /dev/null
++++ b/game/tests/race_tests.gd.uid
+@@ -0,0 +1 @@
++uid://d2vwef50vmyd3
 diff --git a/game/tests/test_runner.gd b/game/tests/test_runner.gd
 index 6271d63..4926fd9 100644
 --- a/game/tests/test_runner.gd
@@ -1054,3 +1323,165 @@ index 6271d63..4926fd9 100644
  const KIT_TESTS := ["test_body_kit_builds_bodies", "test_body_seams_hats_and_build_time", "test_people_wear_modern_clothes"]
  
  var game
+diff --git a/wip/R/race_calib.gd b/wip/R/race_calib.gd
+deleted file mode 100644
+index eb291d3..0000000
+--- a/wip/R/race_calib.gd
++++ /dev/null
+@@ -1,144 +0,0 @@
+-extends Node
+-## TEMPORARY calibration probe for races (not committed).
+-
+-const MainScene = preload("res://main.tscn")
+-const Vehicle = preload("res://scripts/vehicle.gd")
+-const Races = preload("res://scripts/races.gd")
+-const RC = preload("res://scripts/race_course.gd")
+-
+-var game
+-var races
+-
+-
+-func _ready() -> void:
+-	_run.call_deferred()
+-
+-
+-func _frames(n: int) -> void:
+-	for i in n:
+-		await get_tree().physics_frame
+-
+-
+-func _run() -> void:
+-	game = MainScene.instantiate()
+-	game.settings["camera_turn"] = "north"
+-	game.population_enabled = false
+-	game.missions_enabled = false
+-	game.save_enabled = false
+-	add_child(game)
+-	game.atmosphere.minutes_per_second = 0.0
+-	game.atmosphere.weather_changes = false
+-	await _frames(5)
+-	races = Races.new()
+-	races.game = game
+-	game.add_child(races)
+-	await _frames(2)
+-	var hill = races.hill_course()
+-	print("hill ok ", hill.get("ok", false), " len ", hill.length, " gates ", hill.gates.size(), " vmean ", _mean(hill.vlim))
+-	var tr = races.trail_course()
+-	print("trail ok ", not tr.is_empty(), " len ", tr.get("length", 0), " gates ", tr.get("gates", []).size())
+-	var groups := {
+-		"day": Races.DAY_RIVALS,
+-		"night": Races.NIGHT_RIVALS,
+-		"ghost": [
+-			{"name": "g100", "kind": "sedan", "paint": Color(1, 1, 1), "skill": 1.0, "off": 1.4},
+-			{"name": "g115", "kind": "sedan", "paint": Color(1, 1, 1), "skill": 1.15, "off": -1.4},
+-			{"name": "g130", "kind": "sedan", "paint": Color(1, 1, 1), "skill": 1.3, "off": 0.0},
+-		],
+-	}
+-	var only := OS.get_environment("GROUPS")
+-	for g in groups:
+-		if only != "" and not g in only.split(","):
+-			continue
+-		await _group(g, groups[g])
+-	if only == "" or "bike" in only.split(","):
+-		await _bike()
+-	get_tree().quit()
+-
+-
+-func _mean(a) -> float:
+-	var s := 0.0
+-	for v in a:
+-		s += v
+-	return s / maxf(a.size(), 1)
+-
+-
+-func _group(label: String, specs: Array) -> void:
+-	game.atmosphere.hour = 12.0
+-	races.course = races.hill_course()
+-	var grid = races._slot(0, -1)
+-	var car = Vehicle.new()
+-	car.kind = "sedan"
+-	car.city = game.city
+-	game.add_child(car)
+-	races.put_car(car, grid.pos, grid.yaw)
+-	game.player.enter_vehicle(car)
+-	game.cash = 5000
+-	var ok = races.start_race("day")
+-	print("[", label, "] start ", ok, " state ", races.state)
+-	races._clear_rivals()
+-	races._spawn_rivals(specs)
+-	var t0 := Time.get_ticks_msec()
+-	var frames := 0
+-	var last_pass := []
+-	var times := []
+-	for r in races.rivals:
+-		last_pass.append(0)
+-		times.append([])
+-	var next_report := 20.0
+-	while races.state != Races.State.IDLE and frames < 60 * 420:
+-		races._since_gate = 0.0
+-		await get_tree().physics_frame
+-		frames += 1
+-		if races.state == Races.State.RACING:
+-			var done := true
+-			for i in races.rivals.size():
+-				var r = races.rivals[i]
+-				if r.passed != last_pass[i]:
+-					last_pass[i] = r.passed
+-					times[i].append(snappedf(races.time, 0.1))
+-				if r.finish == INF:
+-					done = false
+-			if races.time >= next_report:
+-				next_report += 20.0
+-				var s := ""
+-				for r in races.rivals:
+-					s += " %s:%d/%d v%.1f" % [r.name, r.passed, races.course.gates.size(), r.car.speed]
+-				print("  t=%.0f%s rec=%d" % [races.time, s, races.recoveries])
+-			if done:
+-				break
+-	print("[", label, "] wall ms ", Time.get_ticks_msec() - t0, " frames ", frames, " race time ", races.time, " recoveries ", races.recoveries)
+-	for i in races.rivals.size():
+-		var r = races.rivals[i]
+-		print("  ", r.name, " finish ", r.finish, " passed ", r.passed, " gate times ", times[i])
+-	races.cancel()
+-	game.player.exit_vehicle()
+-	car.queue_free()
+-	await _frames(3)
+-
+-
+-func _bike() -> void:
+-	var tr = races.trail_course()
+-	if tr.is_empty():
+-		return
+-	var bike = Vehicle.new()
+-	bike.kind = "bicycle"
+-	bike.city = game.city
+-	game.add_child(bike)
+-	var at = RC.at_arc(tr, 2.0)
+-	races.put_car(bike, at.pos, RC.yaw_of(at.dir))
+-	await _frames(3)
+-	var pts := PackedVector3Array()
+-	for i in range(0, tr.route.size(), 3):
+-		pts.append(tr.route[i])
+-	pts.append(tr.route[tr.route.size() - 1])
+-	bike.drive_path(pts, 1.0)
+-	var frames := 0
+-	var maxv := 0.0
+-	while bike.path_index < bike.path.size() - 1 and frames < 60 * 400:
+-		await get_tree().physics_frame
+-		frames += 1
+-		maxv = maxf(maxv, bike.speed)
+-		if frames % 600 == 0:
+-			print("  bike t=%d idx %d/%d v %.1f" % [frames / 60, bike.path_index, pts.size(), bike.speed])
+-	print("[bike] AI time ", frames / 60.0, " over ", tr.length, " m  avg ", tr.length / (frames / 60.0), " max v ", maxv, " idx ", bike.path_index, "/", pts.size())
+diff --git a/wip/R/race_calib.tscn b/wip/R/race_calib.tscn
+deleted file mode 100644
+index 4546986..0000000
+--- a/wip/R/race_calib.tscn
++++ /dev/null
+@@ -1,6 +0,0 @@
+-[gd_scene load_steps=2 format=3]
+-
+-[ext_resource type="Script" path="res://tests/race_calib.gd" id="1"]
+-
+-[node name="RaceCalib" type="Node"]
+-script = ExtResource("1")

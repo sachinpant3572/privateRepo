@@ -1,9 +1,85 @@
+diff --git a/HANDOFF-air-sports.md b/HANDOFF-air-sports.md
+new file mode 100644
+index 0000000..fce8d62
+--- /dev/null
++++ b/HANDOFF-air-sports.md
+@@ -0,0 +1,70 @@
++# HANDOFF: air sports (phase 3 of the hill content, package P)
++
++Parachuting (helicopter bails, the BASE exit) and the bungee jump.
++Decisions note of package P; the task's note is HANDOFF-hill-content.md.
++
++## Files
++
++- `game/scripts/parachute.gd`: free fall, canopy, landing, BASE exit.
++- `game/scripts/bungee.gd`: jump arm site, rope-spring jump, winch.
++- `game/scripts/kits/air_sports_kit.gd`: canopy + lines, risers, BASE
++  plank/windsock/board, jump arm (truss, mast, stays), rope.
++- `game/scripts/player.gd`: `air`, `flies`, `above_land`; `air.drive()`
++  replaces the walk while set; `_chute_bail()` in `exit_vehicle`;
++  `_air_sport_interact()` on E; `air.cancel()` in `respawn`/`stand_at`.
++- `game/tests/air_sports_tests.gd` (7 tests), `tests/air_sports_shots.tscn`.
++
++## Decisions
++
++- Both nodes join group `air_sports` (player.gd's E reaches them without
++  main.gd); the parachute also joins `parachute` (player.gd's bail looks it
++  up). No parachute node = old fall everywhere.
++- MIN_HEIGHT 40 m over the ground (Terrain.height - drop) at the bail.
++  Below it, player.gd's fall is untouched. Killed in the air: hand the body
++  to player.gd's fall (`_hand_to_fall`).
++- Free fall: quadratic drag, terminal 50 m/s; stick tracks up to 12 m/s.
++  OPEN (E) any time; auto-open at `open_height(v)` = 32 m + the distance
++  the 0.6 s line stretch and the 0.6 s braking take, so the canopy is fully
++  flying about 32 m up. Canopy: 5 m/s down, 8 m/s ahead, stick turns it
++  (1.4 rad/s), E brakes 2 s (3 down, 4 ahead), flare under 4 m (1.2 down,
++  3 ahead). Landing damage uses player.gd's formula on the impact's
++  equivalent drop (v²/2g): 7 m/s or less costs nothing; > 2.5 m/s stumbles.
++- Canopy landings on a roof or in water move to open dry ground nearby
++  (`_open_ground_near`, as the helicopter's).
++- BASE exit: best lip within 40 m of (1035, -2740): level behind, ≥ 8 m
++  down in 8 m, ≥ 20 in 16, ≥ 45 in 64. Found at (1056, 981, -2720), facing
++  east, 70 m down in 64 m. The jump throws the canopy at once (no free
++  fall: the ground is right there).
++- Bungee: the hillside by the pad falls about 1.5 m per metre (8 m terrain
++  grid, no sheer cliff); a 20 m arm hung only 35 m up, and a cliff with
++  ≥ 60 m of drop is 215 m away (and still needs a 30 m arm). So the arm is a
++  long jib from the pad edge: the shortest of 12-40 m that hangs WANT_DROP
++  (60 m) over the highest ground within 2.5 m of the tip. Found: root
++  (721, 900, -2723), 36 m long, 60 m drop. Price $60.
++- Rope from the measured drop: reach = drop - BODY 2.6 - CLEAR 3 - MARGIN
++  1; slack l0 = 0.42 reach; stiffness from energy (undamped the ankles
++  just reach `reach`); damping 0.12 of critical, air drag. Ends after 4
++  lows (or 30 s), winch at up to 4 m/s, flip onto the catwalk, walk back.
++- Sites are measured once when the player comes within 1200 m (well
++  before the country's tiles there build, so the clearings keep trees off
++  the arm and the plank). Cost: about 40 ms (BASE) and 70-150 ms (arm).
++- Ground for landings: `Parachute.ground_under(x, z)` = Terrain.height -
++  Terrain.drop. **Switch it to Ground.height(x, z, y_hint) when package G
++  lands** (one function; bungee.gd's walk-down uses it too).
++
++## Traps
++
++- player.gd's `_physics_process` returns before `super()` while `air` is
++  set: humanoid physics, knock-down timers and the ground snap do not run.
++  `_release()` restores layers, rotation and `_drop_at`.
++- The camera on foot follows the stick only when `player.velocity` moves:
++  the flight keeps its own `velocity`, so the view holds still while
++  steering (world_move stays consistent).
++
++## Patches for the main session
++
++See the package report (main.gd, hud.gd). camera.gd: none needed.
++
++## Open items
++
++- The lot's name says "129 m drop"; the jump is 60 m (data not regenerated).
 diff --git a/game/scripts/bungee.gd b/game/scripts/bungee.gd
 new file mode 100644
-index 0000000..14c4853
+index 0000000..65ad140
 --- /dev/null
 +++ b/game/scripts/bungee.gd
-@@ -0,0 +1,447 @@
+@@ -0,0 +1,467 @@
 +extends Node
 +## The bungee jump at the Calder platform lot (HANDOFF-air-sports.md). The
 +## lot sits on a level pad, so a steel jump arm reaches out from the pad's
@@ -28,11 +104,18 @@ index 0000000..14c4853
 +const LOT := Vector2(746.14, -2708.86)
 +const PRICE := 60
 +## The arm: from level ground within ROOT_R m of the lot (within PAD_LEVEL m
-+## of its height), ARM_LENGTHS m long, its catwalk DECK_H m up.
++## of its height), ARM_MIN to ARM_MAX m long (ARM_STEP apart in the search),
++## its catwalk DECK_H m up. The pad's hillside falls about 1.5 m a metre
++## (no sheer cliff on an 8 m terrain grid), so the arm is a long jib: the
++## shortest that hangs WANT_DROP m over the ground wins; short of that each
++## metre of drop is worth DROP_WORTH m of arm.
 +const ROOT_R := 45.0
 +const PAD_LEVEL := 1.5
-+const ARM_LENGTHS := [8, 12, 16, 20]
-+const ARM_MAX := 20
++const ARM_MIN := 12
++const ARM_MAX := 40
++const ARM_STEP := 4
++const WANT_DROP := 60.0
++const DROP_WORTH := 2.0
 +const DECK_H := 0.8
 +## The rope: hanging head down the body reaches BODY m under the ankles; the
 +## lowest point keeps CLEAR m over the highest ground near the tip, with
@@ -51,13 +134,14 @@ index 0000000..14c4853
 +const DIVE_UP := 1.5
 +const DIVE_TIME := 1.2
 +## Walking the catwalk, the winch, the prompt's reach (m from the steps).
-+const WALK := 2.5
++const WALK := 3.5
 +const WINCH := 4.0
 +const REACH := 3.0
 +## The jump ends after LOWS low points, or MAX_TIME s on the rope.
 +const LOWS := 4
 +const MAX_TIME := 30.0
-+const PREPARE_RANGE := 400.0
++## The site is measured this close to the lot (see parachute.gd).
++const PREPARE_RANGE := 1200.0
 +const G := 9.8
 +
 +var game
@@ -142,8 +226,7 @@ index 0000000..14c4853
 +		while z <= lot.y + ROOT_R:
 +			if Vector2(x, z).distance_to(lot) <= ROOT_R and _root_ok(x, z, pad):
 +				for a in 24:
-+					for l: int in ARM_LENGTHS:
-+						best = _better(best, x, z, TAU * a / 24.0, l, lot)
++					best = _better_arm(best, x, z, TAU * a / 24.0, ARM_MIN, ARM_MAX, ARM_STEP, lot)
 +			z += 4.0
 +		x += 4.0
 +	if best[0] == -INF:
@@ -157,8 +240,8 @@ index 0000000..14c4853
 +			if not _root_ok(bx + i, bz + j, pad) or Vector2(bx + i, bz + j).distance_to(lot) > ROOT_R + 4.0:
 +				continue
 +			for k in range(-3, 4):
-+				for l in range(maxi(8, bl - 3), mini(ARM_MAX, bl + 3) + 1):
-+					best = _better(best, bx + i, bz + j, ba + deg_to_rad(2.5 * k), l, lot)
++				best = _better_arm(best, bx + i, bz + j, ba + deg_to_rad(2.5 * k), maxi(ARM_MIN, bl - ARM_STEP),
++						mini(ARM_MAX, bl + ARM_STEP), 1, lot)
 +	var dir := Vector3(cos(best[3]), 0.0, sin(best[3]))
 +	var root := Vector3(best[1], 0.0, best[2])
 +	root.y = Terrain.height(root.x, root.z)
@@ -186,14 +269,24 @@ index 0000000..14c4853
 +	return absf(Terrain.height(x, z) - pad) <= PAD_LEVEL and Terrain.normal(x, z).y >= 0.85
 +
 +
-+## `best` or the arm from (x, z) toward `ang`, `l` m long, if it scores
-+## higher: a deep drop, a short arm, near the lot.
-+static func _better(best: Array, x: float, z: float, ang: float, l: int, lot: Vector2) -> Array:
-+	var d := _arm_drop(x, z, ang, l)
-+	if d == -INF:
-+		return best
-+	var s := d - 0.6 * l - 0.2 * Vector2(x, z).distance_to(lot)
-+	return [s, x, z, ang, l] if s > best[0] else best
++## `best` or an arm from (x, z) toward `ang`, `from` to `to` m long
++## (`step` apart), if one scores higher: the drop (up to WANT_DROP), a short
++## arm, near the lot. A longer arm than one the ground blocks is blocked
++## too, and one longer than the first that reaches WANT_DROP only costs more.
++static func _better_arm(best: Array, x: float, z: float, ang: float, from: int, to: int, step: int, lot: Vector2) -> Array:
++	var near := 0.2 * Vector2(x, z).distance_to(lot)
++	var l := from
++	while l <= to:
++		var d := _arm_drop(x, z, ang, l)
++		if d == -INF:
++			break
++		var s := minf(d, WANT_DROP) * DROP_WORTH - l - near
++		if s > best[0]:
++			best = [s, x, z, ang, l]
++		if d >= WANT_DROP:
++			break
++		l += step
++	return best
 +
 +
 +## The drop from the catwalk at the tip of an arm from (x, z) toward `ang`,
@@ -409,10 +502,13 @@ index 0000000..14c4853
 +		highs.append(_p.y - anchor.y)
 +
 +
++## On the rope: the lowest the body (BODY under the ankles) has come over
++## the ground, and the height over the land the camera reads.
 +func _track_clearance(p) -> void:
 +	if state in ["fall", "winch"]:
-+		var head: Vector3 = p.global_position
-+		lowest_clear = minf(lowest_clear, head.y - BODY - Terrain.height(head.x, head.z))
++		var feet: Vector3 = p.global_position
++		lowest_clear = minf(lowest_clear, feet.y - BODY - Terrain.height(feet.x, feet.z))
++		p.above_land = maxf(feet.y - Parachute.ground_under(feet.x, feet.z), 0.0)
 +
 +
 +func _finish(p) -> void:
@@ -453,10 +549,10 @@ index 0000000..14c4853
 +	state = ""
 diff --git a/game/scripts/kits/air_sports_kit.gd b/game/scripts/kits/air_sports_kit.gd
 new file mode 100644
-index 0000000..373b717
+index 0000000..46822ec
 --- /dev/null
 +++ b/game/scripts/kits/air_sports_kit.gd
-@@ -0,0 +1,219 @@
+@@ -0,0 +1,220 @@
 +extends RefCounted
 +## Meshes for the air sports (parachute.gd, bungee.gd): the canopy and its
 +## lines, the risers, the BASE exit's plank and windsock, the bungee jump
@@ -632,7 +728,8 @@ index 0000000..373b717
 +		mb.limb(Vector3(s * w, deck + 1.05, 0.0), Vector3(s * w, deck + 1.05, -length), 0.035, 0.035, SUN, 4, false)
 +		mb.limb(Vector3(s * w, deck + 0.55, 0.0), Vector3(s * w, deck + 0.55, -length), 0.025, 0.025, SUN, 4, false)
 +	# The mast over the footing and its stays to the arm and back to the ground.
-+	var top := Vector3(0, deck + 7.5, 0.9)
++	# Tall enough that the stays to the tip pull at a useful angle.
++	var top := Vector3(0, deck + maxf(7.5, length * 0.32), 0.9)
 +	for s: float in [-1.0, 1.0]:
 +		mb.limb(Vector3(s * 0.9, deck, 1.2), top, 0.1, 0.07, STEEL, 6, true)
 +	for z: float in [-length * 0.35, -length * 0.7, -length]:
@@ -678,10 +775,10 @@ index 0000000..373b717
 +	return Basis(x, u * l, z)
 diff --git a/game/scripts/parachute.gd b/game/scripts/parachute.gd
 new file mode 100644
-index 0000000..77b42b4
+index 0000000..e3de66c
 --- /dev/null
 +++ b/game/scripts/parachute.gd
-@@ -0,0 +1,543 @@
+@@ -0,0 +1,545 @@
 +extends Node
 +## Parachuting (HANDOFF-air-sports.md). A bail from a helicopter MIN_HEIGHT m
 +## or more over the ground free-falls, then flies a canopy down: OPEN (E) or,
@@ -745,8 +842,10 @@ index 0000000..77b42b4
 +const BASE_REACH := 3.0
 +const EXIT_SPEED := 5.0
 +const EXIT_UP := 2.0
-+## The site and its marker are made when the player comes this close.
-+const PREPARE_RANGE := 400.0
++## The site and its marker are made when the player comes this close:
++## well before the country's tiles there build (130 m on foot, a few
++## hundred from a helicopter), so its clearing keeps them bare.
++const PREPARE_RANGE := 1200.0
 +
 +var game
 +## Test hook: false never opens the canopy by itself.
@@ -1318,3 +1417,532 @@ index ebd43a5..5a95028 100644
  	_fall = 0.0
  	_fall_v = 0.0
  	if not dead and knocked_time > 0.0:
+diff --git a/game/tests/air_sports_shots.gd b/game/tests/air_sports_shots.gd
+new file mode 100644
+index 0000000..e32aa62
+--- /dev/null
++++ b/game/tests/air_sports_shots.gd
+@@ -0,0 +1,140 @@
++extends Node
++## Screenshots of the air sports (HANDOFF-air-sports.md): the BASE lip and
++## its marker, the jump's canopy opening and flying down the face, a
++## helicopter-height free fall and its canopy, close-ups of both, the
++## bungee arm and the jumper at the rope's lowest point. Needs a real
++## renderer:
++##   xvfb-run -a -s "-screen 0 1280x720x24" godot --rendering-driver opengl3 --resolution 1280x720 res://tests/air_sports_shots.tscn -- <out_dir>
++
++const MainScene = preload("res://main.tscn")
++const Parachute = preload("res://scripts/parachute.gd")
++const Bungee = preload("res://scripts/bungee.gd")
++
++var out_dir := "user://"
++var game
++var chute
++var bungee
++
++
++func _ready() -> void:
++	var args := OS.get_cmdline_user_args()
++	if not args.is_empty():
++		out_dir = args[0]
++	_run.call_deferred()
++
++
++func _run() -> void:
++	game = MainScene.instantiate()
++	game.settings["camera_turn"] = "north"
++	game.missions_enabled = false
++	game.save_enabled = false
++	add_child(game)
++	game.atmosphere.minutes_per_second = 0.0
++	game.atmosphere.weather_changes = false
++	game.atmosphere.hour = 11.0
++	await _frames(30)
++	chute = game.get("parachute")
++	if chute == null:
++		chute = Parachute.new()
++		chute.game = game
++		game.add_child(chute)
++	bungee = game.get("bungee")
++	if bungee == null:
++		bungee = Bungee.new()
++		bungee.game = game
++		game.add_child(bungee)
++	var p = game.player
++	# The BASE lip: standing at the stand behind the plank.
++	var s: Dictionary = chute.base_site()
++	await _put(s.stand)
++	p.rotation.y = atan2(-s.dir.x, -s.dir.z)
++	await _frames(60)
++	print("prompt at the lip: ", chute.prompt())
++	await _shot("air_1_base_lip.png")
++	await _close(p.global_position + Vector3(0.0, 1.0, 0.0), 14.0, "air_2_base_lip_close.png")
++	# Off the lip: the canopy opening, then flying down the face.
++	Input.action_press("interact")
++	await _frames(2)
++	Input.action_release("interact")
++	await _frames(70)
++	await _shot("air_3_base_opening.png")
++	await _frames(240)
++	print("BASE flight: ", chute.state, " ", snappedf(p.above_land, 0.1), " m up")
++	await _shot("air_4_base_canopy.png")
++	await _close(p.global_position + Vector3(0.0, 3.5, 0.0), 16.0, "air_5_canopy_close.png")
++	while chute.state != "":
++		await _frames(1)
++	print("BASE landing: ", chute.last_landing)
++	await _frames(30)
++	await _shot("air_6_base_landed.png")
++	# A bail-height free fall over the valley below the lip, then its canopy.
++	var over: Vector3 = s.lip + s.dir * 160.0
++	over.y = Parachute.ground_under(over.x, over.z)
++	p.revive(over)
++	await _put(over)
++	chute.take_bail(p, over + Vector3(0.0, 260.0, 0.0), Vector3(0.0, 0.0, -6.0))
++	await _frames(150)
++	print("free fall: ", chute.state, " ", snappedf(-chute.velocity.y, 0.1), " m/s, ", snappedf(p.above_land, 0.1), " m up")
++	await _shot("air_7_free_fall.png")
++	await _close(p.global_position + Vector3(0.0, 0.5, 0.0), 8.0, "air_8_free_fall_close.png")
++	while chute.state == "free" or chute.state == "opening":
++		await _frames(1)
++	await _frames(30)
++	await _shot("air_9_canopy_open.png")
++	chute.cancel()
++	# The bungee: the arm off the pad, then the jumper at the lowest point.
++	var b: Dictionary = bungee.site()
++	p.revive(b.gate)
++	await _put(b.gate)
++	await _frames(30)
++	print("prompt at the steps: ", bungee.prompt())
++	var mid: Vector3 = b.root + b.dir * (float(b.length) * 0.5)
++	await _close(mid + Vector3(0.0, -6.0, 0.0), 60.0, "air_10_bungee_arm.png")
++	game.cash = 500
++	Input.action_press("interact")
++	await _frames(2)
++	Input.action_release("interact")
++	while bungee.state != "fall":
++		await _frames(1)
++	await _frames(20)
++	await _shot("air_11_bungee_dive.png")
++	while bungee.lows.is_empty():
++		await _frames(1)
++	print("bungee low: ", bungee.lows, " lowest clear ", snappedf(bungee.lowest_clear, 0.1))
++	await _shot("air_12_bungee_lowest.png")
++	await _close(p.global_position + Vector3(0.0, -1.0, 0.0), 14.0, "air_13_bungee_lowest_close.png")
++	get_tree().quit()
++
++
++## The player on foot at `at`, the land streamed round it, the view snapped.
++func _put(at: Vector3) -> void:
++	var p = game.player
++	p.global_position = at
++	p.reset_physics_interpolation()
++	game.city.stream_now(at)
++	game.camera.snap()
++	await _frames(10)
++
++
++## A shot with the view fixed on `at`, `size` m tall, then back to the player.
++func _close(at: Vector3, size: float, file: String) -> void:
++	game.camera.fixed_focus = at
++	game.camera.room_size = size
++	game.camera.size = size
++	game.camera.snap()
++	await _frames(1)
++	await _shot(file)
++	game.camera.fixed_focus = null
++	game.camera.room_size = 0.0
++	game.camera.snap()
++
++
++func _shot(file: String) -> void:
++	await RenderingServer.frame_post_draw
++	get_viewport().get_texture().get_image().save_png(out_dir.path_join(file))
++	print("saved ", file)
++
++
++func _frames(n: int) -> void:
++	for i in n:
++		await get_tree().physics_frame
+diff --git a/game/tests/air_sports_shots.tscn b/game/tests/air_sports_shots.tscn
+new file mode 100644
+index 0000000..4cc49ee
+--- /dev/null
++++ b/game/tests/air_sports_shots.tscn
+@@ -0,0 +1,6 @@
++[gd_scene load_steps=2 format=3]
++
++[ext_resource type="Script" path="res://tests/air_sports_shots.gd" id="1"]
++
++[node name="AirSportsShots" type="Node"]
++script = ExtResource("1")
+diff --git a/game/tests/air_sports_tests.gd b/game/tests/air_sports_tests.gd
+new file mode 100644
+index 0000000..95ae717
+--- /dev/null
++++ b/game/tests/air_sports_tests.gd
+@@ -0,0 +1,352 @@
++extends RefCounted
++## Parachuting and bungee (scripts/parachute.gd, scripts/bungee.gd): a
++## helicopter bail that flies a canopy down, the bails that keep the old
++## fall, steering, the BASE exit off the cliff near the Calder lot, and the
++## bungee jump off the arm at the Calder platform. Run from
++## tests/test_runner.gd (TEST_MODULES); `t` is the runner.
++
++const TESTS := ["test_chute_bail_opens_and_lands_softly", "test_chute_never_opened_falls_as_before",
++	"test_chute_low_bail_keeps_the_old_fall", "test_chute_steering_moves_the_landing",
++	"test_chute_base_exit_at_the_lip", "test_bungee_pays_jumps_and_comes_back", "test_bungee_refuses_a_broke_player"]
++const Parachute = preload("res://scripts/parachute.gd")
++const Bungee = preload("res://scripts/bungee.gd")
++const Terrain = preload("res://scripts/terrain.gd")
++## Golden Flats: level farmland (Terrain.height 0 for 300 m round) with no
++## road, off the centre of a pivot circle (its tower stands 3 m), for bails
++## that should not meet a hill or a roof.
++const FLATS := Vector3(-2675.0, 0.0, -925.0)
++
++
++## The game's parachute and bungee nodes; made here while main.gd does not
++## make them yet.
++func _sports(t) -> Array:
++	var game = t.game
++	var chute = game.get("parachute")
++	if chute == null:
++		chute = Parachute.new()
++		chute.game = game
++		game.add_child(chute)
++	var bungee = game.get("bungee")
++	if bungee == null:
++		bungee = Bungee.new()
++		bungee.game = game
++		game.add_child(bungee)
++	return [chute, bungee]
++
++
++## Boards the first helicopter (a new game) and holds it `height` m over
++## `at`, facing north; returns [heli, chute].
++func _heli_over(t, at: Vector3, height: float) -> Array:
++	var heli = await t._board_heli()
++	var chute = _sports(t)[0]
++	t.game.city.stream_now(at)
++	t._hold_heli_at(heli, at, height, 0.0)
++	await t._frames(20)
++	return [heli, chute]
++
++
++static func _finite(v: Vector3) -> bool:
++	return is_finite(v.x) and is_finite(v.y) and is_finite(v.z)
++
++
++## Frames until the flight ends (or `seconds` pass), watching it: the states
++## it went through, any NaN, how far it ever went under the ground, the
++## height over the land when the canopy was first fully flying, and the
++## descent (m/s, from the positions) on the last frame before touching down.
++func _watch_flight(t, chute, seconds := 90.0) -> Dictionary:
++	var p = t.game.player
++	var r := {"states": [], "nan": false, "under": 0.0, "open_clear": -1.0, "descent": -1.0, "ended": false}
++	var last_y: float = p.global_position.y
++	var last_descent := -1.0
++	for i in int(seconds * 60.0):
++		await t._frames(1)
++		var pos: Vector3 = p.global_position
++		if not _finite(pos):
++			r.nan = true
++			break
++		if chute.state == "":
++			r.ended = true
++			r.descent = last_descent
++			break
++		if not r.states.has(chute.state):
++			r.states.append(chute.state)
++		if chute.state == "canopy" and r.open_clear < 0.0:
++			r.open_clear = pos.y - Parachute.ground_under(pos.x, pos.z)
++		r.under = maxf(r.under, Parachute.ground_under(pos.x, pos.z) - pos.y)
++		last_descent = (last_y - pos.y) * 60.0
++		last_y = pos.y
++	return r
++
++
++## A bail at 150 m over open ground free-falls, opens by itself at a safe
++## height, flies down at the canopy's rates and lands soft and on its feet.
++func test_chute_bail_opens_and_lands_softly(t) -> void:
++	var r0 := await _heli_over(t, FLATS, 150.0)
++	var heli = r0[0]
++	var chute = r0[1]
++	var p = t.game.player
++	t.check(heli.exit_check() == "bail", "150 m up the helicopter offers BAIL (%.1f m)" % heli.altitude)
++	var hp: float = p.health
++	await t._press("interact")
++	t.check(p.vehicle == null and p.air == chute and chute.state == "free",
++			"BAIL at 150 m goes to the parachute's free fall (state '%s')" % chute.state)
++	t.check(p.flies and p.above_land > 140.0, "the player reports flying for the camera (%.0f m)" % p.above_land)
++	t.check(chute.prompt().size() == 2 and chute.prompt()[1] == "OPEN", "the prompt offers OPEN in free fall: %s" % [chute.prompt()])
++	# About a second of free fall (and the press's frames): the speed builds
++	# toward terminal, drag-limited (g alone would give 10.5 m/s by then).
++	await t._frames(60)
++	t.check(chute.state == "free" and -chute.velocity.y > 8.0 and -chute.velocity.y < 10.4,
++			"after a second it falls at %.1f m/s (g less drag)" % -chute.velocity.y)
++	var r := await _watch_flight(t, chute)
++	t.check(not r.nan, "no NaN in the flight")
++	t.check(r.ended, "the flight ends on the ground")
++	t.check(r.states.has("opening") and r.states.has("canopy"), "the canopy opened by itself: %s" % [r.states])
++	t.check(r.open_clear >= 15.0, "fully flying %.0f m over the land" % r.open_clear)
++	t.check(r.under <= 0.05, "never under the ground (%.2f m)" % r.under)
++	var land: Dictionary = chute.last_landing
++	t.check(land.get("canopy", false) and float(land.get("impact", 99.0)) <= 7.0,
++			"lands under the canopy at %.1f m/s into the ground" % float(land.get("impact", 99.0)))
++	t.check(r.descent >= 0.0 and r.descent <= 7.0, "the last frame came down at %.1f m/s" % r.descent)
++	t.check(not p.dead and hp - p.health <= 10.0, "no or minor damage (%.0f)" % (hp - p.health))
++	var g := Parachute.ground_under(p.global_position.x, p.global_position.z)
++	t.check(absf(p.global_position.y - g) < 0.05 and p.air == null and not p.flies and p.rotation.x == 0.0,
++			"on its feet on the ground (%.2f m over it)" % (p.global_position.y - g))
++	var flown := Vector2(p.global_position.x - FLATS.x, p.global_position.z - FLATS.z).length()
++	t.check(flown > 40.0, "the canopy glided %.0f m from the bail" % flown)
++	# The walk takes over again.
++	Controls.override_vector = Vector2(0.0, -1.0)
++	var before: Vector3 = p.global_position
++	await t._frames(60)
++	Controls.override_vector = null
++	t.check(p.global_position.distance_to(before) > 2.0, "and walks off after landing")
++
++
++## With the canopy never opened (the test hook), a 150 m bail ends as the
++## old fall does: the same damage from the same height, dead on the ground.
++func test_chute_never_opened_falls_as_before(t) -> void:
++	var r0 := await _heli_over(t, FLATS, 150.0)
++	var chute = r0[1]
++	var p = t.game.player
++	chute.auto_open = false
++	await t._press("interact")
++	t.check(chute.state == "free", "the bail goes to free fall")
++	var from: float = chute._from
++	var r := await _watch_flight(t, chute, 30.0)
++	t.check(r.ended and r.states == ["free"], "it never opens: %s" % [r.states])
++	var land: Dictionary = chute.last_landing
++	var want: float = maxf(from - p.BAIL_SAFE, 0.0) * p.BAIL_HURT
++	t.check(not land.get("canopy", true) and absf(float(land.get("damage", 0.0)) - want) < 0.01,
++			"the damage is the old fall's from %.0f m (%.0f, want %.0f)" % [from, float(land.get("damage", 0.0)), want])
++	t.check(p.dead and p.health <= 0.0, "a 150 m fall kills, as before")
++	var g := Parachute.ground_under(p.global_position.x, p.global_position.z)
++	t.check(absf(p.global_position.y - g) < 0.05 and p.air == null, "the body lies on the ground (%.2f m)" % (p.global_position.y - g))
++	t.check(r.under <= 0.05, "never under the ground (%.2f m)" % r.under)
++
++
++## Below the canopy's minimum the bail is player.gd's fall, untouched: at
++## 12 m the old damage, at 39 m (just under it) still the old fall.
++func test_chute_low_bail_keeps_the_old_fall(t) -> void:
++	var r0 := await _heli_over(t, FLATS, 12.0)
++	var heli = r0[0]
++	var chute = r0[1]
++	var p = t.game.player
++	var hp: float = p.health
++	await t._press("interact")
++	t.check(p.vehicle == null and p.air == null and chute.state == "", "a 12 m bail stays out of the parachute")
++	t.check(absf(p._fall_from - 12.5) < 0.6 and p.knocked_time > 0.0, "it is the old fall from %.1f m" % p._fall_from)
++	await t._frames(150)
++	var want: float = (p._fall_from - p.BAIL_SAFE) * p.BAIL_HURT
++	t.check(absf((hp - p.health) - want) < 0.5, "the 12 m drop costs %.1f health (the old %.1f)" % [hp - p.health, want])
++	# Just under the minimum.
++	p.revive(p.global_position)
++	p.enter_vehicle(heli)
++	t._hold_heli_at(heli, FLATS, Parachute.MIN_HEIGHT - 1.5, 0.0)
++	await t._frames(20)
++	var ground := Parachute.ground_under(heli.global_position.x, heli.global_position.z)
++	var from_y: float = heli.global_position.y
++	await t._press("interact")
++	t.check(p.vehicle == null and p.air == null and chute.state == "" and chute.last_landing.is_empty(),
++			"%.1f m over the ground is under the minimum: no canopy" % (from_y + 0.5 - ground))
++	t.check(absf(p._fall_from - (from_y + 0.5 - ground)) < 0.6, "the old fall from %.1f m" % p._fall_from)
++	await t._frames(240)
++	t.check(p.dead and absf(p.global_position.y - ground) < 0.3, "and the old fall's end (dead %s)" % p.dead)
++
++
++## The stick steers the canopy: the same bail held right from the opening
++## lands well east of the one let go.
++func test_chute_steering_moves_the_landing(t) -> void:
++	await t._new_game(false)
++	var chute = _sports(t)[0]
++	var p = t.game.player
++	var spots := []
++	var east := Vector3.ZERO
++	for steer in [false, true]:
++		p.revive(FLATS)
++		t._place_player_at(FLATS)
++		t.game.city.stream_now(FLATS)
++		await t._frames(5)
++		var start := FLATS + Vector3(0.0, 150.0, 0.0)
++		t.check(chute.take_bail(p, start, Vector3.ZERO), "the bail at 150 m takes the canopy")
++		# Opened by hand after a second (OPEN), for a long canopy flight.
++		await t._frames(60)
++		await t._press("interact")
++		t.check(chute.state == "opening", "OPEN (E) throws the canopy (%s)" % chute.state)
++		while chute.state == "free" or chute.state == "opening":
++			await t._frames(1)
++		if steer:
++			Controls.override_vector = Vector2(1.0, 0.0)
++			east = Controls.world_move()
++		var r := await _watch_flight(t, chute, 60.0)
++		Controls.override_vector = null
++		t.check(r.ended and chute.last_landing.get("canopy", false) and float(chute.last_landing.impact) <= 7.0,
++				"%s: lands soft (%.1f m/s)" % ["steered" if steer else "let go", float(chute.last_landing.get("impact", 99.0))])
++		spots.append(p.global_position)
++	var moved: Vector3 = spots[1] - spots[0]
++	t.check(east.length() > 0.9 and moved.dot(east.normalized()) > 100.0,
++			"holding the stick right lands %.0f m further that way (%s)" % [moved.dot(east.normalized()), moved])
++
++
++## The BASE exit: a real lip with a big drop near (1035, -2740), the prompt
++## at the stand behind it and not a few metres off, and the jump flies the
++## canopy down the face to a soft landing far below.
++func test_chute_base_exit_at_the_lip(t) -> void:
++	await t._new_game(false)
++	var chute = _sports(t)[0]
++	var p = t.game.player
++	var s: Dictionary = chute.base_site()
++	t.check(not s.is_empty(), "a BASE site is found")
++	if s.is_empty():
++		return
++	var lip: Vector3 = s.lip
++	var dir: Vector3 = s.dir
++	t.check(Vector2(lip.x, lip.z).distance_to(Parachute.BASE_NEAR) < Parachute.BASE_R + 15.0,
++			"the lip is near (1035, -2740): %s" % lip)
++	# Measured here from the terrain: level behind, a big drop ahead.
++	var behind := Terrain.height(lip.x - dir.x * 3.0, lip.z - dir.z * 3.0)
++	var d10 := lip.y - Terrain.height(lip.x + dir.x * 10.0, lip.z + dir.z * 10.0)
++	var d60 := lip.y - Terrain.height(lip.x + dir.x * 60.0, lip.z + dir.z * 60.0)
++	t.check(absf(behind - lip.y) < 1.5 and d10 > 8.0 and d60 > 45.0,
++			"a real lip: %.1f m behind, %.0f m down 10 m out, %.0f m down 60 m out" % [behind - lip.y, d10, d60])
++	t.check(chute.get_node_or_null("BaseExit") != null, "the exit has its marker")
++	var stand: Vector3 = s.stand
++	t._place_player_at(stand - dir * 6.0)
++	await t._frames(3)
++	t.check(chute.prompt().is_empty(), "6 m back there is no BASE prompt")
++	t._place_player_at(stand)
++	t.game.city.stream_now(stand)
++	await t._frames(3)
++	t.check(chute.prompt() == ["E: BASE JUMP", "JUMP"], "at the lip: %s" % [chute.prompt()])
++	var hp: float = p.health
++	await t._press("interact")
++	t.check(p.air == chute and chute.state != "", "E jumps (state '%s')" % chute.state)
++	# The hill falls away under the glide (1.6 : 1 against about 1.5 : 1),
++	# down to the valley some 650 m below: a flight of minutes.
++	var r := await _watch_flight(t, chute, 300.0)
++	print("DBG base end ", chute.state, " ", p.global_position, " hag ", p.above_land, " lip ", lip, " states ", r.states, " t ", chute._t)
++	t.check(not r.nan and r.ended, "the flight ends on the ground")
++	t.check(r.under <= 0.05, "never under the ground (%.2f m)" % r.under)
++	var land: Dictionary = chute.last_landing
++	t.check(land.get("canopy", false) and float(land.get("impact", 99.0)) <= 7.0,
++			"lands under the canopy at %.1f m/s" % float(land.get("impact", 99.0)))
++	t.check(not p.dead and hp - p.health <= 10.0, "no or minor damage (%.0f)" % (hp - p.health))
++	t.check(p.global_position.y < lip.y - 30.0, "far below the lip (%.0f m down)" % (lip.y - p.global_position.y))
++	t.check(chute.prompt().is_empty() or chute.prompt()[0] != "E: BASE JUMP", "no BASE prompt down there")
++
++
++## The bones of the jumper: how far the lowest of them (less 0.3 m for the
++## head's crown and the fingers) is over the ground under it.
++static func _body_clear(p) -> float:
++	var sk: Skeleton3D = p.model
++	var low := INF
++	for i in sk.get_bone_count():
++		var w: Vector3 = sk.global_transform * sk.get_bone_global_pose(i).origin
++		low = minf(low, w.y - 0.3 - Terrain.height(w.x, w.z))
++	return low
++
++
++## The bungee: the arm reaches out over a real drop beside the lot; E at its
++## steps takes the price, the jump bounces on the rope (lows rising, highs
++## falling) with the body kept 3 m or more over the ground, and the winch
++## and the walk back leave the player on the pad, unhurt.
++func test_bungee_pays_jumps_and_comes_back(t) -> void:
++	await t._new_game(false)
++	var bungee = _sports(t)[1]
++	var p = t.game.player
++	var s: Dictionary = bungee.site()
++	t.check(not s.is_empty(), "a bungee site is found")
++	if s.is_empty():
++		return
++	var lot: Vector2 = bungee._lot()
++	var root: Vector3 = s.root
++	var tip: Vector3 = s.tip
++	t.check(Vector2(root.x, root.z).distance_to(lot) <= Bungee.ROOT_R + 4.0, "the arm stands by the lot (%.0f m)" % Vector2(root.x, root.z).distance_to(lot))
++	var under := Terrain.height(tip.x, tip.z)
++	t.check(tip.y - under >= 55.0, "its tip hangs %.0f m over the ground" % (tip.y - under))
++	t.check(bungee.get_node_or_null("BungeeArm") != null, "the arm is built")
++	var gate: Vector3 = s.gate
++	t._place_player_at(gate + Vector3(8.0, 0.0, 8.0))
++	await t._frames(3)
++	t.check(bungee.prompt().is_empty(), "away from the steps there is no offer")
++	t._place_player_at(gate)
++	t.game.city.stream_now(gate)
++	await t._frames(3)
++	t.check(bungee.prompt() == ["Bungee: E ($%d)" % Bungee.PRICE, "JUMP"], "at the steps: %s" % [bungee.prompt()])
++	t.game.cash = 100
++	var hp: float = p.health
++	await t._press("interact")
++	t.check(t.game.cash == 100 - Bungee.PRICE and bungee.state != "" and p.air == bungee,
++			"E takes $%d (cash %d) and starts the jump" % [Bungee.PRICE, t.game.cash])
++	var lowest := INF
++	var nan := false
++	var saw := []
++	for i in 150 * 60:
++		await t._frames(1)
++		if not _finite(p.global_position):
++			nan = true
++			break
++		if bungee.state == "":
++			break
++		if not saw.has(bungee.state):
++			saw.append(bungee.state)
++		if bungee.state == "fall" or bungee.state == "winch":
++			lowest = minf(lowest, _body_clear(p))
++	t.check(not nan and bungee.state == "", "the jump ends (went %s)" % [saw])
++	t.check(saw.has("fall") and saw.has("winch") and saw.has("walk_back"), "fall, winch and walk back: %s" % [saw])
++	t.check(lowest >= Bungee.CLEAR, "the body stays %.1f m over the ground at its lowest" % lowest)
++	t.check(bungee.lowest_clear >= Bungee.CLEAR, "and so says the jump's own count (%.1f m)" % bungee.lowest_clear)
++	var lows: Array = bungee.lows
++	var highs: Array = bungee.highs
++	var decays: bool = lows.size() >= 3 and highs.size() >= 2
++	for i in range(1, lows.size()):
++		decays = decays and float(lows[i]) > float(lows[i - 1]) + 0.5
++	for i in range(1, highs.size()):
++		decays = decays and float(highs[i]) < float(highs[i - 1]) - 0.5
++	t.check(decays, "the bounces decay: lows %s highs %s" % [lows, highs])
++	var first_low: float = float(lows[0]) if not lows.is_empty() else 0.0
++	t.check(first_low < -(float(s.l0) + 10.0), "the first low stretches the rope (%.0f m, slack %.0f m)" % [first_low, float(s.l0)])
++	var g := Parachute.ground_under(p.global_position.x, p.global_position.z)
++	t.check(Vector2(p.global_position.x - gate.x, p.global_position.z - gate.z).length() < 0.5
++			and absf(p.global_position.y - g) < 0.3, "back at the steps on the pad (%s)" % p.global_position)
++	t.check(p.air == null and not p.flies and p.rotation.x == 0.0 and not p.dead and p.health == hp,
++			"on its feet and unhurt")
++	t.check(t.game.cash == 100 - Bungee.PRICE, "one jump, one price")
++
++
++## Short of the price the jump is refused and nothing is taken.
++func test_bungee_refuses_a_broke_player(t) -> void:
++	await t._new_game(false)
++	var bungee = _sports(t)[1]
++	var p = t.game.player
++	var s: Dictionary = bungee.site()
++	t.check(not s.is_empty(), "a bungee site is found")
++	if s.is_empty():
++		return
++	t._place_player_at(s.gate)
++	await t._frames(3)
++	t.game.cash = Bungee.PRICE - 1
++	await t._press("interact")
++	t.check(t.game.cash == Bungee.PRICE - 1 and bungee.state == "" and p.air == null and p.vehicle == null,
++			"a broke player is refused (cash %d, state '%s')" % [t.game.cash, bungee.state])
++	await t._frames(30)
++	var gate: Vector3 = s.gate
++	t.check(Vector2(p.global_position.x - gate.x, p.global_position.z - gate.z).length() < 0.5, "and stays at the steps")
+diff --git a/game/tests/test_runner.gd b/game/tests/test_runner.gd
+index 6271d63..96a2518 100644
+--- a/game/tests/test_runner.gd
++++ b/game/tests/test_runner.gd
+@@ -21,7 +21,7 @@ const PeopleBuilder = preload("res://scripts/people_builder.gd")
+ ## `const TESTS` and defines `func test_x(t) -> void` (may await), where
+ ## `t` is this runner (t.check, t.game, t._new_game, t._frames ...). A
+ ## module whose file is missing is skipped, so packages can land apart.
+-const TEST_MODULES := ["res://tests/wildlife_tests.gd", "res://tests/calendar_tests.gd", "res://tests/hunting_tests.gd"]
++const TEST_MODULES := ["res://tests/wildlife_tests.gd", "res://tests/calendar_tests.gd", "res://tests/hunting_tests.gd", "res://tests/air_sports_tests.gd"]
+ const KIT_TESTS := ["test_body_kit_builds_bodies", "test_body_seams_hats_and_build_time", "test_people_wear_modern_clothes"]
+ 
+ var game
