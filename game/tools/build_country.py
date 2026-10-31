@@ -209,7 +209,8 @@ HILL_PLACES = [
 ]
 # The trailer town on East Hills Road: clusters of trailers (W x D).
 HILL_TRAILERS = [((2720.0, -2900.0), (56.0, 44.0)), ((2740.0, -2840.0), (50.0, 40.0))]
-VILLAGE_WALK = 90.0
+VILLAGE_WALK = 20.0
+VILLAGE_FRONTS = 3
 VILLAGE_SHOULDER = 1.5
 HILL_SEED = 122  # the hill places draw from their own rng: no other lot moves
 # Lakes fill their hollows up to a level under the rim (closed basins in
@@ -2145,19 +2146,25 @@ class Country:
         w, d = LOT[kind]
         spots = [(x, y)] + [(x + r * math.cos(a * math.pi / 8.0), y + r * math.sin(a * math.pi / 8.0))
                             for r in np.arange(10.0, search + 1.0, 10.0) for a in range(16)]
+        why = collections.Counter()
         for q in spots:
             near = nearest_points(self.road_area, Point(q))[0]
             nx, ny = q[0] - near.x, q[1] - near.y
             n = math.hypot(nx, ny) or 1.0
             yaw = yaw_facing(nx / n, ny / n)
             poly = lot_poly(q[0], q[1], yaw, w, d)
-            if (self.road_prep.intersects(poly.buffer(3.0)) or self.lot_grid.hits(poly) or self.plot_grid.hits(poly)
-                    or self.water_prep.intersects(poly) or not self.play_land_prep.contains(poly)):
+            hit = [k for k, bad in (("road", self.road_prep.intersects(poly.buffer(3.0))),
+                                    ("lot", self.lot_grid.hits(poly)), ("plot", self.plot_grid.hits(poly)),
+                                    ("water", self.water_prep.intersects(poly)),
+                                    ("off play land", not self.play_land_prep.contains(poly))) if bad]
+            if hit:
+                why.update(hit)
                 continue
             self.lot_grid.add(poly.buffer(1.5))
             self.lots.append({"x": q[0], "y": q[1], "yaw": yaw, "w": w, "d": d, "kind": kind, "id": ident,
                               "zone": zone, "plot": -1})
             return True
+        print("  %s: no site within %d m (%s)" % (ident, search, dict(why)))
         return False
 
     def hill_places(self):
@@ -2166,11 +2173,15 @@ class Country:
         after every other lot, so none of those moves; a place whose spot
         is taken goes to the nearest free one."""
         missed = []
+        self.village_lots = {}
         for name, c, kinds in HILL_VILLAGES:
+            self.village_lots[name] = []
             for k, kind in enumerate(kinds):
                 ident = "%s_%s" % (name, kind) if kind != "house" else ""
                 if not self._place_near(c, kind, ident, "mountain", 260.0):
                     missed.append(ident or "%s house %d" % (name, k))
+                else:
+                    self.village_lots[name].append((self.lots[-1]["x"], self.lots[-1]["y"]))
         for kind, x, y, ident, how, reach in HILL_PLACES:
             ok = (self._place_near((x, y), kind, ident, "mountain", reach) if how == "front"
                   else self._site(x, y, kind, ident, reach))
@@ -4447,31 +4458,44 @@ class Country:
         self.village_walks()
 
     def village_walks(self):
-        """A loop for people in each hill village (HILL_VILLAGES): down one
-        shoulder of the village's road VILLAGE_WALK m either way of its
-        middle and back up the other, crossing at the ends. The hill roads
-        have no sidewalks, so walks_out makes none there."""
+        """Loops for people in the hill villages (HILL_VILLAGES): along each
+        road at least VILLAGE_FRONTS of a village's lots front, down one
+        shoulder past them (VILLAGE_WALK m beyond the end ones) and back up
+        the other, crossing at the ends. The hill roads have no sidewalks,
+        so walks_out makes none there."""
         n = 0
-        for name, c, _ in HILL_VILLAGES:
-            best = min(self.pieces, key=lambda pc: LineString(pc["pts"]).distance(Point(c)))
-            line = LineString(best["pts"])
-            if line.distance(Point(c)) > 80.0:
+        for name, _, _ in HILL_VILLAGES:
+            fronts = collections.defaultdict(list)
+            for q in self.village_lots.get(name, []):
+                k = min(range(len(self.pieces)), key=lambda i: LineString(self.pieces[i]["pts"]).distance(Point(q)))
+                if LineString(self.pieces[k]["pts"]).distance(Point(q)) < 80.0:
+                    fronts[k].append(q)
+            loops = 0
+            for k, qs in fronts.items():
+                if len(qs) < VILLAGE_FRONTS:
+                    continue
+                line = LineString(self.pieces[k]["pts"])
+                ts = [line.project(Point(q)) for q in qs]
+                self._village_loop(line, self.pieces[k]["cls"], min(ts) - VILLAGE_WALK, max(ts) + VILLAGE_WALK)
+                loops += 1
+            if not loops:
                 print("WARNING: village %s has no road for a walk" % name)
-                continue
-            t = line.project(Point(c))
-            sub = substring(line, max(0.0, t - VILLAGE_WALK), min(line.length, t + VILLAGE_WALK))
-            strip = sub.buffer(CLASSES[best["cls"]]["w"] * 0.5 + VILLAGE_SHOULDER, cap_style=2, join_style=2)
-            ring = list(orient(strip.simplify(0.5), 1.0).exterior.coords)[:-1]
-            pts = []
-            for k, a in enumerate(ring):
-                b = ring[(k + 1) % len(ring)]
-                steps = max(1, int(math.dist(a, b) / 6.0))
-                for s_ in range(steps):
-                    f = s_ / steps
-                    pts += [round(a[0] + (b[0] - a[0]) * f, 1), round(a[1] + (b[1] - a[1]) * f, 1)]
-            self.walks.append(pts)
-            n += 1
+            n += loops
         print("village walks: %d" % n)
+
+    def _village_loop(self, line, cls, t0, t1):
+        """One village loop: line from t0 to t1, both shoulders."""
+        sub = substring(line, max(0.0, t0), min(line.length, t1))
+        strip = sub.buffer(CLASSES[cls]["w"] * 0.5 + VILLAGE_SHOULDER, cap_style=2, join_style=2)
+        ring = list(orient(strip.simplify(0.5), 1.0).exterior.coords)[:-1]
+        pts = []
+        for k, a in enumerate(ring):
+            b = ring[(k + 1) % len(ring)]
+            steps = max(1, int(math.dist(a, b) / 6.0))
+            for s_ in range(steps):
+                f = s_ / steps
+                pts += [round(a[0] + (b[0] - a[0]) * f, 1), round(a[1] + (b[1] - a[1]) * f, 1)]
+        self.walks.append(pts)
 
     def upgrade_lots(self):
         """Bellerive's suburbs to city grade (HANDOFF-bellerive-expand.md
