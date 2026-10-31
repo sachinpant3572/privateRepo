@@ -94,14 +94,25 @@ on top; built in phases, each committed; `/effort xhigh` suits it.
 ## Status
 - Phase 1 committed: hill_kit (e3f7d00, review fixes in), TEST_MODULES
   hook (a708f59). Hikers/hunters on 14 trail loops (trail_walks read
-  self.trails; round joins, mitred bends stuck out 6 m). Hunting store
-  opens as a place (type hunting_store, door from hill_kit, icon R).
+  self.trails; a point-offset loop on the 12 m resampled line, since round
+  joins and switchbacks put points 6 m off). Hunting store opens as a place.
 - Sachin 10-31: "It can be single hikers, couples or group of hikers, not
   same all the time" -> trail parties (Pedestrian.TRAIL_PARTY/pick_party,
   join_party slots; population queues bodies by party). Hikers 1-4,
-  runners 1-2, hunters 1-2 in file.
+  runners 1-2, hunters 1-2 in file. Done, tested (aa80800).
 - hunting.gd + shop rows + save in (tests/hunting_tests.gd); shooting
   waits on the wildlife API.
+- Calendar + events (package C) in and wired (39bb3df): main.gd makes
+  calendar and hunting BEFORE missions (missions._ready loads the save into
+  them; hunting used to be null there), events after taxi; save/load/reset
+  carry "calendar" and set atmosphere.sky.day = calendar.day() (moon and
+  the cult's full-moon rule day % 8 == 2 must agree); phone Events app.
+  calendar_tests use the game's own nodes (a second Events built twice).
+  Gates: 9 calendar tests 129/0; hunting, bag/save, phone, taxi-phone,
+  city-population pass.
+
+## Handover (paused 2026-10-31 at Sachin's request)
+SEE_HANDOVER_BLOCK
 
 ## Phase 2 plan (life)
 
