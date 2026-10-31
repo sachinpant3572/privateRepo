@@ -6392,7 +6392,7 @@ func test_mount_calder() -> void:
 ## rail corridor; each named top has a track up to a level viewpoint
 ## pull-out on the map (as do East, Raven and Hawk peaks); the roads over
 ## them keep to their caps (test_mount_calder).
-const HILL_KM2 := 0.0  # set from the measured figure
+const HILL_KM2 := 99.0  # set from the measured figure
 func test_east_hills() -> void:
 	await _new_game(false)
 	var c = game.city.country
