@@ -184,3 +184,17 @@ trail loop 904 in 20 s at noon (shot scripts a party); 26/128 of its
 points lie within 6 m of a road; calendar Lows (archive); the wildlife
 reviewer could not measure in_city cost on a device.
 
+
+## Session 3 done (moved from the handover, session 5)
+Done this session:
+1. Full suite on fe9f7ec: exit 0, 2134 passed, 0 failed.
+2. Whole-task Opus review (4197417..fe9f7ec close, 75eda1f^.. for
+   integration): 0 High, 1 Medium, 4 Low, all fixed (b6efeeb) with tests:
+   M1 pelts only from the player's rifle kills (kill() keeps `by` on the
+   carcass; carcass_near(pos, r, "rifle")), L1 no lion skinning, an old
+   save's lion pelt dropped, L2 a mission's start hour goes through
+   Atmosphere.advance (a start < 1 h behind steps back, same day), L3 a
+   spent lion that ends idle walks off ("leave"), L4 pelt total capped on
+   load. 9 focused tests PASS (77 checks); full suite after the fixes:
+   exit 0, 2145 passed, 0 failed. No second review needed (no High).
+

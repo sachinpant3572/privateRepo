@@ -77,59 +77,61 @@ on top; built in phases, each committed; `/effort xhigh` suits it.
 - Lab gate stands beside Kestrel Hollow Road, not astride it (review M1):
   lay it across the road (yaw along it, excused from the lot-on-road
   check) in the phase-4 rebuild. Its arm is drawn raised until then.
-- Bungee platform sits on a level pad: phase 3 needs a cliff-edge site.
+- Bungee: no sheer cliff at the pad, so P builds a 36 m jump arm (60 m drop).
 
-## Handover (session 3, 2026-10-31) - start here
-Kept current at each milestone (Sachin 10-31: a handoff with proper
-details for when the 5-hour limit is reached; a limit stop gives no
-warning, so this section is the handoff). Branch
-`ccr-ac909a1c-kp0vp0` (draft PR #3, stacked on #2; was
-`claude/gangstar-game-content-tunnels-kszhz9`), pushed. Session 2: archive.
+## Handover (paused 2026-10-31, session 5, at Sachin's request) - start here
+Branch `ccr-ac909a1c-kp0vp0`, draft PR #3 (stacked on #2's branch), pushed.
+Session 4's builders died with its container; session 5 relaunched them.
+All three builders stopped at a clean point and committed; their work is
+in wip/snapshots/<G|P|R>.patch (base 236c09c; all three pass
+`git apply --check` on e0a7614). Worktrees and their branches are local
+only and die with the container: the patches are the record.
 
-Done this session:
-1. Full suite on fe9f7ec: exit 0, 2134 passed, 0 failed.
-2. Whole-task Opus review (4197417..fe9f7ec close, 75eda1f^.. for
-   integration): 0 High, 1 Medium, 4 Low, all fixed (b6efeeb) with tests:
-   M1 pelts only from the player's rifle kills (kill() keeps `by` on the
-   carcass; carcass_near(pos, r, "rifle")), L1 no lion skinning, an old
-   save's lion pelt dropped, L2 a mission's start hour goes through
-   Atmosphere.advance (a start < 1 h behind steps back, same day), L3 a
-   spent lion that ends idle walks off ("leave"), L4 pelt total capped on
-   load. 9 focused tests PASS (77 checks); full suite after the fixes:
-   exit 0, 2145 passed, 0 failed. No second review needed (no High).
+| pkg | state at pause | its note (in its patch) |
+| G ground/air/stunts (Opus) | built; 8 tests 71/0 on final code; 51 neighbour tests (vehicle/walk/traffic/taxi/heli) last 505/0 BEFORE ramps moved (stale); stunt shots not taken; not reviewed | HANDOFF-ground.md |
+| P parachute/bungee (Opus) | done 74be212; 7 tests 67/0; +neighbours 163/0 with patch; 13 shots OK; Opus review stopped at pause (not done) | HANDOFF-air-sports.md |
+| R races/bike (Sonnet) | done df9c56b, reviewed (wip/reviews/R_review.md: 1 H, 5 M, Lows); fixes for all written at 7cdfb19 but UNRUN; tests half-updated; tests last 152/0 (stale) | HANDOFF-races.md (STATUS) |
 
-Sessions 4-5 (10-31): session 4's builders were lost with its container
-(no snapshot after 11:51); session 5 relaunched wave A from wip/snapshots.
-R puts its main/hud/player/mission_manager edits in its report as patches.
+G detail: ramps bend, rise, crest_south all on the east shoulder (Crest
+North dropped; west shoulder has poles every 15.6 m at x 2634 and a
+tilted bank); Rise Hop heads south from (2646.5, -2992). Screenshots need
+a wrapper script that takes /tmp/godot.lock itself (the harness refused
+inline flock + xvfb-run). Expect 6 `saved` lines from stunt_shots.tscn.
+R detail: H1 rival car taken by player dropped; M2 refused press falls
+through, start only < 3 m/s, TRIAL_RANGE 14; M3 "Finish the job first";
+M4 uses police _anyone_sees; M5 260 m run-off; buy-in pick (first E opens
+4 s pick, E steps 100/200/300/500). Left: TESTS list, star test (real
+cop), new tests per fix, race_shots night press, re-check its patch.
+P open: ground_under() -> Ground.height once G is in; lot still named
+"129 m drop" (jump is 60 m); BASE hands-off flight ~135 s, ~1 km.
 
-In progress: phase 3 wave A, three builders in local worktrees (branches
-not pushed; base 236c09c). Their briefs: wip/briefs/ (paths made
-worktree-relative in c53c27b).
-| pkg | builder | worktree (.claude/worktrees/) | files so far |
-| G ground/air/stunts | Opus xhigh | agent-a721ea34355c032ed | ground.gd, ramp_kit.gd, vehicle.gd, humanoid.gd |
-| P parachute/bungee | Opus xhigh | agent-a36839f94834eb721 | DONE 74be212 (7 tests, 67/0); Opus review running; wiring in its wip/P/main_hud.patch |
-| R races/cycling | Sonnet xhigh | agent-a8e49a24b2d9859ff | DONE df9c56b (15 tests, 152/0); review fixes sent back to R; wiring in its HANDOFF-races.patch |
-- R had edited main.gd, hud.gd, player.gd, mission_manager.gd against its
-  brief; told to revert them and report patches instead.
-- `wip/snapshot.sh` saves each worktree's work (commits, uncommitted,
-  untracked) to wip/snapshots/<pkg>.patch; run and commit at milestones.
+Resume steps (in order):
+1. `game/tools/setup_cloud.sh` (background). Per package, a builder in an
+   isolation worktree: `git apply --3way wip/snapshots/<X>.patch`, read
+   wip/briefs/brief_common.md + package_<X>.md and its own HANDOFF note,
+   finish its listed next steps (G: neighbour tests, shots; R: tests and
+   shots for the fixes, re-check patch; P: nothing to build). Builders
+   commit in their worktree at milestones; main runs wip/snapshot.sh
+   (update its agent-id map and base) and commits after each report.
+2. Reviews: P's Opus review (rerun, brief as for R); G's Opus review once
+   G reports; R needs no second review unless its fixes hit trouble.
+3. Main session wires each: patches for main.gd/hud.gd/player.gd/
+   mission_manager.gd (G and R: in their HANDOFF notes / HANDOFF-races.patch;
+   P: wip/P/main_hud.patch). Clashes: all three append TEST_MODULES in
+   test_runner.gd (merge by hand); P edits player.gd bail code and G's
+   patch switches three exit/bail lines in player.gd to Ground.height;
+   R's and P's hud.gd branches both go near the hunting/interiors prompt.
+   Then switch P's ground_under() to Ground.height. Run each package's
+   tests after wiring.
+4. After all three: full `game/tests/run.sh`, screenshots with the HUD
+   wired (race panel and in-car prompt were never seen: R review M6),
+   contact sheet, one Opus review of the integration, delete wip/, push.
+5. Phase 4 (plan below): bridges/tunnels on G's Ground API, Opus + review.
+Nothing needs Sachin's approval so far.
 
-Resume (if this session stopped): worktrees present -> run
-wip/snapshot.sh, commit; then (or if gone) per package a builder with
-isolation worktree: `git apply --3way wip/snapshots/<X>.patch`, then
-wip/briefs/brief_common.md + package_<X>.md, continuing from the files.
-Then, per package as it reports: its own Opus review (diff + gate output
-+ the brief quoted), fixes, then the main session applies the builder's
-main.gd/hud.gd/player.gd/mission_manager patches, merges the branch,
-runs that package's tests. After all three: full suite, screenshots
-(contact sheet), delete wip/, commit, push. Then phase 4 (wave B: bridges
-and tunnels on G's Ground deck/cut API; one Opus builder + review).
-Next for Sachin: report at the end; nothing needs his approval so far.
-
-Open items not in Sachin's list (report only): trail loop 904 (nobody
-passed in 20 s at noon; 26/128 points within 6 m of a road); calendar
-Lows (archive); in_city cost unmeasured on a device; session 2's runs
-hung at the Godot banner once (check `pgrep -af godot`).
+Report-only items: trail loop 904 (nobody passed in 20 s at noon); calendar
+Lows (archive); in_city cost unmeasured on a device; godot once hung at
+its banner (check `pgrep -af godot`).
 
 ## Phase 3 and 4 plan (decided 2026-10-31)
 - vehicle.gd has no air state (y = Terrain.height each frame), so stunt
@@ -141,9 +143,7 @@ hung at the Godot banner once (check `pgrep -af godot`).
   and bungee; Opus xhigh, physics). Wave B after G: bridges and tunnels
   (Opus). Main session wires each into main.gd/hud.gd and merges.
   Cheaper option named for Sachin: all in the main session, sequential.
-- Session 3 launch cost: R Sonnet xhigh, G and P Opus xhigh, each about
-  1.5-3 h plus a 20-40 min Opus review; started while the step-1 suite ran
-  (own worktrees, shared /tmp/godot.lock).
+- Cost: R Sonnet xhigh ~0.5-1 h used, G/P Opus xhigh ~45-50 min each in
+  session 5, plus a 5-40 min Opus review each; shared /tmp/godot.lock.
 
-Archive (HANDOFF-hill-content-archive.md): phase 1-2 history, phase 2
-package plan, session 2 handover.
+Archive: phase 1-2 history, phase 2 package plan, sessions 2-3.
