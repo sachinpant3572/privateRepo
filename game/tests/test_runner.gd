@@ -6262,7 +6262,7 @@ func test_mount_calder() -> void:
 	for rd in c.roads:
 		if not rd.name in ["Mount Calder Road", "Crest Drive", "Canyon Freeway", "Coyote Canyon Road", "Observatory Road", "Summit Fire Road", "West Ridge Track", "Larkspur Track",
 				"East Hills Road", "Copperback Track", "Whistler Track", "Tallow Track", "Fernmoor Track", "Copperback Cut", "Spur Track",
-				"Tallow Top Track", "Whistler Top Track"]:
+				"Tallow Top Track", "Whistler Top Track", "Fernmoor Ridge Track", "Brackett Track"]:
 			continue
 		var nodes: PackedInt32Array = rd.nodes
 		var s: Array[float] = [0.0]
@@ -6392,7 +6392,7 @@ func test_mount_calder() -> void:
 ## rail corridor; each named top has a track up to a level viewpoint
 ## pull-out on the map (as do East, Raven and Hawk peaks); the roads over
 ## them keep to their caps (test_mount_calder).
-const HILL_KM2 := 99.0  # set from the measured figure
+const HILL_KM2 := 1.1  # measured 1.21 km² (2026-10-31)
 func test_east_hills() -> void:
 	await _new_game(false)
 	var c = game.city.country

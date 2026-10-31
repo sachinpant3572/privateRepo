@@ -83,8 +83,9 @@ gentle, in the mountain zone and the play area) has no road at all.
   Tallow Trail along the crest; back-country lines into the gentle ground
   the first build left unreached: Fernmoor Ridge Track (Tallow round the
   low north ridge to Fernmoor, 1.25 km), Brackett Track (dead end west
-  from East Hills Road into the south hills, 0.9 km), Hollin Trail (Spur
-  Track down the west flank to Route 9) and Moor Trail (Fernmoor west to
+  from East Hills Road into the south hills, 0.9 km), Hollin Trail (from
+  Route 9 up the west flank, a dead end: joined to Spur Track it wound
+  round through a hairpin and broke its grade) and Moor Trail (Fernmoor west to
   the logging road). "hills" is in build_country MTN_TAGS
   (else _grade_rest graded them again as suburb streets).
 - **Viewpoints** (mountain.py VIEWPOINTS): a 20 x 12 m level pull-out on

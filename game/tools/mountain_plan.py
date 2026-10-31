@@ -515,14 +515,15 @@ SPECS = [
     dict(id="whistler_top", cls="track", name="Whistler Top Track", tag="hills",
          way=[("on", "east_hills_road", (2640, -3760)), (2536, -3656)], gmax=0.18, hairpin_r=8.0),
     # Into the hills' back country: a track along the low north ridge from
-    # Tallow round to Fernmoor, a trail down the west flank from Spur Track
-    # (off a straight leg: at a hairpin its grading broke the hairpin's) to Route 9, a trail from Fernmoor west to the logging road, and a
+    # Tallow round to Fernmoor, a trail from Route 9 up the west flank
+    # (a dead end: joined to Spur Track it wound round through a hairpin and
+    # broke its grade), a trail from Fernmoor west to the logging road, and a
     # dead-end track west into the south hills off East Hills Road.
     dict(id="fernmoor_ridge", cls="track", name="Fernmoor Ridge Track", tag="hills",
          way=[("on", "tallow_track", (2440, -3960)), (2700, -4100), (2600, -4300), (2264, -4360), (2136, -4420),
               ("on", "fernmoor_track", (2066, -4536))], gmax=0.18, hairpin_r=8.0, hairpin_cost=150.0),
     dict(id="hollin_trail", cls="trail", name="Hollin Trail", tag="trail",
-         way=[("on", "spur_track", (1645, -3607)), (1700, -3850), (1522, -4028), ("on", "route_9", (1394, -4273))],
+         way=[("on", "route_9", (1394, -4273)), (1522, -4028), (1700, -3850)],
          gmax=0.24, hairpin_r=5.0, hairpin_cost=60.0, cut=2.0, pin_cut=4.0),
     dict(id="moor_trail", cls="trail", name="Moor Trail", tag="trail",
          way=[("on", "fernmoor_track", (2066, -4536)), (1800, -4720), ("on", "pinecrest_logging", (1558, -4446))],
