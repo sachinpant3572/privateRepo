@@ -1,0 +1,86 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="Solvera Prototype"
+config/version="0.26.1"
+run/main_scene="res://main.tscn"
+config/icon="res://icon.svg"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+
+[autoload]
+
+Controls="*res://scripts/controls.gd"
+Wanted="*res://scripts/wanted.gd"
+Fx="*res://scripts/fx.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=4
+
+[input_devices]
+
+pointing/emulate_touch_from_mouse=true
+sensors/enable_accelerometer=true
+sensors/enable_gravity=true
+
+[physics]
+
+common/physics_interpolation=true
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
+
+[shader_globals]
+
+night={
+"type": "float",
+"value": 0.0
+}
+wet={
+"type": "float",
+"value": 0.0
+}
+detail={
+"type": "float",
+"value": 1.0
+}
+sky_tint={
+"type": "color",
+"value": Color(0.55, 0.7, 0.85, 1)
+}
+terrain_dm={
+"type": "sampler2D",
+"value": ""
+}
+terrain_grid={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+stars={
+"type": "float",
+"value": 0.0
+}
+sky_zenith={
+"type": "color",
+"value": Color(0.3, 0.5, 0.8, 1)
+}
+sun_dir={
+"type": "vec4",
+"value": Vector4(0, 1, 0, 0)
+}
