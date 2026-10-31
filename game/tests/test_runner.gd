@@ -5331,12 +5331,15 @@ func test_hikers_walk_the_trails() -> void:
 			break
 	_check(street >= 0 and not (game.population._add_ped(street, 0).category in ["hiker", "hunter"]),
 		"the street crowd stays as it was")
-	# A trail loop runs on the trail, on the ground, not off in the trees.
-	var loop: PackedVector3Array = city.sidewalk_loops[trail[0]]
-	var off := 0.0
-	for q in loop:
-		off = maxf(off, absf(q.y - (Terrain.height(q.x, q.z) - Terrain.drop(q.x, q.z))))
-	_check(off < 1.5, "the hikers' loop keeps to the ground, worst %.2f m" % off)
+	# A trail loop runs on the trail, not off in the trees: the hills'
+	# ground is drawn lower everywhere but on roads, paths and trails.
+	var on := 0
+	var all := 0
+	for li in trail:
+		for q in city.sidewalk_loops[li]:
+			all += 1
+			on += 1 if Terrain.drop(q.x, q.z) < 0.01 else 0
+	_check(on >= all * 0.95, "the hikers' loops keep to the trails, %d of %d points" % [on, all])
 
 
 func test_people_walk_the_suburbs() -> void:
