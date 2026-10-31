@@ -1,9 +1,9 @@
 diff --git a/HANDOFF-races.md b/HANDOFF-races.md
 new file mode 100644
-index 0000000..dca389f
+index 0000000..dbe16b2
 --- /dev/null
 +++ b/HANDOFF-races.md
-@@ -0,0 +1,32 @@
+@@ -0,0 +1,48 @@
 +# HANDOFF: races (package R of the hill content, phase 3)
 +
 +Request (Sachin): "Build the content, and then the tunnels and bridges", then "phase 3 (races, stunt jumps, cycling, parachuting, bungee)".
@@ -36,6 +36,22 @@ index 0000000..dca389f
 +## Open
 +- Full suite not run here (main session). A shot pass after the patch lands would confirm the HUD prompt in a vehicle.
 +- The start prompt shows only within 22 m of the arch; the map marker is the discoverable cue.
++
++## STATUS: PAUSED mid review fixes (2026-10-31, WIP commit)
++Nothing was run after the review-fix edits: no godot command is running or was started in this phase. The last race-test pass line, `152 checks passed, 0 failed` (15 tests, commit df9c56b), is STALE: it predates every item below. The tree may not pass until the tests are finished.
++
++Code written, UNRUN (races.gd, race_course.gd):
++- H1 done in code: `_drop_taken()` (rival whose car is the player's or driver PLAYER is dropped) called in `_go`, the countdown tick and `_update_rivals`.
++- M2 done in code: `_start_block()` and `_offer()` {text, button, act}; `try_interact()` returns start_race's result, so a refused press falls through to exit; notices use button EXIT (in a ride) or ENTER (on foot); starts offered only when `abs(speed) < STOP_SPEED` (3 m/s); `TRIAL_RANGE` 14 (was 30), so a freshly rented bike (a few m from the top) still offers START until it moves.
++- M3 done in code: "Finish the job first" when `game.missions.active`; the race also cancels if a job starts.
++- M4 done in code: `police_sees()` calls the police manager's `_anyone_sees` (prunes freed units first).
++- M5 done in code: `RaceCourse.hill()` adds `runoff` (260 m past the finish) and `runoff_v`; `_spawn_rivals` appends it to each rival line; `_update_rivals` uses `_runoff_throttle` (capped 14 m/s) once `r.finish` is set.
++- Lows done in code: HUD place cached on a 0.25 s tick (`place_runs`); one static beam Shader; night buy-in saved when taken (`_save_now()`); `set_wager` now has a caller (night run: first E opens a 4 s buy-in pick, each further E steps 100/200/300/500, race starts at timeout, driving off cancels); dead `5.4 if i >= 0 else 4.0` removed; burning wrecks go to `_wrecks`, freed by `_sweep_wrecks` only when over 80 m away and out of view.
++
++Tests: HALF-done in race_tests.gd. Done: stand-poor check (button ENTER), night poor case (EXIT, not eaten), night start via `start_race("night")`. NOT done: TESTS list still has the old 15 names; star test (~line 459) still uses `try_interact()` (must be `start_race("night")`) and a fake parked patrol car (rewrite with real frozen cops from `game.police.spawn_cop_at` / `spawn_car_at` with driver NONE); new tests not written: `test_race_player_takes_a_rival_car` (H1), `test_race_press_is_not_eaten` (M2/M3, needs a stub `missions.active` with `check_fail()`), `test_night_race_buy_in_pick`; M5 asserts (runoff non-empty and on roads, rivals more than 40 m past the last gate 6 s after finishing); LOW tests (place_runs, shared shader, stake saved, wreck survives then is freed after the player moves 500 m). race_shots.gd night start still presses E once (now only arms the pick): use `start_race("night")`.
++
++HANDOFF-races.patch: believed current (hud.gd already uses `race_prompt[1]`; player.gd falls through on false), but not re-checked with `git apply --check` after these edits.
++Next, in order: finish tests, add to TESTS, run the race tests under flock (/tmp/R_all.sh, update the ONLY list), fix failures, fix race_shots.gd, `git apply --check`, update this file, commit, report. Leave wip/ alone; the coordinator merges TEST_MODULES by hand.
 diff --git a/HANDOFF-races.patch b/HANDOFF-races.patch
 new file mode 100644
 index 0000000..7a1ec19
@@ -190,13 +206,34 @@ index 0000000..7a1ec19
 + func focus_node() -> Node3D:
 + 	return vehicle if vehicle != null else self
 diff --git a/wip/R/race_course.gd b/game/scripts/race_course.gd
-similarity index 99%
+similarity index 92%
 rename from wip/R/race_course.gd
 rename to game/scripts/race_course.gd
-index 897d75a..511b2bf 100644
+index 897d75a..975cec1 100644
 --- a/wip/R/race_course.gd
 +++ b/game/scripts/race_course.gd
-@@ -267,7 +267,7 @@ static func hill(country, laps := 2) -> Dictionary:
+@@ -17,6 +17,8 @@ extends RefCounted
+ ##   rival   PackedVector3Array  every RIVAL_STRIDE-th point, for the AI cars
+ ##   rival_i PackedInt32Array    the route index of each rival point
+ ##   vlim    PackedFloat32Array  the corner speed (m/s) at each rival point
++##   runoff  PackedVector3Array  hill(): rival points past the finish, where a
++##                               finished rival rolls on (runoff_v: its corner speeds)
+ ##   length, lead_len, loop_len, laps
+ ## `ok` is false when the data is not there.
+ 
+@@ -33,6 +35,11 @@ const STEP := 4.0
+ const RIVAL_STRIDE := 3
+ ## Checkpoints about this far apart (m).
+ const GATE_GAP := 150.0
++## The rivals' line runs RUNOFF metres past the finish (on round the loop
++## from the lap line, starting RUNOFF_SKIP samples past it) so a finished car
++## rolls on instead of stopping on the line.
++const RUNOFF := 260.0
++const RUNOFF_SKIP := 8
+ ## The foot of the Calder Trail is a scramble up from the road: the run starts
+ ## above the first FOOT_RUN metres of it.
+ const FOOT_RUN := 60.0
+@@ -267,7 +274,7 @@ static func hill(country, laps := 2) -> Dictionary:
  	if lead_nodes.is_empty():
  		return {}
  	var j1: int = lead_nodes[lead_nodes.size() - 1]
@@ -205,6 +242,39 @@ index 897d75a..511b2bf 100644
  	if lead_nodes.size() > 1:
  		heading = (country.pos(j1) - country.pos(lead_nodes[lead_nodes.size() - 2])).normalized()
  	var ring := _ring(country, core, j1, heading)
+@@ -289,7 +296,31 @@ static func hill(country, laps := 2) -> Dictionary:
+ 	var marks: Array = [lead_len]
+ 	for lap in laps:
+ 		marks.append(lead_len + loop_len * (lap + 1))
+-	return _assemble(raw, marks, laps, lead_len, loop_len, 36.0)
++	var c := _assemble(raw, marks, laps, lead_len, loop_len, 36.0)
++	c["runoff"] = _runoff(c)
++	c["runoff_v"] = speed_profile(c.runoff, 36.0)
++	return c
++
++
++## The line past the finish: the route just after the first lap line (the
++## finish stands on the same spot), as rival points.
++static func _runoff(c: Dictionary) -> PackedVector3Array:
++	var out := PackedVector3Array()
++	var route: PackedVector3Array = c.route
++	var cum: PackedFloat32Array = c.cum
++	var from := -1
++	for g in c.gates:
++		if g.lap_line:
++			from = int(g.i)
++			break
++	if from < 0:
++		return out
++	var start := from + RUNOFF_SKIP
++	var k := start
++	while k < route.size() and cum[k] - cum[start] <= RUNOFF:
++		out.append(route[k])
++		k += RIVAL_STRIDE
++	return out
+ 
+ 
+ ## Builds the course from the raw polyline; `marks` are the arc lengths of the
 diff --git a/game/scripts/race_course.gd.uid b/game/scripts/race_course.gd.uid
 new file mode 100644
 index 0000000..1aa7a0e
@@ -213,10 +283,10 @@ index 0000000..1aa7a0e
 @@ -0,0 +1 @@
 +uid://denp81oscqdw0
 diff --git a/wip/R/races.gd b/game/scripts/races.gd
-similarity index 80%
+similarity index 73%
 rename from wip/R/races.gd
 rename to game/scripts/races.gd
-index 16217a6..267bad7 100644
+index 16217a6..e7f4c34 100644
 --- a/wip/R/races.gd
 +++ b/game/scripts/races.gd
 @@ -31,9 +31,12 @@ const NIGHT_TO := 4.0
@@ -247,7 +317,7 @@ index 16217a6..267bad7 100644
  const RENT_PRICE := 10
  ## Rides that cannot run the road races.
  const NO_RACE := ["heli", "police_heli", "bicycle", "scooter", "tipper", "semi", "box_truck"]
-@@ -58,19 +67,24 @@ const OFF_VEHICLE_TIME := 8.0
+@@ -58,19 +67,26 @@ const OFF_VEHICLE_TIME := 8.0
  ## line for 3 s, is put back on the course.
  const STUCK_TIME := 5.0
  const OFF_ROUTE := 30.0
@@ -259,6 +329,8 @@ index 16217a6..267bad7 100644
  ## Rubber band: a rival speeds up or slows by at most this share to stay in
  ## touch with the player.
  const BAND := 0.04
++## A rival past the finish rolls on at this pace (m/s) along the run-off.
++const RUNOFF_SPEED := 14.0
  
  const DAY_RIVALS := [
 -	{"name": "Kessa Vane", "kind": "sedan", "paint": Color(0.78, 0.12, 0.1), "skill": 0.86, "off": 1.4},
@@ -277,7 +349,17 @@ index 16217a6..267bad7 100644
  ]
  
  const BEAM_SHADER := """
-@@ -99,7 +113,7 @@ var wager := 0
+@@ -84,6 +100,9 @@ void fragment() {
+ }
+ """
+ 
++## One shader for every light beam (built on first use).
++static var _beam_shader: Shader
++
+ var game
+ var state := State.IDLE
+ ## "day", "night" or "bike": the race on now, or the last one run.
+@@ -99,7 +118,7 @@ var wager := 0
  var stake := 0
  ## The last race's result: {mode, place, time, prize, medal, best, new_best}.
  var result := {}
@@ -286,7 +368,7 @@ index 16217a6..267bad7 100644
  var rivals: Array = []
  ## The checkpoint the player must pass next (the number passed so far).
  var next_gate := 0
-@@ -107,8 +121,17 @@ var course := {}
+@@ -107,8 +126,17 @@ var course := {}
  ## How many times a rival was put back on the course in this race.
  var recoveries := 0
  
@@ -304,7 +386,7 @@ index 16217a6..267bad7 100644
  var _since_gate := 0.0
  var _off_vehicle := 0.0
  var _done_time := 0.0
-@@ -247,49 +270,90 @@ func medal_time(m: int) -> float:
+@@ -247,49 +275,90 @@ func medal_time(m: int) -> float:
  
  # --- Prompts --------------------------------------------------------------------
  
@@ -429,7 +511,7 @@ index 16217a6..267bad7 100644
  
  
  # --- Starting and stopping ---------------------------------------------------------
-@@ -305,8 +369,9 @@ func start_race(race_mode: String) -> bool:
+@@ -305,8 +374,9 @@ func start_race(race_mode: String) -> bool:
  		return false
  	if (race_mode == "night") != night_race_open():
  		return false
@@ -441,7 +523,7 @@ index 16217a6..267bad7 100644
  		return false
  	var night: bool = race_mode == "night"
  	var buy_in := 0
-@@ -316,6 +381,9 @@ func start_race(race_mode: String) -> bool:
+@@ -316,6 +386,9 @@ func start_race(race_mode: String) -> bool:
  			_say("A night run takes a $%d buy-in" % WAGER_MIN)
  			return false
  		game.cash -= buy_in
@@ -451,7 +533,7 @@ index 16217a6..267bad7 100644
  	stake = buy_in
  	mode = race_mode
  	course = c
-@@ -336,6 +404,10 @@ func start_trial() -> bool:
+@@ -336,6 +409,10 @@ func start_trial() -> bool:
  	var car = game.player.vehicle
  	if c.is_empty() or car == null or car.get("kind") != "bicycle":
  		return false
@@ -462,7 +544,7 @@ index 16217a6..267bad7 100644
  	mode = "bike"
  	course = c
  	stake = 0
-@@ -343,12 +415,13 @@ func start_trial() -> bool:
+@@ -343,12 +420,13 @@ func start_trial() -> bool:
  	var at := RaceCourse.at_arc(c, 1.5)
  	put_car(car, at.pos, RaceCourse.yaw_of(at.dir))
  	_clear_rivals()
@@ -477,9 +559,17 @@ index 16217a6..267bad7 100644
  	_count = COUNT_TIME
  	time = 0.0
  	next_gate = 0
-@@ -396,7 +469,8 @@ func _spawn_rivals(specs: Array) -> void:
+@@ -394,9 +472,15 @@ func _spawn_rivals(specs: Array) -> void:
+ 		var car = _new_rival_car(s)
+ 		game.add_child(car)
  		put_car(car, slot.pos, slot.yaw)
- 		var full := RaceCourse.offset_path(course.rival, float(s.off))
+-		var full := RaceCourse.offset_path(course.rival, float(s.off))
++		# The line runs on past the finish (the run-off), so a rival that has
++		# finished rolls on instead of stopping on the line.
++		var line: PackedVector3Array = course.rival
++		if course.has("runoff"):
++			line = line + course.runoff
++		var full := RaceCourse.offset_path(line, float(s.off))
  		rivals.append({"car": car, "name": s.name, "skill": float(s.skill), "off": float(s.off), "spec": s, "passed": 0, "base": 0,
 -			"stall": 0.0, "far": 0.0, "finish": INF, "full": full, "path": full})
 +			"stall": 0.0, "far": 0.0, "idle": 0.0, "prog": 0, "finish": INF, "full": full, "path": full})
@@ -487,7 +577,7 @@ index 16217a6..267bad7 100644
  
  
  func _new_rival_car(s: Dictionary):
-@@ -407,7 +481,60 @@ func _new_rival_car(s: Dictionary):
+@@ -407,7 +491,60 @@ func _new_rival_car(s: Dictionary):
  	return car
  
  
@@ -548,7 +638,15 @@ index 16217a6..267bad7 100644
  	state = State.RACING
  	time = 0.0
  	_since_gate = 0.0
-@@ -441,8 +568,18 @@ func _physics_process(delta: float) -> void:
+@@ -419,6 +556,7 @@ func _go() -> void:
+ 
+ ## Stops the race: the stake (night) is lost, the rivals go.
+ func cancel(msg := "") -> void:
++	_pick = 0.0
+ 	if state == State.IDLE:
+ 		return
+ 	_clear_rivals()
+@@ -441,8 +579,18 @@ func _physics_process(delta: float) -> void:
  	if game == null or not is_instance_valid(game.player):
  		return
  	match state:
@@ -567,7 +665,7 @@ index 16217a6..267bad7 100644
  				_hold(_player_car)
  				_count -= delta
  				if _count <= 0.0:
-@@ -468,6 +605,7 @@ func _process(delta: float) -> void:
+@@ -468,6 +616,7 @@ func _process(delta: float) -> void:
  	if _clock > 0.0:
  		return
  	_clock = 0.5
@@ -575,7 +673,7 @@ index 16217a6..267bad7 100644
  	if _arch_label != null and game != null and game.get("atmosphere") != null:
  		var night := night_race_open()
  		var text := "NIGHT RUN" if night else "HILL RACE"
-@@ -490,20 +628,23 @@ func _player_ok(delta: float) -> bool:
+@@ -490,20 +639,23 @@ func _player_ok(delta: float) -> bool:
  	if p.dead or game.get("respawning") == true:
  		cancel("Race abandoned")
  		return false
@@ -602,7 +700,20 @@ index 16217a6..267bad7 100644
  		return false
  	return true
  
-@@ -577,6 +718,9 @@ func _finish() -> void:
+@@ -570,13 +722,21 @@ func _finish() -> void:
+ 		line += "   (best)"
+ 	if game.get("hud") != null and game.hud != null:
+ 		game.hud.show_banner(line)
+-	if game.get("missions") != null and game.missions != null:
++	_save_now()
++
++
++## Writes the save (the missions manager owns the file).
++func _save_now() -> void:
++	if game != null and game.get("missions") != null and game.missions != null:
+ 		game.missions.save_game()
+ 
+ 
  # --- Rivals -----------------------------------------------------------------------
  
  func _update_rivals(delta: float) -> void:
@@ -612,7 +723,21 @@ index 16217a6..267bad7 100644
  	var vlim: PackedFloat32Array = course.vlim
  	var rival_i: PackedInt32Array = course.rival_i
  	var gates: Array = course.gates
-@@ -602,9 +746,23 @@ func _update_rivals(delta: float) -> void:
+@@ -591,7 +751,12 @@ func _update_rivals(delta: float) -> void:
+ 		var k: int = clampi(int(r.base) + car.path_index, 0, vlim.size() - 1)
+ 		var rival_arc: float = course.cum[rival_i[k]]
+ 		var band := 1.0 + clampf((player_arc - rival_arc) / 600.0, -BAND, BAND)
+-		car.script_throttle = clampf(vlim[k] * float(r.skill) * band / car.max_speed, 0.15, 1.0)
++		if r.finish < INF:
++			# Past the line: roll on along the run-off at a gentle pace so the field
++			# behind does not pile into a car parked on the finish.
++			car.script_throttle = _runoff_throttle(r)
++		else:
++			car.script_throttle = clampf(vlim[k] * float(r.skill) * band / car.max_speed, 0.15, 1.0)
+ 		var ri: int = rival_i[k]
+ 		while r.passed < gates.size() and ri + RaceCourse.RIVAL_STRIDE >= gates[r.passed].i:
+ 			r.passed += 1
+@@ -602,12 +767,37 @@ func _update_rivals(delta: float) -> void:
  		else:
  			r.stall = 0.0
  		var path: PackedVector3Array = r.path
@@ -637,7 +762,21 @@ index 16217a6..267bad7 100644
  			recover_rival(r)
  
  
-@@ -619,10 +777,12 @@ func recover_rival(r: Dictionary) -> void:
++## Throttle for a rival that has crossed the line: its corner speed on the
++## run-off, capped at RUNOFF_SPEED, so it clears the finish and slows for bends.
++func _runoff_throttle(r: Dictionary) -> float:
++	var rv: PackedFloat32Array = course.get("runoff_v", PackedFloat32Array())
++	var j: int = int(r.base) + r.car.path_index - course.vlim.size()
++	var v := RUNOFF_SPEED
++	if not rv.is_empty():
++		v = minf(RUNOFF_SPEED, float(rv[clampi(j, 0, rv.size() - 1)]))
++	return clampf(v / r.car.max_speed, 0.15, 0.6)
++
++
+ ## Puts a stuck or lost rival back on its line, a point behind its target,
+ ## and sends it on.
+ func recover_rival(r: Dictionary) -> void:
+@@ -619,10 +809,12 @@ func recover_rival(r: Dictionary) -> void:
  	var d := Vector3(b.x - a.x, 0.0, b.z - a.z).normalized()
  	put_car(car, a, RaceCourse.yaw_of(d))
  	r.base = k
@@ -650,7 +789,7 @@ index 16217a6..267bad7 100644
  	recoveries += 1
  
  
-@@ -634,8 +794,14 @@ func _replace_rival(r: Dictionary) -> void:
+@@ -634,8 +826,14 @@ func _replace_rival(r: Dictionary) -> void:
  	r.car = fresh
  	r.stall = 0.0
  	r.far = 0.0
@@ -666,7 +805,7 @@ index 16217a6..267bad7 100644
  	recover_rival(r)
  
  
-@@ -702,7 +868,7 @@ func _police_tick(delta: float) -> void:
+@@ -702,38 +900,23 @@ func _police_tick(delta: float) -> void:
  	if police_sees():
  		_flagged = true
  		Wanted.report_crime(1)
@@ -674,8 +813,49 @@ index 16217a6..267bad7 100644
 +		_say("Street racing: police saw you")
  
  
- ## Whether a police car or an officer has a clear line to the player within
-@@ -764,7 +930,7 @@ func rent_bike() -> bool:
+-## Whether a police car or an officer has a clear line to the player within
+-## the police's sight range (police_manager.gd's rule, for units that are not
+-## yet on a chase).
++## Whether the police can see the player: police_manager.gd's own sight rule
++## (an officer on duty, or a patrol car driven or with its officer out, within
++## SIGHT_RANGE and a clear line). A parked patrol car or an off-duty officer
++## sees nothing. False when there is no police manager.
+ func police_sees() -> bool:
+ 	if game == null or not is_instance_valid(game.player):
+ 		return false
+-	var target := _player_pos() + Vector3(0.0, 1.0, 0.0)
+-	var space: PhysicsDirectSpaceState3D = game.get_world_3d().direct_space_state
+-	var sight := 35.0
+-	if game.get("police") != null and game.police != null:
+-		sight = float(game.police.SIGHT_RANGE)
+-	for car in get_tree().get_nodes_in_group("vehicles"):
+-		if car == game.player.vehicle or car.get("is_police") != true or car.wrecked:
+-			continue
+-		if _clear_line(space, car.global_position + Vector3(0.0, 1.4, 0.0), target, sight):
+-			return true
+-	if game.get("police") != null and game.police != null:
+-		for cop in game.police.cops:
+-			if is_instance_valid(cop) and not cop.dead:
+-				if _clear_line(space, cop.global_position + Vector3(0.0, 1.4, 0.0), target, sight):
+-					return true
+-	return false
+-
+-
+-func _clear_line(space: PhysicsDirectSpaceState3D, eye: Vector3, target: Vector3, sight: float) -> bool:
+-	if eye.distance_to(target) > sight:
++	var pm = game.get("police")
++	if pm == null or not pm.has_method("_anyone_sees"):
+ 		return false
+-	var query := PhysicsRayQueryParameters3D.create(eye, target, 1) # L.WORLD
+-	return space.intersect_ray(query).is_empty()
++	# Units freed since the manager last pruned its lists are not looked at.
++	pm.cops = pm.cops.filter(func(c): return is_instance_valid(c))
++	pm.cars = pm.cars.filter(func(c): return is_instance_valid(c))
++	return pm._anyone_sees(game.player)
+ 
+ 
+ # --- The bike stand ---------------------------------------------------------------
+@@ -764,15 +947,29 @@ func rent_bike() -> bool:
  	put_car(bike, at.pos, RaceCourse.yaw_of(at.dir))
  	_rented = bike
  	game.player.enter_vehicle(bike)
@@ -684,6 +864,60 @@ index 16217a6..267bad7 100644
  	return true
  
  
+ # --- HUD ----------------------------------------------------------------------------
+ 
++## The player's place for the panel: worked out every PLACE_TICK seconds (or
++## at once when a checkpoint or the field changes), not every frame.
++func _panel_place() -> int:
++	if time < _place_at or time - _place_at >= PLACE_TICK or next_gate != _place_gate or rivals.size() != _place_n:
++		_place_cache = place()
++		_place_at = time
++		_place_gate = next_gate
++		_place_n = rivals.size()
++		place_runs += 1
++	return _place_cache
++
++
+ ## The race panel's text; "" when idle.
+ func hud_text() -> String:
+ 	var title := "NIGHT RUN" if mode == "night" else ("CALDER DOWNHILL" if mode == "bike" else "HILL RACE")
++	if state == State.IDLE and _pick > 0.0:
++		return "NIGHT RUN\nbuy-in $%d   start in %d" % [wager_for(game.cash), ceili(_pick)]
+ 	match state:
+ 		State.COUNTDOWN:
+ 			return "%s\n%d" % [title, maxi(ceili(_count), 1)]
+@@ -785,7 +982,7 @@ func hud_text() -> String:
+ 				bottom = "%s   best %s" % [fmt_time(time), fmt_time(float(best.get("bike", INF)))]
+ 			else:
+ 				top = "%s   lap %d/%d   checkpoint %d/%d" % [title, lap(), LAPS, mini(next_gate + 1, gates), gates]
+-				bottom = "%s of %d   %s   best %s" % [ordinal(place()), rivals.size() + 1, fmt_time(time),
++				bottom = "%s of %d   %s   best %s" % [ordinal(_panel_place()), rivals.size() + 1, fmt_time(time),
+ 						fmt_time(float(best.get(mode, INF)))]
+ 			return top + "\n" + bottom
+ 		State.DONE:
+@@ -848,7 +1045,7 @@ func _build_props() -> void:
+ 		_stand.position = p
+ 		add_child(_stand)
+ 	for i in 3:
+-		var g := _make_gate(5.4 if i >= 0 else 4.0)
++		var g := _make_gate(5.4)
+ 		g.visible = false
+ 		add_child(g)
+ 		_gates.append(g)
+@@ -948,9 +1145,10 @@ func _beam(base: Vector3, radius: float, height: float, tint: Color) -> MeshInst
+ 	col.cap_top = false
+ 	col.cap_bottom = false
+ 	var mat := ShaderMaterial.new()
+-	var sh := Shader.new()
+-	sh.code = BEAM_SHADER
+-	mat.shader = sh
++	if _beam_shader == null:
++		_beam_shader = Shader.new()
++		_beam_shader.code = BEAM_SHADER
++	mat.shader = _beam_shader
+ 	mat.set_shader_parameter("color", tint)
+ 	var inst := MeshInstance3D.new()
+ 	inst.mesh = col
 diff --git a/game/scripts/races.gd.uid b/game/scripts/races.gd.uid
 new file mode 100644
 index 0000000..e2b9e58
@@ -868,7 +1102,7 @@ index 0000000..3cf2845
 +script = ExtResource("1")
 diff --git a/game/tests/race_tests.gd b/game/tests/race_tests.gd
 new file mode 100644
-index 0000000..dea9f91
+index 0000000..c110bb7
 --- /dev/null
 +++ b/game/tests/race_tests.gd
 @@ -0,0 +1,713 @@
@@ -1283,13 +1517,13 @@ index 0000000..dea9f91
 +	t.check(races.wager_for(50) == 0 and races.wager_for(100) == 100 and races.wager_for(1000) == 200 and races.wager_for(9000) == 500
 +			and races.wager_for(350) == 100, "the buy-in is a quarter of the cash in hundreds, $100 to $500")
 +	game.cash = 40
-+	t.check(races.prompt()[0].contains("you need $100"), "too poor for the buy-in, the prompt says so")
-+	t.check(races.try_interact() and races.state == Races.State.IDLE and game.cash == 40, "and the press takes nothing and starts nothing")
++	t.check(races.prompt()[0].contains("you need $100") and races.prompt()[1] == "EXIT", "too poor for the buy-in, the prompt says so and E stays EXIT")
++	t.check(not races.try_interact() and races.state == Races.State.IDLE and game.cash == 40, "and the press takes nothing, starts nothing and is not eaten (E gets out)")
 +	game.cash = 1000
 +	races.set_wager(450)
 +	t.check(races.wager_for(1000) == 500 or races.wager_for(1000) == 400, "a chosen buy-in is rounded to hundreds, got %d" % races.wager_for(1000))
 +	races.set_wager(200)
-+	t.check(races.try_interact() and races.mode == "night" and races.state == Races.State.COUNTDOWN, "E starts the night run")
++	t.check(races.start_race("night") and races.mode == "night" and races.state == Races.State.COUNTDOWN, "the night run starts")
 +	t.check(game.cash == 800 and races.stake == 200, "the buy-in is taken, cash %d" % game.cash)
 +	t.check(races.hud_text().begins_with("NIGHT RUN"), "the panel is titled NIGHT RUN")
 +	for i in 260:
@@ -1399,8 +1633,8 @@ index 0000000..dea9f91
 +	p.reset_physics_interpolation()
 +	game.cash = 5
 +	var pr: Array = races.prompt()
-+	t.check(pr.size() == 2 and pr[1] == "RENT" and pr[0].contains("short"), "too poor: the stand says so, got %s" % [pr])
-+	t.check(races.try_interact() and p.vehicle == null and game.cash == 5, "no bike without the $10")
++	t.check(pr.size() == 2 and pr[1] == "ENTER" and pr[0].contains("short"), "too poor: the stand says so (and E stays E), got %s" % [pr])
++	t.check(not races.try_interact() and p.vehicle == null and game.cash == 5, "no bike without the $10, and the press is not eaten")
 +	game.cash = 50
 +	pr = races.prompt()
 +	t.check(pr.size() == 2 and pr[0] == "Rent a bike for $10: E / RENT", "with the cash it offers a bike, got %s" % [pr])
