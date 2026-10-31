@@ -77,6 +77,10 @@ func _run() -> void:
 		await _mountain(game)
 		get_tree().quit()
 		return
+	if OS.get_environment("SHOTS") == "easthills":
+		await _east_hills(game)
+		get_tree().quit()
+		return
 	if OS.get_environment("SHOTS") == "lights":
 		# Just headlights at night, flat and up and down the hills.
 		await _lights(game)
@@ -416,6 +420,30 @@ func _mountain(game) -> void:
 	await _shot("mountain_8_map.png")
 	game.hud.full_map.close()
 
+
+## The East Hills (hill country land): the hills from high over each half,
+## then every viewpoint's pull-out up close (east_hills_1 to _2, then
+## east_hills_view_<peak>).
+func _east_hills(game) -> void:
+	var s: Dictionary = game.city.country.mountain.sites
+	var stops := [["east_hills_1_south", Vector2(2450, -2700), 700.0],
+			["east_hills_2_north", Vector2(2300, -4150), 700.0]]
+	for k in s:
+		if String(k).begins_with("view_"):
+			stops.append(["east_hills_" + String(k), Vector2(float(s[k].x), float(s[k].y)), 90.0])
+	for stop in stops:
+		var at: Vector2 = stop[1]
+		var pos := Vector3(at.x, Terrain.height(at.x, at.y), at.y)
+		game.city.stream_now(pos)
+		game.player.global_position = pos
+		game.player.reset_physics_interpolation()
+		game.camera.fixed_focus = pos
+		game.camera.room_size = stop[2]
+		game.camera.snap()
+		await _frames(90)
+		await _shot(stop[0] + ".png")
+	game.camera.fixed_focus = null
+	game.camera.room_size = 0.0
 
 ## The hills' ecology (0.23): a wet canyon floor, a dry south face, a
 ## green north face, the pines up high, a eucalyptus grove, and two wide

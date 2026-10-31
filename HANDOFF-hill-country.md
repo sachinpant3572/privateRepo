@@ -80,7 +80,12 @@ gentle, in the mountain zone and the play area) has no road at all.
   Whistler, Tallow, Fernmoor, plus Tallow Top and Whistler Top to the true
   tops); shortcuts Copperback Cut (Whistler-Copperback) and Spur Track
   (Tallow up the north-east spur to East Peak, 3.8 km of switchbacks);
-  Tallow Trail along the crest. "hills" is in build_country MTN_TAGS
+  Tallow Trail along the crest; back-country lines into the gentle ground
+  the first build left unreached: Fernmoor Ridge Track (Tallow round the
+  low north ridge to Fernmoor, 1.25 km), Brackett Track (dead end west
+  from East Hills Road into the south hills, 0.9 km), Hollin Trail (Spur
+  Track down the west flank to Route 9) and Moor Trail (Fernmoor west to
+  the logging road). "hills" is in build_country MTN_TAGS
   (else _grade_rest graded them again as suburb streets).
 - **Viewpoints** (mountain.py VIEWPOINTS): a 20 x 12 m level pull-out on
   Tallow, Whistler, Copperback, Fernmoor and East Peak, at the end of the

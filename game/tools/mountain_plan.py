@@ -514,6 +514,21 @@ SPECS = [
          way=[("on", "tallow_track", (2508, -3831)), (2576, -3968)], gmax=0.18, hairpin_r=8.0),
     dict(id="whistler_top", cls="track", name="Whistler Top Track", tag="hills",
          way=[("on", "east_hills_road", (2640, -3760)), (2536, -3656)], gmax=0.18, hairpin_r=8.0),
+    # Into the hills' back country: a track along the low north ridge from
+    # Tallow round to Fernmoor, a trail down the west flank from Spur Track
+    # to Route 9, a trail from Fernmoor west to the logging road, and a
+    # dead-end track west into the south hills off East Hills Road.
+    dict(id="fernmoor_ridge", cls="track", name="Fernmoor Ridge Track", tag="hills",
+         way=[("on", "tallow_track", (2440, -3960)), (2700, -4100), (2600, -4300), (2264, -4360), (2136, -4420),
+              ("on", "fernmoor_track", (2066, -4536))], gmax=0.18, hairpin_r=8.0, hairpin_cost=150.0),
+    dict(id="hollin_trail", cls="trail", name="Hollin Trail", tag="trail",
+         way=[("on", "spur_track", (2014, -3718)), (1750, -3850), (1522, -4028), ("on", "route_9", (1394, -4273))],
+         gmax=0.24, hairpin_r=5.0, hairpin_cost=60.0, cut=2.0, pin_cut=4.0),
+    dict(id="moor_trail", cls="trail", name="Moor Trail", tag="trail",
+         way=[("on", "fernmoor_track", (2066, -4536)), (1800, -4720), ("on", "pinecrest_logging", (1558, -4446))],
+         gmax=0.24, hairpin_r=5.0, hairpin_cost=60.0, cut=2.0, pin_cut=4.0),
+    dict(id="brackett_track", cls="track", name="Brackett Track", tag="hills",
+         way=[("on", "east_hills_road", (2770, -2234)), (2430, -2160), (2120, -2230)], gmax=0.18, hairpin_r=8.0),
 ]
 # The rail pass (Morrow Freight Line round the range): a shelf on the
 # Morrow gorge's inner wall round the range's west and north foot (the river
