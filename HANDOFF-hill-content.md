@@ -84,3 +84,20 @@ on top; built in phases, each committed; `/effort xhigh` suits it.
   log's "steepest" lines after adding a bridged way).
 
 ## Open
+- Timber Haul hairpin_r 14 (8 put the hairpin's legs 16 m apart; one leg's
+  carve broke the other's profile: 54.7 % at (304, -4192)).
+
+## Phase 2 plan (life)
+
+- Flora bands by height already exist (flora_kit `pick`: pine from 120 m,
+  oaks thinning above 450 m, rock above 680 m); phase 2 adds wildflower
+  meadows and ferns only.
+- Packages (cost ~ each builder 1-2 h + an Opus review; the cheaper option
+  is all in the main session, slower and serial):
+  W wildlife (builder): scripts/wildlife.gd, kits/animal_kit.gd,
+  tests/wildlife_tests.gd. C calendar + events (builder): scripts/calendar.gd,
+  scripts/events.gd, tests/calendar_tests.gd. H hunting (after W; touches
+  inventory, shop, hud, player): main session. Hikers/runners/hunters on
+  trails (generator walks + population looks): main session.
+- Test modules: test_runner.gd runs `TEST_MODULES` (each a script with
+  `const TESTS` and `func test_x(t)`), so builders never edit test_runner.gd.

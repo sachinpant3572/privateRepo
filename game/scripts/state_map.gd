@@ -143,6 +143,9 @@ static func bake(map_origin: Vector2, city = null) -> Dictionary:
 	for w in world.water:
 		if w.has("polygon") and w.type != "ocean":
 			labels.water.append({"name": w.name, "pos": _local(_centroid(_poly(w.polygon)), map_origin)})
+	if city != null and city.country != null:
+		for lk: Dictionary in city.country.lakes:
+			labels.water.append({"name": lk.name, "pos": _local(_centroid(lk.poly), Vector2.ZERO)})
 	labels.water.append({"name": "Gulf of Solvera", "pos": _local(Vector2(world_size.x * 0.3, world_size.y - 300.0), map_origin)})
 	img.convert(Image.FORMAT_RGB8) # no alpha needed: a quarter less memory
 	return {"texture": ImageTexture.create_from_image(img), "origin": -map_origin, "size": Vector2(px),
@@ -167,6 +170,17 @@ static func _streets(img: Image, map_origin: Vector2, city) -> void:
 	for pv: Array in country.pivots:
 		var crop: String = pv[3]
 		_disc(img, Vector2(pv[0], pv[1]) + map_origin, float(pv[2]), PIVOT_COLORS.get(crop, PIVOT_COLORS.pivot_green))
+	# The hill country's lakes and creeks, under the roads.
+	for lk: Dictionary in country.lakes:
+		var poly := PackedVector2Array()
+		for p in lk.poly:
+			poly.append(p + map_origin)
+		_fill(img, Vector2.ZERO, poly, MapImage.WATER)
+	for st: Dictionary in country.streams:
+		var line := PackedVector2Array()
+		for p in st.pts:
+			line.append(p + map_origin)
+		_line(img, Vector2.ZERO, line, maxf(float(st.w) * 1.4, 7.0), MapImage.WATER)
 	for road in country.roads:
 		var line := PackedVector2Array()
 		for n in road.nodes:
