@@ -48,6 +48,13 @@ func _driver(t, races, kind := "sports", arc := 6.0):
 	return car
 
 
+## The player's ride back on the lead-in `arc` metres from the start.
+func _to_start(t, races, arc := 6.0) -> void:
+	var at: Dictionary = RaceCourse.at_arc(races.hill_course(), arc)
+	races.put_car(t.game.player.vehicle, at.pos, RaceCourse.yaw_of(at.dir))
+	await t._frames(2)
+
+
 ## Starts the day race from the start prompt and runs the countdown out.
 func _start_day(t, races) -> bool:
 	var ok: bool = races.try_interact()
@@ -205,6 +212,7 @@ func test_race_checkpoints_finish_and_prize(t) -> void:
 	var first: float = races.best["day"]
 	await t._frames(8 * 60 + 30)
 	t.check(races.state == Races.State.IDLE and races.rivals.is_empty(), "the result shows a few seconds, then the track is clear")
+	await _to_start(t, races)
 	await _start_day(t, races)
 	await t._frames(120)
 	for i in gates.size():
@@ -224,12 +232,12 @@ func test_race_skipped_checkpoint_does_not_count(t) -> void:
 	var n: int = races.course.gates.size()
 	await _to_gate(t, races, 3)
 	t.check(races.next_gate == 0, "driving through checkpoint 4 first counts for nothing")
+	# The ring's entry (checkpoint 1) and the lap lines and the finish are the
+	# same spot: the finish line counts only as the entry now, and does not end it.
 	await _to_gate(t, races, n - 1)
-	t.check(races.state == Races.State.RACING and races.next_gate == 0, "the finish line does not count before the others")
-	await _to_gate(t, races, 0)
-	t.check(races.next_gate == 1, "checkpoint 1 counts")
+	t.check(races.state == Races.State.RACING and races.next_gate == 1, "the finish line does not end the race early (counts as checkpoint 1 only), at %d" % races.next_gate)
 	await _to_gate(t, races, 2)
-	t.check(races.next_gate == 1, "skipping checkpoint 2 does not")
+	t.check(races.next_gate == 1, "skipping checkpoint 2 does not count")
 	await _to_gate(t, races, 1)
 	await _to_gate(t, races, 2)
 	t.check(races.next_gate == 3, "then 2 and 3 do, in order")
@@ -254,7 +262,7 @@ func test_race_places_pay_by_place(t) -> void:
 		# `want - 1` rivals cross the line ahead of the player.
 		for k in want - 1:
 			races.rivals[k].passed = gates.size()
-			races.rivals[k].finish = 1.0 + float(k)
+			races.rivals[k].finish = 0.01 * float(k + 1) # before the teleporting player's ~1 s
 		for i in gates.size():
 			await _to_gate(t, races, i)
 			if races.state != Races.State.RACING:
@@ -418,7 +426,7 @@ func test_night_race_hours_wager_and_pot(t) -> void:
 			break
 		await t._frames(1)
 	races.rivals[0].passed = gates.size()
-	races.rivals[0].finish = 2.0
+	races.rivals[0].finish = 0.01
 	for i in gates.size():
 		await _to_gate(t, races, i)
 		if races.state != Races.State.RACING:
@@ -544,7 +552,7 @@ func test_bike_rental_and_trial(t) -> void:
 	races.try_interact()
 	await t._frames(200)
 	p.exit_vehicle()
-	await t._frames(8 * 60)
+	await t._frames(8 * 60 + 30)
 	t.check(races.state == Races.State.IDLE, "walking away from the bike abandons the trial")
 
 

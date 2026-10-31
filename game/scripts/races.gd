@@ -320,7 +320,9 @@ func start_race(race_mode: String) -> bool:
 	mode = race_mode
 	course = c
 	_begin(car)
-	var slot := _slot(0, -1)
+	# The player takes the back row, left: nobody sits behind him to be rammed
+	# if he is slow off the line (the AI does not brake for the player's car).
+	var slot := _slot(1, -1)
 	put_car(car, slot.pos, slot.yaw)
 	_spawn_rivals(NIGHT_RIVALS if night else DAY_RIVALS)
 	_say("%s: %d laps, %d checkpoints" % ["Night run" if night else "Hill race", LAPS, course.gates.size()])
@@ -387,7 +389,7 @@ func put_car(car, pos: Vector3, yaw: float) -> void:
 
 
 func _spawn_rivals(specs: Array) -> void:
-	var slots := [[0, 1], [1, -1], [1, 1]]
+	var slots := [[0, 1], [0, -1], [1, 1]]
 	for i in mini(specs.size(), slots.size()):
 		var s: Dictionary = specs[i]
 		var slot := _slot(slots[i][0], slots[i][1])
@@ -559,6 +561,7 @@ func _finish() -> void:
 	result = {"mode": mode, "place": pl, "time": time, "prize": prize, "medal": got, "best": float(best.get(mode, time)),
 		"new_best": new_best, "stake": stake}
 	_hide_gates()
+	_pass_through_player()
 	var line := ""
 	if mode == "bike":
 		line = "%s   %s" % [MEDAL_NAMES[got].capitalize(), fmt_time(time)]
@@ -576,7 +579,22 @@ func _finish() -> void:
 
 # --- Rivals -----------------------------------------------------------------------
 
+## After the finish the field drives on through the line behind the winner: the
+## player's car and the rivals no longer touch, so a finisher who stops on the
+## line is not rammed by the cars he just beat.
+func _pass_through_player() -> void:
+	var mine = _player_car
+	if mine == null or not is_instance_valid(mine):
+		return
+	for r in rivals:
+		if is_instance_valid(r.car):
+			r.car.add_collision_exception_with(mine)
+			mine.add_collision_exception_with(r.car)
+
+
 func _update_rivals(delta: float) -> void:
+	if rivals.is_empty():
+		return # the bike trial is against the clock: no field, no speed profile
 	var vlim: PackedFloat32Array = course.vlim
 	var rival_i: PackedInt32Array = course.rival_i
 	var gates: Array = course.gates
