@@ -483,8 +483,10 @@ func test_wildlife_stays_out_of_lakes(t) -> void:
 	t.check(not lake.is_empty(), "the hills have a lake with a walkable shore")
 	if lake.is_empty():
 		return
+	# The player 12 m behind the herd: well inside a deer's flee radius even
+	# standing still (25 m x 0.7), so the herd always runs at the lake.
 	var herd_at := shore + out * 8.0
-	var player_at := shore + out * 26.0
+	var player_at := shore + out * 20.0
 	var at = await _stand(t, player_at)
 	w.refresh()
 	for a in w.animals.duplicate():
