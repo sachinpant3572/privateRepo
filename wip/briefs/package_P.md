@@ -10,3 +10,5 @@ What to build:
 Tests (tests/air_sports_tests.gd; each check must fail if the feature broke): a bail at about 150 m opens the canopy, lands with landing descent at most about 7 m/s and no or minor damage, no NaN, never below ground; a bail at 150 m with the canopy never opened (test hook) does what today's fall does; a bail below the minimum keeps today's behaviour exactly; steering under canopy moves the landing spot; the BASE prompt appears at the lip and the jump lands safely; bungee: the cash is taken, the lowest point stays at least 3 m above the ground, the bounces decay, the player ends back on the platform, a broke player is refused. Take screenshots (free fall, canopy open, the BASE lip, the bungee at its lowest point) and look at them through a contact sheet.
 
 Report as the common rules say, including exact patches for main.gd, hud.gd and camera.gd (if the camera needs to follow a falling player differently).
+
+No head start: the earlier P builder wrote nothing.
