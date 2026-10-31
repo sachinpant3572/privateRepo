@@ -67,13 +67,13 @@ func _run() -> void:
 		if races.state == races.State.RACING:
 			break
 		await _frames(1)
-	_on_course(car, hill, float(hill.gates[0].arc) - 26.0, 2.6)
+	_on_course(car, hill, float(hill.gates[0].arc) - 1.0, 16.0)
 	for i in 1500:
 		await _frames(1)
 		races._since_gate = 0.0
 		var near := false
 		for r in races.rivals:
-			if r.car.global_position.distance_to(car.global_position) < 30.0:
+			if r.car.global_position.distance_to(car.global_position) < 17.0:
 				near = true
 		if near:
 			break
@@ -90,8 +90,8 @@ func _run() -> void:
 	races.try_interact()
 	for i in 260:
 		await _frames(1)
-	_on_course(car, hill, float(hill.gates[0].arc) - 26.0, 2.6)
-	await _frames(40)
+	_on_course(car, hill, float(hill.gates[0].arc) - 1.0, 16.0)
+	await _frames(150) # the GO! message has faded by then
 	await _shot("race_5_night_gate.png")
 	races.cancel()
 	game.atmosphere.hour = 12.5
@@ -117,7 +117,7 @@ func _run() -> void:
 		await _frames(1)
 	var trail: Dictionary = races.trail_course()
 	_on_course(game.player.vehicle, trail, float(trail.gates[0].arc) - 14.0, 0.0)
-	await _frames(40)
+	await _frames(150) # the GO! message has faded by then
 	await _shot("race_8_trail_gate.png")
 	get_tree().quit()
 

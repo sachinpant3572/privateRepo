@@ -214,6 +214,8 @@ func _player_pos() -> Vector3:
 	return game.player.focus_node().global_position
 
 
+## The HUD's centre message is one 84 px line with no wrapping: about 28
+## characters fit a 1280 px screen, so keep every message short.
 func _say(text: String) -> void:
 	if game != null and game.get("hud") != null and game.hud != null:
 		game.hud.show_message(text)
@@ -317,7 +319,7 @@ func start_race(race_mode: String) -> bool:
 	if night:
 		buy_in = wager_for(game.cash)
 		if buy_in < WAGER_MIN:
-			_say("A night run takes a $%d buy-in" % WAGER_MIN)
+			_say("Need a $%d buy-in" % WAGER_MIN)
 			return false
 		game.cash -= buy_in
 	stake = buy_in
@@ -329,7 +331,7 @@ func start_race(race_mode: String) -> bool:
 	var slot := _slot(1, -1)
 	put_car(car, slot.pos, slot.yaw)
 	_spawn_rivals(NIGHT_RIVALS if night else DAY_RIVALS)
-	_say("%s: %d laps, %d checkpoints" % ["Night run" if night else "Hill race", LAPS, course.gates.size()])
+	_say("%s: %d laps" % ["Night run" if night else "Hill race", LAPS])
 	return true
 
 
@@ -349,7 +351,7 @@ func start_trial() -> bool:
 	var at := RaceCourse.at_arc(c, 1.5)
 	put_car(car, at.pos, RaceCourse.yaw_of(at.dir))
 	_clear_rivals()
-	_say("Calder downhill trial: %d checkpoints" % c.gates.size())
+	_say("Downhill trial")
 	return true
 
 
@@ -506,16 +508,16 @@ func _player_ok(delta: float) -> bool:
 	if car == null:
 		_off_vehicle += delta
 		if _off_vehicle > OFF_VEHICLE_TIME:
-			cancel("You left your ride: race abandoned")
+			cancel("Left your ride")
 			return false
 	else:
 		_off_vehicle = 0.0
 		_player_car = car
 		if car.wrecked:
-			cancel("Your ride is wrecked: race abandoned")
+			cancel("Ride wrecked")
 			return false
 	if _since_gate > LOST_TIME:
-		cancel("Lost the course: race abandoned")
+		cancel("Lost the course")
 		return false
 	return true
 
@@ -732,7 +734,7 @@ func _police_tick(delta: float) -> void:
 	if police_sees():
 		_flagged = true
 		Wanted.report_crime(1)
-		_say("Street racing: the police saw you")
+		_say("Police saw you!")
 
 
 ## Whether a police car or an officer has a clear line to the player within
@@ -794,7 +796,7 @@ func rent_bike() -> bool:
 	put_car(bike, at.pos, RaceCourse.yaw_of(at.dir))
 	_rented = bike
 	game.player.enter_vehicle(bike)
-	_say("Bike hired for $%d. Ride the Calder Trail down" % RENT_PRICE)
+	_say("Bike hired: $%d" % RENT_PRICE)
 	return true
 
 

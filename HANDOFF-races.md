@@ -1,17 +1,17 @@
 # Package R: races and cycling (decisions note)
 
-Phase 3 of HANDOFF-hill-content.md. Files: game/scripts/races.gd (the module),
-game/scripts/race_course.gd (course builder), game/tests/race_tests.gd (15 tests),
-game/tests/race_shots.gd/.tscn (8 screenshots), game/tests/race_calib.gd/.tscn
-(manual pace probe, not in the suite), one TEST_MODULES line in tests/test_runner.gd.
-Resumed from a cut-off builder's snapshot (wip/snapshots/R.patch).
+Phase 3 of HANDOFF-hill-content.md. Files in game/: scripts/races.gd (module),
+scripts/race_course.gd (courses), tests/race_tests.gd (15 tests), tests/race_shots.*
+(8 shots), tests/race_calib.* (manual pace probe), a TEST_MODULES line in test_runner.gd.
 
 ## Status
 
-Built and tested; what is missing is the main-session wiring below. Test pass
-lines are in the report. Screenshots were taken with the wiring applied
-temporarily (never committed). Not touched: main.gd, hud.gd, player.gd,
-vehicle.gd, humanoid.gd, mission_manager.gd.
+Built and tested; what is missing is the main-session wiring below. The 15 race
+tests pass without the wiring (147 checks, 0 failed, no SCRIPT ERROR); the wired
+test, save and start-prompt tests also pass with the patch applied. The 8 shots
+(wiring applied temporarily, never committed) were read via contact sheets and
+show what they should. Not touched: main.gd, hud.gd, player.gd, vehicle.gd,
+humanoid.gd, mission_manager.gd.
 
 ## Main-session patch (needed to switch the feature on)
 
@@ -22,13 +22,9 @@ build their own `Races` node, and `test_races_wired_into_the_game` passes by
 skipping its HUD / E press / save / map checks until `game.races` exists (with
 the patch applied it runs them).
 
-- main.gd: `Races` preload, `var races`, create after hunting, `map_markers()`
-  appends `races.map_markers()`.
-- hud.gd: `_race` label (race panel), set from `hud_text()`; the prompt in the
-  car and on foot from `prompt()`.
-- player.gd: E in a car (`_races_take_press()`, before the roof exit) and on foot.
-- mission_manager.gd: `"races": to_save()` in the save, `load_save` in load_game
-  and reset_progress.
+The patch adds the `Races` node and map markers (main.gd), the race label and
+prompts (hud.gd), E in a car and on foot (player.gd), and the save/load/reset of
+`races` (mission_manager.gd).
 
 ## Decisions
 
@@ -76,6 +72,10 @@ the patch applied it runs them).
   before the next `_start_day`, or the start prompt will not show.
 - The runner does not fail on SCRIPT ERROR: grep for it.
 - The HUD prompt in the screenshots only shows with the wiring patch applied.
+- The HUD's centre message is one 84 px line, no wrapping: ~28 characters at 1280 px.
+  The first race messages ("Bike hired for $10. Ride the Calder Trail down") ran off
+  both edges; keep `_say` text short. A gate is passed within 15 m (bike 11 m), so a
+  parked camera shot of a gate must stand off the line (see race_shots.gd).
 
 ## Appendix: the wiring patch, verbatim
 
