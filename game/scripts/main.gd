@@ -87,6 +87,7 @@ func _ready() -> void:
 	calendar = Calendar.new()
 	calendar.game = self
 	add_child(calendar)
+	atmosphere.calendar = calendar
 	hunting = Hunting.new()
 	add_child(hunting)
 

@@ -77,68 +77,73 @@ on top; built in phases, each committed; `/effort xhigh` suits it.
 - Lab gate stands beside Kestrel Hollow Road, not astride it (review M1):
   lay it across the road (yaw along it, excused from the lot-on-road
   check) in the phase-4 rebuild. Its arm is drawn raised until then.
-- Bungee platform sits on a level pad: phase 3 needs a cliff-edge site.
+- Bungee: no sheer cliff at the pad, so P builds a 36 m jump arm (60 m drop).
 
-## Status
-- Phase 1 committed: hill_kit (e3f7d00, review fixes in), TEST_MODULES
-  hook (a708f59). Hikers/hunters on 14 trail loops (trail_walks read
-  self.trails; a point-offset loop on the 12 m resampled line, since round
-  joins and switchbacks put points 6 m off). Hunting store opens as a place.
-- Sachin 10-31: "It can be single hikers, couples or group of hikers, not
-  same all the time" -> trail parties (Pedestrian.TRAIL_PARTY/pick_party,
-  join_party slots; population queues bodies by party). Hikers 1-4,
-  runners 1-2, hunters 1-2 in file. Done, tested (aa80800).
-- hunting.gd + shop rows + save in (tests/hunting_tests.gd); shooting
-  waits on the wildlife API.
-- Calendar + events (package C) in and wired (39bb3df): main.gd makes
-  calendar and hunting BEFORE missions (missions._ready loads the save into
-  them; hunting used to be null there), events after taxi; save/load/reset
-  carry "calendar" and set atmosphere.sky.day = calendar.day() (moon and
-  the cult's full-moon rule day % 8 == 2 must agree); phone Events app.
-  calendar_tests use the game's own nodes (a second Events built twice).
-  Gates: 9 calendar tests 129/0; hunting, bag/save, phone, taxi-phone,
-  city-population pass.
+## Handover (paused 2026-10-31, session 5, at Sachin's request) - start here
+Branch `ccr-ac909a1c-kp0vp0`, draft PR #3 (stacked on #2's branch), pushed.
+Session 4's builders died with its container; session 5 relaunched them.
+All three builders stopped at a clean point and committed; their work is
+in wip/snapshots/<G|P|R>.patch (base 236c09c; all three pass
+`git apply --check` on e0a7614). Worktrees and their branches are local
+only and die with the container: the patches are the record.
 
-## Handover (paused 2026-10-31 at Sachin's request)
-Resume order (each step: focused tests, then commit and push):
-1. Wildlife (package W, 6d820f8, committed WIP, unreviewed, NOT hooked in):
-   scripts/wildlife.gd, kits/animal_kit.gd, tests/wildlife_tests.gd (9
-   tests; run in TEST_MODULES), tests/wildlife_gallery.tscn. API: static
-   attach(atm) -> node; static startle(pos, r); animals_in(pos, r,
-   with_dead); kill(a, dir, by); hurt(a, dmg, dir, by); carcass_near(pos,
-   r); take_carcass(c) -> kind; signal killed(kind, pos, by). Animal dict
-   keys: check _make() (kind deer/rabbit/coyote/lion, pos, dead, hp, ...).
-   a. Patch atmosphere.gd: `const Wildlife = preload(...wildlife.gd)`,
-      `var wildlife: Node`, `wildlife = Wildlife.attach(self)` after the
-      birds block. Patch fx.gd: same preload, and after each
-      Birds.startle (4 calls) the matching Wildlife.startle with the same
-      pos and radius 18-28 / 20+30*strength / 60*scale / 25.
-   b. Render check: game/tests/wildlife_gallery.tscn "all" under xvfb
-      (opengl3), contact sheet, judge buck/coyote/lion/rabbit colours and
-      night eyeshine (only the doe was checked after the colour fix); tune
-      hide colours in animal_kit _deer/_rabbit/_coyote/_lion. Gallery
-      blood decals pile up on z=0 (give each row its own z).
-   c. Per-package Opus review of W, fix findings.
-2. Hunting on the real API (main session): hunting.gd already calls
-   _wildlife() = atmosphere.wildlife; adapt to the dict keys, then tests:
-   shoot a deer in season, poaching (closed season / no licence / lion)
-   gives a star, skin a carcass for a pelt. Name clash: hunting passes
-   "lion", calendar's season table says "mountain_lion": use one (L8).
-3. Calendar review leftovers (review of 39bb3df; H1 and M2 fixed):
-   M1 time skips lose days (phone Skip 3 h runs paused; call
-   calendar.tick after each press) and sky.day drifts while indoors
-   (_apply_indoors skips sky.update): make the calendar the only day
-   counter and have sky.gd read it. M3 event lights sit on top of the
-   street-lamp budget: graphics should subtract Events.lights_used.
-   Lows: ArrayMesh not cached per kind (rebuilt on each re-entry); queued
-   PeopleBuilder tickets still build after free; show_banner shares the
-   district label; phone Events should skip non-finite pos; stale
-   comments calendar_tests.gd:7-8, sky.gd:47-48.
-4. Phase 1 screenshots never taken: Tallow Lake, a stream, Brackett,
-   Hollin, hunting store interior, trail parties.
-5. Phase 2 close: full game/tests/run.sh, screenshots, one Opus review
-   of the whole task, then phases 3 and 4 (above).
-Every godot run under `flock /tmp/godot.lock`; worst off-flat 4.25 m at
-(2341,-2140) near Brackett is unchecked (new or old).
+| pkg | state at pause | its note (in its patch) |
+| G ground/air/stunts (Opus) | built; 8 tests 71/0 on final code; 51 neighbour tests (vehicle/walk/traffic/taxi/heli) last 505/0 BEFORE ramps moved (stale); stunt shots not taken; not reviewed | HANDOFF-ground.md |
+| P parachute/bungee (Opus) | done 74be212; 7 tests 67/0; +neighbours 163/0 with patch; 13 shots OK; Opus review stopped at pause (not done) | HANDOFF-air-sports.md |
+| R races/bike (Sonnet) | done df9c56b, reviewed (wip/reviews/R_review.md: 1 H, 5 M, Lows); fixes for all written at 7cdfb19 but UNRUN; tests half-updated; tests last 152/0 (stale) | HANDOFF-races.md (STATUS) |
 
-Phase 2 package plan: HANDOFF-hill-content-archive.md.
+G detail: ramps bend, rise, crest_south all on the east shoulder (Crest
+North dropped; west shoulder has poles every 15.6 m at x 2634 and a
+tilted bank); Rise Hop heads south from (2646.5, -2992). Screenshots need
+a wrapper script that takes /tmp/godot.lock itself (the harness refused
+inline flock + xvfb-run). Expect 6 `saved` lines from stunt_shots.tscn.
+R detail: H1 rival car taken by player dropped; M2 refused press falls
+through, start only < 3 m/s, TRIAL_RANGE 14; M3 "Finish the job first";
+M4 uses police _anyone_sees; M5 260 m run-off; buy-in pick (first E opens
+4 s pick, E steps 100/200/300/500). Left: TESTS list, star test (real
+cop), new tests per fix, race_shots night press, re-check its patch.
+P open: ground_under() -> Ground.height once G is in; lot still named
+"129 m drop" (jump is 60 m); BASE hands-off flight ~135 s, ~1 km.
+
+Resume steps (in order):
+1. `game/tools/setup_cloud.sh` (background). Per package, a builder in an
+   isolation worktree: `git apply --3way wip/snapshots/<X>.patch`, read
+   wip/briefs/brief_common.md + package_<X>.md and its own HANDOFF note,
+   finish its listed next steps (G: neighbour tests, shots; R: tests and
+   shots for the fixes, re-check patch; P: nothing to build). Builders
+   commit in their worktree at milestones; main runs wip/snapshot.sh
+   (update its agent-id map and base) and commits after each report.
+2. Reviews: P's Opus review (rerun, brief as for R); G's Opus review once
+   G reports; R needs no second review unless its fixes hit trouble.
+3. Main session wires each: patches for main.gd/hud.gd/player.gd/
+   mission_manager.gd (G and R: in their HANDOFF notes / HANDOFF-races.patch;
+   P: wip/P/main_hud.patch). Clashes: all three append TEST_MODULES in
+   test_runner.gd (merge by hand); P edits player.gd bail code and G's
+   patch switches three exit/bail lines in player.gd to Ground.height;
+   R's and P's hud.gd branches both go near the hunting/interiors prompt.
+   Then switch P's ground_under() to Ground.height. Run each package's
+   tests after wiring.
+4. After all three: full `game/tests/run.sh`, screenshots with the HUD
+   wired (race panel and in-car prompt were never seen: R review M6),
+   contact sheet, one Opus review of the integration, delete wip/, push.
+5. Phase 4 (plan below): bridges/tunnels on G's Ground API, Opus + review.
+Nothing needs Sachin's approval so far.
+
+Report-only items: trail loop 904 (nobody passed in 20 s at noon); calendar
+Lows (archive); in_city cost unmeasured on a device; godot once hung at
+its banner (check `pgrep -af godot`).
+
+## Phase 3 and 4 plan (decided 2026-10-31)
+- vehicle.gd has no air state (y = Terrain.height each frame), so stunt
+  jumps and the deck layer share one change: a ground layer (decks: ramps,
+  bridges, tunnel floors) and a ballistic air state. One Opus package owns
+  vehicle.gd/humanoid.gd ground code: G = deck layer + airtime + stunt
+  ramps. Wave A in parallel worktrees: R (races, illegal night races,
+  downhill bike time trial; Sonnet xhigh), G (Opus xhigh), P (parachute
+  and bungee; Opus xhigh, physics). Wave B after G: bridges and tunnels
+  (Opus). Main session wires each into main.gd/hud.gd and merges.
+  Cheaper option named for Sachin: all in the main session, sequential.
+- Cost: R Sonnet xhigh ~0.5-1 h used, G/P Opus xhigh ~45-50 min each in
+  session 5, plus a 5-40 min Opus review each; shared /tmp/godot.lock.
+
+Archive: phase 1-2 history, phase 2 package plan, sessions 2-3.

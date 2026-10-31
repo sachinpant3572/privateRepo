@@ -45,7 +45,8 @@ const FALLOFF := 230.0
 ## A lunar month in game days (a day is 24 real minutes).
 const LUNAR_DAYS := 8.0
 ## Phase on day 0 (0 new, 0.5 full): a waxing crescent, so the first night
-## out of town shows the Milky Way; the moon is full on the fourth night.
+## out of town shows the Milky Way; the moon is nearest full on the third
+## night, the night of day 2 (calendar.gd full_moon_night: day % 8 == 2).
 const PHASE0 := 0.08
 ## Fewest stars, in the brightest city centre (0..1 of a dark sky's).
 const CITY_STARS := 0.08
@@ -270,7 +271,8 @@ var milky := 0.0
 var glow_amount := 0.0
 var zenith := Color()
 var horizon := Color()
-## Whole game days since the start (moon phase, stars' turn).
+## Whole game days since the start (moon phase, stars' turn): the
+## calendar's when the atmosphere has one, else counted here.
 var day := 0
 var _last_hour := -1.0
 var _wait := 0.0
@@ -298,7 +300,13 @@ func _init(environment: Environment) -> void:
 ## camera's focus); `cam` decides how often the shader is updated.
 func update(atm, delta: float, ground: Vector3, cam: Camera3D) -> void:
 	var hour: float = atm.hour
-	if _last_hour >= 0.0 and hour < _last_hour - 12.0:
+	var cal = atm.get("calendar")
+	if cal != null:
+		# The calendar is the day count (it ticks indoors too); feeding it
+		# the clock here keeps a frame where the hour was set straight.
+		cal.tick(hour)
+		day = cal.day()
+	elif _last_hour >= 0.0 and hour < _last_hour - 12.0:
 		day += 1
 	_last_hour = hour
 	var on_screen := cam != null and looks_at_sky(cam)

@@ -248,6 +248,8 @@ func _ready() -> void:
 	view.multimesh = mm
 	view.material_override = material
 	view.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Instances are moved in _process: no physics interpolation for them.
+	view.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	view.custom_aabb = AABB(Vector3(-1e5, -1e3, -1e5), Vector3(2e5, 4e3, 2e5))
 	view.visible = false
 	add_child(view)

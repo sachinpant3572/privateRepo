@@ -21,7 +21,7 @@ const GEAR := {
 	"ammo": {"name": "Rifle rounds (box of 10)", "price": 18, "note": "Carry up to 40"},
 }
 const PELT_PRICE := {"deer": 90, "coyote": 45, "rabbit": 14}
-const PELT_NAMES := {"deer": "deer", "coyote": "coyote", "rabbit": "rabbit", "lion": "mountain lion"}
+const PELT_NAMES := {"deer": "deer", "coyote": "coyote", "rabbit": "rabbit"}
 const LICENCE_DAYS := 28
 const AMMO_MAX := 40
 const PELT_MAX := 6
@@ -98,6 +98,9 @@ func shoot():
 	var muzzle: Vector3 = player.global_position + Vector3(0, 1.45, 0) + player.forward() * 1.1
 	Fx.puff(muzzle, player.forward() * 2.0, 0.25, 1.4, 0.6, Color(0.85, 0.85, 0.82, 0.6))
 	var target = _pick_target(player)
+	# A lion shot while it stalks or charges the hunter is self-defence
+	# (its state before the bang startles it).
+	var defence: bool = target != null and target.kind == "lion" and target.get("state", "") in ["stalk", "charge"]
 	var w = _wildlife()
 	if w != null and w.has_method("startle"):
 		w.startle(player.global_position, STARTLE)
@@ -110,8 +113,10 @@ func shoot():
 	if randf() > chance:
 		return null
 	var kind: String = target.kind
-	w.kill(target, (pos - player.global_position).normalized())
-	if not (licence_valid() and _open_season(kind)):
+	w.kill(target, (pos - player.global_position).normalized(), "rifle")
+	if defence:
+		game.hud.show_message("Self-defence: the rangers let it go")
+	elif not (licence_valid() and _open_season(kind)):
 		Wanted.report_crime(1)
 		var why := "no licence" if not licence_valid() else "out of season"
 		game.hud.show_message("Poaching (%s): the rangers are after you" % why)
@@ -175,7 +180,10 @@ func _carcass():
 	var p = game.player if game != null else null
 	if w == null or p == null or p.vehicle != null or not w.has_method("carcass_near"):
 		return null
-	return w.carcass_near(p.global_position, SKIN_RANGE)
+	# Only the player's own rifle kills of the kinds the store buys: roadkill
+	# and a punched rabbit are ruined, and the rangers take a lion.
+	var c: Dictionary = w.carcass_near(p.global_position, SKIN_RANGE, "rifle")
+	return null if c.is_empty() or not PELT_PRICE.has(c.kind) else c
 
 
 ## Skins the carcass at the player's feet. True when it did.
@@ -202,8 +210,7 @@ func pelts_total() -> int:
 	return n
 
 
-## What the store pays for the pelts it takes (a mountain lion's it won't
-## touch: they are never in season).
+## What the store pays for the pelts it carries.
 func pelt_value() -> int:
 	var v := 0
 	for k in pelts:
@@ -261,6 +268,8 @@ func load_save(d: Dictionary) -> void:
 	pelts = {}
 	var p = d.get("pelts", {})
 	if typeof(p) == TYPE_DICTIONARY:
+		# Only kinds the store buys (an older save may hold a lion pelt, which
+		# could never be sold) and no more than PELT_MAX in all.
 		for k in p:
-			if PELT_NAMES.has(k):
-				pelts[k] = clampi(int(p[k]), 0, PELT_MAX)
+			if PELT_PRICE.has(k):
+				pelts[k] = clampi(int(p[k]), 0, PELT_MAX - pelts_total())

@@ -136,7 +136,14 @@ func start(id: String, teleport := false) -> void:
 		game.player.stand_at(p)
 		game.camera.snap()
 	if m.start_hour() >= 0.0:
-		game.atmosphere.hour = m.start_hour()
+		# Forward to the start hour through advance(), so the calendar counts
+		# the night that passes (licences, weekly events, the moon); a start
+		# less than an hour behind the clock just steps it back, same day.
+		var ahead := fposmod(m.start_hour() - game.atmosphere.hour, 24.0)
+		if ahead > 23.0:
+			game.atmosphere.hour = m.start_hour()
+		else:
+			game.atmosphere.advance(ahead)
 	changed.emit()
 	_run(m)
 
@@ -329,8 +336,6 @@ func load_game() -> void:
 	game.hunting.load_save(hunt if typeof(hunt) == TYPE_DICTIONARY else {})
 	var cal = data.get("calendar")
 	game.calendar.load_save(cal if typeof(cal) == TYPE_DICTIONARY else {})
-	# sky.gd counts its own day for the moon; keep it on the calendar's.
-	game.atmosphere.sky.day = game.calendar.day()
 	GameLog.event("load", {"version": int(data.get("version", 1)), "done": done.size(), "cash": game.cash})
 
 
@@ -343,6 +348,5 @@ func reset_progress() -> void:
 	game.inventory.bag.clear()
 	game.hunting.load_save({})
 	game.calendar.load_save({})
-	game.atmosphere.sky.day = 0
 	save_game()
 	changed.emit()

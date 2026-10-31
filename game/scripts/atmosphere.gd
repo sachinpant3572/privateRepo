@@ -11,6 +11,7 @@ signal night_changed(on: bool)
 
 const SkyDome = preload("res://scripts/sky.gd")
 const Birds = preload("res://scripts/birds.gd")
+const Wildlife = preload("res://scripts/wildlife.gd")
 ## The nearest the perspective shadows reach (m); a parked camera frames
 ## about 30 m of ground.
 const SHADOW_MIN := 40.0
@@ -44,6 +45,10 @@ var indoors := false
 var hour := 17.0
 ## Game minutes per real second.
 var minutes_per_second := 1.0
+## The game's calendar (main.gd sets it): the one count of days. The sky
+## reads its day for the moon and the stars; null in galleries and some tests,
+## where the sky counts midnights itself.
+var calendar: Node
 var weather := "clear"
 ## Set to false to hold the weather (missions, tests, screenshots).
 var weather_changes := true
@@ -68,6 +73,8 @@ var _rain: CPUParticles3D
 var sky: SkyDome
 ## Flocks by day, bats at dusk (birds.gd).
 var birds: Birds
+## Deer, rabbits, coyotes and mountain lions in the hills (wildlife.gd).
+var wildlife: Node
 var _splash: CPUParticles3D
 var rng := RandomNumberGenerator.new()
 
@@ -118,6 +125,7 @@ func _ready() -> void:
 	birds = Birds.new()
 	birds.atmosphere = self
 	add_child(birds)
+	wildlife = Wildlife.attach(self)
 	_rain = _make_rain()
 	_splash = _make_splashes()
 	_apply(0.0)
@@ -180,6 +188,20 @@ func night_amount() -> float:
 	if hour < 7.0:
 		return 1.0 - smoothstep(5.0, 6.8, hour)
 	return 0.0
+
+
+## Moves the clock on `hours` (a skip, a taxi ride) and counts every
+## midnight crossed into the calendar, however long the jump; the paused
+## phone or a skipped ride never loses a day.
+func advance(hours: float) -> void:
+	var total := hour + maxf(hours, 0.0)
+	var days := floori(total / 24.0)
+	hour = fposmod(total, 24.0)
+	if calendar != null:
+		if days > 0:
+			calendar.add_days(days, hour)
+		else:
+			calendar.tick(hour)
 
 
 ## "18:42"

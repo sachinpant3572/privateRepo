@@ -77,6 +77,10 @@ func _run() -> void:
 		await _mountain(game)
 		get_tree().quit()
 		return
+	if OS.get_environment("SHOTS") == "hillplaces":
+		await _hill_places(game)
+		get_tree().quit()
+		return
 	if OS.get_environment("SHOTS") == "easthills":
 		await _east_hills(game)
 		get_tree().quit()
@@ -458,6 +462,109 @@ func _east_hills(game) -> void:
 ## The hills' ecology (0.23): a wet canyon floor, a dry south face, a
 ## green north face, the pines up high, a eucalyptus grove, and two wide
 ## views showing the golden and green patches.
+## Phase 1 of the hill content (HANDOFF-hill-content.md): Tallow Lake wide
+## and at its shore, a stream down a valley, Brackett and Hollin Crossing,
+## the Hollin hunting store, and a party of hikers on a trail
+## (hill_1 .. hill_7).
+func _hill_places(game) -> void:
+	var c = game.city.country
+	var stops := []
+	for l in c.lakes:
+		if String(l.name) == "Tallow Lake":
+			var r: Rect2 = l.rect
+			stops.append(["hill_1_tallow_lake", r.get_center(), 240.0])
+			var poly: PackedVector2Array = l.poly
+			stops.append(["hill_2_tallow_shore", poly[0], 60.0])
+	# A stream: the middle of the longest one.
+	var best_s = null
+	for st in c.streams:
+		if best_s == null or (st.pts as PackedVector2Array).size() > (best_s.pts as PackedVector2Array).size():
+			best_s = st
+	if best_s != null:
+		var pts: PackedVector2Array = best_s.pts
+		stops.append(["hill_3_stream_" + String(best_s.name).to_snake_case(), pts[pts.size() / 2], 70.0])
+	# The villages as built: the place doors nearest the design points.
+	for v in [["hill_4_brackett", Vector2(2412, -2116), 130.0], ["hill_5_hollin", Vector2(1448, -4408), 150.0]]:
+		var at: Vector2 = v[1]
+		var best := INF
+		for p in game.city.places:
+			var d := Vector2(p.door.x, p.door.z).distance_to(v[1])
+			if d < best and d < 400.0:
+				best = d
+				at = Vector2(p.door.x, p.door.z)
+		stops.append([v[0], at, v[2]])
+	for p in game.city.places:
+		if p.type == "hunting_store":
+			stops.append(["hill_6_hunting_store", Vector2(p.door.x, p.door.z), 40.0])
+			break
+	for stop in stops:
+		var at: Vector2 = stop[1]
+		var pos := Vector3(at.x, Terrain.height(at.x, at.y), at.y)
+		game.city.stream_now(pos)
+		game.player.global_position = pos
+		game.player.reset_physics_interpolation()
+		game.camera.fixed_focus = pos
+		game.camera.room_size = stop[2]
+		game.camera.snap()
+		await _frames(90)
+		await _shot(stop[0] + ".png")
+	game.camera.fixed_focus = null
+	game.camera.room_size = 0.0
+	# A trail party: stand on a trail loop for 20 s and count the trail
+	# people who come by themselves; frame a party of them, or a scripted
+	# party of three hikers if none came.
+	var loops: Array = game.city.sidewalk_loops
+	var li := -1
+	for k in loops.size():
+		if game.city.loop_kind(k) == "trail":
+			li = k
+			break
+	if li >= 0:
+		var w: PackedVector3Array = loops[li]
+		# The loop point farthest from any road, and how much of the loop
+		# lies on one (within 6 m).
+		var country = game.city.get("country")
+		var best := 0
+		var best_d := -1.0
+		var on_road := 0
+		for k in w.size():
+			var d: float = country.road_distance(Vector2(w[k].x, w[k].z), 60.0) if country != null else 0.0
+			if d < 6.0:
+				on_road += 1
+			if d > best_d:
+				best_d = d
+				best = k
+		print("trail loop %d: %d points, %d within 6 m of a road, farthest %.0f m" % [li, w.size(), on_road, best_d])
+		var pos: Vector3 = w[best]
+		game.city.stream_now(pos)
+		game.player.global_position = pos
+		game.player.reset_physics_interpolation()
+		game.camera.snap()
+		await _frames(1200)
+		var hill := 0
+		var lead = null
+		for h in get_tree().get_nodes_in_group("humanoids"):
+			if h.get("category") in ["hiker", "athlete", "hunter"] and h.global_position.distance_to(pos) < 150.0:
+				hill += 1
+				if h.get("leader") != null and is_instance_valid(h.leader):
+					lead = h.leader
+		print("trail people near the loop after 20 s: ", hill, ", a party: ", lead != null)
+		if lead == null:
+			var Pedestrian = preload("res://scripts/pedestrian.gd")
+			lead = game.population._add_ped(li, best)
+			for k in range(1, 3):
+				var mate = game.population._add_ped(li, best)
+				mate.join_party(lead, Pedestrian.party_slot("hiker", 3, k))
+			await _frames(240)
+		game.camera.fixed_focus = lead.global_position
+		game.camera.room_size = 30.0
+		game.camera.snap()
+		await _frames(30)
+		await _shot("hill_7_trail_party.png")
+	game.camera.fixed_focus = null
+	game.camera.room_size = 0.0
+
+
 func _flora(game) -> void:
 	var Flora = preload("res://scripts/kits/flora_kit.gd")
 	var best := {}

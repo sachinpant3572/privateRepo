@@ -46,6 +46,10 @@ var sun := DirectionalLight3D.new()
 var env := Environment.new()
 var stub := Stub.new()
 var wild: Node
+## Each row and scene stands at its own z, so the blood of one row's dead
+## animal does not show under the next.
+var _o := Vector3.ZERO
+var _row := 0
 
 
 func _ready() -> void:
@@ -117,7 +121,7 @@ func _clear() -> void:
 ## An animal of `model` (kind found from the model) standing at `pos`.
 func _put(model: String, pos: Vector3, yaw: float, pose: Array) -> Dictionary:
 	var kind: String = {"doe": "deer", "buck": "deer", "rabbit": "rabbit", "coyote": "coyote", "lion": "lion"}[model]
-	var a: Dictionary = wild._make(kind, model, pos, null)
+	var a: Dictionary = wild._make(kind, model, pos + _o, null)
 	a.size = 1.0
 	a.yaw = yaw
 	a.state = pose[1]
@@ -140,6 +144,7 @@ func _model_shots(model: String) -> void:
 	var width := step * n
 	_light(DAY)
 	_clear()
+	_next_row()
 	for i in n:
 		# A line nose to tail along x, all facing -x: a profile for every one.
 		var x := (i - (n - 1) * 0.5) * step
@@ -150,19 +155,19 @@ func _model_shots(model: String) -> void:
 	camera.size = height
 	camera.rotation_degrees = Vector3(-8.0, 0.0, 0.0)
 	# Aimed at the row's middle: the pitch would otherwise shift an orthographic view.
-	camera.global_position = Vector3(0.0, 0.45, 0.0) + camera.global_basis.z * 30.0
+	camera.global_position = _o + Vector3(0.0, 0.45, 0.0) + camera.global_basis.z * 30.0
 	await _snap("wild_%s_1_side.png" % model)
 	# The same row from above at the game camera's distance.
 	camera.projection = Camera3D.PROJECTION_PERSPECTIVE
 	camera.fov = 35.0
 	camera.rotation_degrees = Vector3(-60.0, 0.0, 0.0)
-	camera.global_position = Vector3(0.0, 0.0, 0.0) + camera.global_basis.z * 28.0
+	camera.global_position = _o + Vector3(0.0, 0.0, 0.0) + camera.global_basis.z * 28.0
 	await _snap("wild_%s_2_game.png" % model)
 	# Close, three-quarter, from the front.
 	camera.fov = 40.0
 	camera.rotation_degrees = Vector3(-30.0, -35.0, 0.0)
 	var mid := Vector3((1 - (n - 1) * 0.5) * step, 0.4, 0.0)
-	camera.global_position = mid + camera.global_basis.z * (step * 3.2 + 2.0)
+	camera.global_position = _o + mid + camera.global_basis.z * (step * 3.2 + 2.0)
 	await _snap("wild_%s_3_close.png" % model)
 
 
@@ -170,6 +175,7 @@ func _model_shots(model: String) -> void:
 func _scene(night: bool) -> void:
 	_light(NIGHT if night else DAY)
 	_clear()
+	_next_row()
 	var graze: Array = POSES[1]
 	var stand: Array = POSES[0]
 	var walk: Array = POSES[2]
@@ -195,12 +201,17 @@ func _scene(night: bool) -> void:
 	camera.projection = Camera3D.PROJECTION_PERSPECTIVE
 	camera.fov = 35.0
 	camera.rotation_degrees = Vector3(-60.0, 0.0, 0.0)
-	camera.global_position = Vector3(0.0, 0.0, 0.0) + camera.global_basis.z * 26.0
+	camera.global_position = _o + Vector3(0.0, 0.0, 0.0) + camera.global_basis.z * 26.0
 	await _snap("wild_scene_%s_game.png" % ("night" if night else "day"))
 	camera.fov = 35.0
 	camera.rotation_degrees = Vector3(-24.0, 20.0, 0.0)
-	camera.global_position = Vector3(0.0, 1.0, 0.0) + camera.global_basis.z * 20.0
+	camera.global_position = _o + Vector3(0.0, 1.0, 0.0) + camera.global_basis.z * 20.0
 	await _snap("wild_scene_%s_low.png" % ("night" if night else "day"))
+
+
+func _next_row() -> void:
+	_row += 1
+	_o = Vector3(0.0, 0.0, -40.0 * _row)
 
 
 func _snap(file: String) -> void:

@@ -2157,6 +2157,9 @@ class Country:
             n = math.hypot(nx, ny) or 1.0
             yaw = yaw_facing(nx / n, ny / n)
             poly = lot_poly(q[0], q[1], yaw, w, d)
+            if self._site_skew(q, yaw, d) > 3.5:
+                why.update(["skew"])
+                continue
             hit = [k for k, bad in (("road", self.road_prep.intersects(poly.buffer(3.0))),
                                     ("lot", self.lot_grid.hits(poly)), ("plot", self.plot_grid.hits(poly)),
                                     ("water", self.water_prep.intersects(poly)),
@@ -2170,6 +2173,14 @@ class Country:
             return True
         print("  %s: no site within %d m (%s)" % (ident, search, dict(why)))
         return False
+
+    def _site_skew(self, q, yaw, d):
+        """Degrees a site lot's front turns off the road edge within 8 m of
+        it, as the tests measure it (_road_turn), 0 with none near: facing
+        the nearest road point from the centre is not square to the road
+        when that point is a road's end or round a bend (the Kestrel lab
+        stood 80 deg off Kestrel Hollow Road)."""
+        return max(self._road_turn(frame_point(q, yaw, 0.0, -d * 0.5), yaw), 0.0)
 
     def hill_places(self):
         """The hill country's villages, roadside stops, trailer town and
