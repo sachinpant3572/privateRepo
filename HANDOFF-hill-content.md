@@ -103,12 +103,12 @@ Sessions 4-5 (10-31): session 4's builders were lost with its container
 R puts its main/hud/player/mission_manager edits in its report as patches.
 
 In progress: phase 3 wave A, three builders in local worktrees (branches
-not pushed; base fe9f7ec). Their briefs: wip/briefs/ (paths made
+not pushed; base 236c09c). Their briefs: wip/briefs/ (paths made
 worktree-relative in c53c27b).
 | pkg | builder | worktree (.claude/worktrees/) | files so far |
-| G ground/air/stunts | Opus xhigh | agent-a51e54d60601755b1 | ground.gd, ramp_kit.gd, vehicle.gd, humanoid.gd |
-| P parachute/bungee | Opus xhigh | agent-a33a1bd59f718629f | parachute.gd, bungee.gd, kits/air_sports_kit.gd, player.gd |
-| R races/cycling | Sonnet xhigh | agent-a9c0ec2e48144bf73 | races.gd, race_course.gd (moved from wip/R), race_shots, race_calib |
+| G ground/air/stunts | Opus xhigh | agent-a721ea34355c032ed | ground.gd, ramp_kit.gd, vehicle.gd, humanoid.gd |
+| P parachute/bungee | Opus xhigh | agent-a36839f94834eb721 | parachute.gd, bungee.gd, kits/air_sports_kit.gd, player.gd |
+| R races/cycling | Sonnet xhigh | agent-a8e49a24b2d9859ff | races.gd, race_course.gd (moved from wip/R), race_shots, race_calib |
 - R had edited main.gd, hud.gd, player.gd, mission_manager.gd against its
   brief; told to revert them and report patches instead.
 - `wip/snapshot.sh` saves each worktree's work (commits, uncommitted,
