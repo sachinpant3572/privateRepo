@@ -67,10 +67,14 @@ const DAY_RIVALS := [
 	{"name": "Darrow Pike", "kind": "crossover", "paint": Color(0.95, 0.75, 0.1), "skill": 0.9, "off": -1.4},
 	{"name": "Ines Holloway", "kind": "compact", "paint": Color(0.15, 0.55, 0.3), "skill": 0.95, "off": 0.0},
 ]
+## Rival cars take this many times their model's health: the hill's hairpins
+## scrape a light sports car to a wreck in one lap, and a race should be lost
+## on pace, not because the field burnt out.
+const RIVAL_HEALTH := 3.0
 const NIGHT_RIVALS := [
-	{"name": "Rix", "kind": "sports", "paint": Color(0.1, 0.1, 0.12), "skill": 0.95, "off": 1.4},
-	{"name": "Moth", "kind": "muscle", "paint": Color(0.5, 0.08, 0.6), "skill": 1.0, "off": -1.4},
-	{"name": "Solenne", "kind": "roadster", "paint": Color(0.9, 0.9, 0.92), "skill": 1.05, "off": 0.0},
+	{"name": "Rix", "kind": "sports", "paint": Color(0.1, 0.1, 0.12), "skill": 0.98, "off": 1.4},
+	{"name": "Moth", "kind": "muscle", "paint": Color(0.5, 0.08, 0.6), "skill": 1.02, "off": -1.4},
+	{"name": "Solenne", "kind": "roadster", "paint": Color(0.9, 0.9, 0.92), "skill": 1.06, "off": 0.0},
 ]
 
 const BEAM_SHADER := """
@@ -395,6 +399,7 @@ func _spawn_rivals(specs: Array) -> void:
 		var slot := _slot(slots[i][0], slots[i][1])
 		var car = _new_rival_car(s)
 		game.add_child(car)
+		_toughen(car)
 		put_car(car, slot.pos, slot.yaw)
 		var full := RaceCourse.offset_path(course.rival, float(s.off))
 		rivals.append({"car": car, "name": s.name, "skill": float(s.skill), "off": float(s.off), "spec": s, "passed": 0, "base": 0,
@@ -407,6 +412,11 @@ func _new_rival_car(s: Dictionary):
 	car.body_color = s.paint
 	car.city = game.city
 	return car
+
+
+func _toughen(car) -> void:
+	car.max_health *= RIVAL_HEALTH
+	car.health = car.max_health
 
 
 func _go() -> void:
@@ -628,10 +638,10 @@ func _update_rivals(delta: float) -> void:
 
 ## Puts a stuck or lost rival back on its line, a point behind its target,
 ## and sends it on.
-func recover_rival(r: Dictionary) -> void:
+func recover_rival(r: Dictionary, from := -1) -> void:
 	var car = r.car
 	var full: PackedVector3Array = r.full
-	var k: int = clampi(int(r.base) + car.path_index - 1, 0, full.size() - 2)
+	var k: int = clampi(int(r.base) + car.path_index - 1 if from < 0 else from, 0, full.size() - 2)
 	var a: Vector3 = full[k]
 	var b: Vector3 = full[k + 1]
 	var d := Vector3(b.x - a.x, 0.0, b.z - a.z).normalized()
@@ -647,14 +657,16 @@ func recover_rival(r: Dictionary) -> void:
 ## A rival that burnt out gives way to a fresh car of the same model.
 func _replace_rival(r: Dictionary) -> void:
 	var old = r.car
+	var progress: int = int(r.base) + old.path_index - 1 # the fresh car restarts here, not at the last recovery
 	var fresh = _new_rival_car(r.spec)
 	game.add_child(fresh)
+	_toughen(fresh)
 	r.car = fresh
 	r.stall = 0.0
 	r.far = 0.0
 	put_car(fresh, old.global_position, old.rotation.y)
 	old.queue_free()
-	recover_rival(r)
+	recover_rival(r, progress)
 
 
 ## How far along the course the player is (m): the last checkpoint's distance

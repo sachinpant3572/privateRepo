@@ -15,6 +15,7 @@ const Races = preload("res://scripts/races.gd")
 const RaceCourse = preload("res://scripts/race_course.gd")
 const Vehicle = preload("res://scripts/vehicle.gd")
 const Terrain = preload("res://scripts/terrain.gd")
+const VehicleKit = preload("res://scripts/kits/vehicle_kit.gd")
 
 
 ## A fresh game at `hour` with the races module (the game's own once main.gd
@@ -368,10 +369,13 @@ func test_race_stuck_rival_recovers(t) -> void:
 	t.check(best < 8.0, "back on its line, %.1f m off" % best)
 	# 3. A wreck gives way to a fresh car of the same model.
 	var old = r.car
+	var spot: Vector3 = old.global_position
 	old.wrecked = true
 	var model: String = r.spec.kind
 	await t._frames(3)
 	t.check(r.car != old and r.car.kind == model and not r.car.wrecked, "a wrecked rival is swapped for a fresh %s" % model)
+	t.check(r.car.global_position.distance_to(spot) < 25.0, "it restarts on the stretch where it burnt out, %.0f m away" % r.car.global_position.distance_to(spot))
+	t.check(r.car.max_health > float(VehicleKit.spec(model).health) * 2.5 and r.car.health == r.car.max_health, "and every rival car is tougher than stock (%.0f health)" % r.car.max_health)
 	races.cancel()
 
 

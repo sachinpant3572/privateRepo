@@ -1,38 +1,81 @@
 # Package R: races and cycling (decisions note)
 
 Phase 3 of HANDOFF-hill-content.md. Files: game/scripts/races.gd (the module),
-game/scripts/race_course.gd (course builder), game/tests/race_tests.gd,
-game/tests/race_shots.gd/.tscn (screenshots), game/tests/race_calib.gd/.tscn
-(pace probe used to tune rivals), TEST_MODULES line in tests/test_runner.gd.
+game/scripts/race_course.gd (course builder), game/tests/race_tests.gd (15 tests),
+game/tests/race_shots.gd/.tscn (8 screenshots), game/tests/race_calib.gd/.tscn
+(manual pace probe, not in the suite), one TEST_MODULES line in tests/test_runner.gd.
 Resumed from a cut-off builder's snapshot (wip/snapshots/R.patch).
 
 ## Status
 
-(filled in at the end)
+Built and tested; what is missing is the main-session wiring below. Test pass
+lines are in the report. Screenshots were taken with the wiring applied
+temporarily (never committed). Not touched: main.gd, hud.gd, player.gd,
+vehicle.gd, humanoid.gd, mission_manager.gd.
 
 ## Main-session patch (needed to switch the feature on)
 
-The four shared files (main.gd, hud.gd, player.gd, mission_manager.gd) are NOT
-edited here. Apply HANDOFF-races-wiring.patch at the repo root with
-`git apply HANDOFF-races-wiring.patch` (the exact diff is also pasted at the
-foot of this note). Without it the module exists but nothing creates it: the
-tests build their own `Races` node and `test_races_wired_into_the_game` only
-checks the HUD, E press, save and map marker once `game.races` exists.
+The four shared files are NOT edited here. Apply HANDOFF-races-wiring.patch at the
+repo root with `git apply HANDOFF-races-wiring.patch` (the exact diff is also
+pasted at the foot of this note). Without it nothing creates the module: the tests
+build their own `Races` node, and `test_races_wired_into_the_game` passes by
+skipping its HUD / E press / save / map checks until `game.races` exists (with
+the patch applied it runs them).
 
-- main.gd: `const Races = preload(...)`, `var races`, create after hunting
-  (`races = Races.new(); races.game = self; add_child(races)`), and append
-  `races.map_markers()` in `map_markers()`.
-- hud.gd: `_race` label (race panel under the district banner), set from
-  `game.races.hud_text()`; the prompt, in the car and on foot, from
-  `game.races.prompt()`.
-- player.gd: E in a car (`_races_take_press()`, before the roof exit) and E
-  on foot (the bike hire stand).
-- mission_manager.gd: `"races": game.races.to_save()` in the save, `load_save`
-  in load_game and reset_progress.
+- main.gd: `Races` preload, `var races`, create after hunting, `map_markers()`
+  appends `races.map_markers()`.
+- hud.gd: `_race` label (race panel), set from `hud_text()`; the prompt in the
+  car and on foot from `prompt()`.
+- player.gd: E in a car (`_races_take_press()`, before the roof exit) and on foot.
+- mission_manager.gd: `"races": to_save()` in the save, `load_save` in load_game
+  and reset_progress.
 
 ## Decisions
 
-(filled in as work lands)
+- API (races.gd): `prompt()`, `try_interact()`, `hud_text()`, `map_markers()`,
+  `to_save()/load_save()`; also `start_race(mode)` (day/night), `start_trial()`,
+  `rent_bike()`, `cancel()`, `standings()`, `place()`, `medal_for()`,
+  `hill_course()`, `trail_course()`. States: IDLE, COUNTDOWN, RACING, DONE.
+- Courses are built at run time from `country.roads` (East Hills Road, Whistler
+  Track, Copperback Cut/Track; Calder Trail for the bike). Gates ~150 m apart.
+  Gate 0, the lap lines and the finish share the ring junction, which is ~134 m
+  from the start. Teleporting ahead counts only the next gate in order.
+- Grid: the player takes the BACK row, rivals in front or beside. The script AI
+  does not brake for the player's car, so a rival behind rams him and pins
+  himself on the parked car (slots `[[0,1],[0,-1],[1,1]]`, player `_slot(1,-1)`).
+- Finish: `_pass_through_player()` adds collision exceptions between the player's
+  car and the rivals; the field reaches a parked finisher ~5 s after he stops and
+  used to wreck him.
+- Rival pace: `script_throttle = vlim[k] * skill * band / max_speed`, BAND 0.04
+  rubber band, A_LAT 5 / BRAKE 5.5 profile in race_course.gd. Measured with
+  race_calib: day field 236-247 s over 3788 m (15.3-16.0 m/s, no rescues) at skills
+  0.86/0.90/0.95; night field 203-211 s (no rescues) at 0.98/1.02/1.06. The test
+  needs night slowest skill > day fastest skill (it was a 0.95 tie) and the day
+  field inside 14..30 m/s.
+- Rival health x3 (`RIVAL_HEALTH`): the sports car and roadster were scraped to a
+  wreck at the hairpins (path idx ~212 and ~245-250), and the swap-in restarted
+  them at their last rescue point, so each lost 120-150 s and the night field
+  came out slower than the day field. Now `_replace_rival` restarts the fresh car
+  on the wreck's stretch (`recover_rival(r, from)`). Lowering A_LAT/BRAKE was not
+  taken: it slows the day field and does not clear the hairpins.
+- Night run: open 21:00-04:00, stake 100-500 (default a quarter of the cash),
+  taken at the start; the winner collects stake x 4, anything else loses it. A
+  patrol car or officer with a clear ray within 35 m (police_manager SIGHT_RANGE)
+  gives one star (`Wanted.report_crime(1)`). Cancelling or leaving the car ends it.
+- Day race prize 400/200/80 by place. Bike: 10 to hire at the stand
+  (990,-1502), timed run down Calder Trail (855 m); medals by average speed
+  4.6/5.6/6.6 m/s; a medal pays its tier once (60/150/300, the difference when
+  improving); 8 s out of the saddle abandons. `_update_rivals` returns early with
+  no field (the trial has no speed profile).
+
+## Traps
+
+- `GROUPS` is a bash variable: `GROUPS=night cmd` is silently ignored. The probe
+  reads `RUNS=` (and `DIAG=1`, `TRACE=from,to`). Every godot run goes under `flock`.
+- A test that parks the player's car must put it back on the lead-in (`_to_start`)
+  before the next `_start_day`, or the start prompt will not show.
+- The runner does not fail on SCRIPT ERROR: grep for it.
+- The HUD prompt in the screenshots only shows with the wiring patch applied.
 
 ## Appendix: the wiring patch, verbatim
 

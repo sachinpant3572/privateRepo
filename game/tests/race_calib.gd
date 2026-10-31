@@ -1,5 +1,9 @@
 extends Node
-## TEMPORARY calibration probe for races (not committed).
+## Manual pace probe for races (not run by the test suite): drives the rival
+## fields round the courses and prints finish times, gate times and recoveries.
+## RUNS=day,night,ghost,bike picks the runs; DIAG=1 reports rivals that stop;
+## TRACE=from,to (race seconds) prints each rival's state once a second.
+## Run: RUNS=day flock /tmp/godot.lock godot --headless --fixed-fps 60 res://tests/race_calib.tscn
 
 const MainScene = preload("res://main.tscn")
 const Vehicle = preload("res://scripts/vehicle.gd")
@@ -46,7 +50,7 @@ func _run() -> void:
 			{"name": "g130", "kind": "sedan", "paint": Color(1, 1, 1), "skill": 1.3, "off": 0.0},
 		],
 	}
-	var only := OS.get_environment("GROUPS")
+	var only := OS.get_environment("RUNS")
 	for g in groups:
 		if only != "" and not g in only.split(","):
 			continue
@@ -99,6 +103,23 @@ func _group(label: String, specs: Array) -> void:
 					times[i].append(snappedf(races.time, 0.1))
 				if r.finish == INF:
 					done = false
+			var tr_env := OS.get_environment("TRACE")
+			if tr_env != "" and int(races.time * 60.0) % 60 == 0:
+				var win := tr_env.split(",")
+				if races.time >= float(win[0]) and races.time <= float(win[1]):
+					for r in races.rivals:
+						var c = r.car
+						print("  T%.0f %s idx %d pos (%.0f, %.0f) spd %.1f rev %.1f hp %.0f thr %.2f yaw %.2f" % [races.time, r.name, c.path_index + r.base, c.global_position.x, c.global_position.z, c.speed, c._reverse_time, c.health, c.script_throttle, c.rotation.y])
+			if OS.get_environment("DIAG") != "":
+				for i in races.rivals.size():
+					var r = races.rivals[i]
+					var c = r.car
+					if not r.has("dbg_idx") or r.dbg_idx != c.path_index + r.base:
+						r["dbg_idx"] = c.path_index + r.base
+						r["dbg_t"] = races.time
+					elif races.time - r.dbg_t > 6.0 and r.finish == INF and not r.get("dbg_said", false):
+						r["dbg_said"] = true
+						print("  STALL ", r.name, " kind ", c.kind, " t=", snappedf(races.time, 0.1), " idx ", r.dbg_idx, " pos ", c.global_position, " spd ", snappedf(c.speed, 0.1), " rev ", c._reverse_time, " wall ", c._wall_normal, " braking ", c.braking, " stuck ", c._stuck_time, " yaw ", snappedf(c.rotation.y, 0.01), " target ", c.path[clampi(c.path_index, 0, c.path.size() - 1)])
 			if races.time >= next_report:
 				next_report += 20.0
 				var s := ""
