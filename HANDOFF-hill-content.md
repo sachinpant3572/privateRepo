@@ -116,16 +116,10 @@ worktree-relative in c53c27b).
 - `wip/snapshot.sh` saves each worktree's work (commits, uncommitted,
   untracked) to wip/snapshots/<pkg>.patch; run and commit at milestones.
 
-Resume (if this session stopped):
-- Same container (`git worktree list` shows the three): the builders
-  stopped with the session. Read each worktree's HANDOFF-<pkg>.md (if any)
-  and `git -C <wt> status`; start a new builder per unfinished package in
-  that worktree path (Agent, no isolation; brief: "work in <wt>; read
-  wip/briefs/brief_common.md and package_<X>.md; continue from the files
-  there").
-- New container (worktrees gone): `game/tools/setup_cloud.sh`; for each
-  package, a builder with isolation worktree whose first step is
-  `git apply --3way wip/snapshots/<X>.patch`, then the brief as above.
+Resume (if this session stopped): worktrees present -> run
+wip/snapshot.sh, commit; then (or if gone) per package a builder with
+isolation worktree: `git apply --3way wip/snapshots/<X>.patch`, then
+wip/briefs/brief_common.md + package_<X>.md, continuing from the files.
 Then, per package as it reports: its own Opus review (diff + gate output
 + the brief quoted), fixes, then the main session applies the builder's
 main.gd/hud.gd/player.gd/mission_manager patches, merges the branch,
