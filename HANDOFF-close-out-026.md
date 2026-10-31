@@ -20,7 +20,19 @@ MadOut2 lessons. Grass optional.
 
 ## Park cell hitch (probe: tests/cell_probe.tscn, headless)
 
-PROBE_RESULTS
+Main-thread add (`city._add_cell`: mesh instance plus one CollisionShape3D
+per box) over all 842 cells, headless in the container: median 1.66 ms,
+p90 3.12 ms. Biggest park (cell 16, parkland, 240-tree budget): 7.1 ms,
+260 shapes, 57k triangles, 13th of 842. Above it are dense urban blocks:
+golf 18.3, painted 17.5 (282 shapes), havana 17.4 / 15.7, heights 11.4,
+quarter 10.9. Repeat runs vary a lot (the same golf cell gave 5.8 ms in a
+parks-only run). The worker build (Cells.build) is off the main thread.
+Verdict: a park is no worse than an ordinary dense block, so no park fix.
+A phone is maybe 3-5x slower and also uploads the mesh to the GPU (the dummy
+renderer skips that), so the worst cells may cost a 30-90 ms frame there.
+That applies to every block type; not measured on a phone. If Sachin's
+logs show hitches on cell loads: add shapes over several frames, or build
+the static bodies through PhysicsServer3D directly.
 
 ## Decisions
 

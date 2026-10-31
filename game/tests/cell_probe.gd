@@ -1,7 +1,8 @@
 extends Node
-## Times the open-land cells (parks, cemeteries, golf, yards): the worker
-## build (Cells.build) and the main-thread add (_add_cell: mesh instance and
-## collision shapes), the part a phone feels as a hitch. Headless is fine:
+## Times every city cell: the worker build (Cells.build) and the main-thread
+## add (_add_cell: mesh instance and collision shapes), the part a phone
+## feels as a hitch. Prints the 12 slowest adds and every open-land cell
+## (parks, cemeteries, golf, yards), then the median and p90. Headless:
 ##   godot --headless res://tests/cell_probe.tscn
 
 const MainScene = preload("res://main.tscn")
