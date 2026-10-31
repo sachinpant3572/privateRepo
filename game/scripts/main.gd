@@ -20,6 +20,8 @@ const Taxi = preload("res://scripts/taxi.gd")
 const Graphics = preload("res://scripts/graphics.gd")
 const GameLog = preload("res://scripts/game_log.gd")
 const Heliports = preload("res://scripts/heliports.gd")
+const Calendar = preload("res://scripts/calendar.gd")
+const Events = preload("res://scripts/events.gd")
 
 const RESPAWN_DELAY := 2.5
 
@@ -40,6 +42,8 @@ var interiors
 var hunting
 var taxi
 var heliports
+var calendar
+var events
 ## The game log (Settings > Game > Log).
 var game_log
 var inventory = Inventory.new()
@@ -78,6 +82,13 @@ func _ready() -> void:
 	add_child(heliports)
 	heliports.build(city)
 	atmosphere.night_changed.connect(heliports.set_glow_visible)
+
+	# Before missions: its _ready loads the save into these.
+	calendar = Calendar.new()
+	calendar.game = self
+	add_child(calendar)
+	hunting = Hunting.new()
+	add_child(hunting)
 
 	missions = MissionManager.new()
 	missions.game = self
@@ -135,12 +146,13 @@ func _ready() -> void:
 	interiors = Interiors.new()
 	interiors.game = self
 	add_child(interiors)
-	hunting = Hunting.new()
-	add_child(hunting)
-
 	taxi = Taxi.new()
 	taxi.game = self
 	add_child(taxi)
+	events = Events.new()
+	events.game = self
+	events.calendar = calendar
+	add_child(events)
 
 	hud = Hud.new()
 	hud.game = self

@@ -138,7 +138,7 @@ func _home() -> void:
 	grid.add_theme_constant_override("h_separation", 14)
 	grid.add_theme_constant_override("v_separation", 14)
 	_body.add_child(grid)
-	for app in [["Messages", _messages], ["Contacts", _contacts], ["Map", _map], ["Places", _places], ["Missions", _missions], ["Cab", _cab], ["Settings", _settings]]:
+	for app in [["Messages", _messages], ["Contacts", _contacts], ["Map", _map], ["Places", _places], ["Events", _events], ["Missions", _missions], ["Cab", _cab], ["Settings", _settings]]:
 		var b := _button(app[0], app[1])
 		b.custom_minimum_size = Vector2(170, 110)
 		grid.add_child(b)
@@ -223,6 +223,28 @@ func _places() -> void:
 		row.add_child(go)
 		_body.add_child(row)
 
+
+
+## Today's events (fair, market, raves, ...); GO sets a waypoint to the nearest road.
+func _events() -> void:
+	_clear("Events · %s" % game.calendar.date_text())
+	var list: Array = game.events.today_list()
+	if list.is_empty():
+		_body.add_child(_text("Nothing on today.", 18, Color(0.7, 0.72, 0.78)))
+		return
+	for e in list:
+		_body.add_child(_text(e.name, 22, Color.WHITE))
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		var info := _text("%s%s" % ["On now · " if e.active else "", e.text], 16, Color(0.7, 0.72, 0.78))
+		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(info)
+		var go := _button("GO", func():
+			game.waypoint = game.city.node_pos(game.city.nearest_node(e.pos))
+			close())
+		go.custom_minimum_size = Vector2(80, 48)
+		row.add_child(go)
+		_body.add_child(row)
 
 func _missions() -> void:
 	_clear("Missions · Act 1")
