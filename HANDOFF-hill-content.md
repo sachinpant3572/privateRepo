@@ -125,7 +125,8 @@ main.gd/hud.gd/player.gd/mission_manager patches, merges the branch,
 runs that package's tests. After all three: full suite, screenshots
 (contact sheet), delete wip/, commit, push. Then phase 4 (wave B: bridges
 and tunnels on G's Ground deck/cut API; one Opus builder + review).
-Next for Sachin: report at the end; nothing needs his approval so far.
+Sachin 10-31: move this branch to a new private repo. The GitHub app can't
+create repos (403): he makes an empty private repo, then push (add_repo).
 
 Open items not in Sachin's list (report only): trail loop 904 (nobody
 passed in 20 s at noon; 26/128 points within 6 m of a road); calendar
