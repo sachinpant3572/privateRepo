@@ -128,12 +128,10 @@ runs that package's tests. After all three: full suite, screenshots
 and tunnels on G's Ground deck/cut API; one Opus builder + review).
 Next for Sachin: report at the end; nothing needs his approval so far.
 
-Open items not in Sachin's list (report only): no trail person passed
-trail loop 904 in 20 s at noon (shot scripts a party); 26/128 of its
-points lie within 6 m of a road; calendar Lows (archive); the wildlife
-reviewer could not measure in_city cost on a device; trap: three test
-runs hung at the Godot banner after the data commit in session 2 (cause
-not found; check `pgrep -af godot`).
+Open items not in Sachin's list (report only): trail loop 904 (nobody
+passed in 20 s at noon; 26/128 points within 6 m of a road); calendar
+Lows (archive); in_city cost unmeasured on a device; session 2's runs
+hung at the Godot banner once (check `pgrep -af godot`).
 
 ## Phase 3 and 4 plan (decided 2026-10-31)
 - vehicle.gd has no air state (y = Terrain.height each frame), so stunt
