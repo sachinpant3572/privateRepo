@@ -159,5 +159,8 @@ reviewer could not measure in_city cost on a device.
   kill() keeps `by` on the carcass, only "rifle" kills of PELT_PRICE kinds
   skin; mission start advances (a start < 1 h behind steps back, same
   day); spent lion -> leave. 9 focused tests PASS (77 checks).
+  Full suite after the fixes (8015468): exit 0, 2145 passed, 0 failed.
+  Steps 1-2 done; the review's findings were Medium/Low only, so no
+  second review run.
 
 Phase 2 package plan: HANDOFF-hill-content-archive.md.
