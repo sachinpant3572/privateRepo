@@ -4496,20 +4496,45 @@ class Country:
         the hills."""
         self.trail_walk_ids = []
         for t in self.trails:
-            line = t[0]
+            # The trail as it goes out (polyline_outputs), which the game
+            # draws and keeps undropped: at switchbacks the 12 m resample
+            # cuts the bend by metres.
+            line = LineString(resample(t[0], 12.0))
             if line.length < TRAIL_WALK_MIN:
                 continue
             self.trail_walk_ids.append(len(self.walks))
-            self._village_loop(line, "trail", 0.0, line.length, edge=TRAIL_EDGE, join=1)
+            self.walks.append(self._trail_loop(line))
         print("trail walks: %d" % len(self.trail_walk_ids))
 
-    def _village_loop(self, line, cls, t0, t1, edge=VILLAGE_SHOULDER, join=2):
+    def _trail_loop(self, line):
+        """Up the trail's right side and back down its other, each point
+        TRAIL_EDGE in from the way's edge square off the centre line, every
+        6 m. Offsetting point by point keeps to the way even at switchbacks,
+        where a buffer of the two legs merged and its ring cut across the
+        bend, up to 5 m off the trail."""
+        off = CLASSES["trail"]["w"] * 0.5 + TRAIL_EDGE
+        n = max(2, int(line.length / 6.0))
+        out, back = [], []
+        for i in range(n + 1):
+            d = line.length * i / n
+            a = line.interpolate(max(0.0, d - 1.0))
+            b = line.interpolate(min(line.length, d + 1.0))
+            p = line.interpolate(d)
+            tx, tz = b.x - a.x, b.y - a.y
+            m = math.hypot(tx, tz) or 1.0
+            nx, nz = -tz / m * off, tx / m * off
+            out.append((p.x - nx, p.y - nz))
+            back.append((p.x + nx, p.y + nz))
+        pts = []
+        for x, z in out + back[::-1]:
+            pts += [round(x, 1), round(z, 1)]
+        return pts
+
+    def _village_loop(self, line, cls, t0, t1, edge=VILLAGE_SHOULDER):
         """One village loop: line from t0 to t1, both shoulders (edge m out
-        from the road's side; a negative edge keeps it on the way). join is
-        shapely's join_style: mitred (2) for the village streets, round (1)
-        for the winding trails, whose mitred bends stuck out off the way."""
+        from the road's side; a negative edge keeps it on the way)."""
         sub = substring(line, max(0.0, t0), min(line.length, t1))
-        strip = sub.buffer(CLASSES[cls]["w"] * 0.5 + edge, cap_style=2, join_style=join)
+        strip = sub.buffer(CLASSES[cls]["w"] * 0.5 + edge, cap_style=2, join_style=2)
         ring = list(orient(strip.simplify(0.5), 1.0).exterior.coords)[:-1]
         pts = []
         for k, a in enumerate(ring):
