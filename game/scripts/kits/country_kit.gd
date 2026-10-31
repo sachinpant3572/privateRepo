@@ -16,6 +16,7 @@ const Props = preload("res://scripts/kits/prop_kit.gd")
 const Civic = preload("res://scripts/kits/civic_kit.gd")
 const Skyline = preload("res://scripts/kits/skyline_kit.gd")
 const Shady = preload("res://scripts/kits/shady_kit.gd")
+const Hill = preload("res://scripts/kits/hill_kit.gd")
 const Homes = preload("res://scripts/kits/homes_kit.gd")
 
 const KINDS := [
@@ -108,6 +109,8 @@ const BRICKS := [Color(0.6, 0.32, 0.25), Color(0.52, 0.28, 0.22), Color(0.68, 0.
 static func footprint(kind: String) -> Vector2:
 	if not FOOTPRINTS.has(kind) and kind in Shady.kinds():
 		return Shady.default_size(kind)
+	if not FOOTPRINTS.has(kind) and kind in Hill.kinds():
+		return Hill.default_size(kind)
 	return FOOTPRINTS.get(kind, Vector2(16, 16))
 
 
@@ -176,12 +179,15 @@ static func build(kind: String, mb, out: Array, size: Vector2, rng: RandomNumber
 		"gatehouse": Homes.gatehouse(mb, out, w, d, rng)
 		_:
 			# Government buildings and terraced homes come from the civic
-			# kit, the rough side of town from the shady kit; an unknown
-			# kind is a plain block, so a typo shows instead of a hole.
+			# kit, the rough side of town from the shady kit, the hill
+			# country from the hill kit; an unknown kind is a plain block,
+			# so a typo shows instead of a hole.
 			if kind in Civic.kinds():
 				Civic.build(kind, mb, out, Vector2(w, d), rng)
 			elif kind in Shady.kinds():
 				Shady.build(kind, mb, out, Vector2(w, d), rng)
+			elif kind in Hill.kinds():
+				Hill.build(kind, mb, out, Vector2(w, d), rng)
 			else:
 				_solid(mb, out, Vector3(0, 2.0, 0), Vector3(w * 0.6, 4.0, d * 0.6), Color(1.0, 0.0, 1.0))
 

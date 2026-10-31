@@ -5573,7 +5573,11 @@ func test_country_kit_builds_every_kind() -> void:
 	# The shady kinds (shady_kit) are built through Kit.build too; their
 	# yards and blocks are compounds, held to the big-lot budget.
 	var shady: Array = preload("res://scripts/kits/shady_kit.gd").kinds()
-	for kind: String in Kit.KINDS + shady:
+	# The hill kinds (hill_kit) too; they follow the area rule: 8000 triangles
+	# for a lot of 5000 m2 or more, 5000 below.
+	var hill: Array = preload("res://scripts/kits/hill_kit.gd").kinds()
+	_check(hill.size() == 16, "hill kit lists its 16 kinds, got %d" % hill.size())
+	for kind: String in Kit.KINDS + shady + hill:
 		var f: Vector2 = Kit.footprint(kind)
 		var budget := 8000 if f.x * f.y >= 5000.0 or kind in shady else 5000
 		if not (f.x > 0.0 and f.y > 0.0):
@@ -5608,6 +5612,16 @@ func test_country_kit_builds_every_kind() -> void:
 	for p in problems.slice(0, 10):
 		print("  " + p)
 	_check(problems.is_empty(), "every country kind builds on its lot (%d problems)" % problems.size())
+	# No kind the data places falls through to the magenta stand-in block.
+	var unbuilt: Array[String] = []
+	for kind: String in data.kinds:
+		var mb = MB.new()
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 7
+		Kit.build(kind, mb, [], Vector2(20, 20), rng)
+		if mb.colors.has(Color(1.0, 0.0, 1.0)):
+			unbuilt.append(kind)
+	_check(unbuilt.is_empty(), "every kind in the country data has a builder, missing: %s" % [unbuilt])
 	# Lawn and yard lots are fenced: a run along the back edge of each, and
 	# no house, tree trunk or car stands in a fence, over sizes and seeds;
 	# on the farm homes no two solid parts overlap.
