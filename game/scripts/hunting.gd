@@ -175,7 +175,8 @@ func _carcass():
 	var p = game.player if game != null else null
 	if w == null or p == null or p.vehicle != null or not w.has_method("carcass_near"):
 		return null
-	return w.carcass_near(p.global_position, SKIN_RANGE)
+	var c: Dictionary = w.carcass_near(p.global_position, SKIN_RANGE)
+	return null if c.is_empty() else c
 
 
 ## Skins the carcass at the player's feet. True when it did.

@@ -3,9 +3,6 @@ extends RefCounted
 ## the day count, weekdays and seasons, the save, the schedule, and the
 ## events building near the player and going away with the clock or with
 ## distance. Run from tests/test_runner.gd (TEST_MODULES); `t` is the runner.
-##
-## main.gd does not create the Calendar or Events nodes yet (see the patch in
-## the package report), so each test makes its own and hangs them on the game.
 
 const Calendar = preload("res://scripts/calendar.gd")
 const Events = preload("res://scripts/events.gd")
@@ -21,6 +18,8 @@ const TESTS := [
 	"test_calendar_cult_and_trap",
 	"test_calendar_far_player_builds_nothing",
 	"test_calendar_lights_and_phone_list",
+	"test_calendar_skips_and_indoors_keep_the_day",
+	"test_calendar_event_lights_share_the_lamp_budget",
 ]
 
 ## Seconds a build may take in real time (the dressing bakes on a worker and
@@ -162,7 +161,7 @@ func test_calendar_save_and_open_season(t) -> void:
 		c.set_day(day)
 		t.check(c.is_open_season("rabbit") and c.is_open_season("coyote"),
 				"rabbit and coyote are open all year (day %d)" % day)
-		t.check(not c.is_open_season("mountain_lion") and not c.is_open_season("Mountain Lion"),
+		t.check(not c.is_open_season("lion") and not c.is_open_season("mountain_lion") and not c.is_open_season("Mountain Lion"),
 				"the mountain lion is never open (day %d)" % day)
 		t.check(not c.is_open_season("dragon"), "an unknown kind is closed (day %d)" % day)
 	c.free()
@@ -519,3 +518,87 @@ func test_calendar_lights_and_phone_list(t) -> void:
 ## Sets the clock (a helper so a test reads straight).
 func game_hour(t, h: float) -> void:
 	t.game.atmosphere.hour = h
+
+
+## Review M1: the clock moved on in jumps (the phone's Skip 3 hours runs
+## while the game is paused; a skipped taxi ride) counts every midnight it
+## crosses, however long; the sky's day is the calendar's, also after a stay
+## indoors where the sky is not updated.
+func test_calendar_skips_and_indoors_keep_the_day(t) -> void:
+	await t._new_game(false)
+	var game = t.game
+	var atm = game.atmosphere
+	var cal = game.calendar
+	atm.minutes_per_second = 0.0
+	atm.weather_changes = false
+	t.check(atm.calendar == cal, "the atmosphere knows the calendar")
+	cal.set_day(5)
+	atm.hour = 12.0
+	cal.tick(12.0)
+	for i in 8:
+		atm.advance(3.0)
+	t.check(cal.day() == 6 and absf(atm.hour - 12.0) < 0.001, "eight 3-hour skips with no frame between are one day, day %d at %.2f" % [cal.day(), atm.hour])
+	atm.advance(50.0)
+	t.check(cal.day() == 8 and absf(atm.hour - 14.0) < 0.001, "a 50-hour jump is two days, day %d at %.2f" % [cal.day(), atm.hour])
+	await t._frames(2)
+	t.check(cal.day() == 8, "the next frames add no day, day %d" % cal.day())
+	atm._apply(0.0)
+	t.check(atm.sky.day == 8, "the sky shows the calendar's day, got %d" % atm.sky.day)
+	# Indoors the sky is not updated; the calendar still counts.
+	atm.indoors = true
+	atm.hour = 23.5
+	await t._frames(2)
+	atm.hour = 1.0
+	await t._frames(2)
+	t.check(cal.day() == 9, "midnight indoors counts, day %d" % cal.day())
+	atm.indoors = false
+	atm._apply(0.0)
+	t.check(atm.sky.day == 9 and absf(atm.sky.moon_phase - cal.moon_phase(1.0)) < 0.0001,
+			"out again the moon is on the calendar's day (sky %d, phase %.3f vs %.3f)" % [atm.sky.day, atm.sky.moon_phase, cal.moon_phase(1.0)])
+
+
+## Review M3: lights an event holds come out of the street-lamp budget, so
+## the scene never has more real lamp-type lights than the preset allows.
+func test_calendar_event_lights_share_the_lamp_budget(t) -> void:
+	await t._new_game(false)
+	var game = t.game
+	var g = game.graphics
+	game.atmosphere.minutes_per_second = 0.0
+	game.atmosphere.weather_changes = false
+	game.atmosphere.hour = 23.0
+	g.lamps = 4
+	# The lamp-lit spot with the most standing lamps near the start.
+	var lamps: Array = game.get_tree().get_nodes_in_group("lamps")
+	t.check(lamps.size() >= 4, "street lamps stand near the start, got %d" % lamps.size())
+	if lamps.size() < 4:
+		return
+	var best = lamps[0]
+	var most := 0
+	for a in lamps:
+		var n := 0
+		for b in lamps:
+			if a.global_position.distance_to(b.global_position) < g.REACH * 0.7:
+				n += 1
+		if n > most:
+			best = a
+			most = n
+	t.check(most >= 4, "4 lamps stand together somewhere, best %d" % most)
+	t._place_player_at(best.global_position + Vector3(2.0, 300.0, 0.0))
+	var lit := func() -> int:
+		var n := 0
+		for l in g._lamp_lights:
+			if l.visible:
+				n += 1
+		return n
+	var saved: int = Events.lights_used
+	g._light_lamps(game.player.global_position, 1.0)
+	var free: int = lit.call()
+	t.check(free == 4, "with no event light the lamps take all 4, got %d" % free)
+	Events.lights_used = 2
+	g._light_lamps(game.player.global_position, 1.0)
+	t.check(lit.call() == 2, "two event lights leave 2 lamps, got %d" % lit.call())
+	Events.lights_used = 5
+	g._light_lamps(game.player.global_position, 1.0)
+	t.check(lit.call() == 0, "more event lights than the budget leave none, got %d" % lit.call())
+	Events.lights_used = saved
+	g._light_lamps(game.player.global_position, 1.0)

@@ -329,8 +329,6 @@ func load_game() -> void:
 	game.hunting.load_save(hunt if typeof(hunt) == TYPE_DICTIONARY else {})
 	var cal = data.get("calendar")
 	game.calendar.load_save(cal if typeof(cal) == TYPE_DICTIONARY else {})
-	# sky.gd counts its own day for the moon; keep it on the calendar's.
-	game.atmosphere.sky.day = game.calendar.day()
 	GameLog.event("load", {"version": int(data.get("version", 1)), "done": done.size(), "cash": game.cash})
 
 
@@ -343,6 +341,5 @@ func reset_progress() -> void:
 	game.inventory.bag.clear()
 	game.hunting.load_save({})
 	game.calendar.load_save({})
-	game.atmosphere.sky.day = 0
 	save_game()
 	changed.emit()
