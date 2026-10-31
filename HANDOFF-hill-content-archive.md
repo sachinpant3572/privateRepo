@@ -132,3 +132,55 @@ one review of the whole task; then phase 3 and phase 4.
   (birds too). Tests tightened (startle, day lion, indoors) + Fx test.
 - Trail shot: no trail person came by loop 904 in 20 s at noon, so the
   shot scripts a party; 26 of its 128 points lie within 6 m of a road.
+
+## Session 2 handover (moved 2026-10-31, session 3)
+Branch `claude/gangstar-game-content-tunnels-kszhz9` (pushed). Sachin's
+order this session: wildlife hook-in + colours + Opus review; hunting on
+the animals with tests; calendar fixes; hill-place shots, full suite, one
+review of the whole task; then phase 3 and phase 4. Session log: archive.
+Done and pushed (8d8840f, 5f75299, a3697f3, then the pause commits):
+- Wildlife in atmosphere/fx, colours retuned (gallery checked), Opus
+  review: 0 High, 3 Medium, 8 Low, all fixed (details in archive).
+- Hunting: shoot a deer, poaching star (no licence, out of season, lion),
+  lion shot while stalking/charging = self-defence, skinning; tests.
+- Calendar: skip time keeps days (Atmosphere.advance), moon follows the
+  calendar after indoors, event lights share the lamp budget; tests.
+- SHOTS=hillplaces 7/7 checked (villages centred, trail party on the
+  dirt trail) and PLACES=hill (hunting store) 6/6.
+Last full suite (a3697f3): 2132 passed, 2 failed; both fixed since and
+each verified alone (not yet in a full run):
+- test_wildlife_stays_out_of_lakes: flaky (2/3 alone). The player stood
+  18 m from the herd; a standing player's flee radius is 25 x 0.7 =
+  17.5 m. Player moved to 12 m off: 3/3 PASS.
+- test_country_plots_square_to_their_roads: kestrel_lab 80.2 deg off
+  Kestrel Hollow Road (failed on 4197417 too). build_country.py
+  `_site_skew` (= `_road_turn`, the test's own measure) rejects site spots
+  over 3.5 deg off the road edge within 8 m of the front. Country rebuilt
+  (a4837f3): only kestrel_lab moved (547.7,-4041.5 yaw 0.17 -> 561.2,
+  -4038.8 yaw 0.44); terrain pad and Raven Creek's route there changed.
+  mountain_plan/world map not needed (no route re-planned). PASS.
+- Trap: right after the data commit, three runs under flock printed only
+  the Godot banner and hung to their timeouts; the same tests run without
+  flock a few minutes later passed (cause not found; no godot was left
+  running). If a run hangs at the banner, check `pgrep -af godot`.
+Next steps, in order (new container: `game/tools/setup_cloud.sh` first;
+`pip install shapely numpy contourpy scipy` only for a country rebuild):
+1. Full suite: `cd game && tests/run.sh > /tmp/tests.log 2>&1; echo $?`
+   then grep (CLAUDE.md Token cost). Expect 0 failed.
+2. One Opus review of the whole task (phases 1-2 + this session; diff
+   4197417..HEAD; quote Sachin's order; give the gate outputs). Fix, rerun
+   the suite. Two review runs at most.
+3. Phase 3 builders (stopped at the pause, early): briefs in
+   wip/briefs/ (package_R/G/P.md + brief_common.md; fix its /tmp paths).
+   WIP files from the stopped builders, untested: wip/R/ (races.gd 1016
+   lines, race_course.gd, race_calib probe) and wip/G/ground.gd (232
+   lines). Copy them into a fresh worktree as a head start or discard.
+   P had written nothing. Plan: "Phase 3 and 4 plan" below; each package
+   gets its own Opus review; the main session wires main.gd, hud.gd,
+   player.gd and mission_manager save, then merges. Delete wip/ when done.
+4. Phase 4 (wave B after G): bridges and tunnels on G's deck layer.
+Open items not in Sachin's list (report only): no trail person passed
+trail loop 904 in 20 s at noon (shot scripts a party); 26/128 of its
+points lie within 6 m of a road; calendar Lows (archive); the wildlife
+reviewer could not measure in_city cost on a device.
+

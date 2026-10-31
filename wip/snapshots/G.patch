@@ -1,0 +1,924 @@
+diff --git a/game/scripts/ground.gd b/game/scripts/ground.gd
+new file mode 100644
+index 0000000..2f57dff
+--- /dev/null
++++ b/game/scripts/ground.gd
+@@ -0,0 +1,286 @@
++extends RefCounted
++## The walkable ground: the hills' height grid (Terrain) plus decks laid
++## over it (stunt ramps now; bridges and tunnel floors in phase 4) and cuts
++## where the grid stops counting (tunnels). Static, like Terrain: vehicles
++## and people ask Ground instead of Terrain for the surface under them.
++## Main thread only (surface() leaves its answer in static vars).
++##
++## Rules (all heights in metres, local x, z):
++## - The terrain is solid: outside a cut it always counts, however far above
++##   the asker it is (a car can never sink into a hill).
++## - A deck counts only when it is at or below `y_hint + STEP`: found from
++##   above (a car on a bridge stays on it), ignored from below (a car on the
++##   road under the bridge stays on the road). STEP is how high a wheel or a
++##   foot steps up onto a deck's edge.
++## - In a cut the terrain counts only where it is at or above the cut's roof
++##   and at or below `y_hint + STEP` (the hill over a tunnel); below the roof
++##   it is the hole, so a floor deck under the hill wins there.
++## - When nothing counts (an asker below every deck in a cut), the lowest
++##   deck there is the answer.
++## With no deck or cut in a point's grid cell the answer is exactly the
++## caller's terrain value, after one dictionary look-up.
++##
++## API
++##   Ground.height(x, z, y_hint := INF) -> float
++##       The surface with Terrain.drop applied to the terrain (for one-off
++##       look-ups: spawn spots, exits, landings). INF: the top surface.
++##   Ground.surface(x, z, base, y_hint := INF) -> float
++##       The same with the caller's own terrain value `base` (movers pass
++##       Terrain.height - their eased drop). Afterwards `Ground.hit` holds the
++##       deck that won (its Dictionary; null for the terrain) and
++##       `Ground.hit_grad` that deck's slope (dy/dx, dy/dz).
++##   Ground.normal(x, z, y_hint := INF) -> Vector3  up-facing normal there.
++##   Ground.terrain_grad(x, z) -> Vector2  the grid's exact slope (dy/dx,
++##       dy/dz) at a point (Terrain.normal is a smoothed 8 m difference).
++##   Ground.add_strip(id, pts, heights, width, kind := "strip")
++##       A polyline deck: `pts` (PackedVector2Array, x z), one height per
++##       point (the deck's top, linear between points), `width` across.
++##       Joins between segments are round; the two ends are square.
++##   Ground.add_ramp(id, start, yaw, length, width, profile)
++##       A straight deck from `start` (x z; Vector2 or Vector3) heading `yaw`
++##       (Godot yaw: forward is -z rotated by yaw) for `length` m; `profile`
++##       holds the top heights at evenly spaced stations from start to end
++##       (at least 2). kind "ramp".
++##   Ground.add_cut(id, pts, roofs, width)
++##       A polyline strip where the terrain does not count below `roofs` (one
++##       per point, linear between).
++##   Ground.remove(id)  removes a deck or a cut;  Ground.clear()  all of them.
++##   Ground.deck(id) -> Dictionary (or {}): "id", "kind", "pts", "h", "w"
++##       (half width), "len", "dir", "slope", and anything the caller stored.
++##
++## Movers (vehicle.gd, humanoid.gd) pass their own y as y_hint, so whatever
++## they stand on keeps them; a mover placed by code (spawn, teleport) is
++## snapped with its placed y as the hint. Cars fly off a deck's end or edge
++## when the surface falls away (vehicle.gd, air state).
++##
++## Phase 4 (bridges and tunnels): a bridge is add_strip(id, centreline,
++## deck heights, carriageway width + kerbs); its piers and parapets are
++## ordinary colliders (the deck itself needs none). A tunnel is add_cut(id,
++## centreline portal to portal, roof heights, bore width) plus add_strip for
++## its floor (the road's heights); walls are colliders. Spawners that put a
++## car or a person on a lane under a bridge must pass the lane's own height
++## as y_hint (INF finds the bridge). Keep decks under ~1000 segments in one
++## 32 m cell: every look-up in that cell walks its list.
++
++const Terrain = preload("res://scripts/terrain.gd")
++
++## How high a deck's edge can be over the asker's feet and still be stepped
++## onto (and how far a deck can sit over a mover and still be "under" it).
++const STEP := 0.6
++## Grid cell (m) for bucketing decks and cuts.
++const CELL := 32.0
++
++## The deck the last surface()/height() call stood on (null: the terrain).
++static var hit = null
++## That deck's slope at the point (dy/dx, dy/dz).
++static var hit_grad := Vector2.ZERO
++
++static var _items := {} # id -> item Dictionary (decks and cuts)
++static var _grid := {} # Vector2i -> Array of [item, segment]
++
++
++static func height(x: float, z: float, y_hint := INF) -> float:
++	return surface(x, z, Terrain.height(x, z) - Terrain.drop(x, z), y_hint)
++
++
++static func surface(x: float, z: float, base: float, y_hint := INF) -> float:
++	hit = null
++	if _grid.is_empty():
++		return base
++	var list = _grid.get(Vector2i(floori(x / CELL), floori(z / CELL)))
++	if list == null:
++		return base
++	var reach := y_hint + STEP
++	var p := Vector2(x, z)
++	var terrain_counts := true
++	var best := -INF
++	var best_item = null
++	var best_grad := Vector2.ZERO
++	var low := INF
++	var low_item = null
++	var low_grad := Vector2.ZERO
++	# Cuts first: they decide whether the terrain counts.
++	for e: Array in list:
++		var it: Dictionary = e[0]
++		if not it.cut:
++			continue
++		var roof := _on_segment(it, int(e[1]), p)
++		if is_nan(roof):
++			continue
++		if base < roof or base > reach:
++			terrain_counts = false
++	if terrain_counts:
++		best = base
++	for e: Array in list:
++		var it: Dictionary = e[0]
++		if it.cut:
++			continue
++		var i := int(e[1])
++		var h := _on_segment(it, i, p)
++		if is_nan(h):
++			continue
++		if h <= reach and h > best:
++			best = h
++			best_item = it
++			best_grad = it.dir[i] * it.slope[i]
++		if h < low:
++			low = h
++			low_item = it
++			low_grad = it.dir[i] * it.slope[i]
++	if best == -INF:
++		if low_item == null:
++			return base
++		best = low
++		best_item = low_item
++		best_grad = low_grad
++	hit = best_item
++	if hit != null:
++		hit_grad = best_grad
++	return best
++
++
++## Up-facing normal of the surface at x, z for an asker at y_hint.
++static func normal(x: float, z: float, y_hint := INF) -> Vector3:
++	height(x, z, y_hint)
++	if hit == null:
++		return Terrain.normal(x, z)
++	return Vector3(-hit_grad.x, 1.0, -hit_grad.y).normalized()
++
++
++## The terrain grid's exact slope (dy/dx, dy/dz) at x, z: the derivative of
++## the bilinear patch Terrain.height reads from.
++static func terrain_grad(x: float, z: float) -> Vector2:
++	if Terrain.nx == 0:
++		return Vector2.ZERO
++	var u := (x - Terrain.origin.x) / Terrain.cell
++	var v := (z - Terrain.origin.y) / Terrain.cell
++	if not (u >= 0.0 and v >= 0.0 and u < Terrain.nx - 1 and v < Terrain.ny - 1):
++		return Vector2.ZERO
++	var i := int(u)
++	var j := int(v)
++	var fu := u - i
++	var fv := v - j
++	var k := j * Terrain.nx + i
++	var hs := Terrain.heights
++	var h00 := hs[k]
++	var h10 := hs[k + 1]
++	var h01 := hs[k + Terrain.nx]
++	var h11 := hs[k + Terrain.nx + 1]
++	var du := (h10 - h00) * (1.0 - fv) + (h11 - h01) * fv
++	var dv := (h01 - h00) * (1.0 - fu) + (h11 - h10) * fu
++	return Vector2(du, dv) / Terrain.cell
++
++
++static func add_strip(id: String, pts: PackedVector2Array, heights: PackedFloat32Array, width: float, kind := "strip") -> Dictionary:
++	return _add(id, pts, heights, width, kind, false)
++
++
++static func add_ramp(id: String, start, yaw: float, length: float, width: float, profile: PackedFloat32Array) -> Dictionary:
++	var a := Vector2(start.x, start.z) if start is Vector3 else Vector2(start)
++	var fwd := Vector2(-sin(yaw), -cos(yaw))
++	var n := maxi(profile.size(), 2)
++	var pts := PackedVector2Array()
++	var hs := PackedFloat32Array()
++	for k in n:
++		pts.append(a + fwd * length * k / (n - 1))
++		hs.append(profile[mini(k, profile.size() - 1)])
++	var it := _add(id, pts, hs, width, "ramp", false)
++	it["yaw"] = yaw
++	it["length"] = length
++	return it
++
++
++static func add_cut(id: String, pts: PackedVector2Array, roofs: PackedFloat32Array, width: float) -> Dictionary:
++	return _add(id, pts, roofs, width, "cut", true)
++
++
++static func remove(id: String) -> void:
++	var it = _items.get(id)
++	if it == null:
++		return
++	_items.erase(id)
++	for key: Vector2i in it.cells:
++		var list: Array = _grid.get(key, [])
++		for k in range(list.size() - 1, -1, -1):
++			if list[k][0] == it:
++				list.remove_at(k)
++		if list.is_empty():
++			_grid.erase(key)
++	if hit == it:
++		hit = null
++
++
++static func clear() -> void:
++	_items.clear()
++	_grid.clear()
++	hit = null
++
++
++static func deck(id: String) -> Dictionary:
++	return _items.get(id, {})
++
++
++static func ids() -> Array:
++	return _items.keys()
++
++
++static func _add(id: String, pts: PackedVector2Array, heights: PackedFloat32Array, width: float, kind: String, cut: bool) -> Dictionary:
++	remove(id)
++	if pts.size() < 2 or heights.size() != pts.size():
++		push_error("Ground: %s needs 2+ points and a height per point" % id)
++		return {}
++	var it := {"id": id, "kind": kind, "cut": cut, "pts": pts, "h": heights, "w": width * 0.5,
++		"dir": PackedVector2Array(), "len": PackedFloat32Array(), "slope": PackedFloat32Array(), "cells": []}
++	for i in pts.size() - 1:
++		var d := pts[i + 1] - pts[i]
++		var l := maxf(d.length(), 0.001)
++		it.dir.append(d / l)
++		it.len.append(l)
++		it.slope.append((heights[i + 1] - heights[i]) / l)
++	_items[id] = it
++	var cells := {}
++	for i in pts.size() - 1:
++		var lo := pts[i].min(pts[i + 1]) - Vector2.ONE * it.w
++		var hi := pts[i].max(pts[i + 1]) + Vector2.ONE * it.w
++		for cx in range(floori(lo.x / CELL), floori(hi.x / CELL) + 1):
++			for cz in range(floori(lo.y / CELL), floori(hi.y / CELL) + 1):
++				var key := Vector2i(cx, cz)
++				if not _grid.has(key):
++					_grid[key] = []
++				_grid[key].append([it, i])
++				cells[key] = true
++	it.cells = cells.keys()
++	return it
++
++
++## The strip's height (or roof) over p on segment i, NAN when p is off it.
++## Interior joins are round: past its end a segment answers the shared
++## point's height, but only in the wedge its neighbour does not cover (so a
++## change of slope never makes a step). The strip's two ends are square.
++static func _on_segment(it: Dictionary, i: int, p: Vector2) -> float:
++	var a: Vector2 = it.pts[i]
++	var d: Vector2 = it.dir[i]
++	var l: float = it.len[i]
++	var r := p - a
++	var t := r.dot(d)
++	var last: int = it.len.size() - 1
++	if (t < 0.0 and i == 0) or (t > l and i == last):
++		return NAN
++	var tc := clampf(t, 0.0, l)
++	if (r - d * tc).length_squared() > it.w * it.w:
++		return NAN
++	if t < 0.0 and _covers(it, i - 1, p):
++		return NAN
++	if t > l and _covers(it, i + 1, p):
++		return NAN
++	return it.h[i] + it.slope[i] * tc
++
++
++## Whether segment i covers p within its own length (no rounding).
++static func _covers(it: Dictionary, i: int, p: Vector2) -> bool:
++	var d: Vector2 = it.dir[i]
++	var r: Vector2 = p - it.pts[i]
++	var t := r.dot(d)
++	if t < 0.0 or t > it.len[i]:
++		return false
++	return (r - d * t).length_squared() <= it.w * it.w
+diff --git a/game/scripts/humanoid.gd b/game/scripts/humanoid.gd
+index 8c34f58..c488cbd 100644
+--- a/game/scripts/humanoid.gd
++++ b/game/scripts/humanoid.gd
+@@ -11,6 +11,7 @@ extends CharacterBody3D
+ ## same tick. Subclasses move the body for it in _on_reaction().
+ 
+ const Terrain = preload("res://scripts/terrain.gd")
++const Ground = preload("res://scripts/ground.gd")
+ const MeshBuilder = preload("res://scripts/mesh_builder.gd")
+ const CharacterKit = preload("res://scripts/kits/character_kit.gd")
+ const Rig = preload("res://scripts/rig.gd")
+@@ -38,6 +39,14 @@ const ANIMATE_RANGE := 55.0
+ const BLOOD_MIN_DAMAGE := 5.0
+ const BLOOD_MIN_IMPACT := 4.0
+ const BLOOD_HARD_IMPACT := 7.0
++## Ledges (_stand): ground more than LEDGE_STEP m below the feet is a fall,
++## not a step (a deck's edge, a ramp's lip). A fall of LEDGE_KNOCK m or
++## more knocks the person down; past LEDGE_HURT m each metre costs
++## LEDGE_HURT_RATE health.
++const LEDGE_STEP := 0.6
++const LEDGE_KNOCK := 2.0
++const LEDGE_HURT := 3.0
++const LEDGE_HURT_RATE := 8.0
+ 
+ var max_health := 100.0
+ var health := 100.0
+@@ -103,6 +112,14 @@ var _combo := 0
+ var _drop := 0.0
+ var _drop_want := 0.0
+ var _drop_at := Vector2.INF
++## The height the feet were last put at (a different y, or a jump of more
++## than 2 m sideways, means code placed the person: they are put on the
++## ground there), and a fall off a ledge: under way, its speed, from where.
++var _feet_y := INF
++var _feet_xz := Vector2.INF
++var _ledge_fall := false
++var _ledge_vy := 0.0
++var _ledge_from := 0.0
+ var _combo_time := 0.0
+ var _punch_t := -1.0
+ var _kick_t := -1.0
+@@ -166,12 +183,61 @@ func _physics_process(delta: float) -> void:
+ 		_update_reaction(delta)
+ 		_think(delta)
+ 	velocity.y = 0.0
++	var placed := _was_placed()
+ 	move_and_slide()
+-	global_position.y = Terrain.height(global_position.x, global_position.z) - _ground_drop(delta)
++	_stand(delta, placed)
+ 	if _pool_size > 0.0 or _trail > 0.0:
+ 		_bleed_on_ground()
+ 
+ 
++## Whether code moved the person since their feet were last put down.
++func _was_placed() -> bool:
++	var p := global_position
++	if is_inf(_feet_y) or absf(p.y - _feet_y) > 0.001:
++		return true
++	return Vector2(p.x, p.z).distance_squared_to(_feet_xz) > 4.0
++
++
++## Puts the feet on the ground under them (Ground: the terrain, or a deck
++## they are on, looked for from their own height so a ramp is walked up and
++## a bridge overhead is ignored). Ground more than LEDGE_STEP below is a
++## fall: down under gravity, then knocked down (and hurt) if it was high.
++## Placed, they land on what is under the placed height at once.
++func _stand(delta: float, placed: bool) -> void:
++	var p := global_position
++	var base := Terrain.height(p.x, p.z) - _ground_drop(delta)
++	var g := Ground.surface(p.x, p.z, base, p.y if placed else _feet_y)
++	_feet_xz = Vector2(p.x, p.z)
++	if placed:
++		_ledge_fall = false
++	elif _ledge_fall or _feet_y - g > LEDGE_STEP:
++		if not _ledge_fall:
++			_ledge_fall = true
++			_ledge_vy = 0.0
++			_ledge_from = _feet_y
++		_ledge_vy -= 9.8 * delta
++		var y := _feet_y + _ledge_vy * delta
++		if y > g: # (false for a NaN: down at once)
++			_feet_y = y
++			global_position.y = y
++			return
++		_ledge_fall = false
++		_land_fall(_ledge_from - g)
++	_feet_y = g
++	global_position.y = g
++
++
++## Down after a fall of `height` m off a ledge.
++func _land_fall(height: float) -> void:
++	if dead or height < LEDGE_KNOCK:
++		return
++	GameLog.person("fell", self, {"m": snappedf(height, 0.1)})
++	if height > LEDGE_HURT:
++		take_hit(null, (height - LEDGE_HURT) * LEDGE_HURT_RATE, Vector3.ZERO, false)
++	if not dead and knocked_time <= 0.0:
++		knock_down(1.5 + minf(height * 0.2, 1.5), velocity)
++
++
+ ## Off the roads on the hills the ground is drawn a little under
+ ## Terrain.height (Terrain.drop), looked up each half metre walked and
+ ## eased at 2 m/s so a step off the paving is a step, not a jump (the first
+diff --git a/game/scripts/kits/ramp_kit.gd b/game/scripts/kits/ramp_kit.gd
+new file mode 100644
+index 0000000..787505a
+--- /dev/null
++++ b/game/scripts/kits/ramp_kit.gd
+@@ -0,0 +1,186 @@
++extends RefCounted
++## Ramp kit: the stunt-jump kickers of stunts.gd (HANDOFF-ground.md). Pure
++## data in, mesh and collider points out: static functions, no scene tree.
++##
++## Frame: the foot of the ramp at the origin, y = 0 the ground at the foot,
++## the ramp running along -Z (forward) for `length` m to its lip, x across.
++##
++## spec keys:
++##   length, width    the deck (m)
++##   deck             PackedFloat32Array: the deck's top at N+1 stations,
++##                    evenly spaced from the foot (0) to the lip (N)
++##   ground_l, ground_r  the ground under the deck's left (-x) and right (+x)
++##                    edges at the same stations
++##   ground_front     the ground on the centreline 4, 8 and 12 m before the
++##                    foot (painted arrows)
++##   style            "timber" (plank deck, posts and braces) or "steel"
++##                    (plate deck, hazard band at the lip, red truss)
++##
++## The deck has no collider: Ground (ground.gd) holds it as a deck and lifts
++## whatever drives or walks onto it. build() returns the colliders that keep
++## things out of the ramp's sides and back, as point clouds for
++## ConvexPolygonShape3D: a wall just outside each edge (from SINK under the
++## ground to RAIL over the deck, so it is also the side rail) and, where the
++## deck is high, a core under the deck whose top stays CORE_GAP below it. A
++## car on the ramp never reaches the core (its level hull, 3 m either side of
++## its centre on the steepest part, slope 0.35, clears it); one driving into
++## the back is stopped. Vehicles longer than that (buses) can scrape it.
++
++const MeshBuilder = preload("res://scripts/mesh_builder.gd")
++
++## Wall height over the deck (the side rail), wall thickness, the core's
++## gap under the deck, and how far colliders reach under the ground.
++const RAIL := 0.25
++const SKIRT := 0.15
++const CORE_GAP := 1.2
++const SINK := 0.5
++
++const TIMBER := Color(0.46, 0.32, 0.2)
++const TIMBER_DK := Color(0.3, 0.2, 0.13)
++const TIMBER_LT := Color(0.66, 0.5, 0.32)
++const STEEL := Color(0.58, 0.6, 0.63)
++const STEEL_DK := Color(0.28, 0.3, 0.33)
++const RED := Color(0.72, 0.16, 0.14)
++const YELLOW := Color(0.95, 0.78, 0.15)
++const BLACK := Color(0.06, 0.06, 0.07)
++const ORANGE := Color(0.9, 0.45, 0.12)
++const WHITE := Color(0.93, 0.93, 0.9)
++
++
++## Adds the ramp to `mb` (in mb's current frame) and returns its colliders:
++## an Array of PackedVector3Array, each a convex hull's points.
++static func build(mb, spec: Dictionary) -> Array:
++	var length: float = spec.length
++	var hw: float = spec.width * 0.5
++	var deck: PackedFloat32Array = spec.deck
++	var gl: PackedFloat32Array = spec.ground_l
++	var gr: PackedFloat32Array = spec.ground_r
++	var steel: bool = spec.get("style", "timber") == "steel"
++	var n := deck.size() - 1
++	var ds := length / n
++	var metal := MeshBuilder.glow(STEEL, MeshBuilder.METAL)
++	var metal_dk := MeshBuilder.glow(STEEL_DK, MeshBuilder.METAL)
++	var side_col: Color = metal_dk if steel else TIMBER_DK
++	var out: Array = []
++	for k in n:
++		var z0 := -ds * k
++		var z1 := -ds * (k + 1)
++		var d0 := deck[k]
++		var d1 := deck[k + 1]
++		var up := Vector3(0.0, ds, d1 - d0).normalized()
++		# Deck top: planks across (timber) or plates with ribs (steel).
++		if steel:
++			mb.quad(Vector3(-hw, d0, z0), Vector3(hw, d0, z0), Vector3(hw, d1, z1), Vector3(-hw, d1, z1), up, metal)
++			var zr := z0 - ds * 0.5
++			var dr := (d0 + d1) * 0.5 + 0.015
++			mb.quad(Vector3(-hw, dr, zr + 0.08), Vector3(hw, dr, zr + 0.08), Vector3(hw, dr, zr - 0.08), Vector3(-hw, dr, zr - 0.08), up, metal_dk)
++		else:
++			for s in 3:
++				var za := lerpf(z0, z1, s / 3.0)
++				var zb := lerpf(z0, z1, (s + 1) / 3.0)
++				var ya := lerpf(d0, d1, s / 3.0)
++				var yb := lerpf(d0, d1, (s + 1) / 3.0)
++				var c := TIMBER_LT if (k * 3 + s) % 2 == 0 else TIMBER_LT.darkened(0.12)
++				mb.quad(Vector3(-hw, ya, za), Vector3(hw, ya, za), Vector3(hw, yb, zb), Vector3(-hw, yb, zb), up, c)
++		# The side walls (rails): outer face to the ground, top, inner face.
++		for side in [-1.0, 1.0]:
++			var g := gl if side < 0.0 else gr
++			var xi: float = side * hw
++			var xo: float = side * (hw + SKIRT)
++			var b0 := minf(g[k], d0) - 0.1
++			var b1 := minf(g[k + 1], d1) - 0.1
++			var t0 := d0 + RAIL
++			var t1 := d1 + RAIL
++			var outn := Vector3(side, 0.0, 0.0)
++			mb.quad(Vector3(xo, b0, z0), Vector3(xo, b1, z1), Vector3(xo, t1, z1), Vector3(xo, t0, z0), outn, side_col)
++			mb.quad(Vector3(xi, t0, z0), Vector3(xo, t0, z0), Vector3(xo, t1, z1), Vector3(xi, t1, z1), up, YELLOW if steel else TIMBER)
++			mb.quad(Vector3(xi, d0, z0), Vector3(xi, d1, z1), Vector3(xi, t1, z1), Vector3(xi, t0, z0), -outn, side_col)
++			# Dressing on the outer face: a post at each station and a brace
++			# across each bay (timber), a red truss (steel).
++			var xd: float = side * (hw + SKIRT + 0.06)
++			if steel:
++				mb.limb(Vector3(xd, b0 + 0.1, z0), Vector3(xd, t1 - 0.1, z1), 0.06, 0.06, RED, 4, false)
++				mb.limb(Vector3(xd, t0 - 0.1, z0), Vector3(xd, t0 - 0.1, z1), 0.06, 0.06, RED, 4, false)
++			else:
++				mb.box(Vector3(xd, (b0 + t0) * 0.5, z0), Vector3(0.18, t0 - b0, 0.18), TIMBER)
++				if d0 - g[k] > 0.8:
++					mb.limb(Vector3(xd, b0 + 0.15, z0), Vector3(xd, t1 - 0.2, z1), 0.06, 0.06, TIMBER, 4, false)
++			# The wall's collider.
++			var wall := PackedVector3Array()
++			for x in [xi, xo]:
++				wall.append(Vector3(x, g[k] - SINK, z0))
++				wall.append(Vector3(x, g[k + 1] - SINK, z1))
++				wall.append(Vector3(x, t0, z0))
++				wall.append(Vector3(x, t1, z1))
++			out.append(wall)
++		# The core under the high part of the deck.
++		var floor0 := minf(gl[k], gr[k])
++		var floor1 := minf(gl[k + 1], gr[k + 1])
++		if maxf(d0 - CORE_GAP - floor0, d1 - CORE_GAP - floor1) > 0.1:
++			var core := PackedVector3Array()
++			for x in [-hw, hw]:
++				core.append(Vector3(x, floor0 - SINK, z0))
++				core.append(Vector3(x, floor1 - SINK, z1))
++				core.append(Vector3(x, maxf(d0 - CORE_GAP, floor0 - SINK + 0.1), z0))
++				core.append(Vector3(x, maxf(d1 - CORE_GAP, floor1 - SINK + 0.1), z1))
++			out.append(core)
++	_lip(mb, spec, hw, steel)
++	_arrows(mb, spec)
++	return out
++
++
++## The back face under the lip, the lip's edge band and two flags.
++static func _lip(mb, spec: Dictionary, hw: float, steel: bool) -> void:
++	var length: float = spec.length
++	var deck: PackedFloat32Array = spec.deck
++	var n := deck.size() - 1
++	var top := deck[n]
++	var gl: float = spec.ground_l[n]
++	var gr: float = spec.ground_r[n]
++	var z := -length
++	var w := hw + SKIRT
++	var back := Vector3.FORWARD
++	mb.quad(Vector3(-w, gl - 0.1, z), Vector3(w, gr - 0.1, z), Vector3(w, top + RAIL, z), Vector3(-w, top + RAIL, z), back,
++		MeshBuilder.glow(STEEL_DK, MeshBuilder.METAL) if steel else TIMBER_DK)
++	# A band across the deck at the lip: yellow and black stripes (steel),
++	# a white painted line (timber).
++	var slope := (deck[n] - deck[n - 1]) / (length / n)
++	var up := Vector3(0.0, 1.0, slope).normalized()
++	var z0 := z + 0.9
++	var y0 := top - slope * 0.9 + 0.02
++	var y1 := top + 0.02
++	if steel:
++		var stripes := 10
++		for s in stripes:
++			var xa := -hw + 2.0 * hw * s / stripes
++			var xb := -hw + 2.0 * hw * (s + 1) / stripes
++			mb.quad(Vector3(xa, y0, z0), Vector3(xb, y0, z0), Vector3(xb, y1, z), Vector3(xa, y1, z), up, YELLOW if s % 2 == 0 else BLACK)
++	else:
++		mb.quad(Vector3(-hw, y0, z0), Vector3(hw, y0, z0), Vector3(hw, y1, z), Vector3(-hw, y1, z), up, WHITE)
++	# Flags on poles at the lip's corners.
++	for side in [-1.0, 1.0]:
++		var x: float = side * (w + 0.3)
++		var g := gl if side < 0.0 else gr
++		var tip := Vector3(x, top + 2.4, z)
++		mb.limb(Vector3(x, g - 0.1, z), tip, 0.05, 0.04, WHITE, 4, true)
++		var fc := ORANGE if steel else RED
++		var a := tip + Vector3(0.0, -0.05, 0.0)
++		var b := tip + Vector3(0.0, -0.6, 0.0)
++		var c := tip + Vector3(side * 0.8, -0.32, 0.0)
++		mb.tri(a, b, c, Vector3.BACK, fc)
++		mb.tri(a, c, b, Vector3.FORWARD, fc)
++
++
++## Painted chevrons on the ground before the foot, pointing up the ramp.
++static func _arrows(mb, spec: Dictionary) -> void:
++	var front: PackedFloat32Array = spec.get("ground_front", PackedFloat32Array())
++	for i in front.size():
++		var z := 4.0 * (i + 1)
++		var y := front[i] + 0.05
++		for side in [-1.0, 1.0]:
++			var a := Vector2(side * 1.3, z + 0.7)
++			var b := Vector2(0.0, z - 0.7)
++			var d := (b - a).normalized()
++			var s := Vector2(d.y, -d.x) * 0.2
++			mb.quad(Vector3(a.x - s.x, y, a.y - s.y), Vector3(b.x - s.x, y, b.y - s.y),
++				Vector3(b.x + s.x, y, b.y + s.y), Vector3(a.x + s.x, y, a.y + s.y), Vector3.UP, ORANGE)
+diff --git a/game/scripts/vehicle.gd b/game/scripts/vehicle.gd
+index af590f1..e7ac50a 100644
+--- a/game/scripts/vehicle.gd
++++ b/game/scripts/vehicle.gd
+@@ -8,6 +8,7 @@ const MeshBuilder = preload("res://scripts/mesh_builder.gd")
+ const VehicleKit = preload("res://scripts/kits/vehicle_kit.gd")
+ const L = preload("res://scripts/layers.gd")
+ const Terrain = preload("res://scripts/terrain.gd")
++const Ground = preload("res://scripts/ground.gd")
+ const Breakables = preload("res://scripts/breakables.gd")
+ const GameLog = preload("res://scripts/game_log.gd")
+ const VehicleClasses = preload("res://scripts/kits/vehicle_classes.gd")
+@@ -19,6 +20,12 @@ const Convertible = preload("res://scripts/convertible.gd")
+ signal officer_deployed(car)
+ ## A SCRIPT driver reached the end of its path.
+ signal path_done(car)
++## The car left the ground (a ramp's lip, a deck's edge, a sharp crest).
++signal took_off(car)
++## The car came down after `air_time` s in the air, `distance` m (flat)
++## from where it took off, `height` m at most over the ground under it
++## (the rest is in last_flight).
++signal air_landed(car, air_time, distance, height)
+ 
+ ## SCRIPT drives a mission path; CHASER hunts the player like police do.
+ enum Driver { NONE, PLAYER, TRAFFIC, POLICE, SCRIPT, CHASER }
+@@ -30,6 +37,23 @@ const DROP_RATE := 1.5
+ ## How much of gravity's pull along a slope reaches the speed (the rest the
+ ## engine and brakes take).
+ const SLOPE_PULL := 0.6
++## The air state (_ride_ground, _air_drive): the car takes off when the
++## ground falls away under it more than AIR_LIFT m in one frame below where
++## its own climb and gravity carry it (a ramp's lip, a deck's edge; the
++## hills' road crests stay under 0.25 m at 30 m/s, so they never launch).
++## In the air it flies under AIR_GRAVITY keeping its horizontal velocity;
++## its nose eases to the flight path (AIR_NOSE, 1/s) and the stick turns it
++## only AIR_STEER rad/s. Landing faster than LAND_SAFE m/s into the ground
++## hurts LAND_HURT per m/s over it (before the class's damage factor); each
++## m/s of impact scrubs LAND_SCRUB of the speed (at most LAND_SCRUB_MAX).
++const AIR_GRAVITY := 9.8
++const AIR_LIFT := 0.3
++const AIR_NOSE := 1.5
++const AIR_STEER := 0.5
++const LAND_SAFE := 12.0
++const LAND_HURT := 2.5
++const LAND_SCRUB := 0.015
++const LAND_SCRUB_MAX := 0.3
+ ## Corner assist: a turn the stick asks for that is too tight at this speed
+ ## slows the car to the speed at which it can turn on this radius (m).
+ const CORNER_RADIUS := 5.0
+@@ -291,6 +315,31 @@ var _heave_v := 0.0
+ ## a bump or a crest the springs take.
+ var _ground_vy := 0.0
+ var _last_y := INF
++## In the air (a jump or a fall; _air_drive) and its vertical speed (m/s).
++var airborne := false
++var air_vy := 0.0
++## Seconds in the air so far on this flight (kept after landing).
++var air_time := 0.0
++## The last flight, set on landing: {"time", "distance", "height" (most
++## over the ground under it), "rise" (top over take-off), "from", "to"
++## (Vector3), "deck" (id of the deck it left, "" for the terrain), "speed"
++## (m/s at take-off), "impact" (m/s into the ground)}. Empty before any.
++var last_flight := {}
++## The y this car last set (a different y means code placed it: snap), its
++## xz then, the ground's slope there, the deck it is on ("" for none) and
++## that deck's normal (ZERO on the terrain).
++var _y_set := INF
++var _xz_set := Vector2.INF
++var _grad := Vector2.ZERO
++var _deck_id := ""
++var _deck_n := Vector3.ZERO
++## This flight: where it took off, from which deck, how fast, its highest
++## point and its most height over the ground.
++var _air_from := Vector3.ZERO
++var _air_deck := ""
++var _air_speed := 0.0
++var _air_top := 0.0
++var _air_peak := 0.0
+ ## Yaw spin from an off-centre hit (rad/s), dying away.
+ var _spin := 0.0
+ ## Dented copies of the cached meshes ([body, gloss] arrays and the
+@@ -391,7 +440,7 @@ func _ready() -> void:
+ 
+ 
+ func _physics_process(delta: float) -> void:
+-	if driver == Driver.NONE and speed == 0.0 and velocity == Vector3.ZERO and _lights.is_empty() and _settled():
++	if driver == Driver.NONE and speed == 0.0 and velocity == Vector3.ZERO and _lights.is_empty() and _settled() and not airborne:
+ 		motion = Vector3.ZERO
+ 		return # parked: nothing to simulate until something drives or hits it
+ 	desired_dir = Vector3.ZERO
+@@ -644,9 +693,19 @@ static func footprints_meet(a: Vector3, a_yaw: float, a_size: Vector3, b: Vector
+ ## Moves the car by `offset` at once, stopping at walls (another car
+ ## sunk into it moves it out).
+ func shove(offset: Vector3) -> void:
++	var placed := _was_placed()
++	var hint := global_position.y if placed else _y_set
+ 	move_and_collide(offset)
+-	# A parked car skips its physics step: put it back on the ground here.
+-	global_position.y = Terrain.height(global_position.x, global_position.z) - _drop
++	if airborne and not placed:
++		global_position.y = _y_set # it falls on in _air_drive
++		return
++	airborne = false
++	# A parked car skips its physics step: put it back on the ground here
++	# (the deck it stands on, if any).
++	var p := global_position
++	_y_set = Ground.surface(p.x, p.z, Terrain.height(p.x, p.z) - _drop, hint)
++	_xz_set = Vector2(p.x, p.z)
++	global_position.y = _y_set
+ 
+ 
+ ## Hit by another vehicle: `push` is already scaled by the two masses (see
+@@ -1264,6 +1323,14 @@ func _police_ai(delta: float) -> void:
+ ## velocity follows the heading (lower slides more, and rear-drive cars
+ ## lose some under power), and brake and reverse are per model.
+ func _drive(delta: float) -> void:
++	# Placed by code (a spawn, a teleport): snapped to the ground below, not
++	# flown. In the air the wheels do nothing (_air_drive).
++	var placed := _was_placed()
++	if placed:
++		airborne = false
++	elif airborne:
++		_air_drive(delta)
++		return
+ 	var fwd := -global_basis.z
+ 	var target := 0.0
+ 	var steer := 0.0
+@@ -1366,9 +1433,12 @@ func _drive(delta: float) -> void:
+ 	velocity = Vector3(velocity.x, 0.0, velocity.z).lerp(want, clampf(grip * delta, 0.0, 1.0))
+ 	var before := velocity
+ 	move_and_slide()
+-	global_position.y = Terrain.height(global_position.x, global_position.z) - _ground_drop(delta)
+-	_ground_bumps(delta)
+-	_ground_slope(delta)
++	_ride_ground(delta, placed)
++	if airborne:
++		_air_slope(delta)
++	else:
++		_ground_bumps(delta)
++		_ground_slope(delta)
+ 	# Tilt follows how the body really moves, so a car pinned against a
+ 	# wall with the throttle down stays level.
+ 	var real := get_real_velocity()
+@@ -1379,6 +1449,164 @@ func _drive(delta: float) -> void:
+ 	_handle_collisions(before)
+ 
+ 
++## Whether code moved the car since it last set its own height (a spawn, a
++## teleport, a test): it is then put on the ground there, not flown.
++func _was_placed() -> bool:
++	var p := global_position
++	if is_inf(_y_set) or absf(p.y - _y_set) > 0.001:
++		return true
++	return Vector2(p.x, p.z).distance_squared_to(_xz_set) > 9.0
++
++
++## Puts the car on the ground under it (Ground: the terrain, or the deck it
++## is on) or, when that ground falls away faster than the car's own climb
++## and gravity can follow it (a ramp's lip, a deck's edge), launches it.
++## A placed car looks from its placed height, so one put on the road under
++## a bridge stays on the road.
++func _ride_ground(delta: float, placed: bool) -> void:
++	var p := global_position
++	var xz := Vector2(p.x, p.z)
++	var base := Terrain.height(p.x, p.z) - _ground_drop(delta)
++	var g := Ground.surface(p.x, p.z, base, p.y if placed else _y_set)
++	var deck = Ground.hit
++	var grad: Vector2 = Ground.hit_grad if deck != null else Ground.terrain_grad(p.x, p.z)
++	if not placed:
++		var rise := _grad.dot(xz - _xz_set)
++		var carry := _y_set + rise - 0.5 * AIR_GRAVITY * delta * delta
++		if carry - g > AIR_LIFT:
++			_take_off(carry, rise / delta)
++			return
++	_y_set = g
++	_xz_set = xz
++	_grad = grad
++	_deck_id = deck.id if deck != null else ""
++	_deck_n = Vector3(-grad.x, 1.0, -grad.y).normalized() if deck != null else Vector3.ZERO
++	global_position.y = g
++
++
++func _take_off(y: float, vy: float) -> void:
++	airborne = true
++	air_vy = vy
++	air_time = 0.0
++	var p := global_position
++	_air_from = Vector3(p.x, y, p.z)
++	_air_deck = _deck_id
++	_air_speed = Vector2(velocity.x, velocity.z).length()
++	_air_top = y
++	_air_peak = 0.0
++	_y_set = y
++	_xz_set = Vector2(p.x, p.z)
++	_deck_id = ""
++	_deck_n = Vector3.ZERO
++	global_position.y = y
++	_last_y = y
++	took_off.emit(self)
++
++
++## In the air: no grip and no engine. The car keeps its horizontal velocity
++## and falls; its heading eases to the flight path and the stick turns it
++## only a little. It lands on the ground (or a deck) when it comes down to it.
++func _air_drive(delta: float) -> void:
++	air_time += delta
++	var fwd := -global_basis.z
++	var flat := Vector3(velocity.x, 0.0, velocity.z)
++	var vh := flat.length()
++	if vh > 1.0:
++		var along := flat / vh
++		if along.dot(fwd) < 0.0:
++			along = -along # flying backwards stays backwards
++		rotate_y(fwd.signed_angle_to(along, Vector3.UP) * (1.0 - exp(-AIR_NOSE * delta)))
++	if desired_dir != Vector3.ZERO and driver == Driver.PLAYER:
++		var turn := clampf(fwd.signed_angle_to(desired_dir, Vector3.UP) * 2.0, -1.0, 1.0) * AIR_STEER * delta
++		rotate_y(turn)
++		velocity = velocity.rotated(Vector3.UP, turn * 0.3)
++	if _spin != 0.0:
++		rotate_y(_spin * delta)
++		_spin *= exp(-2.5 * delta)
++		if absf(_spin) < 0.02:
++			_spin = 0.0
++	_yaw_rate = 0.0
++	speed = Vector3(velocity.x, 0.0, velocity.z).dot(-global_basis.z)
++	air_vy -= AIR_GRAVITY * delta
++	velocity.y = 0.0
++	var before := velocity
++	move_and_slide()
++	var p := global_position
++	var y := _y_set + air_vy * delta
++	var base := Terrain.height(p.x, p.z) - _ground_drop(delta)
++	var g := Ground.surface(p.x, p.z, base, _y_set)
++	var deck = Ground.hit
++	var grad: Vector2 = Ground.hit_grad if deck != null else Ground.terrain_grad(p.x, p.z)
++	if y > g: # (false for a NaN: it lands)
++		_air_top = maxf(_air_top, y)
++		_air_peak = maxf(_air_peak, y - g)
++		_y_set = y
++		_xz_set = Vector2(p.x, p.z)
++		_last_y = y
++		global_position.y = y
++		_air_slope(delta)
++	else:
++		_air_land(g, grad, deck)
++		_ground_slope(delta)
++	var real := get_real_velocity()
++	motion = motion.lerp(Vector3(real.x, 0.0, real.z), 1.0 - exp(-delta / MOTION_EASE))
++	_moved = real.dot(-global_basis.z)
++	_body_tilt(delta, 0.0, 0.0)
++	_handle_collisions(before)
++
++
++## Down on `g` (slope `grad`, on `deck` or the terrain): the speed into the
++## ground is the impact. The body slams onto its springs, a hard landing
++## dents and hurts (LAND_SAFE, LAND_HURT) and throws a rider off a bike, and
++## the tyres scrub some speed. Reports the flight (last_flight, air_landed).
++func _air_land(g: float, grad: Vector2, deck) -> void:
++	var p := global_position
++	var flat := Vector2(velocity.x, velocity.z)
++	var impact := maxf(grad.dot(flat) - air_vy, 0.0) / sqrt(1.0 + grad.length_squared())
++	if is_nan(impact):
++		impact = 0.0
++	var keep := 1.0 - minf(impact * LAND_SCRUB, LAND_SCRUB_MAX)
++	velocity.x *= keep
++	velocity.z *= keep
++	speed *= keep
++	airborne = false
++	air_vy = 0.0
++	_y_set = g
++	_xz_set = Vector2(p.x, p.z)
++	_grad = grad
++	_deck_id = deck.id if deck != null else ""
++	_deck_n = Vector3(-grad.x, 1.0, -grad.y).normalized() if deck != null else Vector3.ZERO
++	global_position.y = g
++	_last_y = INF # the bumps start again from here
++	var k: float = _cls.kick
++	_heave_v -= clampf(impact * 0.12, 0.0, 1.2) * k
++	_tilt_v.y -= clampf(impact * 0.04, 0.0, 0.5) * k
++	if impact > 3.0:
++		Fx.puff(Vector3(p.x, g + 0.2, p.z), Vector3(flat.x, 0.0, flat.y) * 0.1 + Vector3.UP * 0.6,
++				_size.x * 0.6, 1.5, 1.2, Color(0.55, 0.5, 0.42, 0.45))
++	if impact > LAND_SAFE:
++		Fx.crash(Vector3(p.x, g, p.z), impact, driver == Driver.PLAYER)
++		_damage((impact - LAND_SAFE) * LAND_HURT)
++	var throw: float = _cls.throw
++	if throw > 0.0 and impact >= throw:
++		_throw_rider(Vector3(velocity.x, 0.0, velocity.z))
++	var to := Vector3(p.x, g, p.z)
++	var dist := Vector2(to.x - _air_from.x, to.z - _air_from.z).length()
++	last_flight = {"time": air_time, "distance": dist, "height": _air_peak, "rise": _air_top - _air_from.y,
++		"from": _air_from, "to": to, "deck": _air_deck, "speed": _air_speed, "impact": impact}
++	air_landed.emit(self, air_time, dist, _air_peak)
++
++
++## In the air the body's pitch eases to the flight path (nose up on the way
++## up, down on the way down) and its roll to level.
++func _air_slope(delta: float) -> void:
++	var vh := Vector2(velocity.x, velocity.z).length()
++	var pitch := clampf(atan2(air_vy, maxf(vh, 2.0)) * 0.6, -0.6, 0.6)
++	if speed < 0.0:
++		pitch = -pitch
++	_slope = _slope.lerp(Vector2(0.0, pitch), 1.0 - exp(-AIR_NOSE * delta))
++
++
+ ## Speed (m/s) at which this model's heading turns as fast as a car on a
+ ## CORNER_RADIUS circle at full lock: v = R * turn * (1 - steer_fade * v /
+ ## max_speed), solved for v, and no faster than its tyres hold that
+@@ -1552,7 +1780,7 @@ func _throw_rider(fling: Vector3) -> void:
+ 
+ ## The ground's slope along and across the car (it lies on the hill).
+ func _ground_slope(delta: float) -> void:
+-	var n := Terrain.normal(global_position.x, global_position.z)
++	var n := _deck_n if _deck_n != Vector3.ZERO else Terrain.normal(global_position.x, global_position.z)
+ 	var want := Vector2.ZERO
+ 	if n.y < 0.9999:
+ 		var fwd := -global_basis.z
+@@ -1686,7 +1914,7 @@ func _effects(delta: float) -> void:
+ 	var moving := v.length()
+ 	_exhaust(delta)
+ 	_tyres(delta, v, moving)
+-	if _game != null and _game.atmosphere.wetness > 0.4 and moving > 7.0:
++	if _game != null and _game.atmosphere.wetness > 0.4 and moving > 7.0 and not airborne:
+ 		_splash_time -= delta
+ 		if _splash_time <= 0.0:
+ 			_splash_time = 0.16
+@@ -1815,7 +2043,7 @@ func _tyres(delta: float, v: Vector3, moving: float) -> void:
+ 			front = moving
+ 	if _emit.pops and throttle > 0.9 and pace < 7.0 and _load > 0.4 and driver == Driver.PLAYER:
+ 		rear = maxf(rear, 10.0 - pace)
+-	if wet or wrecked:
++	if wet or wrecked or airborne:
+ 		rear = 0.0
+ 		front = 0.0
+ 		faint = false

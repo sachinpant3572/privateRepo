@@ -1,0 +1,1320 @@
+diff --git a/game/scripts/bungee.gd b/game/scripts/bungee.gd
+new file mode 100644
+index 0000000..14c4853
+--- /dev/null
++++ b/game/scripts/bungee.gd
+@@ -0,0 +1,447 @@
++extends Node
++## The bungee jump at the Calder platform lot (HANDOFF-air-sports.md). The
++## lot sits on a level pad, so a steel jump arm reaches out from the pad's
++## edge over the steepest drop beside it, found from the terrain at run
++## time. E at the arm's steps (PRICE taken) walks the player out, a swan
++## dive off the tip, a rope-spring fall with decaying bounces, the winch
++## back up and a walk back. The rope is cut from the measured drop so the
++## lowest the body reaches stays CLEAR m or more over the ground under it.
++## While jumping this node drives the player (player.air), as parachute.gd.
++##
++## main.gd: `bungee = Bungee.new(); bungee.game = self; add_child(bungee)`.
++
++const Kit = preload("res://scripts/kits/air_sports_kit.gd")
++const MeshBuilder = preload("res://scripts/mesh_builder.gd")
++const Terrain = preload("res://scripts/terrain.gd")
++const GameLog = preload("res://scripts/game_log.gd")
++const Parachute = preload("res://scripts/parachute.gd")
++const Tiles = preload("res://scripts/country_tiles.gd")
++
++const LOT_ID := "calder_bungee"
++## The lot's centre, when the country data has no such lot.
++const LOT := Vector2(746.14, -2708.86)
++const PRICE := 60
++## The arm: from level ground within ROOT_R m of the lot (within PAD_LEVEL m
++## of its height), ARM_LENGTHS m long, its catwalk DECK_H m up.
++const ROOT_R := 45.0
++const PAD_LEVEL := 1.5
++const ARM_LENGTHS := [8, 12, 16, 20]
++const ARM_MAX := 20
++const DECK_H := 0.8
++## The rope: hanging head down the body reaches BODY m under the ankles; the
++## lowest point keeps CLEAR m over the highest ground near the tip, with
++## MARGIN to spare. The rope's slack is RATIO of the fall to that point;
++## its damping ZETA of critical; AIR and HDAMP are the air's drag.
++const BODY := 2.6
++const CLEAR := 3.0
++const MARGIN := 1.0
++const RATIO := 0.42
++const ZETA := 0.12
++const AIR := 0.004
++const HDAMP := 0.4
++const MIN_FALL := 10.0
++## The dive: out and up off the tip (m/s).
++const DIVE_OUT := 0.7
++const DIVE_UP := 1.5
++const DIVE_TIME := 1.2
++## Walking the catwalk, the winch, the prompt's reach (m from the steps).
++const WALK := 2.5
++const WINCH := 4.0
++const REACH := 3.0
++## The jump ends after LOWS low points, or MAX_TIME s on the rope.
++const LOWS := 4
++const MAX_TIME := 30.0
++const PREPARE_RANGE := 400.0
++const G := 9.8
++
++var game
++## "" (not jumping), "climb", "walk_out", "ready", "fall", "winch", "flip",
++## "walk_back", "down".
++var state := ""
++var player = null
++## Each low and high of the ankles on the rope, metres from the anchor (up +).
++var lows: Array = []
++var highs: Array = []
++## The lowest the body came over the ground under it in this jump (m).
++var lowest_clear := INF
++var _site := {}
++var _site_done := false
++var _prepare_tick := 0.0
++var _t := 0.0
++var _p := Vector3.ZERO
++var _v := Vector3.ZERO
++var _from := Vector3.ZERO
++var _arm: MeshInstance3D
++var _rope: MeshInstance3D
++
++
++func _ready() -> void:
++	if game == null:
++		game = get_parent()
++	add_to_group("air_sports")
++	add_to_group("bungee")
++	_rope = MeshInstance3D.new()
++	_rope.name = "BungeeRope"
++	_rope.mesh = Kit.rope()
++	_rope.material_override = MeshBuilder.material()
++	_rope.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
++	_rope.visible = false
++	add_child(_rope)
++
++
++func _process(delta: float) -> void:
++	_prepare_tick -= delta
++	if not _site_done and _prepare_tick <= 0.0:
++		_prepare_tick = 0.5
++		var p = game.get("player") if game != null else null
++		if p != null and Vector2(p.global_position.x, p.global_position.z).distance_to(_lot()) < PREPARE_RANGE:
++			site()
++	if player != null and state in ["ready", "fall", "winch"]:
++		var feet: Vector3 = player.get_global_transform_interpolated().origin
++		var eye := _anchor() + Vector3(0.0, -0.35, 0.0)
++		_rope.global_transform = Transform3D(Kit.along(eye, feet), eye)
++		_rope.visible = true
++	else:
++		_rope.visible = false
++
++
++func _lot() -> Vector2:
++	var city = game.get("city") if game != null else null
++	var country = city.get("country") if city != null else null
++	if country != null:
++		var lm: Dictionary = country.landmark(LOT_ID)
++		if not lm.is_empty():
++			return Vector2(lm.pos.x, lm.pos.z)
++	return LOT
++
++
++# --- The site -----------------------------------------------------------------
++
++## The jump arm and its rope, measured from the terrain once: root (on the
++## ground), dir (out along the arm), length, deck (catwalk height), tip (at
++## the catwalk), drop (catwalk to the highest ground near the tip), the
++## rope's slack l0, stiffness k and damping c (per kg). {} if no drop will do.
++func site() -> Dictionary:
++	if _site_done:
++		return _site
++	_site_done = true
++	if Terrain.nx == 0:
++		return _site
++	var lot := _lot()
++	var pad := Terrain.height(lot.x, lot.y)
++	var best := [-INF, 0.0, 0.0, 0.0, 0]
++	var x := lot.x - ROOT_R
++	while x <= lot.x + ROOT_R:
++		var z := lot.y - ROOT_R
++		while z <= lot.y + ROOT_R:
++			if Vector2(x, z).distance_to(lot) <= ROOT_R and _root_ok(x, z, pad):
++				for a in 24:
++					for l: int in ARM_LENGTHS:
++						best = _better(best, x, z, TAU * a / 24.0, l, lot)
++			z += 4.0
++		x += 4.0
++	if best[0] == -INF:
++		return _site
++	var bx: float = best[1]
++	var bz: float = best[2]
++	var ba: float = best[3]
++	var bl: int = best[4]
++	for i in range(-3, 4):
++		for j in range(-3, 4):
++			if not _root_ok(bx + i, bz + j, pad) or Vector2(bx + i, bz + j).distance_to(lot) > ROOT_R + 4.0:
++				continue
++			for k in range(-3, 4):
++				for l in range(maxi(8, bl - 3), mini(ARM_MAX, bl + 3) + 1):
++					best = _better(best, bx + i, bz + j, ba + deg_to_rad(2.5 * k), l, lot)
++	var dir := Vector3(cos(best[3]), 0.0, sin(best[3]))
++	var root := Vector3(best[1], 0.0, best[2])
++	root.y = Terrain.height(root.x, root.z)
++	var length: float = best[4]
++	var deck := root.y + DECK_H
++	var tip := root + dir * length
++	tip.y = deck
++	var drop := deck - _highest_near(tip.x, tip.z)
++	# The rope: undamped, the ankles would just reach `reach` under the
++	# anchor; the body then hangs BODY under them, CLEAR + MARGIN up.
++	var reach := drop - BODY - CLEAR - MARGIN
++	if reach < MIN_FALL:
++		return _site
++	var l0 := RATIO * reach
++	var stretch := reach - l0
++	var rise := DIVE_UP * DIVE_UP / (2.0 * G)
++	var k := 2.0 * G * (reach + rise) / (stretch * stretch)
++	_site = {"root": root, "dir": dir, "length": length, "deck": deck, "tip": tip, "drop": drop,
++			"l0": l0, "k": k, "c": ZETA * 2.0 * sqrt(k), "gate": root - dir * 2.6}
++	_build_arm()
++	return _site
++
++
++static func _root_ok(x: float, z: float, pad: float) -> bool:
++	return absf(Terrain.height(x, z) - pad) <= PAD_LEVEL and Terrain.normal(x, z).y >= 0.85
++
++
++## `best` or the arm from (x, z) toward `ang`, `l` m long, if it scores
++## higher: a deep drop, a short arm, near the lot.
++static func _better(best: Array, x: float, z: float, ang: float, l: int, lot: Vector2) -> Array:
++	var d := _arm_drop(x, z, ang, l)
++	if d == -INF:
++		return best
++	var s := d - 0.6 * l - 0.2 * Vector2(x, z).distance_to(lot)
++	return [s, x, z, ang, l] if s > best[0] else best
++
++
++## The drop from the catwalk at the tip of an arm from (x, z) toward `ang`,
++## `l` m long, or -INF when the ground along it comes up under the catwalk.
++static func _arm_drop(x: float, z: float, ang: float, l: int) -> float:
++	var dx := cos(ang)
++	var dz := sin(ang)
++	var deck := Terrain.height(x, z) + DECK_H
++	var s := 2
++	while s <= l:
++		if Terrain.height(x + dx * s, z + dz * s) > deck - 0.3:
++			return -INF
++		s += 2
++	return deck - _highest_near(x + dx * l, z + dz * l)
++
++
++## The highest ground within 2.5 m of (x, z): where a swinging body could reach.
++static func _highest_near(x: float, z: float) -> float:
++	var m := Terrain.height(x, z)
++	for a in 8:
++		var ang := TAU * a / 8.0
++		m = maxf(m, Terrain.height(x + cos(ang) * 2.5, z + sin(ang) * 2.5))
++	return m
++
++
++func _build_arm() -> void:
++	var root: Vector3 = _site.root
++	var dir: Vector3 = _site.dir
++	var length: float = _site.length
++	var yaw := atan2(-dir.x, -dir.z)
++	var back := root - dir * 9.0
++	_arm = MeshInstance3D.new()
++	_arm.name = "BungeeArm"
++	_arm.mesh = Kit.jump_arm(length, DECK_H, Terrain.height(back.x, back.z) - root.y)
++	_arm.material_override = MeshBuilder.material()
++	add_child(_arm)
++	_arm.global_transform = Transform3D(Basis(Vector3.UP, yaw), root)
++	# No trees along the arm or in the fall under its tip.
++	var mid := root + dir * (length * 0.5 - 2.0)
++	Tiles.clearings.append([Vector2(mid.x, mid.z), yaw, Vector2(3.0, length * 0.5 + 9.0)])
++	Tiles.clearings.append([Vector2(_site.tip.x, _site.tip.z), yaw, Vector2(6.0, 6.0)])
++
++
++func _anchor() -> Vector3:
++	return _site.tip if not _site.is_empty() else Vector3.ZERO
++
++
++# --- The HUD and E ------------------------------------------------------------
++
++func _at_gate() -> bool:
++	var p = game.get("player") if game != null else null
++	if p == null or p.vehicle != null or p.dead or p.knocked_time > 0.0 or p.air != null or not p.controllable:
++		return false
++	if Vector2(p.global_position.x, p.global_position.z).distance_to(_lot()) > ROOT_R + 30.0:
++		return false
++	var s := site()
++	if s.is_empty():
++		return false
++	var at: Vector3 = s.gate
++	return Vector2(p.global_position.x - at.x, p.global_position.z - at.z).length() <= REACH
++
++
++## [text, button] for the HUD: the offer at the arm's steps, or how the
++## jump goes; [] otherwise.
++func prompt() -> Array:
++	if state != "":
++		match state:
++			"fall":
++				return ["Bungee   %d m drop" % roundi(_site.drop), "JUMP"]
++			"winch":
++				return ["Bungee   winching you up", "JUMP"]
++		return ["Bungee", "JUMP"]
++	if _at_gate():
++		return ["Bungee: E ($%d)" % PRICE, "JUMP"]
++	return []
++
++
++## At the steps: pays and jumps, or says what it costs. True when it took E.
++func try_interact() -> bool:
++	if state != "" or not _at_gate():
++		return false
++	if game.cash < PRICE:
++		if game.hud != null:
++			game.hud.show_message("A bungee jump costs $%d" % PRICE)
++		GameLog.event("bungee_refused", {"cash": game.cash})
++		return true
++	game.cash -= PRICE
++	_start(game.player)
++	return true
++
++
++func _start(p) -> void:
++	player = p
++	p.air = self
++	state = "climb"
++	_t = 0.0
++	lows = []
++	highs = []
++	lowest_clear = INF
++	_from = p.global_position
++	p.velocity = Vector3.ZERO
++	p.collision_layer = 0
++	p.collision_mask = 0
++	var dir: Vector3 = _site.dir
++	p.rotation.y = atan2(-dir.x, -dir.z)
++	GameLog.event("bungee_jump", {"drop": _site.drop, "l0": _site.l0, "k": _site.k})
++
++
++# --- The jump -----------------------------------------------------------------
++
++## One physics frame of the jump (player.gd calls this while p.air is us).
++func drive(p, delta: float) -> void:
++	if p.dead:
++		_hand_to_fall(p)
++		return
++	_t += delta
++	var dir: Vector3 = _site.dir
++	var root: Vector3 = _site.root
++	var deck: float = _site.deck
++	var on_deck := Vector3(root.x, deck, root.z)
++	var tip_stand: Vector3 = _site.tip - dir * 0.3
++	match state:
++		"climb":
++			var k := smoothstep(0.0, 1.0, minf(_t / 0.8, 1.0))
++			p.global_position = _from.lerp(on_deck, k)
++			p.velocity = dir * WALK * 0.6
++			if _t >= 0.8:
++				_next("walk_out")
++		"walk_out":
++			p.global_position = p.global_position.move_toward(tip_stand, WALK * delta)
++			p.velocity = dir * WALK
++			if p.global_position.distance_to(tip_stand) < 0.01:
++				p.velocity = Vector3.ZERO
++				p.gesture = "hands_up"
++				p.flies = true
++				p.above_land = _site.drop
++				_next("ready")
++		"ready":
++			if _t >= 1.0:
++				_p = p.global_position
++				_v = dir * DIVE_OUT + Vector3.UP * DIVE_UP
++				_next("fall")
++		"fall":
++			p.rotation.x = -PI * smoothstep(0.0, 1.0, minf(_t / DIVE_TIME, 1.0))
++			_rope_step(delta)
++			p.global_position = _p
++			if lows.size() >= LOWS or _t > MAX_TIME:
++				_next("winch")
++		"winch":
++			_v = Vector3.ZERO
++			var top := _anchor() + Vector3(0.0, -1.2, 0.0)
++			_p = _p.move_toward(top, minf(WINCH, 0.5 + _t * 2.0) * delta)
++			p.global_position = _p
++			if _p.distance_to(top) < 0.01:
++				_p = top
++				_next("flip")
++		"flip":
++			var k := smoothstep(0.0, 1.0, minf(_t / 1.0, 1.0))
++			var top := _anchor() + Vector3(0.0, -1.2, 0.0)
++			p.global_position = top.lerp(tip_stand, k) + Vector3.UP * sin(k * PI) * 0.4
++			p.rotation.x = lerpf(-PI, 0.0, k)
++			if _t >= 1.0:
++				p.rotation.x = 0.0
++				p.gesture = ""
++				p.flies = false
++				p.above_land = 0.0
++				p.rotation.y = atan2(dir.x, dir.z)
++				_next("walk_back")
++		"walk_back":
++			p.global_position = p.global_position.move_toward(on_deck, WALK * delta)
++			p.velocity = -dir * WALK
++			if p.global_position.distance_to(on_deck) < 0.01:
++				_from = on_deck
++				_next("down")
++		"down":
++			var k := smoothstep(0.0, 1.0, minf(_t / 0.8, 1.0))
++			var gate: Vector3 = _site.gate
++			gate.y = Parachute.ground_under(gate.x, gate.z)
++			p.global_position = _from.lerp(gate, k)
++			p.velocity = -dir * WALK * 0.6
++			if _t >= 0.8:
++				_finish(p)
++				return
++	_track_clearance(p)
++
++
++func _next(s: String) -> void:
++	state = s
++	_t = 0.0
++
++
++## The rope and the air on the jumper (the ankles, at _p): gravity, the
++## rope's spring and damping while it is stretched and pulling, drag.
++func _rope_step(delta: float) -> void:
++	var anchor := _anchor()
++	var a := Vector3(0.0, -G, 0.0) - _v * _v.length() * AIR
++	a.x -= _v.x * HDAMP
++	a.z -= _v.z * HDAMP
++	var r := _p - anchor
++	var d := r.length()
++	var l0: float = _site.l0
++	if d > l0:
++		var u := r / d
++		var f: float = _site.k * (d - l0) + _site.c * _v.dot(u)
++		if f > 0.0:
++			a -= u * f
++	var vy_was := _v.y
++	_v += a * delta
++	_p += _v * delta
++	if vy_was < 0.0 and _v.y >= 0.0:
++		lows.append(_p.y - anchor.y)
++	elif vy_was > 0.0 and _v.y <= 0.0 and _t > 0.5:
++		highs.append(_p.y - anchor.y)
++
++
++func _track_clearance(p) -> void:
++	if state in ["fall", "winch"]:
++		var head: Vector3 = p.global_position
++		lowest_clear = minf(lowest_clear, head.y - BODY - Terrain.height(head.x, head.z))
++
++
++func _finish(p) -> void:
++	GameLog.event("bungee_done", {"lows": lows, "lowest_clear": lowest_clear})
++	_release(p)
++
++
++func _release(p) -> void:
++	state = ""
++	player = null
++	p.air = null
++	p.flies = false
++	p.above_land = 0.0
++	p.gesture = ""
++	p.rotation.x = 0.0
++	p.rotation.z = 0.0
++	p.velocity = Vector3.ZERO
++	if not p.dead:
++		p._set_standing_layers()
++	p.set("_drop_at", Vector2.INF)
++	p.reset_physics_interpolation()
++
++
++## Killed on the rope: player.gd's fall takes the body down.
++func _hand_to_fall(p) -> void:
++	var pos: Vector3 = p.global_position
++	var h := maxf(pos.y - Parachute.ground_under(pos.x, pos.z), 0.0)
++	_release(p)
++	p._fall = h
++	p._fall_v = 0.0
++	p._fall_from = h
++
++
++## Ends the jump at once (player.gd's stand_at and respawn).
++func cancel() -> void:
++	if player != null:
++		_release(player)
++	state = ""
+diff --git a/game/scripts/kits/air_sports_kit.gd b/game/scripts/kits/air_sports_kit.gd
+new file mode 100644
+index 0000000..373b717
+--- /dev/null
++++ b/game/scripts/kits/air_sports_kit.gd
+@@ -0,0 +1,219 @@
++extends RefCounted
++## Meshes for the air sports (parachute.gd, bungee.gd): the canopy and its
++## lines, the risers, the BASE exit's plank and windsock, the bungee jump
++## arm and its rope. All original, low-poly, vertex-coloured.
++
++const MeshBuilder = preload("res://scripts/mesh_builder.gd")
++
++## The canopy: CELLS cells across SPAN m on an arc, CHORD m deep; its lowest
++## edge sits LINE_RISE m over the riser point (where the lines meet).
++const CELLS := 8
++const SPAN := 7.2
++const CHORD := 2.6
++const ARC := 0.7 # half the arc's angle (rad)
++const LINE_RISE := 4.4
++## Where the lines meet, over the feet (the harness hangs under it).
++const RISER_Y := 2.3
++const SHOULDER_Y := 1.45
++
++const TEAL := Color(0.06, 0.42, 0.47)
++const SUN := Color(0.97, 0.76, 0.2)
++const CORAL := Color(0.9, 0.36, 0.3)
++const LINE := Color(0.88, 0.88, 0.84)
++const STEEL := Color(0.86, 0.33, 0.12)
++const STEEL_DK := Color(0.32, 0.31, 0.3)
++const GRATE := Color(0.46, 0.46, 0.44)
++const TIMBER := Color(0.55, 0.4, 0.24)
++const CONCRETE := Color(0.62, 0.61, 0.58)
++const ROPE := Color(0.95, 0.42, 0.18)
++
++static var _cloth: StandardMaterial3D
++
++
++## Both faces drawn: the canopy is seen from above and, swinging, its
++## underside.
++static func cloth_material() -> StandardMaterial3D:
++	if _cloth == null:
++		_cloth = MeshBuilder.material().duplicate()
++		_cloth.cull_mode = BaseMaterial3D.CULL_DISABLED
++	return _cloth
++
++
++## The airfoil section across a cell: [z, y] from the nose round the top
++## and back under it.
++static func _section() -> Array:
++	var h := CHORD * 0.5
++	return [Vector2(-h, 0.0), Vector2(-h * 0.45, 0.34), Vector2(h * 0.3, 0.22), Vector2(h, 0.04),
++		Vector2(h * 0.3, -0.04), Vector2(-h * 0.45, -0.08)]
++
++
++## A point of the wing: rib `phi` (rad across the arc), section point `s`;
++## the riser point is the origin.
++static func _wing_point(phi: float, s: Vector2) -> Vector3:
++	var r := SPAN * 0.5 / sin(ARC)
++	# The arc's centre, so the wing tips sit LINE_RISE over the risers.
++	var centre_y := LINE_RISE - r * cos(ARC)
++	var rr := r + s.y
++	return Vector3(rr * sin(phi), centre_y + rr * cos(phi), s.x)
++
++
++## The canopy and its lines, the riser point at the origin (scale it about
++## there to inflate). Up is +y, ahead is -z.
++static func canopy() -> ArrayMesh:
++	var mb := MeshBuilder.new()
++	var sec := _section()
++	var ribs: Array = []
++	for i in CELLS + 1:
++		ribs.append(lerpf(-ARC, ARC, float(i) / CELLS))
++	for i in CELLS:
++		var mid := absf(i - (CELLS - 1) * 0.5) < 1.0
++		var top: Color = CORAL if mid else (TEAL if i % 2 == 0 else SUN)
++		var under := top.darkened(0.3)
++		var a: float = ribs[i]
++		var b: float = ribs[i + 1]
++		var out := Vector3(sin((a + b) * 0.5), cos((a + b) * 0.5), 0.0)
++		for k in sec.size():
++			var s0: Vector2 = sec[k]
++			var s1: Vector2 = sec[(k + 1) % sec.size()]
++			var upper := k < 3
++			var n := out if upper else -out
++			if k == sec.size() - 1:
++				n = Vector3(0, 0, -1) # the open nose
++			mb.quad(_wing_point(a, s0), _wing_point(b, s0), _wing_point(b, s1), _wing_point(a, s1), n,
++					top if upper else under)
++	# Rib walls at the cells' sides, a shade darker than the cloth.
++	for i in CELLS + 1:
++		var phi: float = ribs[i]
++		var side := Vector3(cos(phi), -sin(phi), 0.0)
++		var c := _wing_point(phi, Vector2(0, 0.08))
++		for k in sec.size():
++			var s0: Vector2 = sec[k]
++			var s1: Vector2 = sec[(k + 1) % sec.size()]
++			mb.tri(c, _wing_point(phi, s0), _wing_point(phi, s1), side, TEAL.darkened(0.45))
++	# Lines: from three points under each rib to the two riser points.
++	var h := CHORD * 0.5
++	for i in CELLS + 1:
++		var phi: float = ribs[i]
++		var riser := Vector3(signf(phi) * 0.25 if absf(phi) > 0.01 else 0.0, 0.0, 0.0)
++		for z: float in [-h * 0.6, 0.0, h * 0.6]:
++			var p := _wing_point(phi, Vector2(z, -0.06))
++			mb.limb(riser, p, 0.018, 0.018, LINE, 3, false)
++	return mb.commit()
++
++
++## The risers and harness straps from the line ends down to the shoulders,
++## the feet at the origin.
++static func risers() -> ArrayMesh:
++	var mb := MeshBuilder.new()
++	for s: float in [-1.0, 1.0]:
++		mb.limb(Vector3(s * 0.25, RISER_Y, 0.0), Vector3(s * 0.2, SHOULDER_Y, 0.04), 0.03, 0.03, STEEL_DK, 4, false)
++		# The toggles the hands hold.
++		mb.box(Vector3(s * 0.32, RISER_Y - 0.15, 0.0), Vector3(0.05, 0.16, 0.05), CORAL)
++	return mb.commit()
++
++
++## The BASE exit at a lip: a timber plank jutting over the edge, two
++## orange posts, a windsock and a striped board. The lip is the origin, the
++## drop ahead (-z); `back_y` is the ground 2 m behind, relative.
++static func base_exit(back_y: float) -> ArrayMesh:
++	var mb := MeshBuilder.new()
++	mb.box(Vector3(0.0, 0.06, -0.2), Vector3(0.7, 0.08, 2.6), TIMBER)
++	for z: float in [-0.9, 0.3, 0.9]:
++		mb.box(Vector3(0.0, 0.03, z), Vector3(0.82, 0.06, 0.12), TIMBER.darkened(0.25))
++	for s: float in [-1.0, 1.0]:
++		mb.cylinder(Vector3(s * 0.45, back_y - 0.2, 1.2), 0.06, 1.3 - back_y, CORAL, 6)
++	# Windsock on a pole off to the side, pointing along the slope.
++	var pole := Vector3(2.4, back_y, 1.6)
++	mb.cylinder(pole + Vector3(0, -0.2, 0), 0.05, 4.0, STEEL_DK, 6)
++	for k in 4:
++		var a := pole + Vector3(0.1 + k * 0.3, 3.6 - k * 0.06, -0.05 - k * 0.12)
++		var b := pole + Vector3(0.1 + (k + 1) * 0.3, 3.6 - (k + 1) * 0.06, -0.05 - (k + 1) * 0.12)
++		mb.limb(a, b, 0.26 - k * 0.04, 0.22 - k * 0.04, CORAL if k % 2 == 0 else Color(0.96, 0.95, 0.92), 8, k == 3)
++	# A board on two legs behind the plank: yellow with dark chevrons.
++	var bp := Vector3(-1.6, back_y, 2.2)
++	for s: float in [-1.0, 1.0]:
++		mb.cylinder(bp + Vector3(s * 0.45, -0.2, 0), 0.04, 1.9, STEEL_DK, 4)
++	mb.box(bp + Vector3(0, 1.4, 0), Vector3(1.2, 0.7, 0.06), SUN)
++	for k in 3:
++		mb.box(bp + Vector3(-0.35 + k * 0.35, 1.4, -0.04), Vector3(0.12, 0.5, 0.02), Color(0.12, 0.12, 0.14))
++	return mb.commit()
++
++
++## The bungee jump arm: a steel truss `length` m out along -z from a
++## footing at the origin, its catwalk `deck` m up, a mast and stays, a gate
++## and the rope's anchor eye at the tip. `back_y` is the ground at the stay
++## anchor 9 m behind, relative.
++static func jump_arm(length: float, deck: float, back_y: float) -> ArrayMesh:
++	var mb := MeshBuilder.new()
++	var w := 0.7 # half the catwalk's width
++	# Footing and steps up from the pad behind.
++	mb.box(Vector3(0, deck * 0.5 - 0.3, 0.6), Vector3(2.0, deck + 0.6, 2.4), CONCRETE, false)
++	for k in 3:
++		var y := deck * (k + 1) / 4.0
++		mb.box(Vector3(0, y * 0.5 - 0.2, 2.1 + (2 - k) * 0.35), Vector3(1.2, y + 0.4, 0.35), CONCRETE.darkened(0.08), false)
++	# Catwalk: grating on two side chords, cross members every 2 m.
++	mb.box(Vector3(0, deck - 0.03, -length * 0.5), Vector3(w * 2.0, 0.06, length), GRATE)
++	for s: float in [-1.0, 1.0]:
++		mb.limb(Vector3(s * w, deck - 0.12, 0.0), Vector3(s * w, deck - 0.12, -length - 0.3), 0.08, 0.08, STEEL, 4, true)
++		# Bottom chord, deeper at the root, and the truss diagonals.
++		var depth := 1.6
++		var bottom_root := Vector3(s * w * 0.6, deck - depth, 0.0)
++		var bottom_tip := Vector3(s * w * 0.6, deck - 0.5, -length)
++		mb.limb(bottom_root, bottom_tip, 0.07, 0.07, STEEL, 4, true)
++		var n := int(length / 2.0)
++		for k in n + 1:
++			var z := -length * k / n
++			var bot := bottom_root.lerp(bottom_tip, float(k) / n)
++			mb.limb(Vector3(s * w, deck - 0.12, z), bot, 0.035, 0.035, STEEL, 4, false)
++			if k < n:
++				var bot2 := bottom_root.lerp(bottom_tip, float(k + 1) / n)
++				mb.limb(Vector3(s * w, deck - 0.12, z), bot2, 0.03, 0.03, STEEL, 4, false)
++			# Handrail posts.
++			mb.limb(Vector3(s * w, deck, z), Vector3(s * w, deck + 1.05, z), 0.03, 0.03, SUN, 4, false)
++		mb.limb(Vector3(s * w, deck + 1.05, 0.0), Vector3(s * w, deck + 1.05, -length), 0.035, 0.035, SUN, 4, false)
++		mb.limb(Vector3(s * w, deck + 0.55, 0.0), Vector3(s * w, deck + 0.55, -length), 0.025, 0.025, SUN, 4, false)
++	# The mast over the footing and its stays to the arm and back to the ground.
++	var top := Vector3(0, deck + 7.5, 0.9)
++	for s: float in [-1.0, 1.0]:
++		mb.limb(Vector3(s * 0.9, deck, 1.2), top, 0.1, 0.07, STEEL, 6, true)
++	for z: float in [-length * 0.35, -length * 0.7, -length]:
++		for s: float in [-1.0, 1.0]:
++			mb.limb(top, Vector3(s * w, deck - 0.12, z), 0.025, 0.025, STEEL_DK, 3, false)
++	for s: float in [-1.0, 1.0]:
++		mb.limb(top, Vector3(s * 1.4, back_y + 0.15, 9.0), 0.025, 0.025, STEEL_DK, 3, false)
++		mb.box(Vector3(s * 1.4, back_y + 0.1, 9.0), Vector3(0.5, 0.4, 0.5), CONCRETE.darkened(0.15), false)
++	mb.box(top + Vector3(0, 0.15, 0), Vector3(0.3, 0.3, 0.3), CORAL)
++	# The gate at the tip and the anchor eye under it.
++	for s: float in [-1.0, 1.0]:
++		mb.limb(Vector3(s * w, deck, -length), Vector3(s * w, deck + 2.2, -length), 0.05, 0.05, SUN, 4, true)
++	mb.limb(Vector3(-w, deck + 2.2, -length), Vector3(w, deck + 2.2, -length), 0.05, 0.05, SUN, 4, true)
++	for k in 6:
++		mb.box(Vector3(-w + (k + 0.5) * w / 3.0, deck + 0.02, -length + 0.15), Vector3(w / 3.0, 0.02, 0.3),
++				SUN if k % 2 == 0 else Color(0.1, 0.1, 0.12))
++	mb.limb(Vector3(0, deck - 0.12, -length), Vector3(0, deck - 0.35, -length), 0.06, 0.06, STEEL_DK, 6, true)
++	# A sign at the root: coral board, sun stripes.
++	var sp := Vector3(1.6, 0.0, 2.4)
++	mb.cylinder(sp + Vector3(0, -0.2, 0), 0.05, 2.4, STEEL_DK, 4)
++	mb.box(sp + Vector3(0, 2.0, 0), Vector3(0.9, 0.6, 0.06), CORAL)
++	for k in 3:
++		mb.box(sp + Vector3(0, 1.85 + k * 0.15, -0.04), Vector3(0.7, 0.05, 0.02), SUN)
++	return mb.commit()
++
++
++## A unit rope along +y from the origin (scale y to its length).
++static func rope() -> ArrayMesh:
++	var mb := MeshBuilder.new()
++	mb.limb(Vector3.ZERO, Vector3(0, 1, 0), 0.05, 0.05, ROPE, 6, false)
++	return mb.commit()
++
++
++## A basis whose +y runs from `a` to `b` (its length is the scale).
++static func along(a: Vector3, b: Vector3) -> Basis:
++	var y := b - a
++	var l := y.length()
++	if l < 0.001:
++		return Basis.IDENTITY.scaled(Vector3(1, 0.001, 1))
++	var u := y / l
++	var x := u.cross(Vector3.FORWARD if absf(u.z) < 0.9 else Vector3.RIGHT).normalized()
++	var z := x.cross(u)
++	return Basis(x, u * l, z)
+diff --git a/game/scripts/parachute.gd b/game/scripts/parachute.gd
+new file mode 100644
+index 0000000..77b42b4
+--- /dev/null
++++ b/game/scripts/parachute.gd
+@@ -0,0 +1,543 @@
++extends Node
++## Parachuting (HANDOFF-air-sports.md). A bail from a helicopter MIN_HEIGHT m
++## or more over the ground free-falls, then flies a canopy down: OPEN (E) or,
++## if the player does nothing, it opens by itself at a safe height. Under the
++## canopy the stick steers, E brakes, and it flares by itself near the
++## ground. A cliff lip near BASE_NEAR is a BASE exit (E: BASE JUMP) that
++## starts the same flight. While in the air this node drives the player:
++## player.gd sets `player.air` and calls drive() each physics frame instead
++## of the walk. Lower bails keep player.gd's fall.
++##
++## main.gd: `parachute = Parachute.new(); parachute.game = self; add_child(parachute)`.
++
++const Kit = preload("res://scripts/kits/air_sports_kit.gd")
++const MeshBuilder = preload("res://scripts/mesh_builder.gd")
++const Terrain = preload("res://scripts/terrain.gd")
++const L = preload("res://scripts/layers.gd")
++const GameLog = preload("res://scripts/game_log.gd")
++const Helicopter = preload("res://scripts/helicopter.gd")
++const Tiles = preload("res://scripts/country_tiles.gd")
++
++const G := 9.8
++## Free fall: quadratic drag that settles at TERMINAL m/s.
++const TERMINAL := 50.0
++const DRAG := G / (TERMINAL * TERMINAL)
++## Lowest bail (m over the ground) that gets the canopy; lower ones fall.
++const MIN_HEIGHT := 40.0
++## Opening: OPEN_DELAY s of lines paying out (still falling), then the
++## canopy brakes the fall (OPEN_TAU s) and is fully flying INFLATE s later.
++const OPEN_DELAY := 0.6
++const OPEN_TAU := 0.6
++const INFLATE := 1.8
++## Flying: SINK m/s down, FORWARD m/s ahead, eased over FLY_TAU s; the
++## stick turns it toward where it points at TURN rad/s.
++const SINK := 5.0
++const FORWARD := 8.0
++const FLY_TAU := 0.6
++const TURN := 1.4
++## The flare under FLARE_HEIGHT m: down to FLARE_SINK and FLARE_FWD m/s.
++const FLARE_HEIGHT := 4.0
++const FLARE_SINK := 1.2
++const FLARE_FWD := 3.0
++const FLARE_TAU := 0.3
++## E under the canopy: brakes for BRAKE_TIME s (a steeper, slower glide).
++const BRAKE_TIME := 2.0
++const BRAKE_SINK := 3.0
++const BRAKE_FWD := 4.0
++## Auto-open: the full canopy wants about AUTO_CLEAR m under it.
++const AUTO_CLEAR := 32.0
++## Free fall with the stick: tracking up to TRACK m/s across the ground.
++const TRACK := 12.0
++const TRACK_ACCEL := 4.0
++## The landing hurts as player.gd's bail does: each metre of drop it equals
++## past BAIL_SAFE costs BAIL_HURT health.
++const BAIL_SAFE := 2.5
++const BAIL_HURT := 7.0
++## The BASE exit: the best cliff lip within BASE_R m of BASE_NEAR; the
++## prompt shows within BASE_REACH m of the spot behind it; the hop off is
++## EXIT_SPEED m/s out and EXIT_UP up, the canopy thrown at once.
++const BASE_NEAR := Vector2(1035.0, -2740.0)
++const BASE_R := 40.0
++const BASE_REACH := 3.0
++const EXIT_SPEED := 5.0
++const EXIT_UP := 2.0
++## The site and its marker are made when the player comes this close.
++const PREPARE_RANGE := 400.0
++
++var game
++## Test hook: false never opens the canopy by itself.
++var auto_open := true
++## "" (on the ground), "free", "opening" or "canopy".
++var state := ""
++var player = null
++var velocity := Vector3.ZERO
++var heading := 0.0
++var bank := 0.0
++## The lowest the player came over the ground in this flight (tests).
++var min_clear := INF
++## How the last flight ended: impact (m/s into the ground), damage, where,
++## whether the canopy was flying, and the height it began at.
++var last_landing := {}
++var _t := 0.0
++var _from := 0.0
++var _brake := 0.0
++var _flare := false
++var _site := {}
++var _site_done := false
++var _prepare_tick := 0.0
++var _rig: Node3D
++var _wing: Node3D
++var _collapse := -1.0
++var _marker: MeshInstance3D
++
++
++func _ready() -> void:
++	if game == null:
++		game = get_parent()
++	add_to_group("air_sports")
++	add_to_group("parachute")
++	_rig = Node3D.new()
++	_rig.name = "Canopy"
++	_rig.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
++	_rig.visible = false
++	add_child(_rig)
++	_wing = Node3D.new()
++	_wing.position.y = Kit.RISER_Y
++	_rig.add_child(_wing)
++	var cloth := MeshInstance3D.new()
++	cloth.mesh = Kit.canopy()
++	cloth.material_override = Kit.cloth_material()
++	_wing.add_child(cloth)
++	var straps := MeshInstance3D.new()
++	straps.mesh = Kit.risers()
++	straps.material_override = MeshBuilder.material()
++	_rig.add_child(straps)
++
++
++## The ground a landing comes down on at x, z: the drawn land (the hills'
++## ground sits Terrain.drop under Terrain.height). One place, so it can
++## switch to the shared ground layer (Ground.height) later.
++static func ground_under(x: float, z: float) -> float:
++	return Terrain.height(x, z) - Terrain.drop(x, z)
++
++
++## Height over the ground at which falling at `v` m/s the canopy is fully
++## flying about AUTO_CLEAR m up.
++static func open_height(v: float) -> float:
++	return AUTO_CLEAR + v * OPEN_DELAY + maxf(v - SINK, 0.0) * OPEN_TAU
++
++
++func flying() -> bool:
++	return state != ""
++
++
++# --- Starting a flight --------------------------------------------------------
++
++## A bail from a helicopter: `p` leaves at `start` moving `v0`. True when
++## the canopy takes it (high enough, alive); false leaves player.gd's fall.
++func take_bail(p, start: Vector3, v0: Vector3) -> bool:
++	if p == null or p.dead or state != "":
++		return false
++	var h := start.y - ground_under(start.x, start.z)
++	if h < MIN_HEIGHT:
++		return false
++	_begin(p, start, v0, "free")
++	GameLog.event("bail", {"height": h, "chute": true})
++	return true
++
++
++func _begin(p, start: Vector3, v0: Vector3, first: String) -> void:
++	player = p
++	p.air = self
++	state = first
++	_t = 0.0
++	_brake = 0.0
++	_flare = false
++	_collapse = -1.0
++	velocity = v0
++	heading = p.rotation.y
++	bank = 0.0
++	p.global_position = start
++	p.reset_physics_interpolation()
++	p.velocity = Vector3.ZERO
++	p.knocked_time = 0.0
++	p.collision_layer = 0
++	p.collision_mask = L.WORLD
++	p.gesture = "hands_up"
++	_from = start.y - ground_under(start.x, start.z)
++	min_clear = _from
++	p.flies = true
++	p.above_land = _from
++	_rig.visible = first != "free"
++	_rig.scale = Vector3.ONE
++	_wing.scale = Vector3(0.12, 0.2, 0.3)
++
++
++func _open() -> void:
++	state = "opening"
++	_t = 0.0
++	_rig.visible = true
++	_wing.scale = Vector3(0.12, 0.2, 0.3)
++	heading = player.rotation.y
++	GameLog.event("chute_open", {"height": player.global_position.y - ground_under(player.global_position.x, player.global_position.z),
++			"speed": velocity.length()})
++
++
++# --- In the air ---------------------------------------------------------------
++
++## One physics frame of the flight (player.gd calls this while p.air is us).
++func drive(p, delta: float) -> void:
++	if p.dead:
++		_hand_to_fall(p)
++		return
++	_t += delta
++	var pos: Vector3 = p.global_position
++	var hag := pos.y - ground_under(pos.x, pos.z)
++	if state == "free" and (Controls.just_pressed("interact") or (auto_open and hag <= open_height(-velocity.y))):
++		_open()
++	var stick := Controls.world_move()
++	stick.y = 0.0
++	if state == "free" or (state == "opening" and _t < OPEN_DELAY):
++		_fall_step(stick, delta)
++	else:
++		_canopy_step(stick, hag, delta)
++	_pose(p, stick, delta)
++	_move(p, delta)
++
++
++func _fall_step(stick: Vector3, delta: float) -> void:
++	velocity.y -= G * delta
++	velocity -= velocity * velocity.length() * DRAG * delta
++	if state == "free" and stick.length_squared() > 0.04:
++		var flat := Vector3(velocity.x, 0.0, velocity.z).move_toward(stick.limit_length(1.0) * TRACK, TRACK_ACCEL * delta)
++		velocity.x = flat.x
++		velocity.z = flat.z
++
++
++func _canopy_step(stick: Vector3, hag: float, delta: float) -> void:
++	if state == "opening" and _t >= OPEN_DELAY + INFLATE:
++		state = "canopy"
++	var turn := 0.0
++	if stick.length_squared() > 0.04:
++		var want := atan2(-stick.x, -stick.z)
++		var diff := angle_difference(heading, want)
++		turn = clampf(diff * 2.0, -TURN, TURN)
++		heading = wrapf(heading + turn * delta, -PI, PI)
++	bank = lerpf(bank, turn * 0.3, 1.0 - exp(-4.0 * delta))
++	if Controls.just_pressed("interact"):
++		_brake = BRAKE_TIME
++	_brake = maxf(_brake - delta, 0.0)
++	if not _flare and hag < FLARE_HEIGHT and (state == "canopy" or _t > OPEN_DELAY + 0.5):
++		_flare = true
++	var sink := SINK
++	var fwd := FORWARD
++	var tau := FLY_TAU if state == "canopy" else OPEN_TAU
++	if _flare:
++		sink = FLARE_SINK
++		fwd = FLARE_FWD
++		tau = FLARE_TAU
++	elif _brake > 0.0:
++		sink = BRAKE_SINK
++		fwd = BRAKE_FWD
++	var ahead := Vector3(-sin(heading), 0.0, -cos(heading))
++	var want_v := ahead * fwd + Vector3.DOWN * sink
++	velocity += (want_v - velocity) * (1.0 - exp(-delta / tau))
++
++
++## Belly to earth in free fall (facing where the stick tracks), upright
++## under the canopy, banked into its turns.
++func _pose(p, stick: Vector3, delta: float) -> void:
++	var falling := state == "free"
++	var k := 1.0 - exp(-5.0 * delta)
++	p.rotation.x = lerpf(p.rotation.x, -PI * 0.5 if falling else 0.0, k)
++	if falling:
++		if stick.length_squared() > 0.04:
++			p.rotation.y = lerp_angle(p.rotation.y, atan2(-stick.x, -stick.z), 1.0 - exp(-3.0 * delta))
++		p.rotation.z = lerpf(p.rotation.z, 0.0, k)
++		heading = p.rotation.y
++	else:
++		p.rotation.y = lerp_angle(p.rotation.y, heading, k)
++		p.rotation.z = lerpf(p.rotation.z, bank, k)
++
++
++func _move(p, delta: float) -> void:
++	var col: KinematicCollision3D = p.move_and_collide(velocity * delta)
++	if col != null:
++		var n := col.get_normal()
++		if n.y > 0.6:
++			_land(p, true) # on a roof: down to open ground beside it
++			return
++		# A wall: slide along it.
++		velocity = velocity.slide(n)
++		p.move_and_collide(col.get_remainder().slide(n))
++	var pos: Vector3 = p.global_position
++	var g := ground_under(pos.x, pos.z)
++	if pos.y <= g:
++		p.global_position.y = g
++		if velocity.y <= 0.0:
++			_land(p, false)
++			return
++		velocity.y = 0.0
++	var clear: float = p.global_position.y - g
++	min_clear = minf(min_clear, clear)
++	p.above_land = clear
++
++
++# --- Down ---------------------------------------------------------------------
++
++func _land(p, roof: bool) -> void:
++	var pos: Vector3 = p.global_position
++	var n := Vector3.UP if roof else Terrain.normal(pos.x, pos.z)
++	var impact := maxf(-velocity.dot(n), 0.0)
++	var canopy := state != "free"
++	var damage := 0.0
++	if canopy:
++		var drop := impact * impact / (2.0 * G)
++		damage = maxf(drop - BAIL_SAFE, 0.0) * BAIL_HURT
++	else:
++		damage = maxf(_from - BAIL_SAFE, 0.0) * BAIL_HURT # as player.gd's bail
++	_release(p)
++	if roof or _wet(pos, ground_under(pos.x, pos.z)):
++		pos = _open_ground_near(pos)
++	pos.y = ground_under(pos.x, pos.z)
++	p.global_position = pos
++	p.reset_physics_interpolation()
++	last_landing = {"impact": impact, "damage": damage, "pos": pos, "canopy": canopy, "from": _from, "roof": roof}
++	if canopy:
++		GameLog.event("chute_landed", {"impact": impact, "damage": damage, "from": _from})
++		if damage > 0.0:
++			p.knock_down(1.2 + minf(damage * 0.03, 2.0))
++			p.take_hit(null, damage, Vector3.ZERO)
++		elif impact > 2.5:
++			p.play_action("stumble")
++		_collapse = 0.0
++		_rig.global_position = pos
++	else:
++		GameLog.event("bail_landed", {"from": _from})
++		p.knock_down(1.2)
++		p.take_hit(null, damage, Vector3.ZERO)
++		Fx.crash(pos, impact, true)
++		_rig.visible = false
++
++
++## Back on its feet: the walk takes over again.
++func _release(p) -> void:
++	state = ""
++	player = null
++	p.air = null
++	p.flies = false
++	p.above_land = 0.0
++	p.gesture = ""
++	p.rotation.x = 0.0
++	p.rotation.z = 0.0
++	p.velocity = Vector3.ZERO
++	if not p.dead:
++		p._set_standing_layers()
++	# The ground's draw drop is looked up afresh where they land.
++	p.set("_drop_at", Vector2.INF)
++
++
++## Killed in the air: player.gd's fall takes the body down.
++func _hand_to_fall(p) -> void:
++	var pos: Vector3 = p.global_position
++	var h := maxf(pos.y - ground_under(pos.x, pos.z), 0.0)
++	_release(p)
++	_rig.visible = false
++	p._fall = h
++	p._fall_v = maxf(-velocity.y, 0.0)
++	p._fall_from = h
++
++
++## Ends a flight at once, unhurt (a mission replay or respawn moves the
++## player; player.gd calls this from stand_at and respawn).
++func cancel() -> void:
++	if player != null:
++		_release(player)
++	state = ""
++	_rig.visible = false
++	_collapse = -1.0
++
++
++func _wet(p: Vector3, g: float) -> bool:
++	var city = game.get("city") if game != null else null
++	var plan = city.plan if city != null else null
++	var q := Vector2(p.x, p.z)
++	if Helicopter._wet(plan, q, g):
++		return true
++	var country = city.get("country") if city != null else null
++	return country != null and not country.lakes.is_empty() and not country.lake_at(q).is_empty()
++
++
++## The nearest open, dry ground to `p` (no roof over it), rings out to 80 m.
++func _open_ground_near(p: Vector3) -> Vector3:
++	if not is_inside_tree():
++		return p
++	var space := get_viewport().find_world_3d().direct_space_state
++	for r: float in [0.0, 6.0, 12.0, 20.0, 30.0, 45.0, 60.0, 80.0]:
++		for k in (1 if r == 0.0 else 12):
++			var q := p + Vector3(r, 0.0, 0.0).rotated(Vector3.UP, TAU * k / 12.0)
++			var g := ground_under(q.x, q.z)
++			if _wet(q, g):
++				continue
++			var ray := PhysicsRayQueryParameters3D.create(Vector3(q.x, g + 200.0, q.z), Vector3(q.x, g - 0.5, q.z), L.WORLD)
++			var hit := space.intersect_ray(ray)
++			if hit.is_empty() or float(hit.position.y) <= g + 1.0:
++				return Vector3(q.x, g, q.z)
++	return p
++
++
++# --- Drawing ------------------------------------------------------------------
++
++func _process(delta: float) -> void:
++	_prepare_tick -= delta
++	if not _site_done and _prepare_tick <= 0.0:
++		_prepare_tick = 0.5
++		var p = game.get("player") if game != null else null
++		if p != null and Vector2(p.global_position.x, p.global_position.z).distance_to(BASE_NEAR) < PREPARE_RANGE:
++			base_site()
++	if player != null and state != "":
++		var xf: Transform3D = player.get_global_transform_interpolated()
++		_rig.global_transform = Transform3D(Basis.from_euler(Vector3(0.0, heading, bank)), xf.origin)
++		if state != "free":
++			var k := smoothstep(0.0, 1.0, clampf((_t - 0.15) / (OPEN_DELAY + INFLATE - 0.15), 0.0, 1.0))
++			_wing.scale = Vector3(lerpf(0.12, 1.0, k), lerpf(0.2, 1.0, k), lerpf(0.3, 1.0, k))
++	elif _collapse >= 0.0:
++		# Down: the canopy settles onto the ground behind and is packed away.
++		_collapse += delta
++		var k := clampf(_collapse / 1.4, 0.0, 1.0)
++		_rig.scale = Vector3(1.0, lerpf(1.0, 0.06, k), 1.0)
++		if _collapse > 4.0:
++			_rig.visible = false
++			_rig.scale = Vector3.ONE
++			_collapse = -1.0
++
++
++# --- The BASE exit ------------------------------------------------------------
++
++## The BASE exit: {lip, dir (out over the drop), stand (where to stand,
++## a metre behind the lip), drop (m down 64 m out)}, found once from the
++## terrain; {} if there is none.
++func base_site() -> Dictionary:
++	if _site_done:
++		return _site
++	_site_done = true
++	if Terrain.nx == 0:
++		return _site
++	var best := [-INF, 0.0, 0.0, 0.0]
++	var x := BASE_NEAR.x - BASE_R
++	while x <= BASE_NEAR.x + BASE_R:
++		var z := BASE_NEAR.y - BASE_R
++		while z <= BASE_NEAR.y + BASE_R:
++			if Vector2(x, z).distance_to(BASE_NEAR) <= BASE_R:
++				for a in 32:
++					var ang := TAU * a / 32.0
++					var s := _lip_score(x, z, ang)
++					if s > best[0]:
++						best = [s, x, z, ang]
++			z += 4.0
++		x += 4.0
++	if best[0] == -INF:
++		return _site
++	var bx: float = best[1]
++	var bz: float = best[2]
++	var ba: float = best[3]
++	for i in range(-3, 4):
++		for j in range(-3, 4):
++			for k in range(-4, 5):
++				var ang := ba + deg_to_rad(2.0 * k)
++				var s := _lip_score(bx + i, bz + j, ang)
++				if s > best[0]:
++					best = [s, bx + i, bz + j, ang]
++	var px: float = best[1]
++	var pz: float = best[2]
++	var dir := Vector3(cos(best[3]), 0.0, sin(best[3]))
++	var top := Terrain.height(px, pz)
++	# The lip: out along the drop while the ground keeps within 0.6 m of the top.
++	var out := 0.0
++	while out < 12.0 and absf(Terrain.height(px + dir.x * (out + 0.25), pz + dir.z * (out + 0.25)) - top) <= 0.6:
++		out += 0.25
++	var lip := Vector3(px + dir.x * out, 0.0, pz + dir.z * out)
++	lip.y = Terrain.height(lip.x, lip.z)
++	var stand := lip - dir * 1.0
++	stand.y = ground_under(stand.x, stand.z)
++	_site = {"lip": lip, "dir": dir, "stand": stand,
++			"drop": top - Terrain.height(lip.x + dir.x * 64.0, lip.z + dir.z * 64.0)}
++	_build_marker()
++	return _site
++
++
++## How good a jump off (x, z) toward `ang` is, or -INF: level ground behind,
++## and the land falling away at least 8 m in 8 m, 20 in 16 and 45 in 64.
++static func _lip_score(x: float, z: float, ang: float) -> float:
++	var dx := cos(ang)
++	var dz := sin(ang)
++	var g0 := Terrain.height(x, z)
++	if absf(Terrain.height(x - dx * 2.0, z - dz * 2.0) - g0) > 0.8 or Terrain.normal(x - dx * 4.0, z - dz * 4.0).y < 0.85:
++		return -INF
++	var d8 := g0 - Terrain.height(x + dx * 8.0, z + dz * 8.0)
++	if d8 < 8.0:
++		return -INF
++	var d16 := g0 - Terrain.height(x + dx * 16.0, z + dz * 16.0)
++	if d16 < 20.0:
++		return -INF
++	var d64 := g0 - Terrain.height(x + dx * 64.0, z + dz * 64.0)
++	if d64 < 45.0:
++		return -INF
++	return d16 + 0.3 * d64
++
++
++func _build_marker() -> void:
++	var lip: Vector3 = _site.lip
++	var dir: Vector3 = _site.dir
++	var back := lip - dir * 2.0
++	_marker = MeshInstance3D.new()
++	_marker.name = "BaseExit"
++	_marker.mesh = Kit.base_exit(Terrain.height(back.x, back.z) - lip.y)
++	_marker.material_override = MeshBuilder.material()
++	add_child(_marker)
++	_marker.global_transform = Transform3D(Basis(Vector3.UP, atan2(-dir.x, -dir.z)), lip)
++	# No trees or stones on the exit.
++	Tiles.clearings.append([Vector2(lip.x, lip.z), 0.0, Vector2(5.0, 5.0)])
++
++
++func _at_lip() -> bool:
++	var p = game.get("player") if game != null else null
++	if p == null or p.vehicle != null or p.dead or p.knocked_time > 0.0 or p.air != null or not p.controllable:
++		return false
++	if Vector2(p.global_position.x, p.global_position.z).distance_to(BASE_NEAR) > BASE_R + 20.0:
++		return false
++	var s := base_site()
++	if s.is_empty():
++		return false
++	var at: Vector3 = s.stand
++	return Vector2(p.global_position.x - at.x, p.global_position.z - at.z).length() <= BASE_REACH
++
++
++# --- The HUD and E ------------------------------------------------------------
++
++## [text, button] for the HUD: the flight's height and what E does, or the
++## BASE exit's offer at the lip; [] otherwise.
++func prompt() -> Array:
++	if state != "" and player != null:
++		var alt := roundi(maxf(player.above_land, 0.0))
++		if state == "free":
++			return ["Free fall   ALT %d m   Open: E / OPEN" % alt, "OPEN"]
++		return ["Canopy   ALT %d m   Steer with the stick   Brake: E" % alt, "BRAKE"]
++	if _at_lip():
++		return ["E: BASE JUMP", "JUMP"]
++	return []
++
++
++## Off the lip, when the player stands at it. True when it jumped.
++func try_interact() -> bool:
++	if state != "" or not _at_lip():
++		return false
++	var p = game.player
++	var dir: Vector3 = _site.dir
++	p.rotation.y = atan2(-dir.x, -dir.z)
++	var start: Vector3 = _site.stand
++	start.y += 0.05
++	_begin(p, start, dir * EXIT_SPEED + Vector3.UP * EXIT_UP, "opening")
++	_from = _site.drop
++	GameLog.event("base_jump", {"at": start, "drop": _site.drop})
++	return true
+diff --git a/game/scripts/player.gd b/game/scripts/player.gd
+index ebd43a5..5a95028 100644
+--- a/game/scripts/player.gd
++++ b/game/scripts/player.gd
+@@ -34,6 +34,14 @@ var controllable := true
+ var _fall := 0.0
+ var _fall_v := 0.0
+ var _fall_from := 0.0
++## An air sport flying the player (parachute.gd, bungee.gd): while set, it
++## moves the body each physics frame (drive) instead of the walk, and
++## cancel() ends it at once.
++var air = null
++## While in the air: the camera reads these off what it follows, as off a
++## helicopter (top_down_camera.gd): the height over the land widens the view.
++var flies := false
++var above_land := 0.0
+ 
+ 
+ func _init() -> void:
+@@ -66,6 +74,9 @@ func _physics_process(delta: float) -> void:
+ 			else:
+ 				exit_vehicle()
+ 		return
++	if air != null:
++		air.drive(self, delta)
++		return
+ 	super(delta)
+ 	if _fall > 0.0:
+ 		# Bailed out of a helicopter: down to the ground, hurt by the drop.
+@@ -113,10 +124,21 @@ func _think(delta: float) -> void:
+ 			pass
+ 		elif game != null and game.hunting != null and game.hunting.try_interact():
+ 			pass
++		elif _air_sport_interact():
++			pass
+ 		elif game == null or game.interiors == null or not game.interiors.try_interact():
+ 			try_enter_vehicle()
+ 
+ 
++## The BASE exit and the bungee jump (parachute.gd, bungee.gd) take E when
++## the player stands at them. True when one did.
++func _air_sport_interact() -> bool:
++	for sport in get_tree().get_nodes_in_group("air_sports"):
++		if sport.try_interact():
++			return true
++	return false
++
++
+ ## The node the camera and police should track.
+ func focus_node() -> Node3D:
+ 	return vehicle if vehicle != null else self
+@@ -227,7 +249,9 @@ func exit_vehicle(thrown := false) -> void:
+ 	_set_standing_layers()
+ 	if dead:
+ 		knock_down(0.0) # lie where they fell, out of the way
+-	if bail:
++	if bail and not thrown and not dead and _chute_bail(from_y + 0.5, car):
++		pass # high enough for the canopy: parachute.gd flies it down
++	elif bail:
+ 		var ground := Terrain.height(global_position.x, global_position.z) - Terrain.drop(global_position.x, global_position.z)
+ 		_fall_from = maxf(from_y + 0.5 - ground, 0.0)
+ 		_fall = _fall_from
+@@ -240,9 +264,21 @@ func exit_vehicle(thrown := false) -> void:
+ 		take_hit(null, 25.0, Vector3.ZERO)
+ 
+ 
++## A bail high enough for a canopy goes to the parachute (parachute.gd),
++## leaving at `from_y` with the aircraft's motion. True when it took it.
++func _chute_bail(from_y: float, car) -> bool:
++	var chute = get_tree().get_first_node_in_group("parachute")
++	if chute == null:
++		return false
++	var v0: Vector3 = car.velocity if car is CharacterBody3D else Vector3.ZERO
++	return chute.take_bail(self, Vector3(global_position.x, from_y, global_position.z), v0)
++
++
+ func respawn(at: Vector3) -> void:
+ 	if vehicle != null:
+ 		exit_vehicle()
++	if air != null:
++		air.cancel()
+ 	_fall = 0.0
+ 	_fall_v = 0.0
+ 	revive(at)
+@@ -254,6 +290,8 @@ func respawn(at: Vector3) -> void:
+ func stand_at(at: Vector3) -> void:
+ 	if vehicle != null:
+ 		exit_vehicle()
++	if air != null:
++		air.cancel()
+ 	_fall = 0.0
+ 	_fall_v = 0.0
+ 	if not dead and knocked_time > 0.0:

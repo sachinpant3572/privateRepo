@@ -82,56 +82,62 @@ on top; built in phases, each committed; `/effort xhigh` suits it.
 ## Status
 Phases 1-2 history (status, the 10-31 handover list): archive.
 
-## Handover (paused 2026-10-31, session 2) - start here
-Branch `claude/gangstar-game-content-tunnels-kszhz9` (pushed). Sachin's
-order this session: wildlife hook-in + colours + Opus review; hunting on
-the animals with tests; calendar fixes; hill-place shots, full suite, one
-review of the whole task; then phase 3 and phase 4. Session log: archive.
-Done and pushed (8d8840f, 5f75299, a3697f3, then the pause commits):
-- Wildlife in atmosphere/fx, colours retuned (gallery checked), Opus
-  review: 0 High, 3 Medium, 8 Low, all fixed (details in archive).
-- Hunting: shoot a deer, poaching star (no licence, out of season, lion),
-  lion shot while stalking/charging = self-defence, skinning; tests.
-- Calendar: skip time keeps days (Atmosphere.advance), moon follows the
-  calendar after indoors, event lights share the lamp budget; tests.
-- SHOTS=hillplaces 7/7 checked (villages centred, trail party on the
-  dirt trail) and PLACES=hill (hunting store) 6/6.
-Last full suite (a3697f3): 2132 passed, 2 failed; both fixed since and
-each verified alone (not yet in a full run):
-- test_wildlife_stays_out_of_lakes: flaky (2/3 alone). The player stood
-  18 m from the herd; a standing player's flee radius is 25 x 0.7 =
-  17.5 m. Player moved to 12 m off: 3/3 PASS.
-- test_country_plots_square_to_their_roads: kestrel_lab 80.2 deg off
-  Kestrel Hollow Road (failed on 4197417 too). build_country.py
-  `_site_skew` (= `_road_turn`, the test's own measure) rejects site spots
-  over 3.5 deg off the road edge within 8 m of the front. Country rebuilt
-  (a4837f3): only kestrel_lab moved (547.7,-4041.5 yaw 0.17 -> 561.2,
-  -4038.8 yaw 0.44); terrain pad and Raven Creek's route there changed.
-  mountain_plan/world map not needed (no route re-planned). PASS.
-- Trap: right after the data commit, three runs under flock printed only
-  the Godot banner and hung to their timeouts; the same tests run without
-  flock a few minutes later passed (cause not found; no godot was left
-  running). If a run hangs at the banner, check `pgrep -af godot`.
-Next steps, in order (new container: `game/tools/setup_cloud.sh` first;
-`pip install shapely numpy contourpy scipy` only for a country rebuild):
-1. Full suite: `cd game && tests/run.sh > /tmp/tests.log 2>&1; echo $?`
-   then grep (CLAUDE.md Token cost). Expect 0 failed.
-2. One Opus review of the whole task (phases 1-2 + this session; diff
-   4197417..HEAD; quote Sachin's order; give the gate outputs). Fix, rerun
-   the suite. Two review runs at most.
-3. Phase 3 builders (stopped at the pause, early): briefs in
-   wip/briefs/ (package_R/G/P.md + brief_common.md; fix its /tmp paths).
-   WIP files from the stopped builders, untested: wip/R/ (races.gd 1016
-   lines, race_course.gd, race_calib probe) and wip/G/ground.gd (232
-   lines). Copy them into a fresh worktree as a head start or discard.
-   P had written nothing. Plan: "Phase 3 and 4 plan" below; each package
-   gets its own Opus review; the main session wires main.gd, hud.gd,
-   player.gd and mission_manager save, then merges. Delete wip/ when done.
-4. Phase 4 (wave B after G): bridges and tunnels on G's deck layer.
+## Handover (session 3, 2026-10-31) - start here
+Kept current at each milestone (Sachin 10-31: a handoff with proper
+details for when the 5-hour limit is reached; a limit stop gives no
+warning, so this section is the handoff). Branch
+`claude/gangstar-game-content-tunnels-kszhz9`, pushed. Session 2 notes:
+archive.
+
+Done this session:
+1. Full suite on fe9f7ec: exit 0, 2134 passed, 0 failed.
+2. Whole-task Opus review (4197417..fe9f7ec close, 75eda1f^.. for
+   integration): 0 High, 1 Medium, 4 Low, all fixed (b6efeeb) with tests:
+   M1 pelts only from the player's rifle kills (kill() keeps `by` on the
+   carcass; carcass_near(pos, r, "rifle")), L1 no lion skinning, an old
+   save's lion pelt dropped, L2 a mission's start hour goes through
+   Atmosphere.advance (a start < 1 h behind steps back, same day), L3 a
+   spent lion that ends idle walks off ("leave"), L4 pelt total capped on
+   load. 9 focused tests PASS (77 checks); full suite after the fixes:
+   exit 0, 2145 passed, 0 failed. No second review needed (no High).
+
+In progress: phase 3 wave A, three builders in local worktrees (branches
+not pushed; base fe9f7ec). Their briefs: wip/briefs/ (paths made
+worktree-relative in c53c27b).
+| pkg | builder | worktree (.claude/worktrees/) | files so far |
+| G ground/air/stunts | Opus xhigh | agent-a51e54d60601755b1 | ground.gd, ramp_kit.gd, vehicle.gd, humanoid.gd |
+| P parachute/bungee | Opus xhigh | agent-a33a1bd59f718629f | parachute.gd, bungee.gd, kits/air_sports_kit.gd, player.gd |
+| R races/cycling | Sonnet xhigh | agent-a9c0ec2e48144bf73 | races.gd, race_course.gd (moved from wip/R), race_shots, race_calib |
+- R had edited main.gd, hud.gd, player.gd, mission_manager.gd against its
+  brief; told to revert them and report patches instead.
+- Snapshots: `wip/snapshot.sh` writes each worktree's work (commits +
+  uncommitted + untracked, temp index) to wip/snapshots/<pkg>.patch; run it
+  and commit at each milestone. Untested until the builder says so.
+
+Resume (if this session stopped):
+- Same container (`git worktree list` shows the three): the builders
+  stopped with the session. Read each worktree's HANDOFF-<pkg>.md (if any)
+  and `git -C <wt> status`; start a new builder per unfinished package in
+  that worktree path (Agent, no isolation; brief: "work in <wt>; read
+  wip/briefs/brief_common.md and package_<X>.md; continue from the files
+  there").
+- New container (worktrees gone): `game/tools/setup_cloud.sh`; for each
+  package, a builder with isolation worktree whose first step is
+  `git apply --3way wip/snapshots/<X>.patch`, then the brief as above.
+Then, per package as it reports: its own Opus review (diff + gate output
++ the brief quoted), fixes, then the main session applies the builder's
+main.gd/hud.gd/player.gd/mission_manager patches, merges the branch,
+runs that package's tests. After all three: full suite, screenshots
+(contact sheet), delete wip/, commit, push. Then phase 4 (wave B: bridges
+and tunnels on G's Ground deck/cut API; one Opus builder + review).
+Next for Sachin: report at the end; nothing needs his approval so far.
+
 Open items not in Sachin's list (report only): no trail person passed
 trail loop 904 in 20 s at noon (shot scripts a party); 26/128 of its
 points lie within 6 m of a road; calendar Lows (archive); the wildlife
-reviewer could not measure in_city cost on a device.
+reviewer could not measure in_city cost on a device; trap: three test
+runs hung at the Godot banner after the data commit in session 2 (cause
+not found; check `pgrep -af godot`).
 
 ## Phase 3 and 4 plan (decided 2026-10-31)
 - vehicle.gd has no air state (y = Terrain.height each frame), so stunt
@@ -143,24 +149,8 @@ reviewer could not measure in_city cost on a device.
   and bungee; Opus xhigh, physics). Wave B after G: bridges and tunnels
   (Opus). Main session wires each into main.gd/hud.gd and merges.
   Cheaper option named for Sachin: all in the main session, sequential.
-- Session 3 (2026-10-31): wave A started while the step-1 suite ran (the
-  builders work in their own worktrees and wait on /tmp/godot.lock, so
-  they change nothing the suite or the step-2 review checks). 3 agents:
-  R Sonnet xhigh, G Opus xhigh, P Opus xhigh; rough cost each 1.5-3 h
-  plus a 20-40 min Opus review. Briefs got worktree-relative paths
-  (c53c27b).
-- Session 3 step 1: full suite on fe9f7ec exit 0, 2134 passed, 0 failed.
-  Step 2 review (Opus) started on 4197417..fe9f7ec plus integration of
-  75eda1f^..fe9f7ec.
-- Step 2 review: 0 High, M1 (pelts from roadkill/punches, no licence
-  check), L1 (lion pelt stuck in the bag), L2 (mission start hour skipped
-  Atmosphere.advance), L3 (spent lion idles near when its retreat is
-  blocked), L4 (pelt total over cap on load). All fixed in b6efeeb:
-  kill() keeps `by` on the carcass, only "rifle" kills of PELT_PRICE kinds
-  skin; mission start advances (a start < 1 h behind steps back, same
-  day); spent lion -> leave. 9 focused tests PASS (77 checks).
-  Full suite after the fixes (8015468): exit 0, 2145 passed, 0 failed.
-  Steps 1-2 done; the review's findings were Medium/Low only, so no
-  second review run.
+- Session 3 launch cost: R Sonnet xhigh, G and P Opus xhigh, each about
+  1.5-3 h plus a 20-40 min Opus review; started while the step-1 suite ran
+  (own worktrees, shared /tmp/godot.lock).
 
 Phase 2 package plan: HANDOFF-hill-content-archive.md.

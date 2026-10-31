@@ -1,0 +1,1056 @@
+diff --git a/game/scripts/hud.gd b/game/scripts/hud.gd
+index e96f4e9..952a89a 100644
+--- a/game/scripts/hud.gd
++++ b/game/scripts/hud.gd
+@@ -30,6 +30,7 @@ var _stars: Control
+ var _perf: Label
+ var bug_button: Button
+ var _prompt: Label
++var _race: Label
+ var _message: Label
+ var _message_tween: Tween
+ var _district: Label
+@@ -170,6 +171,10 @@ func _ready() -> void:
+ 	_message.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+ 	_message.modulate.a = 0.0
+ 
++	_race = _label(root, 26)
++	_anchor(_race, Vector2(0.5, 0), Rect2(-330, 132, 660, 80))
++	_race.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
++
+ 	_district = _label(root, 30)
+ 	_anchor(_district, Vector2(0.5, 0), Rect2(-300, 84, 600, 44))
+ 	_district.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+@@ -227,6 +232,7 @@ func _process(delta: float) -> void:
+ 	_shown_cash = move_toward(_shown_cash, game.cash, maxf(absf(game.cash - _shown_cash) * 3.0, 50.0) * delta)
+ 	_cash.text = "$%d" % int(_shown_cash)
+ 	_clock.text = game.atmosphere.clock_text()
++	_race.text = game.races.hud_text() if game.races != null else ""
+ 	_phone_button.visible = game.missions != null and game.missions.phone_unlocked
+ 	# The gear takes PHONE's slot until the story unlocks the phone.
+ 	settings_button.offset_left = -196.0 if _phone_button.visible else -76.0
+@@ -267,6 +273,10 @@ func _process(delta: float) -> void:
+ 		touch.set_label("brake", "BRAKE")
+ 		touch.set_label("interact", "EXIT")
+ 		touch.set_label("sprint", "DRIFT")
++		var race_prompt: Array = game.races.prompt() if game.races != null else []
++		if not race_prompt.is_empty():
++			_prompt.text = race_prompt[0]
++			touch.set_label("interact", race_prompt[1])
+ 	elif context_prompt.size() == 2:
+ 		_prompt.text = context_prompt[0]
+ 		touch.set_label("interact", context_prompt[1])
+@@ -281,6 +291,11 @@ func _process(delta: float) -> void:
+ 		_prompt.text = hunt_prompt[0]
+ 		touch.set_label("interact", hunt_prompt[1])
+ 		touch.set_label("sprint", "RUN")
++	elif game.races != null and not game.races.prompt().is_empty():
++		var race_prompt: Array = game.races.prompt()
++		_prompt.text = race_prompt[0]
++		touch.set_label("interact", race_prompt[1])
++		touch.set_label("sprint", "RUN")
+ 	elif game.interiors != null and not game.interiors.prompt().is_empty():
+ 		var place_prompt: Array = game.interiors.prompt()
+ 		_prompt.text = place_prompt[0]
+diff --git a/game/scripts/main.gd b/game/scripts/main.gd
+index 11a5eaa..e6b006f 100644
+--- a/game/scripts/main.gd
++++ b/game/scripts/main.gd
+@@ -15,6 +15,7 @@ const Atmosphere = preload("res://scripts/atmosphere.gd")
+ const MissionManager = preload("res://scripts/missions/mission_manager.gd")
+ const Interiors = preload("res://scripts/interiors.gd")
+ const Hunting = preload("res://scripts/hunting.gd")
++const Races = preload("res://scripts/races.gd")
+ const Inventory = preload("res://scripts/inventory.gd")
+ const Taxi = preload("res://scripts/taxi.gd")
+ const Graphics = preload("res://scripts/graphics.gd")
+@@ -40,6 +41,7 @@ var graphics
+ var missions
+ var interiors
+ var hunting
++var races
+ var taxi
+ var heliports
+ var calendar
+@@ -90,6 +92,9 @@ func _ready() -> void:
+ 	atmosphere.calendar = calendar
+ 	hunting = Hunting.new()
+ 	add_child(hunting)
++	races = Races.new()
++	races.game = self
++	add_child(races)
+ 
+ 	missions = MissionManager.new()
+ 	missions.game = self
+@@ -267,6 +272,8 @@ func map_markers() -> Array:
+ 		list.append_array(missions.markers)
+ 	if taxi:
+ 		list.append_array(taxi.map_markers())
++	if races:
++		list.append_array(races.map_markers())
+ 	if heliports:
+ 		for port in heliports.ports:
+ 			list.append({"pos": port.pos, "color": Color(0.35, 0.8, 1.0), "label": port.name, "gps": false, "icon": "H"})
+diff --git a/game/scripts/missions/mission_manager.gd b/game/scripts/missions/mission_manager.gd
+index e49a1f7..6a2e545 100644
+--- a/game/scripts/missions/mission_manager.gd
++++ b/game/scripts/missions/mission_manager.gd
+@@ -305,7 +305,7 @@ func save_game() -> void:
+ 	if not save_enabled:
+ 		return
+ 	var data := {"version": SAVE_VERSION, "done": done, "cash": game.cash, "phone": phone_unlocked,
+-		"settings": game.settings, "inventory": game.inventory.to_save(), "hunting": game.hunting.to_save(), "calendar": game.calendar.to_save()}
++		"settings": game.settings, "inventory": game.inventory.to_save(), "hunting": game.hunting.to_save(), "races": game.races.to_save(), "calendar": game.calendar.to_save()}
+ 	var f := FileAccess.open(save_path, FileAccess.WRITE)
+ 	if f:
+ 		f.store_string(JSON.stringify(data))
+@@ -327,6 +327,8 @@ func load_game() -> void:
+ 	game.inventory.load_save(inv if typeof(inv) == TYPE_DICTIONARY else {})
+ 	var hunt = data.get("hunting")
+ 	game.hunting.load_save(hunt if typeof(hunt) == TYPE_DICTIONARY else {})
++	var rc = data.get("races")
++	game.races.load_save(rc if typeof(rc) == TYPE_DICTIONARY else {})
+ 	var cal = data.get("calendar")
+ 	game.calendar.load_save(cal if typeof(cal) == TYPE_DICTIONARY else {})
+ 	GameLog.event("load", {"version": int(data.get("version", 1)), "done": done.size(), "cash": game.cash})
+@@ -340,6 +342,7 @@ func reset_progress() -> void:
+ 	game.cash = 0
+ 	game.inventory.bag.clear()
+ 	game.hunting.load_save({})
++	game.races.load_save({})
+ 	game.calendar.load_save({})
+ 	save_game()
+ 	changed.emit()
+diff --git a/game/scripts/player.gd b/game/scripts/player.gd
+index ebd43a5..514dc20 100644
+--- a/game/scripts/player.gd
++++ b/game/scripts/player.gd
+@@ -58,6 +58,8 @@ func _physics_process(delta: float) -> void:
+ 			var game = get_tree().get_first_node_in_group("game") if passenger else null
+ 			if game != null and game.taxi != null:
+ 				game.taxi.request_exit() # the cab pulls up and you pay
++			elif _races_take_press():
++				pass # the race start line or the Calder trial
+ 			elif vehicle.has_method("exit_check") and vehicle.exit_check() == "roof":
+ 				# Nobody stands on a roof here: land on open ground first.
+ 				var g = get_tree().get_first_node_in_group("game")
+@@ -113,10 +115,18 @@ func _think(delta: float) -> void:
+ 			pass
+ 		elif game != null and game.hunting != null and game.hunting.try_interact():
+ 			pass
++		elif _races_take_press():
++			pass # the bike hire stand
+ 		elif game == null or game.interiors == null or not game.interiors.try_interact():
+ 			try_enter_vehicle()
+ 
+ 
++## E at a race start line, or at the bike hire stand (races.gd).
++func _races_take_press() -> bool:
++	var g = get_tree().get_first_node_in_group("game")
++	return g != null and g.races != null and g.races.try_interact()
++
++
+ ## The node the camera and police should track.
+ func focus_node() -> Node3D:
+ 	return vehicle if vehicle != null else self
+diff --git a/wip/R/race_course.gd b/game/scripts/race_course.gd
+similarity index 99%
+rename from wip/R/race_course.gd
+rename to game/scripts/race_course.gd
+index 897d75a..511b2bf 100644
+--- a/wip/R/race_course.gd
++++ b/game/scripts/race_course.gd
+@@ -267,7 +267,7 @@ static func hill(country, laps := 2) -> Dictionary:
+ 	if lead_nodes.is_empty():
+ 		return {}
+ 	var j1: int = lead_nodes[lead_nodes.size() - 1]
+-	var heading := (country.pos(j1) - START).normalized()
++	var heading: Vector2 = (country.pos(j1) - START).normalized()
+ 	if lead_nodes.size() > 1:
+ 		heading = (country.pos(j1) - country.pos(lead_nodes[lead_nodes.size() - 2])).normalized()
+ 	var ring := _ring(country, core, j1, heading)
+diff --git a/wip/R/races.gd b/game/scripts/races.gd
+similarity index 100%
+rename from wip/R/races.gd
+rename to game/scripts/races.gd
+diff --git a/wip/R/race_calib.gd b/game/tests/race_calib.gd
+similarity index 100%
+rename from wip/R/race_calib.gd
+rename to game/tests/race_calib.gd
+diff --git a/wip/R/race_calib.tscn b/game/tests/race_calib.tscn
+similarity index 100%
+rename from wip/R/race_calib.tscn
+rename to game/tests/race_calib.tscn
+diff --git a/game/tests/race_shots.gd b/game/tests/race_shots.gd
+new file mode 100644
+index 0000000..dc5c75d
+--- /dev/null
++++ b/game/tests/race_shots.gd
+@@ -0,0 +1,146 @@
++extends Node
++## Screenshots of the races and the bike trial (scripts/races.gd): the start
++## line with its prompt, the grid at the countdown, a checkpoint gate with the
++## rivals closing in, the night run's start and gate, the bike stand and a
++## trail checkpoint. Needs a real renderer:
++##   xvfb-run -a -s "-screen 0 1280x720x24" godot --rendering-driver opengl3 \
++##     --resolution 1280x720 res://tests/race_shots.tscn -- <out_dir>
++## 8 shots (race_1 .. race_8); read them through tools/contactsheet.sh.
++
++const MainScene = preload("res://main.tscn")
++const Vehicle = preload("res://scripts/vehicle.gd")
++const Races = preload("res://scripts/races.gd")
++const RaceCourse = preload("res://scripts/race_course.gd")
++const Terrain = preload("res://scripts/terrain.gd")
++
++var out_dir := "user://"
++var game
++var races
++
++
++func _ready() -> void:
++	var args := OS.get_cmdline_user_args()
++	if not args.is_empty():
++		out_dir = args[0]
++	_run.call_deferred()
++
++
++func _run() -> void:
++	game = MainScene.instantiate()
++	game.settings["camera_turn"] = "north"
++	game.save_enabled = false
++	game.missions_enabled = false
++	game.population_enabled = false
++	add_child(game)
++	game.atmosphere.hour = 12.5
++	game.atmosphere.minutes_per_second = 0.0
++	game.atmosphere.weather_changes = false
++	game.hud.touch.visible = true
++	game.cash = 1000
++	await _frames(30)
++	races = game.get("races")
++	if races == null:
++		races = Races.new()
++		races.game = game
++		game.add_child(races)
++	await _frames(5)
++	var hill: Dictionary = races.hill_course()
++	var car = Vehicle.new()
++	car.kind = "sports"
++	car.body_color = Color(0.82, 0.16, 0.16)
++	car.city = game.city
++	game.add_child(car)
++	game.player.enter_vehicle(car)
++
++	# 1. The start line by day, with the prompt.
++	_on_course(car, hill, 6.0, 0.0)
++	await _frames(100)
++	await _shot("race_1_start_prompt.png")
++
++	# 2. The grid at the countdown.
++	races.try_interact()
++	await _frames(100)
++	await _shot("race_2_countdown.png")
++
++	# 3. A checkpoint gate with the rivals closing in.
++	for i in 200:
++		if races.state == races.State.RACING:
++			break
++		await _frames(1)
++	_on_course(car, hill, float(hill.gates[0].arc) - 26.0, 2.6)
++	for i in 1500:
++		await _frames(1)
++		races._since_gate = 0.0
++		var near := false
++		for r in races.rivals:
++			if r.car.global_position.distance_to(car.global_position) < 30.0:
++				near = true
++		if near:
++			break
++	await _shot("race_3_gate_rivals.png")
++	races.cancel()
++
++	# 4. The night run: the arch relabelled, the prompt with the buy-in.
++	game.atmosphere.hour = 23.0
++	_on_course(car, hill, 6.0, 0.0)
++	await _frames(150)
++	await _shot("race_4_night_start.png")
++
++	# 5. A night gate.
++	races.try_interact()
++	for i in 260:
++		await _frames(1)
++	_on_course(car, hill, float(hill.gates[0].arc) - 26.0, 2.6)
++	await _frames(40)
++	await _shot("race_5_night_gate.png")
++	races.cancel()
++	game.atmosphere.hour = 12.5
++	await _frames(30)
++
++	# 6. The bike stand, on foot.
++	game.player.exit_vehicle()
++	var stand: Vector3 = races.stand_pos()
++	var p = game.player
++	p.global_position = Vector3(stand.x, Terrain.height(stand.x, stand.z), stand.z) + _stand_front() * 3.8
++	p.reset_physics_interpolation()
++	game.camera.snap()
++	game.cash = 50
++	await _frames(60)
++	await _shot("race_6_bike_stand.png")
++
++	# 7. The trial: the bike at the top, the countdown, a trail checkpoint.
++	races.try_interact()
++	await _frames(30)
++	await _shot("race_7_bike_rented.png")
++	races.try_interact()
++	for i in 220:
++		await _frames(1)
++	var trail: Dictionary = races.trail_course()
++	_on_course(game.player.vehicle, trail, float(trail.gates[0].arc) - 14.0, 0.0)
++	await _frames(40)
++	await _shot("race_8_trail_gate.png")
++	get_tree().quit()
++
++
++## The side of the stand with the bikes on it (its local +Z).
++func _stand_front() -> Vector3:
++	var at: Dictionary = RaceCourse.at_arc(races.trail_course(), 0.0)
++	return Basis(Vector3.UP, RaceCourse.yaw_of(at.dir)) * Vector3(0.0, 0.0, 1.0)
++
++
++## `ride` on the course at `arc` metres, `off` metres to the right of the line.
++func _on_course(ride, course: Dictionary, arc: float, off: float) -> void:
++	var at: Dictionary = RaceCourse.at_arc(course, arc)
++	var pos: Vector3 = at.pos + RaceCourse.right_of(at.dir) * off
++	races.put_car(ride, pos, RaceCourse.yaw_of(at.dir))
++
++
++func _shot(file: String) -> void:
++	await RenderingServer.frame_post_draw
++	get_viewport().get_texture().get_image().save_png(out_dir.path_join(file))
++	print("saved ", file)
++
++
++func _frames(n: int) -> void:
++	for i in n:
++		await get_tree().physics_frame
+diff --git a/game/tests/race_shots.tscn b/game/tests/race_shots.tscn
+new file mode 100644
+index 0000000..3cf2845
+--- /dev/null
++++ b/game/tests/race_shots.tscn
+@@ -0,0 +1,6 @@
++[gd_scene load_steps=2 format=3]
++
++[ext_resource type="Script" path="res://tests/race_shots.gd" id="1"]
++
++[node name="RaceShots" type="Node"]
++script = ExtResource("1")
+diff --git a/game/tests/race_tests.gd b/game/tests/race_tests.gd
+new file mode 100644
+index 0000000..4711200
+--- /dev/null
++++ b/game/tests/race_tests.gd
+@@ -0,0 +1,690 @@
++extends RefCounted
++## Races and cycling (scripts/races.gd, scripts/race_course.gd): the hill
++## loop built from the real roads, the start prompt, checkpoints and prizes,
++## the rivals, the illegal night run and its police star, the bike stand and
++## the Calder trial, the save. Run from tests/test_runner.gd (TEST_MODULES);
++## `t` is the runner.
++
++const TESTS := ["test_race_course_follows_the_hill_roads", "test_race_start_prompt_and_countdown",
++	"test_race_checkpoints_finish_and_prize", "test_race_skipped_checkpoint_does_not_count",
++	"test_race_places_pay_by_place", "test_race_rivals_drive_the_course", "test_race_rivals_finish_the_course",
++	"test_race_stuck_rival_recovers", "test_night_race_hours_wager_and_pot", "test_night_race_police_star",
++	"test_bike_rental_and_trial", "test_bike_medals_and_best_time", "test_bike_rides_the_trail",
++	"test_race_save_and_load", "test_races_wired_into_the_game"]
++const Races = preload("res://scripts/races.gd")
++const RaceCourse = preload("res://scripts/race_course.gd")
++const Vehicle = preload("res://scripts/vehicle.gd")
++const Terrain = preload("res://scripts/terrain.gd")
++
++
++## A fresh game at `hour` with the races module (the game's own once main.gd
++## makes one). Returns the races node.
++func _races(t, hour := 12.0):
++	await t._new_game(false)
++	var game = t.game
++	game.atmosphere.minutes_per_second = 0.0
++	game.atmosphere.weather_changes = false
++	game.atmosphere.hour = hour
++	var races = game.get("races")
++	if races == null:
++		races = Races.new()
++		races.game = game
++		game.add_child(races)
++	await t._frames(3)
++	return races
++
++
++## The player in a car of `kind` on the lead-in `arc` metres from the start.
++func _driver(t, races, kind := "sports", arc := 6.0):
++	var game = t.game
++	var car = Vehicle.new()
++	car.kind = kind
++	car.city = game.city
++	game.add_child(car)
++	game.player.enter_vehicle(car)
++	var at: Dictionary = RaceCourse.at_arc(races.hill_course(), arc)
++	races.put_car(car, at.pos, RaceCourse.yaw_of(at.dir))
++	await t._frames(3)
++	return car
++
++
++## Starts the day race from the start prompt and runs the countdown out.
++func _start_day(t, races) -> bool:
++	var ok: bool = races.try_interact()
++	for i in 260:
++		if races.state == Races.State.RACING:
++			break
++		await t._frames(1)
++	return ok and races.state == Races.State.RACING
++
++
++## Teleports the player's ride onto gate `i` and lets the race see it.
++func _to_gate(t, races, i: int) -> void:
++	var g: Dictionary = races.course.gates[i]
++	races.put_car(t.game.player.vehicle, g.pos, RaceCourse.yaw_of(g.dir))
++	await t._frames(2)
++
++
++func _min_dist_to_roads(country, p: Vector2) -> float:
++	var best := INF
++	for r in country.roads:
++		if not (r.name in RaceCourse.RACE_ROADS):
++			continue
++		var nodes: PackedInt32Array = r.nodes
++		for i in nodes.size() - 1:
++			var a: Vector2 = country.pos(nodes[i])
++			var b: Vector2 = country.pos(nodes[i + 1])
++			var c := Geometry2D.get_closest_point_to_segment(p, a, b)
++			best = minf(best, p.distance_to(c))
++	return best
++
++
++func test_race_course_follows_the_hill_roads(t) -> void:
++	await t._new_game(false)
++	var country = t.game.city.country
++	var c: Dictionary = RaceCourse.hill(country, 2)
++	t.check(c.get("ok", false), "the hill course builds from the country's roads")
++	t.check(RaceCourse.hill(null, 2).is_empty(), "no country, no course")
++	var route: PackedVector3Array = c.route
++	var gates: Array = c.gates
++	var north := INF
++	var off_road := 0.0
++	for i in range(0, route.size(), 2):
++		north = minf(north, route[i].z)
++		off_road = maxf(off_road, _min_dist_to_roads(country, Vector2(route[i].x, route[i].z)))
++	t.check(north > RaceCourse.RACE_NORTH, "the whole course is south of RACE_NORTH, northmost z %.0f" % north)
++	t.check(off_road < 4.5, "the line stays on the named roads, worst %.1f m off" % off_road)
++	var worst_gate := 0.0
++	var gate_north := INF
++	for g in gates:
++		worst_gate = maxf(worst_gate, _min_dist_to_roads(country, Vector2(g.pos.x, g.pos.z)))
++		gate_north = minf(gate_north, g.pos.z)
++	t.check(worst_gate < 4.0 and gate_north > RaceCourse.RACE_NORTH, "every checkpoint stands on the road south of RACE_NORTH, worst %.1f m" % worst_gate)
++	# The start: the lead-in begins beside the design map's start spot.
++	t.check(Vector2(route[0].x, route[0].z).distance_to(RaceCourse.START) < 40.0, "the course starts by the design map's start spot")
++	# A closed loop run twice: the lead-in ends on the lap line, the first lap
++	# ends on it, and so does the second (the finish), all on one spot.
++	var lines: Array = gates.filter(func(g): return g.lap_line)
++	t.check(lines.size() == 3 and gates[gates.size() - 1].lap_line, "three lap lines (start, lap 2, finish), the last is the finish")
++	var gap: float = maxf(lines[0].pos.distance_to(lines[1].pos), lines[1].pos.distance_to(lines[2].pos))
++	t.check(gap < 8.0, "the lap lines are on the same spot of the loop, %.1f m apart" % gap)
++	t.check(float(c.loop_len) > 1500.0 and float(c.loop_len) < 2600.0 and float(c.length) > float(c.lead_len) + 1.9 * float(c.loop_len),
++			"the loop is about 1.9 km, got %.0f m (course %.0f)" % [c.loop_len, c.length])
++	var spacing_ok := true
++	var prev := 0.0
++	for g in gates:
++		var d: float = float(g.arc) - prev
++		if d < 40.0 or d > 230.0:
++			spacing_ok = false
++		prev = g.arc
++	t.check(spacing_ok and gates.size() >= 20, "checkpoints every 40 to 230 m, %d in all" % gates.size())
++	# Every metre of the line runs somewhere a car can go: no jump between samples.
++	var jump := 0.0
++	for i in range(1, route.size()):
++		jump = maxf(jump, Vector2(route[i].x - route[i - 1].x, route[i].z - route[i - 1].z).length())
++	t.check(jump < RaceCourse.STEP + 0.5, "the line has no gaps, widest step %.1f m" % jump)
++	# The AI's corner speeds: never faster than a car can hold, slower at the bends.
++	var vlim: PackedFloat32Array = c.vlim
++	var vmin := INF
++	var vmax := 0.0
++	for v in vlim:
++		vmin = minf(vmin, v)
++		vmax = maxf(vmax, v)
++	t.check(vmin >= 2.0 and vmax <= 36.1 and vmax - vmin > 8.0, "corner speeds run %.1f to %.1f m/s" % [vmin, vmax])
++
++
++func test_race_start_prompt_and_countdown(t) -> void:
++	var races = await _races(t, 12.0)
++	var game = t.game
++	t.check(races.prompt().is_empty() and races.hud_text() == "", "far from the start there is no prompt and no panel")
++	var car = await _driver(t, races, "sports", 6.0)
++	var pr: Array = races.prompt()
++	t.check(pr.size() == 2 and pr[0] == "Hill race: E / RACE" and pr[1] == "RACE", "driving into the start line offers the race, got %s" % [pr])
++	game.player.exit_vehicle()
++	races.put_car(car, car.global_position + Vector3(0, 0, 400), 0.0)
++	t.check(races.prompt().is_empty(), "on foot by the start there is nothing to do (no bike stand here)")
++	game.player.enter_vehicle(car)
++	var at: Dictionary = RaceCourse.at_arc(races.hill_course(), 6.0)
++	races.put_car(car, at.pos, RaceCourse.yaw_of(at.dir))
++	# A helicopter or a bicycle cannot run it.
++	for kind in ["bicycle", "heli"]:
++		var saved: String = car.kind
++		car.kind = kind
++		t.check(races.prompt().is_empty(), "a %s is not offered the road race" % kind)
++		car.kind = saved
++	game.cash = 700
++	t.check(races.try_interact(), "E at the line is taken")
++	t.check(races.state == Races.State.COUNTDOWN and races.mode == "day" and races.rivals.size() == 3, "the countdown starts with three rivals")
++	t.check(game.cash == 700, "the day race is free to enter")
++	t.check(races.hud_text().begins_with("HILL RACE\n3"), "the panel counts down from 3, got %s" % [races.hud_text()])
++	var rival_slots_clear := true
++	for r in races.rivals:
++		if r.car.global_position.distance_to(car.global_position) < 2.5:
++			rival_slots_clear = false
++	t.check(rival_slots_clear, "the rivals line up beside the player, not on top")
++	var held: Vector3 = car.global_position
++	await t._frames(60)
++	t.check(races.state == Races.State.COUNTDOWN and car.global_position.distance_to(held) < 1.0, "the player's car is held on the grid during the count")
++	await t._frames(150)
++	t.check(races.state == Races.State.RACING, "the race goes at zero")
++	t.check(races.prompt().is_empty(), "no prompt mid-race")
++	var txt: String = races.hud_text()
++	t.check(txt.contains("lap 1/2") and txt.contains("checkpoint 1/%d" % races.course.gates.size()) and txt.contains(" of 4"),
++			"the panel shows lap, checkpoint and place, got %s" % [txt])
++	# A second press mid-race does not start another.
++	t.check(not races.start_race("day"), "no second start while racing")
++	races.cancel()
++	t.check(races.state == Races.State.IDLE and races.rivals.is_empty() and races.hud_text() == "", "cancel clears the field and the panel")
++	# Not with the police after you.
++	Wanted.report_crime(1)
++	t.check(not races.start_race("day") and races.state == Races.State.IDLE, "no race while wanted")
++	Wanted.clear()
++
++
++func test_race_checkpoints_finish_and_prize(t) -> void:
++	var races = await _races(t, 12.0)
++	var game = t.game
++	await _driver(t, races)
++	game.cash = 100
++	t.check(await _start_day(t, races), "the race starts")
++	var gates: Array = races.course.gates
++	var in_order := true
++	for i in gates.size():
++		in_order = in_order and races.next_gate == i
++		await _to_gate(t, races, i)
++		if races.state != Races.State.RACING:
++			break
++	t.check(in_order, "each checkpoint counted as the next one in turn")
++	t.check(races.state == Races.State.DONE, "passing every checkpoint in order finishes the race")
++	t.check(races.result.get("place", 0) == 1 and races.result.prize == 400, "first place pays $400, got %s" % [races.result])
++	t.check(game.cash == 500, "the prize is paid, cash %d" % game.cash)
++	t.check(races.result.time > 0.0 and races.best.get("day", 0.0) == races.result.time and races.result.new_best,
++			"the time is the new best")
++	t.check(races.hud_text().contains("1st place"), "the panel shows the result, got %s" % [races.hud_text()])
++	# The best time only improves: a slower run keeps it.
++	var first: float = races.best["day"]
++	await t._frames(8 * 60 + 30)
++	t.check(races.state == Races.State.IDLE and races.rivals.is_empty(), "the result shows a few seconds, then the track is clear")
++	await _start_day(t, races)
++	await t._frames(120)
++	for i in gates.size():
++		await _to_gate(t, races, i)
++		if races.state != Races.State.RACING:
++			break
++	t.check(races.state == Races.State.DONE and races.best["day"] == first and not races.result.new_best and races.result.time > first,
++			"a slower run keeps the best time %.2f (ran %.2f)" % [first, races.result.time])
++
++
++func test_race_skipped_checkpoint_does_not_count(t) -> void:
++	var races = await _races(t, 12.0)
++	var game = t.game
++	await _driver(t, races)
++	game.cash = 100
++	await _start_day(t, races)
++	var n: int = races.course.gates.size()
++	await _to_gate(t, races, 3)
++	t.check(races.next_gate == 0, "driving through checkpoint 4 first counts for nothing")
++	await _to_gate(t, races, n - 1)
++	t.check(races.state == Races.State.RACING and races.next_gate == 0, "the finish line does not count before the others")
++	await _to_gate(t, races, 0)
++	t.check(races.next_gate == 1, "checkpoint 1 counts")
++	await _to_gate(t, races, 2)
++	t.check(races.next_gate == 1, "skipping checkpoint 2 does not")
++	await _to_gate(t, races, 1)
++	await _to_gate(t, races, 2)
++	t.check(races.next_gate == 3, "then 2 and 3 do, in order")
++	# Going back over an earlier one changes nothing.
++	await _to_gate(t, races, 0)
++	t.check(races.next_gate == 3, "an old checkpoint is not counted twice")
++	t.check(game.cash == 100, "nothing is paid for a skipped course")
++	# Wandering off the course: the race is lost after a long time without one.
++	races._since_gate = races.LOST_TIME + 1.0
++	await t._frames(3)
++	t.check(races.state == Races.State.IDLE, "a race with no checkpoint for %d s is abandoned" % int(races.LOST_TIME))
++
++
++func test_race_places_pay_by_place(t) -> void:
++	var races = await _races(t, 12.0)
++	var game = t.game
++	for want in [2, 3, 4]:
++		await _driver(t, races)
++		game.cash = 0
++		await _start_day(t, races)
++		var gates: Array = races.course.gates
++		# `want - 1` rivals cross the line ahead of the player.
++		for k in want - 1:
++			races.rivals[k].passed = gates.size()
++			races.rivals[k].finish = 1.0 + float(k)
++		for i in gates.size():
++			await _to_gate(t, races, i)
++			if races.state != Races.State.RACING:
++				break
++		var prize: int = [0, 400, 200, 80, 0][want]
++		t.check(races.state == Races.State.DONE and races.result.place == want and races.result.prize == prize and game.cash == prize,
++				"%s place pays $%d, got %s with cash %d" % [Races.ordinal(want), prize, races.result, game.cash])
++		races.cancel()
++		await t._frames(2)
++	t.check(Races.ordinal(1) == "1st" and Races.ordinal(2) == "2nd" and Races.ordinal(3) == "3rd" and Races.ordinal(4) == "4th",
++			"ordinals read right")
++	t.check(Races.fmt_time(75.34) == "1:15.3" and Races.fmt_time(9.04) == "0:09.0" and Races.fmt_time(INF) == "--:--.-", "times read m:ss.s")
++
++
++## Runs the field with the player parked, until `done` says stop or `limit`
++## seconds pass; keeps the player's race from timing out.
++func _run_field(t, races, limit: float, done: Callable) -> void:
++	var frames := int(limit * 60.0)
++	for i in frames:
++		races._since_gate = 0.0
++		await t._frames(1)
++		if races.state != Races.State.RACING or done.call():
++			return
++
++
++func test_race_rivals_drive_the_course(t) -> void:
++	var races = await _races(t, 12.0)
++	await _driver(t, races)
++	await _start_day(t, races)
++	var start := []
++	for r in races.rivals:
++		start.append(r.car.global_position)
++	await _run_field(t, races, 15.0, func(): return false)
++	t.check(races.state == Races.State.RACING, "the race is still on")
++	var gates: Array = races.course.gates
++	for i in races.rivals.size():
++		var r: Dictionary = races.rivals[i]
++		var moved: float = r.car.global_position.distance_to(start[i])
++		t.check(moved > 120.0, "%s drove %.0f m in 15 s" % [r.name, moved])
++		t.check(r.car.speed > 8.0, "%s is up to speed, %.1f m/s" % [r.name, r.car.speed])
++		t.check(r.passed >= 1, "%s has passed checkpoints, %d" % [r.name, r.passed])
++		# On the road: near the rival's own line.
++		var line: PackedVector3Array = r.full
++		var best := INF
++		for p in line:
++			best = minf(best, Vector2(p.x, p.z).distance_to(Vector2(r.car.global_position.x, r.car.global_position.z)))
++		t.check(best < 5.0, "%s stays on the line, %.1f m off" % [r.name, best])
++	t.check(races.recoveries == 0, "no rival needed a rescue, %d" % races.recoveries)
++	var order: Array = races.standings()
++	t.check(order.size() == 4 and order[0].passed >= order[3].passed, "standings list the field by checkpoints passed")
++	races.cancel()
++
++
++func test_race_rivals_finish_the_course(t) -> void:
++	var races = await _races(t, 12.0)
++	await _driver(t, races)
++	await _start_day(t, races)
++	await _run_field(t, races, 330.0, func(): return races.rivals.all(func(r): return r.finish < INF))
++	var finishes := []
++	for r in races.rivals:
++		finishes.append(snappedf(r.finish, 0.1))
++		t.check(r.finish < INF, "%s finished the %d checkpoints (passed %d, %.0f s)" % [r.name, races.course.gates.size(), r.passed, races.time])
++	t.check(races.recoveries <= 3, "at most 3 rescues over the whole race, %d" % races.recoveries)
++	if not finishes.is_empty() and not (INF in finishes):
++		var fastest: float = finishes.min()
++		var slowest: float = finishes.max()
++		var length: float = races.course.length
++		# A good player in a quick car runs 24 to 30 m/s on average: the field
++		# is beatable (the best rival is slower than that) but not asleep.
++		t.check(length / fastest < 30.0 and length / slowest > 14.0,
++				"rivals average %.1f to %.1f m/s over %.0f m (%s)" % [length / slowest, length / fastest, length, finishes])
++	races.cancel()
++
++
++func test_race_stuck_rival_recovers(t) -> void:
++	var races = await _races(t, 12.0)
++	await _driver(t, races)
++	await _start_day(t, races)
++	await _run_field(t, races, 6.0, func(): return false)
++	var r: Dictionary = races.rivals[1]
++	var car = r.car
++	# 1. Dead in the road: engine off, wheels still.
++	car.driver = Vehicle.Driver.NONE
++	car.speed = 0.0
++	car.velocity = Vector3.ZERO
++	var before: Vector3 = car.global_position
++	var rec0: int = races.recoveries
++	await _run_field(t, races, 9.0, func(): return races.recoveries > rec0)
++	t.check(races.recoveries > rec0, "a rival that stopped is put back on the course (%d rescues)" % races.recoveries)
++	await _run_field(t, races, 5.0, func(): return false)
++	t.check(car.global_position.distance_to(before) > 25.0 and car.speed > 4.0, "and it drives on, moved %.0f m at %.1f m/s" % [car.global_position.distance_to(before), car.speed])
++	# 2. Thrown well off the road.
++	var rec1: int = races.recoveries
++	var far := Vector3(car.global_position.x + 90.0, 0.0, car.global_position.z)
++	races.put_car(car, far, 0.0)
++	await _run_field(t, races, 8.0, func(): return races.recoveries > rec1)
++	t.check(races.recoveries > rec1, "a rival 90 m off its line is put back (%d rescues)" % races.recoveries)
++	await t._frames(60)
++	var line: PackedVector3Array = r.full
++	var best := INF
++	for p in line:
++		best = minf(best, Vector2(p.x, p.z).distance_to(Vector2(car.global_position.x, car.global_position.z)))
++	t.check(best < 8.0, "back on its line, %.1f m off" % best)
++	# 3. A wreck gives way to a fresh car of the same model.
++	var old = r.car
++	old.wrecked = true
++	var model: String = r.spec.kind
++	await t._frames(3)
++	t.check(r.car != old and r.car.kind == model and not r.car.wrecked, "a wrecked rival is swapped for a fresh %s" % model)
++	races.cancel()
++
++
++func test_night_race_hours_wager_and_pot(t) -> void:
++	var races = await _races(t, 12.0)
++	var game = t.game
++	for h in [4.0, 12.0, 20.99]:
++		t.check(not Races.is_night_hour(h), "%.2f h is not a night-run hour" % h)
++	for h in [21.0, 23.0, 0.0, 3.99]:
++		t.check(Races.is_night_hour(h), "%.2f h is a night-run hour" % h)
++	await _driver(t, races)
++	game.cash = 1000
++	t.check(not races.night_race_open() and races.prompt()[0] == "Hill race: E / RACE", "at noon only the day race is offered")
++	t.check(not races.start_race("night") and game.cash == 1000, "the night run cannot be started at noon")
++	# After dark.
++	game.atmosphere.hour = 23.0
++	t.check(races.night_race_open(), "open at 23:00")
++	var pr: Array = races.prompt()
++	t.check(pr.size() == 2 and pr[0] == "Night run, $200 buy-in: E / RACE", "the night run asks a buy-in, got %s" % [pr])
++	t.check(not races.start_race("day") and races.state == Races.State.IDLE, "the day race is not run at night")
++	t.check(races.wager_for(50) == 0 and races.wager_for(100) == 100 and races.wager_for(1000) == 200 and races.wager_for(9000) == 500
++			and races.wager_for(350) == 100, "the buy-in is a quarter of the cash in hundreds, $100 to $500")
++	game.cash = 40
++	t.check(races.prompt()[0].contains("you need $100"), "too poor for the buy-in, the prompt says so")
++	t.check(races.try_interact() and races.state == Races.State.IDLE and game.cash == 40, "and the press takes nothing and starts nothing")
++	game.cash = 1000
++	races.set_wager(450)
++	t.check(races.wager_for(1000) == 500 or races.wager_for(1000) == 400, "a chosen buy-in is rounded to hundreds, got %d" % races.wager_for(1000))
++	races.set_wager(200)
++	t.check(races.try_interact() and races.mode == "night" and races.state == Races.State.COUNTDOWN, "E starts the night run")
++	t.check(game.cash == 800 and races.stake == 200, "the buy-in is taken, cash %d" % game.cash)
++	t.check(races.hud_text().begins_with("NIGHT RUN"), "the panel is titled NIGHT RUN")
++	for i in 260:
++		if races.state == Races.State.RACING:
++			break
++		await t._frames(1)
++	var gates: Array = races.course.gates
++	for i in gates.size():
++		await _to_gate(t, races, i)
++		if races.state != Races.State.RACING:
++			break
++	t.check(races.state == Races.State.DONE and races.result.place == 1 and races.result.prize == 800, "the winner takes the pot, got %s" % [races.result])
++	t.check(game.cash == 1600, "cash after winning the pot, %d" % game.cash)
++	races.cancel()
++	# A loss: the buy-in is gone, nothing comes back.
++	await t._frames(2)
++	game.cash = 1000
++	races.set_wager(300)
++	races.start_race("night")
++	for i in 260:
++		if races.state == Races.State.RACING:
++			break
++		await t._frames(1)
++	races.rivals[0].passed = gates.size()
++	races.rivals[0].finish = 2.0
++	for i in gates.size():
++		await _to_gate(t, races, i)
++		if races.state != Races.State.RACING:
++			break
++	t.check(races.result.get("place", 0) == 2 and races.result.prize == 0 and game.cash == 700, "second place loses the $300 buy-in, cash %d" % game.cash)
++	# The night rivals are quicker than the day ones.
++	var day_skill := 0.0
++	for s in Races.DAY_RIVALS:
++		day_skill = maxf(day_skill, float(s.skill))
++	var night_skill := 0.0
++	for s in Races.NIGHT_RIVALS:
++		night_skill = minf(night_skill if night_skill > 0.0 else 9.0, float(s.skill))
++	t.check(night_skill > day_skill, "the night field's slowest is faster than the day field's fastest")
++
++
++func test_night_race_police_star(t) -> void:
++	var races = await _races(t, 23.0)
++	var game = t.game
++	await _driver(t, races)
++	game.cash = 1000
++	races.set_wager(100)
++	t.check(races.try_interact(), "the night run starts")
++	for i in 260:
++		if races.state == Races.State.RACING:
++			break
++		await t._frames(1)
++	# Nobody about: no star.
++	await t._frames(90)
++	t.check(Wanted.level == 0 and not races.police_sees(), "no police in sight, no star")
++	# A patrol car well out of sight range.
++	var far = Vehicle.new()
++	far.is_police = true
++	far.city = game.city
++	game.add_child(far)
++	var me: Vector3 = game.player.vehicle.global_position
++	far.global_position = Vector3(me.x + 90.0, Terrain.height(me.x + 90.0, me.z), me.z)
++	await t._frames(60)
++	t.check(Wanted.level == 0, "a patrol car 90 m off does not see a thing")
++	# One close by with a clear line.
++	far.global_position = Vector3(me.x + 14.0, Terrain.height(me.x + 14.0, me.z), me.z)
++	await t._frames(45)
++	t.check(Wanted.level == 1, "a patrol car 14 m off sees the street race: one star, got %d" % Wanted.level)
++	t.check(races.state == Races.State.RACING, "the race goes on")
++	races.cancel()
++	Wanted.clear()
++	far.queue_free()
++	# By day the same car sees nothing wrong.
++	game.atmosphere.hour = 12.0
++	await t._frames(3)
++	var car = game.player.vehicle
++	var at: Dictionary = RaceCourse.at_arc(races.hill_course(), 6.0)
++	races.put_car(car, at.pos, RaceCourse.yaw_of(at.dir))
++	var cop = Vehicle.new()
++	cop.is_police = true
++	cop.city = game.city
++	game.add_child(cop)
++	var q: Vector3 = at.pos + Vector3(10.0, 0.0, 0.0)
++	cop.global_position = Vector3(q.x, Terrain.height(q.x, q.z), q.z)
++	t.check(races.try_interact() and races.mode == "day", "the day race starts")
++	await t._frames(260)
++	await t._frames(60)
++	t.check(Wanted.level == 0, "a day race with a patrol car beside it is legal")
++	races.cancel()
++	cop.queue_free()
++
++
++func test_bike_rental_and_trial(t) -> void:
++	var races = await _races(t, 12.0)
++	var game = t.game
++	var trail: Dictionary = races.trail_course()
++	t.check(not trail.is_empty() and trail.gates.size() >= 4, "the Calder Trail run builds with %d checkpoints" % trail.get("gates", []).size())
++	var top: Vector3 = trail.top
++	t.check(Vector2(top.x, top.z).distance_to(RaceCourse.BIKE_SPOT) < 60.0, "the run starts near the design map's spot")
++	var first: Vector3 = trail.route[0]
++	var last: Vector3 = trail.route[trail.route.size() - 1]
++	t.check(first.y - last.y > 40.0, "it runs downhill: %.0f m of drop" % (first.y - last.y))
++	var s: Vector3 = races.stand_pos()
++	t.check(Vector2(s.x, s.z).distance_to(Vector2(top.x, top.z)) < 12.0, "the stand is beside the top")
++	# On foot at the stand.
++	var p = game.player
++	p.global_position = s + Vector3(0.0, 0.0, 3.0)
++	p.reset_physics_interpolation()
++	game.cash = 5
++	var pr: Array = races.prompt()
++	t.check(pr.size() == 2 and pr[1] == "RENT" and pr[0].contains("short"), "too poor: the stand says so, got %s" % [pr])
++	t.check(races.try_interact() and p.vehicle == null and game.cash == 5, "no bike without the $10")
++	game.cash = 50
++	pr = races.prompt()
++	t.check(pr.size() == 2 and pr[0] == "Rent a bike for $10: E / RENT", "with the cash it offers a bike, got %s" % [pr])
++	t.check(races.try_interact(), "E rents it")
++	t.check(p.vehicle != null and p.vehicle.kind == "bicycle" and game.cash == 40, "the player is on a bicycle, $10 poorer (cash %d)" % game.cash)
++	t.check(p.vehicle.global_position.distance_to(top) < 15.0, "the bike is at the top of the trail")
++	pr = races.prompt()
++	t.check(pr.size() == 2 and pr[0] == "Calder downhill trial: E / START" and pr[1] == "START", "on the bike at the top: the trial is offered, got %s" % [pr])
++	var bike = p.vehicle
++	# Far from the top the bike is just a bike.
++	races.put_car(bike, top + Vector3(0.0, 0.0, 200.0), 0.0)
++	t.check(races.prompt().is_empty(), "away from the top no trial is offered")
++	var at: Dictionary = RaceCourse.at_arc(trail, 2.0)
++	races.put_car(bike, at.pos, RaceCourse.yaw_of(at.dir))
++	t.check(races.try_interact() and races.state == Races.State.COUNTDOWN and races.mode == "bike", "E at the top starts the trial")
++	t.check(races.rivals.is_empty(), "the trial is against the clock")
++	await t._frames(200)
++	t.check(races.state == Races.State.RACING, "the trial runs")
++	var txt: String = races.hud_text()
++	t.check(txt.contains("CALDER DOWNHILL") and txt.contains("checkpoint 1/%d" % trail.gates.size()), "the panel shows the checkpoint, got %s" % [txt])
++	# Gates in order finish; skipping one does not count.
++	var g: Array = trail.gates
++	races.put_car(bike, g[2].pos, RaceCourse.yaw_of(g[2].dir))
++	await t._frames(2)
++	t.check(races.next_gate == 0, "checkpoint 3 before 1 and 2 does not count")
++	for i in g.size():
++		races.put_car(bike, g[i].pos, RaceCourse.yaw_of(g[i].dir))
++		await t._frames(2)
++		if races.state != Races.State.RACING:
++			break
++	t.check(races.state == Races.State.DONE and races.result.mode == "bike", "the last checkpoint ends the trial")
++	t.check(races.result.medal == 3 and races.result.prize == 300 and game.cash == 340, "a very fast run takes gold and its $300, cash %d" % game.cash)
++	t.check(races.best.get("bike", 0.0) == races.result.time and races.medal == 3, "the time and the medal are kept")
++	# Quitting the saddle abandons the trial.
++	await t._frames(8 * 60 + 30)
++	races.put_car(bike, at.pos, RaceCourse.yaw_of(at.dir))
++	races.try_interact()
++	await t._frames(200)
++	p.exit_vehicle()
++	await t._frames(8 * 60)
++	t.check(races.state == Races.State.IDLE, "walking away from the bike abandons the trial")
++
++
++func test_bike_medals_and_best_time(t) -> void:
++	var races = await _races(t, 12.0)
++	var game = t.game
++	t.check(races.medal_time(1) > races.medal_time(2) and races.medal_time(2) > races.medal_time(3) and races.medal_time(3) > 40.0,
++			"gold is the quickest time: %.0f, %.0f, %.0f s" % [races.medal_time(1), races.medal_time(2), races.medal_time(3)])
++	t.check(races.medal_for(races.medal_time(1) + 1.0) == 0, "slower than bronze: no medal")
++	t.check(races.medal_for(races.medal_time(1) - 0.5) == 1 and races.medal_for(races.medal_time(2) + 0.5) == 1, "bronze")
++	t.check(races.medal_for(races.medal_time(2) - 0.5) == 2 and races.medal_for(races.medal_time(3) + 0.5) == 2, "silver")
++	t.check(races.medal_for(races.medal_time(3) - 0.5) == 3, "gold")
++	t.check(races.medal_for(0.0) == 0, "a zero time earns nothing")
++	var trail: Dictionary = races.trail_course()
++	var s: Vector3 = races.stand_pos()
++	game.cash = 100
++	var p = game.player
++	p.global_position = s + Vector3(0.0, 0.0, 3.0)
++	p.reset_physics_interpolation()
++	races.try_interact()
++	var bike = p.vehicle
++	# A bronze run, paid $60; a silver after it pays the $90 difference; a
++	# second bronze pays nothing and keeps the better time.
++	var cash_before: int = game.cash
++	var paid := []
++	var times := [races.medal_time(1) - 2.0, races.medal_time(2) - 2.0, races.medal_time(1) - 1.0]
++	for want in times:
++		var at: Dictionary = RaceCourse.at_arc(trail, 2.0)
++		races.put_car(bike, at.pos, RaceCourse.yaw_of(at.dir))
++		races.try_interact()
++		for i in 200:
++			if races.state == Races.State.RACING:
++				break
++			await t._frames(1)
++		# Hold the clock at the wanted run time.
++		races.time = want
++		var g: Array = trail.gates
++		for i in g.size():
++			races.put_car(bike, g[i].pos, RaceCourse.yaw_of(g[i].dir))
++			await t._frames(2)
++			if races.state != Races.State.RACING:
++				break
++		paid.append(races.result.prize)
++		races.cancel()
++		await t._frames(2)
++	t.check(paid == [60, 90, 0], "medal cash is paid as the medal improves, got %s" % [paid])
++	t.check(races.medal == 2 and game.cash == cash_before + 150, "best medal silver, cash %d" % game.cash)
++	t.check(absf(races.best["bike"] - (races.medal_time(2) - 2.0)) < 0.5, "the best time is the quickest run, %.1f" % races.best["bike"])
++
++
++func test_bike_rides_the_trail(t) -> void:
++	# The line is ridable: a bicycle steered along it passes every checkpoint
++	# in order and earns a medal; nothing on the way holds it.
++	var races = await _races(t, 12.0)
++	var game = t.game
++	var trail: Dictionary = races.trail_course()
++	var s: Vector3 = races.stand_pos()
++	game.cash = 100
++	game.player.global_position = s + Vector3(0.0, 0.0, 3.0)
++	game.player.reset_physics_interpolation()
++	races.try_interact()
++	var bike = game.player.vehicle
++	var at: Dictionary = RaceCourse.at_arc(trail, 2.0)
++	races.put_car(bike, at.pos, RaceCourse.yaw_of(at.dir))
++	races.try_interact()
++	for i in 200:
++		if races.state == Races.State.RACING:
++			break
++		await t._frames(1)
++	var pts := PackedVector3Array()
++	for i in range(0, trail.route.size(), 3):
++		pts.append(trail.route[i])
++	pts.append(trail.route[trail.route.size() - 1])
++	bike.drive_path(pts, 1.0)
++	var frames := 0
++	while races.state == Races.State.RACING and frames < 60 * 400:
++		await t._frames(1)
++		frames += 1
++	t.check(races.state == Races.State.DONE, "the bike reaches the last checkpoint in %.0f s (checkpoint %d/%d)" % [races.time, races.next_gate, trail.gates.size()])
++	t.check(races.result.get("medal", 0) >= 1, "and the ride is worth a medal: %.0f s over %.0f m, medal %s" % [races.time, trail.length, races.result.get("medal", 0)])
++	races.cancel()
++
++
++func test_race_save_and_load(t) -> void:
++	var races = await _races(t, 12.0)
++	races.best = {"day": 151.5, "night": 140.25, "bike": 98.0}
++	races.medal = 2
++	var saved: Dictionary = JSON.parse_string(JSON.stringify(races.to_save()))
++	t.check(saved.has("best") and saved["best"].size() == 3, "the save holds the best times, got %s" % [saved])
++	races.load_save({})
++	t.check(races.best.is_empty() and races.medal == 0, "load_save({}) clears them")
++	races.load_save(saved)
++	t.check(races.best == {"day": 151.5, "night": 140.25, "bike": 98.0} and races.medal == 2, "best times and medal survive a JSON round trip, got %s" % [races.to_save()])
++	races.load_save({"best": {"day": -5, "night": "fast", "bike": 99999999.0, "moon": 12.0, "x": 9.0}, "medal": 99})
++	t.check(races.best.is_empty() and races.medal == 3, "a bad save is dropped or clamped, got %s" % [races.to_save()])
++	races.load_save({"best": "oops"})
++	t.check(races.best.is_empty(), "a save of the wrong shape is ignored")
++	# Loading cancels a race in progress.
++	await _driver(t, races)
++	t.game.cash = 100
++	races.start_race("day")
++	t.check(races.state == Races.State.COUNTDOWN, "a race is on")
++	races.load_save({})
++	t.check(races.state == Races.State.IDLE, "loading a save ends it")
++
++
++## Only once main.gd makes the module (the patch in HANDOFF-races.md): the
++## game's own HUD, E press and save reach it.
++func test_races_wired_into_the_game(t) -> void:
++	await t._new_game(false)
++	var game = t.game
++	if game.get("races") == null:
++		t.check(true, "main.gd does not make the races module yet (patch in HANDOFF-races.md)")
++		return
++	var races = game.races
++	game.atmosphere.minutes_per_second = 0.0
++	game.atmosphere.hour = 12.0
++	var car = await _driver(t, races)
++	await t._frames(3)
++	game.hud._process(0.016)
++	t.check(game.hud._prompt.text == "Hill race: E / RACE", "the HUD shows the prompt in the car, got %s" % [game.hud._prompt.text])
++	t.check(game.hud.touch == null or game.hud.touch.labels.get("interact", "") == "RACE", "the interact button reads RACE")
++	await t._press("interact")
++	t.check(game.player.vehicle == car and races.state != Races.State.IDLE, "E at the line starts the race and does not get out")
++	game.hud._process(0.016)
++	t.check(game.hud._race.text.begins_with("HILL RACE"), "the race panel is on the HUD, got %s" % [game.hud._race.text])
++	races.cancel()
++	# The save goes through the mission manager.
++	races.best = {"day": 123.5}
++	races.medal = 1
++	var mm = game.missions
++	mm.save_enabled = true
++	mm.save_path = "user://test_save_races.json"
++	mm.save_game()
++	races.load_save({})
++	mm.load_game()
++	t.check(races.best == {"day": 123.5} and races.medal == 1, "best times ride the game save, got %s" % [races.to_save()])
++	DirAccess.remove_absolute(ProjectSettings.globalize_path(mm.save_path))
++	mm.reset_progress()
++	t.check(races.best.is_empty(), "New game wipes them")
++	DirAccess.remove_absolute(ProjectSettings.globalize_path(mm.save_path))
++	var markers: Array = game.map_markers().filter(func(m): return m.get("label", "") == "Hill race")
++	t.check(markers.size() == 1, "the start line is on the map")
+diff --git a/game/tests/test_runner.gd b/game/tests/test_runner.gd
+index 6271d63..4926fd9 100644
+--- a/game/tests/test_runner.gd
++++ b/game/tests/test_runner.gd
+@@ -21,7 +21,7 @@ const PeopleBuilder = preload("res://scripts/people_builder.gd")
+ ## `const TESTS` and defines `func test_x(t) -> void` (may await), where
+ ## `t` is this runner (t.check, t.game, t._new_game, t._frames ...). A
+ ## module whose file is missing is skipped, so packages can land apart.
+-const TEST_MODULES := ["res://tests/wildlife_tests.gd", "res://tests/calendar_tests.gd", "res://tests/hunting_tests.gd"]
++const TEST_MODULES := ["res://tests/wildlife_tests.gd", "res://tests/calendar_tests.gd", "res://tests/hunting_tests.gd", "res://tests/race_tests.gd"]
+ const KIT_TESTS := ["test_body_kit_builds_bodies", "test_body_seams_hats_and_build_time", "test_people_wear_modern_clothes"]
+ 
+ var game
