@@ -82,41 +82,54 @@ on top; built in phases, each committed; `/effort xhigh` suits it.
 ## Status
 Phases 1-2 history (status, the 10-31 handover list): archive.
 
-## Resumed 2026-10-31 (session 2, branch claude/gangstar-game-content-tunnels-kszhz9)
-Sachin's order: wildlife hook-in + colours + Opus review; hunting on the
-animals with tests; calendar fixes M1, M3; hill-place shots, full suite,
-one review of the whole task; then phase 3 and phase 4.
-- Done (8d8840f, + tests commit): wildlife attached in atmosphere.gd,
-  Wildlife.startle beside each Birds.startle in fx.gd (radii 28/18,
-  20+30s, 60*scale, 25). Colours retuned after the gallery (ACES makes
-  hides orange): doe 0.55/0.45/0.35, buck 0.47/0.39/0.31, coyote fur
-  0.52/0.47/0.40, lion fur 0.62/0.50/0.37. Eyeshine: a 1-px yellow glint
-  at game range (eyes 3 cm), kept.
-- Hunting: carcass_near returns {} (not null): hunting._carcass maps it
-  to null (the HUD threw a script error every frame). Season table key
-  is "lion" (wildlife's kind); "mountain_lion" still parses. Tests:
-  shoot a deer in season, poaching (no licence / deer in winter / lion),
-  skinning (full bag keeps the carcass).
-- M1: Atmosphere.advance(hours) counts each midnight (calendar.add_days);
-  phone Skip and taxi skip use it; sky.update ticks atm.calendar and reads
-  its day (sky counts its own only with no calendar: galleries).
-  M3: graphics._light_lamps budget = lamps - Events.lights_used.
-  Calendar Lows (mesh cache, PeopleBuilder tickets after free, banner
-  label, phone non-finite pos) not done: not in Sachin's list.
-- Shots: SHOTS=hillplaces (screenshots.gd, hill_1..7) and PLACES=hill
-  (place_shots.gd: the hunting store front, door, inside, menu).
-- Trap: the test runner does NOT fail on SCRIPT ERROR; grep for it.
-- Wildlife review (Opus, 0 High, 3 Medium, 8 Low), all fixed: lion warns
-  on the HUD (wildlife.warned signal) when it stalks and charges, leaves
-  for good after one strike (a.spent), a lion shot while stalking or
-  charging is self-defence (no star); refresh keeps carcasses within
-  DESPAWN; carcass slide stops at blocked ground or a road; in_city cached
-  per 8 m cell; no work with no animals; leave kept at obstacles, leaving
-  animals (not lions) still flee; cars >6 m above/below scare nothing,
-  kill gap 2 m (bridges); _push sets only changes; MMI interpolation off
-  (birds too). Tests tightened (startle, day lion, indoors) + Fx test.
-- Trail shot: no trail person came by loop 904 in 20 s at noon, so the
-  shot scripts a party; 26 of its 128 points lie within 6 m of a road.
+## Handover (paused 2026-10-31, session 2) - start here
+Branch `claude/gangstar-game-content-tunnels-kszhz9` (pushed). Sachin's
+order this session: wildlife hook-in + colours + Opus review; hunting on
+the animals with tests; calendar fixes; hill-place shots, full suite, one
+review of the whole task; then phase 3 and phase 4. Session log: archive.
+Done and pushed (8d8840f, 5f75299, a3697f3, then the pause commits):
+- Wildlife in atmosphere/fx, colours retuned (gallery checked), Opus
+  review: 0 High, 3 Medium, 8 Low, all fixed (details in archive).
+- Hunting: shoot a deer, poaching star (no licence, out of season, lion),
+  lion shot while stalking/charging = self-defence, skinning; tests.
+- Calendar: skip time keeps days (Atmosphere.advance), moon follows the
+  calendar after indoors, event lights share the lamp budget; tests.
+- SHOTS=hillplaces 7/7 checked (villages centred, trail party on the
+  dirt trail) and PLACES=hill (hunting store) 6/6.
+Last full suite (before the two fixes below): 2132 passed, 2 failed:
+- test_wildlife_stays_out_of_lakes: flaky (2/3 alone). Cause: player
+  18 m from the herd, flee radius standing 25 x 0.7 = 17.5 m. Fixed (player
+  12 m off); the fix is committed but not yet re-run.
+- test_country_plots_square_to_their_roads: kestrel_lab 80.2 deg off
+  Kestrel Hollow Road; fails on 4197417 too (previous session). Fix:
+  build_country.py `_site_skew` rejects a site spot whose front is within
+  10 m of a road and more than 3.5 deg off it (committed). The country
+  data is NOT rebuilt yet (see step 1).
+Next steps, in order:
+1. Rebuild the country (README "The country is generated"): plan_dump,
+   then `python3 tools/build_country.py /tmp/plan.json` (pip install
+   shapely numpy contourpy scipy). Check the log for "kestrel" / "no site"
+   / WARNING; diff data/country.json lots against git: only kestrel_lab
+   (and anything it displaced) may move. Then check whether mountain_plan /
+   world map need a rerun (HANDOFF-hill-country.md). Commit the data.
+2. ONLY=test_country_plots_square_to_their_roads,test_wildlife_stays_out_of_lakes
+   (lake test 3 times), then the full suite (`game/tests/run.sh`).
+3. One Opus review of the whole task (phases 1-2 + this session; diff
+   4197417..HEAD; quote Sachin's order; give the gate outputs). Fix, rerun
+   the suite. Two review runs at most.
+4. Phase 3 builders (stopped at the pause, early): briefs in
+   wip/briefs/ (package_R/G/P.md + brief_common.md; fix its /tmp paths).
+   WIP files from the stopped builders, untested: wip/R/ (races.gd 1016
+   lines, race_course.gd, race_calib probe) and wip/G/ground.gd (232
+   lines). Copy them into a fresh worktree as a head start or discard.
+   P had written nothing. Plan: "Phase 3 and 4 plan" below; each package
+   gets its own Opus review; the main session wires main.gd, hud.gd,
+   player.gd and mission_manager save, then merges. Delete wip/ when done.
+5. Phase 4 (wave B after G): bridges and tunnels on G's deck layer.
+Open items not in Sachin's list (report only): no trail person passed
+trail loop 904 in 20 s at noon (shot scripts a party); 26/128 of its
+points lie within 6 m of a road; calendar Lows (archive); the wildlife
+reviewer could not measure in_city cost on a device.
 
 ## Phase 3 and 4 plan (decided 2026-10-31)
 - vehicle.gd has no air state (y = Terrain.height each frame), so stunt

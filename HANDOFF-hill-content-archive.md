@@ -95,3 +95,40 @@ Resume order (each step: focused tests, then commit and push):
 Every godot run under `flock /tmp/godot.lock`; worst off-flat 4.25 m at
 (2341,-2140) near Brackett is unchecked (new or old).
 
+
+
+## Session 2 log (moved at the pause): Resumed 2026-10-31 (session 2, branch claude/gangstar-game-content-tunnels-kszhz9)
+Sachin's order: wildlife hook-in + colours + Opus review; hunting on the
+animals with tests; calendar fixes M1, M3; hill-place shots, full suite,
+one review of the whole task; then phase 3 and phase 4.
+- Done (8d8840f, + tests commit): wildlife attached in atmosphere.gd,
+  Wildlife.startle beside each Birds.startle in fx.gd (radii 28/18,
+  20+30s, 60*scale, 25). Colours retuned after the gallery (ACES makes
+  hides orange): doe 0.55/0.45/0.35, buck 0.47/0.39/0.31, coyote fur
+  0.52/0.47/0.40, lion fur 0.62/0.50/0.37. Eyeshine: a 1-px yellow glint
+  at game range (eyes 3 cm), kept.
+- Hunting: carcass_near returns {} (not null): hunting._carcass maps it
+  to null (the HUD threw a script error every frame). Season table key
+  is "lion" (wildlife's kind); "mountain_lion" still parses. Tests:
+  shoot a deer in season, poaching (no licence / deer in winter / lion),
+  skinning (full bag keeps the carcass).
+- M1: Atmosphere.advance(hours) counts each midnight (calendar.add_days);
+  phone Skip and taxi skip use it; sky.update ticks atm.calendar and reads
+  its day (sky counts its own only with no calendar: galleries).
+  M3: graphics._light_lamps budget = lamps - Events.lights_used.
+  Calendar Lows (mesh cache, PeopleBuilder tickets after free, banner
+  label, phone non-finite pos) not done: not in Sachin's list.
+- Shots: SHOTS=hillplaces (screenshots.gd, hill_1..7) and PLACES=hill
+  (place_shots.gd: the hunting store front, door, inside, menu).
+- Trap: the test runner does NOT fail on SCRIPT ERROR; grep for it.
+- Wildlife review (Opus, 0 High, 3 Medium, 8 Low), all fixed: lion warns
+  on the HUD (wildlife.warned signal) when it stalks and charges, leaves
+  for good after one strike (a.spent), a lion shot while stalking or
+  charging is self-defence (no star); refresh keeps carcasses within
+  DESPAWN; carcass slide stops at blocked ground or a road; in_city cached
+  per 8 m cell; no work with no animals; leave kept at obstacles, leaving
+  animals (not lions) still flee; cars >6 m above/below scare nothing,
+  kill gap 2 m (bridges); _push sets only changes; MMI interpolation off
+  (birds too). Tests tightened (startle, day lion, indoors) + Fx test.
+- Trail shot: no trail person came by loop 904 in 20 s at noon, so the
+  shot scripts a party; 26 of its 128 points lie within 6 m of a road.
