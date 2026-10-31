@@ -100,6 +100,24 @@ gentle, in the mountain zone and the play area) has no road at all.
   in the valleys, the huge forest, places, wildlife, events. Bridges and
   tunnels need #110.
 
+## Result (tools/hill_area.py, 2026-10-31)
+
+Hill ground 4.85 km² (was 3.54); true rolling hills (50-450 m, gentle,
+reached) 3.10 km² (was 1.86): 50-120 2.04, 120-200 0.62, 200-300 0.24,
+300-450 0.20. Ask "3 km² or more": met. Not clipped to the play area.
+In-game test_east_hills: the hills' box (x 1800..3000, y -4750..-2550) in
+the play area holds 1.21 km² of gentle 50-450 m ground (HILL_KM2 1.1).
+
+## Traps
+
+- A via point at a turn back (Spur Track's old (1950,-3750)) forces a
+  hairpin whose legs the 8 m grid cannot keep apart: 26.7 % over 32 m.
+  Let the planner choose the switchbacks.
+- A trail joined at a hairpin wound round through it (cut 2 m) and broke
+  it; Hollin Trail is a dead end instead.
+- mountain_check "steepest" is a 4 m spot value; the gate is the 32 m
+  check in test_mount_calder (list new driven lines there).
+
 ## Decisions
 
 - East apron for the new hills: it is the only large gentle ground left

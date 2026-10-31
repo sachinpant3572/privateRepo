@@ -66,7 +66,12 @@ Plan (not started, awaiting his word; rough cost 6-10 h with gates):
   test that no blades sit on roads/pads, screenshots of a lawn, a park and the hills at
   each step, by day and night.
 
-## Thursday, Oct 30, 2026: hill country behind Bellerive (proposal, awaiting his word)
+## Thursday, Oct 30, 2026: hill country behind Bellerive (land done 2026-10-31, content later)
+
+Status: the land step he approved ("Lets go!", 2026-10-30) is built: the East Hills (Whistler,
+Tallow, Copperback, Fernmoor), East Hills Road, dirt tracks and trails to each top, two
+shortcuts, back-country lines and seven viewpoints; true rolling hills 3.10 km² (was 1.86).
+Details: `HANDOFF-hill-country.md`. Content (places, wildlife, hunting, events) waits for his word.
 
 Sachin, 2026-10-30: "I think Hills area should be increased to at least 3 km2, as it is
 too small right now not even the same as Gta San Andreas maps Hills. We can add cults,
