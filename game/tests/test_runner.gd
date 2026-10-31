@@ -4576,6 +4576,9 @@ func test_places_line_the_streets() -> void:
 	var suburb: Array = city.places.filter(func(p): return p.face < 0)
 	_check(suburb.size() >= 6, "the suburbs have enterable places too, got %d" % suburb.size())
 	_check(suburb.any(func(p): return p.type == "diner") and suburb.any(func(p): return p.type == "corner_store"), "suburb places include a diner and a store")
+	var hill: Array = suburb.filter(func(p): return str(city.country.lots[p.lot][7]) == Places.HILL_ZONE)
+	_check(hill.any(func(p): return p.type == "hunting_store") and hill.any(func(p): return p.type == "diner"),
+		"the hill villages open a hunting store and a diner, got %s" % [hill.map(func(p): return p.type)])
 	_check(again.size() == city.places.size() and again.all(func(p): return p.door == city.places[again.find(p)].door), "places are the same on every build")
 	var space: PhysicsDirectSpaceState3D = game.get_world_3d().direct_space_state
 	var blocked: Array = []

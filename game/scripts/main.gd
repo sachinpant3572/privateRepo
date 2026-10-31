@@ -14,6 +14,7 @@ const Hud = preload("res://scripts/hud.gd")
 const Atmosphere = preload("res://scripts/atmosphere.gd")
 const MissionManager = preload("res://scripts/missions/mission_manager.gd")
 const Interiors = preload("res://scripts/interiors.gd")
+const Hunting = preload("res://scripts/hunting.gd")
 const Inventory = preload("res://scripts/inventory.gd")
 const Taxi = preload("res://scripts/taxi.gd")
 const Graphics = preload("res://scripts/graphics.gd")
@@ -36,6 +37,7 @@ var atmosphere
 var graphics
 var missions
 var interiors
+var hunting
 var taxi
 var heliports
 ## The game log (Settings > Game > Log).
@@ -133,6 +135,8 @@ func _ready() -> void:
 	interiors = Interiors.new()
 	interiors.game = self
 	add_child(interiors)
+	hunting = Hunting.new()
+	add_child(hunting)
 
 	taxi = Taxi.new()
 	taxi.game = self

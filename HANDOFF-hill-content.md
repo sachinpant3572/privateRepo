@@ -86,6 +86,16 @@ on top; built in phases, each committed; `/effort xhigh` suits it.
 ## Open
 - Timber Haul hairpin_r 14 (8 put the hairpin's legs 16 m apart; one leg's
   carve broke the other's profile: 54.7 % at (304, -4192)).
+- Lab gate stands beside Kestrel Hollow Road, not astride it (review M1):
+  lay it across the road (yaw along it, excused from the lot-on-road
+  check) in the phase-4 rebuild. Its arm is drawn raised until then.
+- Bungee platform sits on a level pad: phase 3 needs a cliff-edge site.
+
+## Status
+- Phase 1 committed: hill_kit (e3f7d00, review fixes in), TEST_MODULES
+  hook (a708f59). Hikers/hunters on trail loops: code in, waits on the
+  country rebuild (trail_walks). Hunting store opens as a place (type
+  hunting_store, door from hill_kit, room _hunting_store, icon R).
 
 ## Phase 2 plan (life)
 

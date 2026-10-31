@@ -105,6 +105,8 @@ var _loop_of_block := {}
 ## Suburb sidewalk loops by WALK_CELL grid cell (Vector2i -> loop indices);
 ## they follow the plan's loops in `sidewalk_loops`.
 var _walk_grid := {}
+## Sidewalk loop indices that are hiker loops on the hill trails.
+var _trail_loops := {}
 const WALK_CELL := 100.0
 var _cell_of_face := PackedInt32Array()
 var _cell_grid := {} # Vector2i -> [cell]
@@ -953,9 +955,12 @@ func _place_points() -> void:
 ## Appends the country's suburb sidewalk loops after the plan's and files
 ## them by grid cell, so people walk the suburbs like the city's blocks.
 func _add_country_walks() -> void:
-	for w in country.walks:
+	for wi in country.walks.size():
+		var w: PackedVector3Array = country.walks[wi]
 		var li := sidewalk_loops.size()
 		sidewalk_loops.append(w)
+		if country.trail_walks.has(wi):
+			_trail_loops[li] = true
 		var seen := {}
 		for p in w:
 			var k := Vector2i(floori(p.x / WALK_CELL), floori(p.z / WALK_CELL))
@@ -964,6 +969,12 @@ func _add_country_walks() -> void:
 				if not _walk_grid.has(k):
 					_walk_grid[k] = PackedInt32Array()
 				_walk_grid[k].append(li)
+
+
+## "trail" for a hiker loop on the hill trails (country.gd trail_walks),
+## else "" (a sidewalk).
+func loop_kind(li: int) -> String:
+	return "trail" if _trail_loops.has(li) else ""
 
 
 ## The suburb sidewalk loops with a point in a grid cell within `r` of `pos`

@@ -38,6 +38,8 @@ static func build(type: String, seed_v: int) -> Dictionary:
 	match type:
 		"diner":
 			return _diner(rng)
+		"hunting_store":
+			return _hunting_store(rng)
 		_:
 			return _corner_store(rng)
 
@@ -91,6 +93,72 @@ static func _corner_store(rng: RandomNumberGenerator) -> Dictionary:
 	for k in 4:
 		var fx := -3.9 + k * 1.9
 		spots.append(_spot("browse", Vector3(fx, 0, -hz + 1.35), Vector3.FORWARD, [Vector3(1.0, 0, 3.0), Vector3(1.0, 0, -4.6), Vector3(fx, 0, -4.6)]))
+	var till := Vector3(cx - 1.1, 0, hz - 3.0)
+	spots.append(_spot("till", till, Vector3.RIGHT, [Vector3(till.x, 0, hub.z)]))
+	return {
+		"mesh": mb, "colliders": out, "size": Vector2(w, d), "door": Vector3(0, 0, hz), "hub": hub,
+		"counter": {"pos": till, "yaw": _yaw(Vector3.RIGHT)},
+		"staff": [{"pos": Vector3(cx + 0.8, 0, hz - 3.0), "yaw": _yaw(Vector3.LEFT), "gesture": "work"}],
+		"spots": spots, "focus": Vector3(0, 0, 0.6),
+	}
+
+
+## About 11 x 13 m, the corner store's plan in timber: gear gondolas, a
+## pelt rack down the left wall, mounted antlers along the back and the
+## counter with the rifle rack behind it on the right (hunting, phase 2 of
+## HANDOFF-hill-content.md).
+static func _hunting_store(rng: RandomNumberGenerator) -> Dictionary:
+	var mb := MeshBuilder.new()
+	var out: Array = []
+	var w := 11.0
+	var d := 13.0
+	var hx := w * 0.5
+	var hz := d * 0.5
+	var plank := Color(0.5, 0.36, 0.24)
+	_checker(mb, w, d, 0.5, plank, plank.darkened(0.12))
+	_walls(mb, out, w, d, Color(0.62, 0.47, 0.32), Color(0.2, 0.33, 0.24))
+	for gx in [-2.6, -0.2]:
+		_gondola(mb, out, Vector3(gx, 0, -0.75), 5.5, rng)
+	# Pelts hung on a rail down the left wall.
+	var rail_x := -hx + WALL_T + 0.25
+	_solid(mb, out, Vector3(rail_x, 1.0, -1.2), Vector3(0.4, 2.0, 7.5), WOOD.darkened(0.3), false)
+	mb.box(Vector3(rail_x, 2.05, -1.2), Vector3(0.08, 0.08, 7.5), DARK)
+	var furs := [Color(0.62, 0.45, 0.28), Color(0.55, 0.5, 0.44), Color(0.72, 0.58, 0.4), Color(0.42, 0.36, 0.3)]
+	for k in 9:
+		var pz := -4.6 + k * 0.82
+		var fur: Color = furs[rng.randi() % furs.size()]
+		mb.box(Vector3(rail_x + 0.04, 1.35, pz), Vector3(0.06, 1.3, 0.62), fur)
+		mb.box(Vector3(rail_x + 0.05, 0.7, pz), Vector3(0.05, 0.3, 0.4), fur.darkened(0.15))
+	# Mounted antlers on plaques along the back wall, a cold case below.
+	var back := -hz + WALL_T
+	for k in 4:
+		var ax := -3.9 + k * 1.9
+		mb.box(Vector3(ax, 2.3, back + 0.04), Vector3(0.45, 0.55, 0.06), WOOD.darkened(0.2))
+		for s: float in [-1.0, 1.0]:
+			mb.limb(Vector3(ax + s * 0.08, 2.4, back + 0.12), Vector3(ax + s * 0.42, 2.85, back + 0.2), 0.03, 0.02, Color(0.85, 0.8, 0.68), 4, true)
+			mb.limb(Vector3(ax + s * 0.28, 2.65, back + 0.16), Vector3(ax + s * 0.18, 2.95, back + 0.18), 0.02, 0.015, Color(0.85, 0.8, 0.68), 4, true)
+		_solid(mb, out, Vector3(ax, 0.5, back + 0.4), Vector3(1.6, 1.0, 0.7), Color(0.85, 0.87, 0.88))
+		mb.box(Vector3(ax, 1.02, back + 0.4), Vector3(1.4, 0.04, 0.5), MeshBuilder.glow(Color(0.55, 0.75, 0.85), MeshBuilder.GLOSS))
+	# Counter and till; the rifle rack (locked, behind the clerk).
+	var cx := hx - 2.2
+	_solid(mb, out, Vector3(cx, 0.5, hz - 3.3), Vector3(0.7, 1.0, 3.6), WOOD.darkened(0.25))
+	mb.box(Vector3(cx, 1.03, hz - 3.3), Vector3(0.8, 0.06, 3.7), WOOD.darkened(0.45))
+	mb.box(Vector3(cx, 1.2, hz - 2.6), Vector3(0.35, 0.3, 0.4), DARK)
+	for k in 4:
+		mb.box(Vector3(cx, 1.1, hz - 4.6 + k * 0.25), Vector3(0.3, 0.12, 0.2), Color(0.9, 0.42, 0.08) if k % 2 == 0 else Color(0.3, 0.36, 0.24))
+	var rack_x := hx - WALL_T - 0.2
+	_solid(mb, out, Vector3(rack_x, 1.2, hz - 3.3), Vector3(0.35, 2.4, 3.0), WOOD.darkened(0.35))
+	for k in 8:
+		var rz := hz - 4.6 + k * 0.37
+		mb.box(Vector3(rack_x - 0.2, 1.25, rz), Vector3(0.05, 1.3, 0.07), Color(0.22, 0.2, 0.19))
+		mb.box(Vector3(rack_x - 0.21, 0.75, rz), Vector3(0.06, 0.32, 0.11), WOOD.darkened(0.1))
+	_solid(mb, out, Vector3(-hx + 1.4, 0.45, hz - 1.0), Vector3(1.6, 0.9, 0.8), Color(0.3, 0.36, 0.24))
+	var hub := Vector3(0, 0, hz - 1.4)
+	var spots: Array = []
+	for aisle in [[-4.0, -1.0], [-1.4, -1.0], [-1.4, 1.0], [0.95, -1.0]]:
+		var ax: float = aisle[0]
+		for z in [-2.6, 0.4]:
+			spots.append(_spot("browse", Vector3(ax, 0, z), Vector3(aisle[1], 0, 0), [Vector3(ax, 0, 3.0)]))
 	var till := Vector3(cx - 1.1, 0, hz - 3.0)
 	spots.append(_spot("till", till, Vector3.RIGHT, [Vector3(till.x, 0, hub.z)]))
 	return {

@@ -38,6 +38,12 @@ var _parked := {} # parked spot index -> car spawned there
 var _first_pass := true
 ## [PeopleBuilder ticket, category] per body on order, oldest first.
 var _coming: Array = []
+## Bodies for the hill trails' hikers, runners and hunters, built while
+## trail spots keep coming up (_trail_wanted ticks after the last one).
+var _trail_coming: Array = []
+var _trail_wanted := 0
+const TRAIL_AHEAD := 2
+const TRAIL_WANT_TICKS := 240
 ## Junction controls, speed limits, demand and the district mix (Traffic).
 var traffic
 
@@ -70,10 +76,17 @@ func _physics_process(delta: float) -> void:
 	for car in cars:
 		if car != game.player.vehicle and _gone(car, center, CAR_DESPAWN + _edge(r)):
 			car.queue_free()
-	if peds.size() < PED_COUNT and _body_ready():
+	if peds.size() < PED_COUNT and (_body_ready() or _body_ready(_trail_coming)):
 		var spot: Array = game.city.random_sidewalk_between(center, PED_SPAWN.x, PED_SPAWN.y * r, rng, out_of_view)
 		if not spot.is_empty():
-			_add_ped(spot[0], spot[1], _take_body())
+			# Hikers, runners and hunters on the hill trails, the crowd on
+			# the sidewalks: each from its own queue of built bodies.
+			var trail: bool = game.city.loop_kind(spot[0]) == "trail"
+			if trail:
+				_trail_wanted = TRAIL_WANT_TICKS
+			var queue: Array = _trail_coming if trail else _coming
+			if _body_ready(queue):
+				_add_ped(spot[0], spot[1], _take_body(queue))
 	_order_bodies()
 	if cars.size() < traffic.budget():
 		_spawn_traffic(center, r)
@@ -123,22 +136,32 @@ func _add_ped(loop: int, point: int, body := {}):
 	return ped
 
 
-func _body_ready() -> bool:
-	return not _coming.is_empty() and PeopleBuilder.ready(_coming[0][0])
+func _body_ready(queue = null) -> bool:
+	if queue == null:
+		queue = _coming
+	return not queue.is_empty() and PeopleBuilder.ready(queue[0][0])
 
 
 ## The oldest finished body, for Pedestrian.setup().
-func _take_body() -> Dictionary:
-	var next: Array = _coming.pop_front()
+func _take_body(queue = null) -> Dictionary:
+	if queue == null:
+		queue = _coming
+	var next: Array = queue.pop_front()
 	return {"category": next[1], "made": next[0].made}
 
 
 ## Keeps BODIES_AHEAD people building or built, picked like the crowd
-## (Pedestrian's category mix and CharacterKit.category_look).
+## (Pedestrian's category mix and CharacterKit.category_look); while trail
+## spots have come up lately, TRAIL_AHEAD trail people too.
 func _order_bodies() -> void:
 	while _coming.size() < BODIES_AHEAD:
 		var category := Pedestrian._pick_category(rng)
 		_coming.append([PeopleBuilder.request(CharacterKit.category_look(rng, category)), category])
+	if _trail_wanted > 0:
+		_trail_wanted -= 1
+		while _trail_coming.size() < TRAIL_AHEAD:
+			var category := Pedestrian._pick_category(rng, Pedestrian.TRAIL_CROWD)
+			_trail_coming.append([PeopleBuilder.request(CharacterKit.category_look(rng, category)), category])
 
 
 ## Sets a car off out of view, more often on the arterials than the side

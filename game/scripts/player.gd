@@ -100,12 +100,18 @@ func _think(delta: float) -> void:
 	# Badly hurt, Jules runs holding his side; sprinting pumps the arms.
 	var moving := dir.length_squared() > 0.01
 	style = "limp" if health < max_health * 0.3 else ("sprint" if sprinting and moving else "")
+	var game = get_tree().get_first_node_in_group("game")
 	if Controls.just_pressed("attack"):
-		punch()
+		# The hunting rifle, in the hunting ground on foot (hunting.gd).
+		if game != null and game.hunting != null and game.hunting.can_shoot():
+			game.hunting.shoot()
+		else:
+			punch()
 	if Controls.just_pressed("interact"):
-		var game = get_tree().get_first_node_in_group("game")
 		# The waiting cab comes before a shop door, as the HUD offers them.
 		if _board_waiting_cab(game):
+			pass
+		elif game != null and game.hunting != null and game.hunting.try_interact():
 			pass
 		elif game == null or game.interiors == null or not game.interiors.try_interact():
 			try_enter_vehicle()

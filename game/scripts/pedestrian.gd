@@ -17,6 +17,9 @@ const HOSTILE := Color(1.0, 0.3, 0.25, 0.6)
 ## The street crowd by category, [name, weight].
 const CROWD := [["general", 28], ["office", 16], ["worker", 10], ["tourist", 10], ["gang", 7], ["elderly", 10],
 	["athlete", 8], ["shopkeeper", 5], ["medic", 6]]
+## On the hill trails (country.gd trail_walks): hikers, trail runners and
+## hunters.
+const TRAIL_CROWD := [["hiker", 6], ["athlete", 3], ["hunter", 2]]
 ## Things each category stops to do on the sidewalk (Rig gestures, plus
 ## "chat" with someone close by).
 const PAUSES := {
@@ -29,6 +32,8 @@ const PAUSES := {
 	"athlete": ["stretch", "stretch", "wait"],
 	"shopkeeper": ["smoke", "call", "lean_wall", "chat"],
 	"medic": ["call", "wait", "smoke", "chat"],
+	"hiker": ["point", "film", "stretch", "wait", "chat"],
+	"hunter": ["wait", "point", "arms_crossed", "wait"],
 }
 ## "bench" sits on a free street bench within this many metres (else waits).
 const BENCH_REACH := 6.0
@@ -85,7 +90,7 @@ func setup(c, rand: RandomNumberGenerator, loop: int, point: int, body := {}) ->
 	_rng.seed = rand.randi()
 	category = body.get("category", "")
 	if category == "":
-		category = _pick_category(rand)
+		category = _pick_category(rand, TRAIL_CROWD if c.has_method("loop_kind") and c.loop_kind(loop) == "trail" else CROWD)
 	personality = _pick_personality(rand, category)
 	brave = personality == "brave"
 	if body.has("made"):
@@ -114,6 +119,8 @@ func setup(c, rand: RandomNumberGenerator, loop: int, point: int, body := {}) ->
 			walk_speed = rand.randf_range(1.25, 1.6)
 			base_style = "swagger"
 			punch_damage = 9.0
+		"hiker", "hunter":
+			walk_speed = rand.randf_range(1.1, 1.45)
 		"tourist":
 			walk_speed = rand.randf_range(1.15, 1.6)
 			base_style = "carry" if look.get("bag") == "shopping" else ""
@@ -124,12 +131,12 @@ func setup(c, rand: RandomNumberGenerator, loop: int, point: int, body := {}) ->
 	_pause_clock = rand.randf_range(FIRST_PAUSE.x, FIRST_PAUSE.y)
 
 
-static func _pick_category(rand: RandomNumberGenerator) -> String:
+static func _pick_category(rand: RandomNumberGenerator, crowd := CROWD) -> String:
 	var total := 0
-	for row in CROWD:
+	for row in crowd:
 		total += row[1]
 	var r := rand.randi() % total
-	for row in CROWD:
+	for row in crowd:
 		r -= row[1]
 		if r < 0:
 			return row[0]

@@ -33,7 +33,7 @@ const ROOM_ZOOM := 15.0
 ## A diner meal takes this long; health comes up over it.
 const MEAL_TIME := 4.0
 ## Customers: at most this many at once, arriving every few seconds.
-const CROWD := {"corner_store": 3, "diner": 7}
+const CROWD := {"corner_store": 3, "diner": 7, "hunting_store": 2}
 const ARRIVALS := Vector2(7.0, 15.0)
 
 enum State { OUTSIDE, ENTERING, INSIDE, LEAVING }
@@ -513,6 +513,14 @@ func _use_target() -> String:
 ## Buys item `id`: "eat" (now), "take" (into the bag) or "order" (a diner
 ## meal, eaten seated). Returns false if it can't be done.
 func buy(id: String, mode: String) -> bool:
+	if mode == "gear" or mode == "sell":
+		if state != State.INSIDE:
+			return false
+		var ok: bool = game.hunting.buy_gear(id) if mode == "gear" else game.hunting.sell_pelts() > 0
+		if ok:
+			game.missions.save_game()
+			menu.refresh()
+		return ok
 	var item: Dictionary = Inventory.ITEMS.get(id, {})
 	if item.is_empty() or game.cash < item.price or state != State.INSIDE:
 		return false

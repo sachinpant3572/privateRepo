@@ -67,6 +67,7 @@ const ICONS := {
 	# Places (places.gd).
 	"corner_store": ["S", Color(0.15, 0.6, 0.55)],
 	"diner": ["D", Color(0.85, 0.3, 0.3)],
+	"hunting_store": ["R", Color(0.85, 0.45, 0.1)],
 }
 
 

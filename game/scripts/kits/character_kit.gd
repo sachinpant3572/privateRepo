@@ -338,6 +338,26 @@ static func category_look(rng: RandomNumberGenerator, cat := "general") -> Dicti
 				look.erase(k)
 			if rng.randf() < 0.35:
 				look["headphones"] = _pick(rng, [NEUTRALS[0], NEUTRALS[4], look.shoes])
+		"hiker", "hunter":
+			# The hill trails: boots, cargo or shorts, a backpack; hunters in
+			# blaze orange (a jacket and cap the other hunters can see).
+			var hunter := cat == "hunter"
+			look = random_look(rng, "jacket" if hunter or rng.randf() < 0.45 else _pick(rng, ["tee", "tee", "tank"]))
+			look.bottoms = "cargo" if hunter or rng.randf() < 0.5 else "shorts"
+			look.pants = Color(0.36, 0.33, 0.24) if hunter else _pants_color(rng, look.bottoms)
+			look.shoe_style = "boots"
+			look.shoes = _pick(rng, BOOTS)
+			look["bag"] = "backpack"
+			look["bag_color"] = Color(0.3, 0.32, 0.22) if hunter else _pick(rng, [ACCENTS[0], ACCENTS[2], ACCENTS[5], _cloth(rng, 0.4)])
+			if hunter:
+				look.jacket = Color(0.95, 0.42, 0.08)
+				look.headwear = "cap"
+				look.hat = Color(0.95, 0.42, 0.08)
+			elif rng.randf() < 0.6:
+				look.headwear = _pick(rng, ["cap", "bucket", "bucket"])
+				look.hat = _cloth(rng, 0.35)
+			for k in ["phone", "headphones", "necklace", "print"]:
+				look.erase(k)
 		"shopkeeper":
 			look = random_look(rng, _pick(rng, ["polo", "tee", "tee", "polo"]))
 			look["apron"] = _pick(rng, APRONS)

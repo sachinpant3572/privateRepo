@@ -212,6 +212,10 @@ HILL_TRAILERS = [((2720.0, -2900.0), (56.0, 44.0)), ((2740.0, -2840.0), (50.0, 4
 VILLAGE_WALK = 20.0
 VILLAGE_FRONTS = 3
 VILLAGE_SHOULDER = 1.5
+# Hiker loops: trails this long or longer, the two ways TRAIL_EDGE m in from
+# the trail's sides (3.5 m wide: 1.7 m apart).
+TRAIL_WALK_MIN = 150.0
+TRAIL_EDGE = -0.9
 HILL_SEED = 122  # the hill places draw from their own rng: no other lot moves
 # Lakes fill their hollows up to a level under the rim (closed basins in
 # the ground, tools/hill_design_map.py LAKES): (id, name, centre, level).
@@ -4456,6 +4460,7 @@ class Country:
         print("walks: %d loops, %d points, %d rings dropped (mostly roads without sidewalks)"
               % (len(self.walks), sum(len(w) // 2 for w in self.walks), dropped))
         self.village_walks()
+        self.trail_walks()
 
     def village_walks(self):
         """Loops for people in the hill villages (HILL_VILLAGES): along each
@@ -4483,10 +4488,26 @@ class Country:
             n += loops
         print("village walks: %d" % n)
 
-    def _village_loop(self, line, cls, t0, t1):
-        """One village loop: line from t0 to t1, both shoulders."""
+    def trail_walks(self):
+        """Loops for hikers, runners and hunters (TRAIL_WALK_MIN m or longer
+        trails on Mount Calder and in the hill country): up one side of the
+        trail and back down the other, on the trail itself. Their indices go
+        out as `trail_walks`, so the game dresses the people on them for
+        the hills."""
+        self.trail_walk_ids = []
+        for t in self.trails:
+            line = t[0]
+            if line.length < TRAIL_WALK_MIN:
+                continue
+            self.trail_walk_ids.append(len(self.walks))
+            self._village_loop(line, "trail", 0.0, line.length, edge=TRAIL_EDGE)
+        print("trail walks: %d" % len(self.trail_walk_ids))
+
+    def _village_loop(self, line, cls, t0, t1, edge=VILLAGE_SHOULDER):
+        """One village loop: line from t0 to t1, both shoulders (edge m out
+        from the road's side; a negative edge keeps it on the way)."""
         sub = substring(line, max(0.0, t0), min(line.length, t1))
-        strip = sub.buffer(CLASSES[cls]["w"] * 0.5 + VILLAGE_SHOULDER, cap_style=2, join_style=2)
+        strip = sub.buffer(CLASSES[cls]["w"] * 0.5 + edge, cap_style=2, join_style=2)
         ring = list(orient(strip.simplify(0.5), 1.0).exterior.coords)[:-1]
         pts = []
         for k, a in enumerate(ring):
@@ -4912,6 +4933,7 @@ class Country:
             "far_roads": self.far_out,
             "pivots": self.pivots,
             "walks": self.walks,
+            "trail_walks": self.trail_walk_ids,
             "tiles": tiles,
             # Mount Calder (tools/mountain.py): tunnels, bridges, viaducts and
             # underpasses with their heights; the rail pass; the peaks, the

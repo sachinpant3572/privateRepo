@@ -85,6 +85,8 @@ var suburbs: Array = []
 ## people (HANDOFF-bellerive-expand.md BX-1): closed, anticlockwise, points
 ## every 6 m at most, in game metres on the ground.
 var walks: Array[PackedVector3Array] = []
+## Indices into `walks` of the hikers' loops on the hill trails.
+var trail_walks := {}
 var plan_bounds := Rect2()
 ## The range's tunnels, bridges, rail viaducts and trail underpasses, as data
 ## for a later pass to build (tools/build_country.py _note_structures):
@@ -202,6 +204,8 @@ func load_data(seed_v := 1234) -> void:
 		for i in range(0, w.size(), 2):
 			loop.append(Vector3(w[i], 0.0, w[i + 1]))
 		walks.append(loop)
+	for wi in d.get("trail_walks", []):
+		trail_walks[int(wi)] = true
 	for ring in d.area:
 		var poly := PackedVector2Array()
 		for p in ring:

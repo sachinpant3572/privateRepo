@@ -29,6 +29,12 @@ const TYPES := {
 			"Ruby's", "The Griddle", "Dixie Diner", "Pelican Grill", "Shore Diner", "Hilltop Grill",
 			"Cypress Cafe", "Sunset Diner", "The Skillet"],
 	},
+	# Hill villages only (hill_kit): licences, rifles, ammunition; buys pelts.
+	"hunting_store": {
+		"label": "Hunting store", "size": Vector2(16.0, 20.0),
+		"hours": [6, 20],
+		"names": ["Hollin Outfitters", "Timberline Sporting Goods", "Ridgeback Guns and Tackle", "High Country Trading Post"],
+	},
 }
 ## How many of each type every district gets (district ids from the world
 ## map). Fewer when a district runs out of room. Ironwharf is mostly quay
@@ -49,13 +55,16 @@ const DOOR_OUT := 1.2
 ## Suburb places (country lots round the city, HANDOFF-bellerive-expand
 ## BX-3): the country kinds that open as a place, and the zones they may
 ## stand in. At most SUBURB_MAX of them, spaced as in the city.
-const SUBURB_TYPES := {"diner": "diner", "general_store": "corner_store", "shopfront": "corner_store", "strip_mall": "corner_store"}
+const SUBURB_TYPES := {"diner": "diner", "general_store": "corner_store", "shopfront": "corner_store", "strip_mall": "corner_store",
+	"hunting_store": "hunting_store"}
 const SUBURB_ZONES := ["heights", "bayou_town", "fringe", "eastside", "beach_town", "shore"]
 const SUBURB_MAX := 16
 ## The hill villages' diners and stores (zone "mountain", HILL_VILLAGES in
 ## tools/build_country.py) open too, after the suburbs' and outside their cap.
+## Village shops stand closer together than suburb ones: HILL_GAP apart.
 const HILL_ZONE := "mountain"
-const HILL_MAX := 4
+const HILL_MAX := 6
+const HILL_GAP := 14.0
 
 
 ## [{id, type, name, district, district_name, face, parcel, rect, door,
@@ -156,7 +165,7 @@ static func build_suburbs(city, places: Array) -> Array:
 		var clash := false
 		for q in places + out:
 			var gap: float = Vector2(q.door.x, q.door.z).distance_to(Vector2(door.x, door.z))
-			if gap < MIN_GAP or (q.type == type and gap < SPACING):
+			if gap < (HILL_GAP if on_hill else MIN_GAP) or (q.type == type and gap < SPACING):
 				clash = true
 				break
 		if clash:
@@ -198,6 +207,10 @@ static func suburb_door(kind: String, w: float, d: float) -> Vector2:
 			fz = -d * 0.5 + 3.2
 		"shopfront":
 			fz = -d * 0.5 + 1.6
+		"hunting_store":
+			# hill_kit.hunting_store: the double door on the front wall.
+			fz = -1.54 * d / 20.0
+			x = -2.1 * w / 16.0
 		"strip_mall":
 			fz = d * 0.5 - 1.0 - clampf(d * 0.32, 9.0, 18.0)
 			var bl := w - 4.0

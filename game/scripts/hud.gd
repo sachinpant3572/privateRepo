@@ -239,6 +239,7 @@ func _process(delta: float) -> void:
 	_update_dialogue(delta)
 	var flying: bool = player.vehicle != null and not player.passenger and player.vehicle.get("flies") == true
 	touch.set_mode(player.vehicle != null and not player.passenger, Controls.scheme, player.passenger, flying)
+	touch.set_label("attack", "SHOOT" if game.hunting != null and game.hunting.can_shoot() else "PUNCH")
 	var ride_id: int = player.vehicle.get_instance_id() if player.vehicle != null else 0
 	if ride_id != _ride_id:
 		_ride_id = ride_id
@@ -275,6 +276,11 @@ func _process(delta: float) -> void:
 		_prompt.text = cab_prompt[0]
 		touch.set_label("interact", cab_prompt[1])
 		touch.set_label("sprint", "RUN")
+	elif game.hunting != null and not game.hunting.prompt().is_empty():
+		var hunt_prompt: Array = game.hunting.prompt()
+		_prompt.text = hunt_prompt[0]
+		touch.set_label("interact", hunt_prompt[1])
+		touch.set_label("sprint", "RUN")
 	elif game.interiors != null and not game.interiors.prompt().is_empty():
 		var place_prompt: Array = game.interiors.prompt()
 		_prompt.text = place_prompt[0]
@@ -284,6 +290,9 @@ func _process(delta: float) -> void:
 		var near = player.nearest_vehicle()
 		var verb := "Ride" if near != null and near.shows_rider else "Get in"
 		_prompt.text = "" if near == null else ("Steal it: E / ENTER" if near.has_ai_driver() else verb + ": E / ENTER")
+		if near == null and game.hunting != null and game.hunting.can_shoot():
+			var h = game.hunting
+			_prompt.text = "Hunting ground   ·   %d rounds   ·   %s" % [h.ammo, "licence valid" if h.licence_valid() else "no licence"]
 		touch.set_label("interact", "ENTER")
 		touch.set_label("sprint", "RUN")
 

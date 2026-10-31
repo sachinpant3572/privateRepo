@@ -305,7 +305,7 @@ func save_game() -> void:
 	if not save_enabled:
 		return
 	var data := {"version": SAVE_VERSION, "done": done, "cash": game.cash, "phone": phone_unlocked,
-		"settings": game.settings, "inventory": game.inventory.to_save()}
+		"settings": game.settings, "inventory": game.inventory.to_save(), "hunting": game.hunting.to_save()}
 	var f := FileAccess.open(save_path, FileAccess.WRITE)
 	if f:
 		f.store_string(JSON.stringify(data))
@@ -325,6 +325,8 @@ func load_game() -> void:
 	# Version 1 saves (no "version") had no bag: it starts empty.
 	var inv = data.get("inventory") if int(data.get("version", 1)) >= 2 else null
 	game.inventory.load_save(inv if typeof(inv) == TYPE_DICTIONARY else {})
+	var hunt = data.get("hunting")
+	game.hunting.load_save(hunt if typeof(hunt) == TYPE_DICTIONARY else {})
 	GameLog.event("load", {"version": int(data.get("version", 1)), "done": done.size(), "cash": game.cash})
 
 
@@ -335,5 +337,6 @@ func reset_progress() -> void:
 	phone_unlocked = false
 	game.cash = 0
 	game.inventory.bag.clear()
+	game.hunting.load_save({})
 	save_game()
 	changed.emit()

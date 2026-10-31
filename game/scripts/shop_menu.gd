@@ -93,6 +93,9 @@ func refresh() -> void:
 		_status.text = "Cash $%d   ·   Sit down and eat" % game.cash
 	for c in _list.get_children():
 		c.queue_free()
+	if _type == "hunting_store":
+		_hunting_rows()
+		return
 	for id in Inventory.menu(_type):
 		var item: Dictionary = Inventory.ITEMS[id]
 		var row := HBoxContainer.new()
@@ -109,6 +112,39 @@ func refresh() -> void:
 			row.add_child(_buy_button("EAT", afford, func(): on_buy.call(id, "eat")))
 			row.add_child(_buy_button("TAKE", afford and not inv.bag_full(), func(): on_buy.call(id, "take")))
 		_list.add_child(row)
+
+
+## The hunting store (hunting.gd): licence, rifle and rounds, then the
+## pelts it buys.
+func _hunting_rows() -> void:
+	var h = game.hunting
+	_status.text = "Cash $%d   ·   %s   ·   %d rounds" % [game.cash, "Licence valid" if h.licence_valid() else "No licence", h.ammo]
+	for id in h.GEAR:
+		var item: Dictionary = h.GEAR[id]
+		var block: String = h.gear_block(id)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		var info := VBoxContainer.new()
+		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		info.add_child(_text(item.name, 21, Color.WHITE))
+		info.add_child(_text("$%d   ·   %s" % [item.price, block if block != "" else item.note], 17, Color(0.7, 0.72, 0.78)))
+		row.add_child(info)
+		row.add_child(_buy_button("BUY", block == "" and game.cash >= item.price, func(): on_buy.call(id, "gear")))
+		_list.add_child(row)
+	var row := HBoxContainer.new()
+	var info := VBoxContainer.new()
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var parts: Array = []
+	for k in h.pelts:
+		parts.append("%d %s" % [h.pelts[k], h.PELT_NAMES.get(k, k)])
+	info.add_child(_text("Pelts", 21, Color.WHITE))
+	var note := "none carried" if parts.is_empty() else ", ".join(parts)
+	if h.pelts.has("lion"):
+		note += "   (no mountain lion: never in season)"
+	info.add_child(_text(note, 17, Color(0.7, 0.72, 0.78)))
+	row.add_child(info)
+	row.add_child(_buy_button("SELL $%d" % h.pelt_value(), h.pelt_value() > 0, func(): on_buy.call("pelts", "sell")))
+	_list.add_child(row)
 
 
 ## Shows a short note in the status line (until the next refresh).
