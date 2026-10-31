@@ -98,6 +98,9 @@ func shoot():
 	var muzzle: Vector3 = player.global_position + Vector3(0, 1.45, 0) + player.forward() * 1.1
 	Fx.puff(muzzle, player.forward() * 2.0, 0.25, 1.4, 0.6, Color(0.85, 0.85, 0.82, 0.6))
 	var target = _pick_target(player)
+	# A lion shot while it stalks or charges the hunter is self-defence
+	# (its state before the bang startles it).
+	var defence: bool = target != null and target.kind == "lion" and target.get("state", "") in ["stalk", "charge"]
 	var w = _wildlife()
 	if w != null and w.has_method("startle"):
 		w.startle(player.global_position, STARTLE)
@@ -111,7 +114,9 @@ func shoot():
 		return null
 	var kind: String = target.kind
 	w.kill(target, (pos - player.global_position).normalized())
-	if not (licence_valid() and _open_season(kind)):
+	if defence:
+		game.hud.show_message("Self-defence: the rangers let it go")
+	elif not (licence_valid() and _open_season(kind)):
 		Wanted.report_crime(1)
 		var why := "no licence" if not licence_valid() else "out of season"
 		game.hud.show_message("Poaching (%s): the rangers are after you" % why)

@@ -14,6 +14,7 @@ const TESTS := [
 	"test_wildlife_keeps_to_its_hours",
 	"test_wildlife_herds_flee_a_walking_player",
 	"test_wildlife_car_kills_a_deer",
+	"test_wildlife_fx_bangs_scare_animals",
 	"test_wildlife_kill_leaves_a_carcass_to_take",
 	"test_wildlife_night_lion_hurts_a_player_who_stays",
 	"test_wildlife_stays_out_of_lakes",
@@ -261,8 +262,40 @@ func test_wildlife_herds_flee_a_walking_player(t) -> void:
 	await t._frames(45)
 	t.check(calm_at_15 and rabbit.state == "flee", "a rabbit sits tight at 15 m and bolts at 6 m (calm %s, now %s)" % [calm_at_15, rabbit.state])
 	# A gunshot far off startles the herd that has settled.
-	var near_bang := Wildlife.startle(herd[0].position, 30.0)
-	t.check(near_bang >= 1, "Wildlife.startle reaches animals in range (%d)" % near_bang)
+	var hp: Vector3 = herd[0].position
+	var near_bang := Wildlife.startle(hp + Vector3(20.0, 0.0, 0.0), 30.0)
+	var far_bang := Wildlife.startle(hp + Vector3(400.0, 0.0, 0.0), 30.0)
+	t.check(near_bang >= 1 and far_bang == 0, "Wildlife.startle reaches animals in range and no further (%d, %d)" % [near_bang, far_bang])
+
+
+## The Fx autoload's crash and explosion send nearby animals running; a
+## bang far off leaves them grazing.
+func test_wildlife_fx_bangs_scare_animals(t) -> void:
+	var w = await _begin(t, 12.0)
+	var spot := _find_spot(w, 45.0)
+	if spot == Vector2.INF:
+		t.check(false, "there is open hill ground to test on")
+		return
+	var at = await _stand(t, spot)
+	for a in w.animals.duplicate():
+		w._remove(w.animals.find(a))
+	for case in [["crash", 15.0, true], ["explosion", 20.0, true], ["explosion", 300.0, false]]:
+		var made: Array = w.spawn("deer", at + Vector3(0.0, 0.0, -40.0), 1)
+		if made.is_empty():
+			t.check(false, "a deer stands 40 m off")
+			return
+		var deer: Dictionary = made[0]
+		deer.state = "idle"
+		deer.timer = 30.0
+		var bang: Vector3 = deer.position + Vector3(0.0, 0.0, -float(case[1]))
+		if case[0] == "crash":
+			Fx.crash(bang, 1.0, false)
+		else:
+			Fx.explosion(bang, 1.0)
+		await t._frames(2)
+		var ran: bool = deer.state == "flee"
+		t.check(ran == case[2], "a %s %.0f m off: the deer %s (state %s)" % [case[0], case[1], "runs" if case[2] else "stays", deer.state])
+		w._remove(w.animals.find(deer))
 
 
 func test_wildlife_car_kills_a_deer(t) -> void:
@@ -380,6 +413,8 @@ func test_wildlife_night_lion_hurts_a_player_who_stays(t) -> void:
 	var lion: Dictionary = cat[0]
 	lion.state = "idle"
 	lion.timer = 0.5
+	var warnings := []
+	w.warned.connect(func(text): warnings.append(text))
 	var states := {}
 	var hurt_at := -1
 	for f in 2400:
@@ -389,22 +424,34 @@ func test_wildlife_night_lion_hurts_a_player_who_stays(t) -> void:
 			hurt_at = f
 			break
 	t.check(states.has("stalk"), "the lion stalks a person on foot at night (%s)" % [states.keys()])
+	t.check(warnings.size() == 2 and String(warnings[0]).contains("stalking") and String(warnings[1]).contains("charges"),
+			"the HUD warns of the stalk and the charge, got %s" % [warnings])
 	t.check(hurt_at >= 0 and player.health < player.max_health, "a player who stays near is struck (health %.0f after %.1f s)" % [player.health, hurt_at / 60.0])
 	await t._frames(8)
 	t.check(lion.state == "retreat" and not player.dead, "after one strike the lion retreats and the player lives (%s)" % lion.state)
 	await t._frames(300)
 	t.check(_flat(lion.position, player.global_position) > 14.0, "the lion is leaving (%.0f m off)" % _flat(lion.position, player.global_position))
+	lion.timer = 0.05
+	var again := false
+	for f in 120:
+		await t._frames(1)
+		again = again or lion.state == "stalk" or lion.state == "charge"
+	t.check(lion.state == "leave" and not again, "after its strike it walks off for good (%s, stalked again %s)" % [lion.state, again])
 	# A player who backs away is left alone, and a lion by day just wanders.
 	player.health = player.max_health
-	var day_lion: Array = w.spawn("lion", at + Vector3(0.0, 0.0, -12.0), 1)
 	t.game.atmosphere.hour = 12.0
-	await t._frames(1)
+	w.refresh()
+	var day_lion: Array = w.spawn("lion", at + Vector3(0.0, 0.0, -12.0), 1)
+	t.check(not day_lion.is_empty(), "a lion stands near by day")
+	if day_lion.is_empty():
+		return
 	var calm: Dictionary = day_lion[0]
+	var stalked := false
 	for f in 360:
 		await t._frames(1)
-		if not w.animals.has(calm):
-			break
-	t.check(player.health == player.max_health, "a lion does not hunt by day (health %.0f)" % player.health)
+		stalked = stalked or calm.state == "stalk" or calm.state == "charge"
+	t.check(w.animals.has(calm) and not stalked and player.health == player.max_health,
+			"a lion does not hunt by day (still here %s, stalked %s, health %.0f)" % [w.animals.has(calm), stalked, player.health])
 
 
 func test_wildlife_stays_out_of_lakes(t) -> void:
@@ -504,7 +551,7 @@ func test_wildlife_despawns_past_range_and_halves_on_low(t) -> void:
 	for model in w._views:
 		hidden = hidden and not w._views[model].visible
 	t.game.atmosphere.indoors = false
-	t.check(hidden, "indoors the animals are not drawn (they were: %s)" % shown)
+	t.check(shown and hidden, "drawn outdoors (%s), not drawn indoors (%s)" % [shown, hidden])
 	# Moving the player a long way takes the hills with him.
 	await _stand(t, Vector2(300.0, 250.0))
 	await t._frames(3)

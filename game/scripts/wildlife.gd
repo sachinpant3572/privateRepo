@@ -53,6 +53,8 @@ const CAR_KILL_SPEED := 3.0
 const HABITAT_ZONES := ["mountain", "hillside"]
 const LOT_CELL := 64.0
 const STREAM_CELL := 32.0
+## in_city is cached on a grid this fine (m), by the cell's centre.
+const CITY_CELL := 8.0
 ## Lion: the player stays this close for ATTACK_AFTER seconds and it charges.
 const LION_ZONE := 10.0
 const LION_CLOSE := 6.5
@@ -131,6 +133,7 @@ var _cache_for: Object
 var _habitat: Array = []
 var _lot_cells := {}
 var _stream_cells := {}
+var _city_cells := {}
 
 
 ## Gives `atm` its wildlife (atmosphere.gd calls this after the birds): the
@@ -197,6 +200,8 @@ func _ready() -> void:
 		view.material_override = AnimalKit.material(model)
 		view.custom_aabb = AABB(Vector3(-1e5, -1e3, -1e5), Vector3(2e5, 4e3, 2e5))
 		view.visible = false
+		# Instances are moved in _process: no physics interpolation for them.
+		view.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 		add_child(view)
 		_views[model] = view
 		_mms[model] = mm
@@ -244,12 +249,18 @@ func _process(delta: float) -> void:
 ## Clears the hills and fills them again for the hour, weather and place (a
 ## clock jump, a teleport, a test).
 func refresh() -> void:
+	var focus := _focus()
 	for i in range(animals.size() - 1, -1, -1):
+		var a: Dictionary = animals[i]
+		var p: Vector3 = a.position
+		# A carcass stays through a clock jump while the player is near it.
+		if not a.alive and Vector2(p.x - focus.x, p.z - focus.z).length() < DESPAWN:
+			continue
 		_remove(i)
 	if atmosphere == null:
 		return
 	_last_hour = atmosphere.hour
-	_last_focus = _focus()
+	_last_focus = focus
 	_update_player()
 	_populate(_last_focus, true)
 	_check_threats()
@@ -612,6 +623,7 @@ func _ensure_caches() -> void:
 	_habitat = []
 	_lot_cells = {}
 	_stream_cells = {}
+	_city_cells = {}
 	if country == null:
 		return
 	for s in country.suburbs:
@@ -694,8 +706,12 @@ func _blocked(p: Vector2) -> bool:
 		return true
 	if _near_stream(p, 2.5) or _in_lot(p, 3.0):
 		return true
-	var city = _city()
-	return city != null and city.plan != null and city.plan.in_city(p)
+	var cell := Vector2i(floori(p.x / CITY_CELL), floori(p.y / CITY_CELL))
+	if not _city_cells.has(cell):
+		var city = _city()
+		_city_cells[cell] = city != null and city.plan != null \
+			and city.plan.in_city((Vector2(cell) + Vector2(0.5, 0.5)) * CITY_CELL)
+	return _city_cells[cell]
 
 
 ## Open ground to start or settle on: not blocked and off the roads.
@@ -736,6 +752,8 @@ func _update_player() -> void:
 ## times a second.
 func _check_threats() -> void:
 	_cars.clear()
+	if animals.is_empty():
+		return
 	for car in get_tree().get_nodes_in_group("vehicles"):
 		var v = car.get("speed")
 		if car is Node3D and v is float and absf(v) > 1.5:
@@ -746,7 +764,7 @@ func _check_threats() -> void:
 	elif _pspeed > 6.0:
 		stealth = 1.3
 	for a in animals:
-		if not a.alive or a.state == "leave":
+		if not a.alive or (a.state == "leave" and a.kind == "lion"):
 			continue
 		var k: Dictionary = KINDS[a.kind]
 		var p: Vector3 = a.position
@@ -757,6 +775,8 @@ func _check_threats() -> void:
 		if threat == Vector3.INF:
 			for car in _cars:
 				var cp: Vector3 = car.global_position
+				if absf(cp.y - p.y) > 6.0:
+					continue
 				if Vector2(cp.x - p.x, cp.z - p.z).length() < float(k.car) + absf(float(car.speed)) * 0.5:
 					threat = cp
 					break
@@ -869,11 +889,11 @@ func _car_kills(delta: float) -> void:
 		var size: Vector3 = car._size
 		var half_len := size.z * 0.5 + absf(speed) * delta
 		var half_wid := size.x * 0.5
-		for a in animals.duplicate():
+		for a in animals:
 			if not a.alive:
 				continue
 			var rel: Vector3 = a.position - cp
-			if absf(rel.y) > 3.0 or rel.x * rel.x + rel.z * rel.z > (half_len + 3.0) * (half_len + 3.0):
+			if absf(rel.y) > 2.0 or rel.x * rel.x + rel.z * rel.z > (half_len + 3.0) * (half_len + 3.0):
 				continue
 			var spec: Dictionary = _specs[a.model]
 			var r: float = float(spec.radius)
@@ -976,21 +996,26 @@ func _step_lion(a: Dictionary, k: Dictionary, delta: float) -> void:
 			if a.threat_t >= ATTACK_AFTER:
 				a.state = "charge"
 				a.timer = 6.0
+				_warn("The mountain lion charges: run or shoot!")
 		"retreat":
 			a.timer -= delta
 			a.go = a.flee_dir
 			a.pace = float(k.run)
 			if a.timer <= 0.0:
-				a.state = "idle"
+				# A lion that has struck once walks off for good.
+				a.state = "leave" if a.get("spent", false) else "idle"
 				a.timer = rng.randf_range(4.0, 8.0)
 		"alert":
 			_alert_step(a, delta)
 		"leave":
 			_leave_step(a, k)
 		_:
-			if hunting and d < 55.0:
+			if hunting and d < 55.0 and not a.get("spent", false):
 				a.state = "stalk"
 				a.threat_t = 0.0
+				if not a.get("warned", false):
+					a.warned = true
+					_warn("Something is stalking you in the trees")
 				return
 			_wander_step(a, k, delta)
 
@@ -1002,6 +1027,25 @@ func _strike(a: Dictionary, dir: Vector2) -> void:
 		_player.take_hit(null, LION_DAMAGE, push, true)
 	GameLog.event("animal_attack", {"kind": "lion", "damage": LION_DAMAGE})
 	_retreat(a, _ppos, 45.0)
+	a.spent = true
+
+
+## A warning on the HUD (a lion stalking or charging), each text at most
+## every 8 s.
+signal warned(text: String)
+var _warn_at := {}
+
+
+func _warn(text: String) -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	if now - float(_warn_at.get(text, -1e9)) < 8.0:
+		return
+	_warn_at[text] = now
+	warned.emit(text)
+	var g = _game_node()
+	var hud = g.get("hud") if g != null else null
+	if hud != null and hud.has_method("show_message"):
+		hud.show_message(text)
 
 
 func _flee_step(a: Dictionary, k: Dictionary, delta: float) -> void:
@@ -1181,7 +1225,7 @@ func _avoid(a: Dictionary, delta: float) -> void:
 	if a.state == "flee" or a.state == "retreat":
 		a.state = "alert"
 		a.timer = 2.0
-	elif a.state != "stalk" and a.state != "charge":
+	elif a.state != "stalk" and a.state != "charge" and a.state != "leave":
 		a.state = "idle"
 		a.timer = 2.0
 
@@ -1237,8 +1281,12 @@ func _step_dead(a: Dictionary, delta: float) -> void:
 	var sl: Vector2 = a.slide
 	if sl.length() > 0.05:
 		var p: Vector3 = a.position
-		p.x += sl.x * delta
-		p.z += sl.y * delta
+		var to := Vector2(p.x + sl.x * delta, p.z + sl.y * delta)
+		if _blocked(to) or (_cache_for != null and _cache_for.road_distance(to, 10.0) < 1.5):
+			a.slide = Vector2.ZERO
+			return
+		p.x = to.x
+		p.z = to.y
 		p.y = Terrain.height(p.x, p.z) - a.drop
 		a.position = p
 		a.slide = sl.move_toward(Vector2.ZERO, 7.0 * delta)
@@ -1262,9 +1310,13 @@ func _push() -> void:
 	var shadows := GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if _low else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	for model in AnimalKit.MODELS:
 		var view: MultiMeshInstance3D = _views[model]
-		(_mms[model] as MultiMesh).visible_instance_count = used[model]
-		view.visible = used[model] > 0
-		view.cast_shadow = shadows
+		var mm: MultiMesh = _mms[model]
+		if mm.visible_instance_count != used[model]:
+			mm.visible_instance_count = used[model]
+		if view.visible != (used[model] > 0):
+			view.visible = used[model] > 0
+		if view.cast_shadow != shadows:
+			view.cast_shadow = shadows
 
 
 ## The model's transform: heading, the slope under it, a hop or a bob, a

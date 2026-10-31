@@ -25,7 +25,10 @@ func _run() -> void:
 	add_child(game)
 	await _frames(30)
 	var ii = game.interiors
-	for type in ["corner_store", "diner"]:
+	var types := ["corner_store", "diner"]
+	if OS.get_environment("PLACES") == "hill":
+		types = ["hunting_store"]
+	for type in types:
 		var p := _nearest(type)
 		for hour in [12.0, 22.0]:
 			game.atmosphere.hour = hour

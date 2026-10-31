@@ -132,13 +132,15 @@ func test_hunting_shoots_a_deer_in_season(t) -> void:
 
 ## A kill is poaching, a wanted star and a message, without a valid
 ## licence, out of season (deer in winter), or of a mountain lion in any
-## season; a licensed coyote in winter is fine.
+## season; a licensed coyote in winter is fine, and so is a lion shot while
+## it stalks the hunter (self-defence).
 func test_hunting_poaching_gives_a_star(t) -> void:
 	var cases := [
 		["autumn", false, "deer", 1, "no licence"],
 		["winter", true, "deer", 1, "deer out of season"],
 		["autumn", true, "lion", 1, "a mountain lion, never open"],
 		["winter", true, "coyote", 0, "a coyote, open all year"],
+		["autumn", false, "lion", 0, "a stalking lion, self-defence", "stalk"],
 	]
 	for c in cases:
 		var w = await _hunter(t, c[0], c[1])
@@ -146,6 +148,8 @@ func test_hunting_poaching_gives_a_star(t) -> void:
 			t.check(false, "the atmosphere has its wildlife")
 			return
 		var a := _ahead(t, w, c[2])
+		if c.size() > 5 and not a.is_empty():
+			a.state = c[5]
 		var hit = t.game.hunting.shoot()
 		t.check(hit != null and not a.alive, "%s: the shot kills" % c[4])
 		t.check(Wanted.level == c[3], "%s: wanted %d, got %d" % [c[4], c[3], Wanted.level])
