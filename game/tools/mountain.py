@@ -199,7 +199,8 @@ LINES = Path(__file__).resolve().parent / "mountain_lines.json"
 ROAD_ORDER = ["freeway", "crest", "canyon", "observatory", "calder", "fire_road", "west_ridge_track",
               "larkspur_track", "east_hills_road", "copperback_track", "whistler_track", "tallow_track",
               "tallow_top", "whistler_top", "fernmoor_track", "copperback_cut", "spur_track", "calder_trail",
-              "raven_trail", "tallow_trail", "fernmoor_ridge", "brackett_track", "hollin_trail", "moor_trail"]
+              "raven_trail", "tallow_trail", "fernmoor_ridge", "brackett_track", "hollin_trail", "moor_trail",
+              "lab_road", "timber_haul"]
 # The cable car: from Cable Hill at the city's edge, by a mid-station on the
 # south-west spur, to the summit's rim.
 CABLE = {"bottom": (0.0, -430.0), "mid": (475.0, -1590.0), "top": SUMMIT_SITES["cable_top"][:2]}
@@ -811,6 +812,16 @@ class Mountain:
             w = (1.0 - _smooth(np.clip((dbest - CELL - 2.0) / PAD_BLEND, 0.0, 1.0))) * (1.0 - margin)
             w = np.where(dbest <= 0.0, 1.0, w)  # under the lot itself, the pad
             h = h * (1.0 - w) + hbest * w
+        # A lake's bed (build_country hill_lakes: [shore, level, depth,
+        # shelf]): under the level at the shore, sinking `depth` more over
+        # the `shelf` metres in from it.
+        for shore, level, depth, shelf in getattr(self, "lakes", ()):
+            win = window(shore, CELL)
+            pts = shapely.points(gx[win].ravel(), gy[win].ravel())
+            inside = shapely.contains(shore, pts).reshape(gx[win].shape)
+            d = shapely.distance(shore.exterior, pts).reshape(gx[win].shape)
+            bed = level - 0.4 - depth * _smooth(np.clip(d / shelf, 0.0, 1.0))
+            h[win] = np.where(inside, np.minimum(h[win], bed), h[win])
         h = np.clip(h, 0.0, MAX_H)
         # Past the grid the game reads 0: the outer GRID_TAPER cells ease the
         # ground down to it (the range's outline leaves up to ~5 m there).

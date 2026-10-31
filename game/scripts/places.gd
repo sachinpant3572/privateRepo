@@ -52,6 +52,10 @@ const DOOR_OUT := 1.2
 const SUBURB_TYPES := {"diner": "diner", "general_store": "corner_store", "shopfront": "corner_store", "strip_mall": "corner_store"}
 const SUBURB_ZONES := ["heights", "bayou_town", "fringe", "eastside", "beach_town", "shore"]
 const SUBURB_MAX := 16
+## The hill villages' diners and stores (zone "mountain", HILL_VILLAGES in
+## tools/build_country.py) open too, after the suburbs' and outside their cap.
+const HILL_ZONE := "mountain"
+const HILL_MAX := 4
 
 
 ## [{id, type, name, district, district_name, face, parcel, rect, door,
@@ -120,11 +124,14 @@ static func build_suburbs(city, places: Array) -> Array:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([city.seed_value, "suburb places"])
 	var picks: Array = []
+	var hill: Array = []
 	for i in c.lots.size():
 		var l: Array = c.lots[i]
 		var kind: String = c.kinds[int(l[5])]
 		if SUBURB_TYPES.has(kind) and str(l[7]) in SUBURB_ZONES:
 			picks.append(i)
+		elif SUBURB_TYPES.has(kind) and str(l[7]) == HILL_ZONE:
+			hill.append(i)
 	# Shuffle with the seeded stream so the spread doesn't follow lot order.
 	for k in range(picks.size() - 1, 0, -1):
 		var j := rng.randi() % (k + 1)
@@ -135,9 +142,11 @@ static func build_suburbs(city, places: Array) -> Array:
 	for p in places:
 		used_names[p.name] = true
 	var out: Array = []
-	for i in picks:
-		if out.size() >= SUBURB_MAX:
-			break
+	var hill_open := 0
+	for i in picks + hill:
+		var on_hill: bool = str(c.lots[i][7]) == HILL_ZONE
+		if (on_hill and hill_open >= HILL_MAX) or (not on_hill and out.size() >= SUBURB_MAX):
+			continue
 		var l: Array = c.lots[i]
 		var type: String = SUBURB_TYPES[c.kinds[int(l[5])]]
 		var xf := Transform3D(Basis(Vector3.UP, float(l[2])), Vector3(l[0], 0.0, l[1]))
@@ -160,6 +169,8 @@ static func build_suburbs(city, places: Array) -> Array:
 				name = candidate
 				break
 		used_names[name] = true
+		if on_hill:
+			hill_open += 1
 		# The lot's front is -z: the door faces +z, into the building.
 		var inward := xf.basis * Vector3(0, 0, 1)
 		var d: Dictionary = city.district_at(door)

@@ -51,6 +51,7 @@ from mountain import Mountain, roads as mountain_roads, lines as mountain_lines,
 from mountain import GRADE, SUMMIT_SITES, PEAKS, CABLE, CABLE_MID_SIZE, CELL as MTN_CELL  # noqa: E402
 from mountain import VIEWPOINTS, VIEW_SIZE, VIEW_FLAT  # noqa: E402
 import numpy as np  # noqa: E402
+from scipy import ndimage  # noqa: E402
 import contourpy  # noqa: E402
 
 # An avenue grades like a street.
@@ -120,6 +121,11 @@ LOT = {
     "res_tower": (34, 34), "midrise_condo": (30, 22), "cheap_block": (34, 18), "exec_house": (24, 22),
     "gatehouse": (10, 8), "bungalow_barred": (12, 22), "burned_lot": (20, 20), "liquor_store": (22, 20),
     "pawn_shop": (14, 18), "check_cashing": (16, 16),
+    # Hill country places (HANDOFF-hill-content.md): kits/hill_kit.gd.
+    "research_lab": (90, 70), "lab_gate": (24, 16), "sawmill": (60, 44), "cult_compound": (80, 70),
+    "ranger_post": (24, 20), "logging_camp": (40, 34), "mine_entrance": (30, 24), "stone_ring": (24, 24),
+    "hot_spring": (16, 14), "cold_spring": (12, 10), "mountain_hotel": (60, 44), "lodge_hotel": (44, 32),
+    "rave_clearing": (36, 30), "bungee_platform": (12, 10), "fairground": (70, 50), "hunting_store": (16, 20),
 }
 KINDS = list(LOT)
 
@@ -170,6 +176,57 @@ DWELLINGS = ("house", "shack", "stilt_house", "trailer_home")
 CLUSTER_JITTER = {"village": 8.0, "bayou_town": 16.0, "bayou_village": 26.0, "camp": 28.0, "trailers": 4.0}
 # Homes in a cluster share its yard, so their lots are tighter than a street lot.
 CLUSTER_LOT = {"house": (11, 12), "stilt_house": (10, 10), "shack": (8, 9)}
+# Hill country places (HANDOFF-hill-content.md; positions from
+# tools/hill_design_map.py). Villages: lots square to the nearest way, each
+# as near the centre as there is room, in this order. Places: "front" the
+# same, as near (x, y) as there is room; "site" at (x, y) or the nearest
+# clear spot within `search` m, facing the nearest way (off-road places).
+HILL_VILLAGES = [
+    ("brackett", (2412.0, -2116.0), ["diner", "general_store", "gas_station", "bar", "garage", "house", "house",
+                                     "house", "house"]),
+    ("hollin", (1448.0, -4408.0), ["sawmill", "gas_station", "diner", "hunting_store", "general_store", "fairground",
+                                   "garage", "house", "house", "house", "house"]),
+]
+HILL_PLACES = [
+    ("truck_stop", 2790.0, -2310.0, "east_hills_truck_stop", "front", 160.0),
+    ("motel", 2944.0, -2448.0, "copperback_motel", "front", 160.0),
+    ("research_lab", 540.0, -4060.0, "kestrel_lab", "site", 140.0),
+    ("lab_gate", 492.0, -4262.0, "kestrel_lab_gate", "front", 40.0),
+    ("ranger_post", 584.0, -4200.0, "ranger_post", "front", 120.0),
+    ("logging_camp", -310.0, -4300.0, "logging_camp", "site", 140.0),
+    ("lodge_hotel", 2472.0, -3538.0, "whistler_lodge", "front", 160.0),
+    ("cult_compound", 2316.0, -4024.0, "cult_compound", "site", 80.0),
+    ("mountain_hotel", 905.0, -2800.0, "calder_summit_hotel", "site", 100.0),
+    ("rave_clearing", 2664.0, -3104.0, "rave_copperback", "site", 80.0),
+    ("rave_clearing", 2704.0, -2920.0, "rave_east", "site", 80.0),
+    ("hot_spring", 256.0, -3256.0, "raven_hot_spring", "site", 60.0),
+    ("cold_spring", 2620.0, -3800.0, "whistler_cold_spring", "site", 60.0),
+    ("hot_spring", 2050.0, -4600.0, "fernmoor_hot_spring", "site", 60.0),
+    ("cold_spring", 2440.0, -4040.0, "tallow_cold_spring", "site", 60.0),
+    ("mine_entrance", 1573.0, -2917.0, "copper_mine", "site", 60.0),
+    ("stone_ring", 1936.0, -4520.0, "stone_ring", "site", 60.0),
+    ("bungee_platform", 732.0, -2723.0, "calder_bungee", "site", 40.0),
+]
+# The trailer town on East Hills Road: clusters of trailers (W x D).
+HILL_TRAILERS = [((2720.0, -2900.0), (56.0, 44.0)), ((2740.0, -2840.0), (50.0, 40.0))]
+VILLAGE_WALK = 90.0
+VILLAGE_SHOULDER = 1.5
+HILL_SEED = 122  # the hill places draw from their own rng: no other lot moves
+# Lakes fill their hollows up to a level under the rim (closed basins in
+# the ground, tools/hill_design_map.py LAKES): (id, name, centre, level).
+HILL_LAKES = [("tallow_lake", "Tallow Lake", (2248.0, -4144.0), 62.0),
+              ("fernmoor_pond", "Fernmoor Pond", (1752.0, -4512.0), 42.0)]
+LAKE_REACH = 260.0  # how far from its centre a lake's hollow may reach
+LAKE_DEPTH = 3.0    # the bed sinks this far under the level, LAKE_SHELF m in from the shore
+LAKE_SHELF = 24.0
+LAKE_EDGE = 6.0     # the water reaches this far past the shore, under the rising ground
+# Streams run down the ground from their sources until a lake, the plain
+# or the water: (id, name, source).
+HILL_STREAMS = [("raven_creek", "Raven Creek", (560.0, -3330.0)), ("hollin_creek", "Hollin Creek", (1180.0, -3720.0)),
+                ("copperback_brook", "Copperback Brook", (2250.0, -3400.0)),
+                ("whistler_brook", "Whistler Brook", (2620.0, -3800.0))]
+STREAM_W = 2.4
+WALL_SHORE = 3  # a lake's shore: an invisible wall (kinds 0-2: _wall_kind)
 # Estate house lot (the mansion kit draws house, forecourt and pool in it).
 ESTATE_HOUSE = 40.0
 TENNIS_BACK = 21.0      # depth behind an estate house for a tennis court across the plot
@@ -392,6 +449,17 @@ def densify(pts, step):
             t = k / n
             out.append((a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t))
     return out
+
+
+def chaikin(pts, rounds):
+    """Corner cutting: each round replaces every corner by two points a
+    quarter and three quarters along its sides (the ends stay)."""
+    for _ in range(rounds):
+        out = [pts[0]]
+        for a, b in zip(pts, pts[1:]):
+            out += [(a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25), (a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75)]
+        pts = out + [pts[-1]]
+    return pts
 
 
 def fillet(pts, radius, step):
@@ -2031,6 +2099,133 @@ class Country:
             placed.append(site(m[0], m[1], "radio_mast", "calder_mast_%d" % i, 120.0))
         if not all(placed):
             print("WARNING: mountain sites not all placed", placed)
+
+    # --- Hill country (HANDOFF-hill-content.md) -------------------------------------
+
+    def hill_lakes(self):
+        """Tallow Lake and Fernmoor Pond: each fills its hollow in the ground
+        up to its level (the shore is where the ground meets it), with an
+        invisible wall along the shore and no lot in it. The terrain digs
+        the bed (Mountain.lakes); the game lays the water at the level."""
+        self.lakes = []
+        step = 4.0
+        for ident, name, c, level in HILL_LAKES:
+            xs = np.arange(c[0] - LAKE_REACH, c[0] + LAKE_REACH + step, step)
+            ys = np.arange(c[1] - LAKE_REACH, c[1] + LAKE_REACH + step, step)
+            gx, gy = np.meshgrid(xs, ys)
+            h = self.mtn.raw(gx.ravel(), gy.ravel()).reshape(gx.shape)
+            lab, _n = ndimage.label(h < level)
+            comp = lab == lab[len(ys) // 2, len(xs) // 2]
+            if not lab[len(ys) // 2, len(xs) // 2] or comp[0].any() or comp[-1].any() or comp[:, 0].any() or comp[:, -1].any():
+                print("WARNING: %s: no closed hollow under %.1f m" % (ident, level))
+                continue
+            cells = shapely.box(gx[comp] - step * 0.5, gy[comp] - step * 0.5, gx[comp] + step * 0.5, gy[comp] + step * 0.5)
+            shore = shapely.union_all(cells).buffer(3.0).buffer(-3.0).simplify(1.0)
+            shore = max(polys_of(shore), key=lambda q: q.area)
+            shore = Polygon(shore.exterior)
+            if self.road_prep.intersects(shore):
+                print("WARNING: %s: a road runs into the lake" % ident)
+            wet = [l for l in self.lots if shore.intersects(lot_poly(l["x"], l["y"], l["yaw"], l["w"], l["d"]))]
+            if wet:
+                print("WARNING: %s: lots in the lake: %s" % (ident, [l["kind"] for l in wet]))
+            self.lot_grid.add(shore.buffer(4.0))
+            self.plot_grid.add(shore.buffer(4.0))
+            pts = list(shore.exterior.coords)
+            for a, b in zip(pts, pts[1:]):
+                for piece in _split(a, b, 30.0):
+                    self.wall_list.append([round(piece[0][0], 2), round(piece[0][1], 2), round(piece[1][0], 2),
+                                           round(piece[1][1], 2), WALL_SHORE])
+            self.lakes.append({"id": ident, "name": name, "level": level, "shore": shore})
+            print("lake %s: %.0f m2 at %.1f m" % (ident, shore.area, level))
+        self.mtn.lakes = [(lk["shore"], lk["level"], LAKE_DEPTH, LAKE_SHELF) for lk in self.lakes]
+
+    def _site(self, x, y, kind, ident, search, zone="mountain"):
+        """A lot at (x, y) or the nearest clear spot within `search` m of it
+        (every 10 m out, 16 ways round), its front to the nearest way."""
+        w, d = LOT[kind]
+        spots = [(x, y)] + [(x + r * math.cos(a * math.pi / 8.0), y + r * math.sin(a * math.pi / 8.0))
+                            for r in np.arange(10.0, search + 1.0, 10.0) for a in range(16)]
+        for q in spots:
+            near = nearest_points(self.road_area, Point(q))[0]
+            nx, ny = q[0] - near.x, q[1] - near.y
+            n = math.hypot(nx, ny) or 1.0
+            yaw = yaw_facing(nx / n, ny / n)
+            poly = lot_poly(q[0], q[1], yaw, w, d)
+            if (self.road_prep.intersects(poly.buffer(3.0)) or self.lot_grid.hits(poly) or self.plot_grid.hits(poly)
+                    or self.water_prep.intersects(poly) or not self.play_land_prep.contains(poly)):
+                continue
+            self.lot_grid.add(poly.buffer(1.5))
+            self.lots.append({"x": q[0], "y": q[1], "yaw": yaw, "w": w, "d": d, "kind": kind, "id": ident,
+                              "zone": zone, "plot": -1})
+            return True
+        return False
+
+    def hill_places(self):
+        """The hill country's villages, roadside stops, trailer town and
+        off-road places (HILL_VILLAGES, HILL_PLACES, HILL_TRAILERS). Laid
+        after every other lot, so none of those moves; a place whose spot
+        is taken goes to the nearest free one."""
+        missed = []
+        for name, c, kinds in HILL_VILLAGES:
+            for k, kind in enumerate(kinds):
+                ident = "%s_%s" % (name, kind) if kind != "house" else ""
+                if not self._place_near(c, kind, ident, "mountain", 260.0):
+                    missed.append(ident or "%s house %d" % (name, k))
+        for kind, x, y, ident, how, reach in HILL_PLACES:
+            ok = (self._place_near((x, y), kind, ident, "mountain", reach) if how == "front"
+                  else self._site(x, y, kind, ident, reach))
+            if not ok:
+                missed.append(ident)
+        saved, self.rng = self.rng, random.Random(HILL_SEED)
+        for k, (q, (W, D)) in enumerate(HILL_TRAILERS):
+            if not any(self.cluster_at(self._spiral_pt(q, r), W, D, ["trailer_home"], "trailers", "mountain")
+                       for r in range(0, 120, 6)):
+                missed.append("trailers %d" % k)
+        self.rng = saved
+        if missed:
+            print("WARNING: hill places not placed:", missed)
+        print("hill places: %d lots" % sum(1 for l in self.lots if l["zone"] == "mountain"))
+
+    @staticmethod
+    def _spiral_pt(q, r):
+        a = r * 0.7
+        return (q[0] + math.cos(a) * r, q[1] + math.sin(a) * r)
+
+    def hill_streams(self):
+        """Each stream from its source down the smoothed final ground until
+        a lake, the plain (under 3 m) or the water; broken where it passes
+        under a way (a culvert) and inside a lake."""
+        self.streams = []
+        h = ndimage.gaussian_filter(self.mtn.heights, 3)
+        x0, y0 = self.mtn.origin
+        ny, nx = h.shape
+        lakes = unary_union([lk["shore"] for lk in self.lakes]) if self.lakes else Polygon()
+        cut = unary_union([self.road_area.buffer(1.0), lakes])
+        for ident, name, (sx, sy) in HILL_STREAMS:
+            j, i = int(round((sx - x0) / MTN_CELL)), int(round((sy - y0) / MTN_CELL))
+            path = [(sx, sy)]
+            for _ in range(4000):
+                win = h[max(i - 1, 0):i + 2, max(j - 1, 0):j + 2]
+                a, b = np.unravel_index(np.argmin(win), win.shape)
+                ni, nj = max(i - 1, 0) + a, max(j - 1, 0) + b
+                if (ni, nj) == (i, j):
+                    break
+                i, j = ni, nj
+                p = (x0 + j * MTN_CELL, y0 + i * MTN_CELL)
+                path.append(p)
+                if self.mtn.heights[i, j] < 3.0 or lakes.contains(Point(p)) or self.water_prep.contains(Point(p)):
+                    break
+            if len(path) < 3:
+                continue
+            line = LineString(path).simplify(2.0)
+            line = LineString(chaikin(list(line.coords), 2))
+            n = 0
+            for g in lines_of(line.difference(cut)):
+                if g.length >= 16.0:
+                    self.streams.append({"id": ident, "name": name, "w": STREAM_W,
+                                         "pts": [round(v, 1) for q in g.coords for v in q]})
+                    n += 1
+            print("stream %s: %.0f m, %d pieces" % (ident, line.length, n))
 
     def mountain_terrain(self):
         """The height grid: each mountain plot and lot sits on a flat pad at
@@ -4181,8 +4376,11 @@ class Country:
         self.farm_lots()
         self.field_plots()
         self.farm_fields()
+        self.hill_lakes()
+        self.hill_places()
         self.ground_zones()
         self.mountain_terrain()
+        self.hill_streams()
         self.upgrade_lots()
         self.lot_reach()
         self.wealth = wealth.Wealth(self)
@@ -4246,6 +4444,34 @@ class Country:
                 self.walks.append(pts)
         print("walks: %d loops, %d points, %d rings dropped (mostly roads without sidewalks)"
               % (len(self.walks), sum(len(w) // 2 for w in self.walks), dropped))
+        self.village_walks()
+
+    def village_walks(self):
+        """A loop for people in each hill village (HILL_VILLAGES): down one
+        shoulder of the village's road VILLAGE_WALK m either way of its
+        middle and back up the other, crossing at the ends. The hill roads
+        have no sidewalks, so walks_out makes none there."""
+        n = 0
+        for name, c, _ in HILL_VILLAGES:
+            best = min(self.pieces, key=lambda pc: LineString(pc["pts"]).distance(Point(c)))
+            line = LineString(best["pts"])
+            if line.distance(Point(c)) > 80.0:
+                print("WARNING: village %s has no road for a walk" % name)
+                continue
+            t = line.project(Point(c))
+            sub = substring(line, max(0.0, t - VILLAGE_WALK), min(line.length, t + VILLAGE_WALK))
+            strip = sub.buffer(CLASSES[best["cls"]]["w"] * 0.5 + VILLAGE_SHOULDER, cap_style=2, join_style=2)
+            ring = list(orient(strip.simplify(0.5), 1.0).exterior.coords)[:-1]
+            pts = []
+            for k, a in enumerate(ring):
+                b = ring[(k + 1) % len(ring)]
+                steps = max(1, int(math.dist(a, b) / 6.0))
+                for s_ in range(steps):
+                    f = s_ / steps
+                    pts += [round(a[0] + (b[0] - a[0]) * f, 1), round(a[1] + (b[1] - a[1]) * f, 1)]
+            self.walks.append(pts)
+            n += 1
+        print("village walks: %d" % n)
 
     def upgrade_lots(self):
         """Bellerive's suburbs to city grade (HANDOFF-bellerive-expand.md
@@ -4668,6 +4894,12 @@ class Country:
             # summit's sites and the cable car.
             "structures": self.structures,
             "rail_pass": self.rail_pass,
+            # The hill country's lakes (water at `level`, its edge a little
+            # past the shore, under the ground) and streams (HANDOFF-hill-content.md).
+            "lakes": [{"id": lk["id"], "name": lk["name"], "level": lk["level"],
+                       "poly": [round(v, 1) for q in orient(lk["shore"].buffer(LAKE_EDGE).simplify(1.0), 1.0).exterior.coords[:-1] for v in q]}
+                      for lk in self.lakes],
+            "streams": self.streams,
             "mountain": {
                 "peaks": {k: [p[0], p[1], round(self.mtn.height(p), 1)] for k, p in PEAKS.items()},
                 "sites": self.mtn_sites,

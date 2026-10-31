@@ -530,6 +530,15 @@ SPECS = [
          gmax=0.24, hairpin_r=5.0, hairpin_cost=60.0, cut=2.0, pin_cut=4.0),
     dict(id="brackett_track", cls="track", name="Brackett Track", tag="hills",
          way=[("on", "east_hills_road", (2770, -2234)), (2430, -2160), (2120, -2230)], gmax=0.18, hairpin_r=8.0),
+    # Hill content (HANDOFF-hill-content.md): the guarded road from the gate
+    # on Route 9 up the outlet into the lab's hollow, and the timber haul
+    # from the logging camp on the Morrow's north bank down over the river
+    # on a low deck to Route 9.
+    dict(id="lab_road", cls="lane", name="Kestrel Hollow Road", tag="hills",
+         way=[("on", "route_9", (472, -4288)), (552, -4192), (540, -4085)], gmax=0.10, hairpin_r=12.0),
+    dict(id="timber_haul", cls="track", name="Timber Haul", tag="hills",
+         way=[(-300, -4290), ("on", "route_9", (-127, -4103))], gmax=0.16, hairpin_r=8.0, bridge=BRIDGE,
+         low_bridges=True),
 ]
 # The rail pass (Morrow Freight Line round the range): a shelf on the
 # Morrow gorge's inner wall round the range's west and north foot (the river

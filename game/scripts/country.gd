@@ -96,6 +96,15 @@ var rail_pass: Dictionary = {}
 ## Mount Calder: {peaks {id: [x, y, height]}, sites {id: {x, y, z, w, d}}
 ## (summit pads, cable mid-station), cable {stations, towers}}.
 var mountain: Dictionary = {}
+## The hills' lakes, level water in closed basins: {id, name, level (m),
+## poly (PackedVector2Array, the water's edge, a little past the shore),
+## rect}; and streams down the valleys: {id, name, w, pts
+## (PackedVector2Array)} (tools/build_country.py hill_lakes, hill_streams).
+var lakes: Array = []
+var streams: Array = []
+## Stream segments by tile (the tile holding a segment's middle):
+## Vector2i -> [[stream index, point index], ...].
+var stream_tiles := {}
 ## Every tile's data: Vector2i -> {g, r, l, w, b, p, t, x, f}.
 var tiles := {}
 ## Bridge edges: edge -> true (parapets instead of bank walls).
@@ -185,6 +194,7 @@ func load_data(seed_v := 1234) -> void:
 	var rp = d.get("rail_pass")
 	rail_pass = rp if rp is Dictionary else {}
 	mountain = d.get("mountain", {})
+	_load_water(d)
 	towns = d.towns
 	suburbs = d.suburbs
 	for w in d.get("walks", []):
@@ -545,6 +555,47 @@ func _finish_task() -> void:
 	_task_result = {}
 
 
+func _load_water(d: Dictionary) -> void:
+	lakes = []
+	streams = []
+	stream_tiles = {}
+	for l in d.get("lakes", []):
+		var poly := PackedVector2Array()
+		for i in range(0, l.poly.size(), 2):
+			poly.append(Vector2(l.poly[i], l.poly[i + 1]))
+		var rect := Rect2(poly[0], Vector2.ZERO)
+		for q in poly:
+			rect = rect.expand(q)
+		lakes.append({"id": l.id, "name": l.name, "level": float(l.level), "poly": poly, "rect": rect})
+	for s in d.get("streams", []):
+		var pts := PackedVector2Array()
+		for i in range(0, s.pts.size(), 2):
+			pts.append(Vector2(s.pts[i], s.pts[i + 1]))
+		var si := streams.size()
+		streams.append({"id": s.id, "name": s.name, "w": float(s.w), "pts": pts})
+		for k in pts.size() - 1:
+			var mid := (pts[k] + pts[k + 1]) * 0.5
+			var key := Vector2i(floori(mid.x / tile_size), floori(mid.y / tile_size))
+			if not stream_tiles.has(key):
+				stream_tiles[key] = []
+			stream_tiles[key].append([si, k])
+
+
+## The lake whose water covers p (with `room` metres round it), or {}.
+func lake_at(p: Vector2, room := 0.0) -> Dictionary:
+	for l in lakes:
+		if not (l.rect as Rect2).grow(room).has_point(p):
+			continue
+		if Geometry2D.is_point_in_polygon(p, l.poly):
+			return l
+		if room > 0.0:
+			var poly: PackedVector2Array = l.poly
+			for i in poly.size():
+				if Geometry2D.get_closest_point_to_segment(p, poly[i], poly[(i + 1) % poly.size()]).distance_to(p) < room:
+					return l
+	return {}
+
+
 func _add_tile(key: Vector2i, built: Dictionary) -> void:
 	var root := Node3D.new()
 	root.name = "Tile_%d_%d" % [key.x, key.y]
@@ -586,6 +637,12 @@ func _add_tile(key: Vector2i, built: Dictionary) -> void:
 				if c[3].has("light"):
 					shape.add_to_group("lamps")
 			body.add_child(shape)
+	if built.has("water") and built.water.triangle_count() > 0:
+		var water: MeshInstance3D = built.water.make_instance()
+		water.name = "Water"
+		water.material_override = MeshBuilder.water_material()
+		water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(water)
 	root.set_meta("buildings", built.buildings)
 	root.set_meta("parks", _open_parks(built.get("parks", [])))
 	add_child(root)

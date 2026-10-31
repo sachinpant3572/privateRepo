@@ -95,6 +95,16 @@ const SLEEPER := Color(0.36, 0.28, 0.21)
 const STEEL := Color(0.62, 0.63, 0.65)
 const BARK := Color(0.38, 0.27, 0.19)
 const POND := Color(0.17, 0.25, 0.21)
+## Hill lakes and streams (Country.lakes, streams): the water's colour, how
+## far under the lake's level it lies (the shore wall stands at the level),
+## and how far over the ground a stream runs (the ground is drawn about
+## HILL_GROUND_DROP under Terrain.height; a car fords it).
+const LAKE := Color(0.13, 0.3, 0.33)
+const STREAM := Color(0.2, 0.37, 0.4)
+const LAKE_DROP := 0.3
+const STREAM_LIFT := -0.12
+const STREAM_PIECE := 3.0
+const WALL_SHORE := 3
 
 ## Ground colour per zone (the flag marks green ground).
 const ZONE_GROUND := {
@@ -172,6 +182,8 @@ class Ctx:
 	var rect: Rect2
 	var mb
 	var glow
+	## Lake and stream water, not draped (it lies at its own level).
+	var water
 	var out: Array = []
 	var props: Array = []
 	var buildings := 0
@@ -205,6 +217,7 @@ static func build(country, key: Vector2i) -> Dictionary:
 	ctx.rect = Rect2(Vector2(key) * country.tile_size, Vector2.ONE * country.tile_size)
 	ctx.mb = MeshBuilder.new()
 	ctx.glow = MeshBuilder.new()
+	ctx.water = MeshBuilder.new()
 	ctx.rng.seed = hash([country.seed_value, "tile", key.x, key.y])
 	var t: Dictionary = country.tiles.get(key, {})
 	ctx.hill = Terrain.touches(ctx.rect.grow(1.0))
@@ -238,8 +251,10 @@ static func build(country, key: Vector2i) -> Dictionary:
 		_trees(ctx)
 		if ctx.hill:
 			_drape(ctx)
+		_lakes(ctx)
+		_streams(ctx)
 	return {"mesh": ctx.mb, "glow": ctx.glow, "colliders": ctx.out, "props": ctx.props, "buildings": ctx.buildings,
-			"parks": ctx.parks}
+			"parks": ctx.parks, "water": ctx.water}
 
 
 # --- Helpers ------------------------------------------------------------------------
@@ -519,6 +534,10 @@ static func _gather(ctx: Ctx) -> void:
 			for i in t.p:
 				var path: Array = c.paths[int(i)]
 				ctx.segs_near.append([Vector2(path[0][0], path[0][1]), Vector2(path[1][0], path[1][1]), 3.0])
+			for pair in c.stream_tiles.get(Vector2i(gx, gy), []):
+				var st: Dictionary = c.streams[int(pair[0])]
+				var k := int(pair[1])
+				ctx.segs_near.append([st.pts[k], st.pts[k + 1], st.w * 0.5 + 1.0])
 
 
 ## The zone of the ground under p in this tile, "" off the ground.
@@ -538,6 +557,8 @@ static func _clear(ctx: Ctx, p: Vector2, room: float) -> bool:
 		if absf(q.x) < cl[2].x + room and absf(q.y) < cl[2].y + room:
 			return false
 	if c.road_distance(p, 40.0 + room) < room:
+		return false
+	if not c.lakes.is_empty() and not c.lake_at(p, room).is_empty():
 		return false
 	for i in ctx.lots_near:
 		if _in_rect(p, c.lots[i], room):
@@ -875,7 +896,9 @@ static func _wall(ctx: Ctx, w: Array) -> void:
 		return
 	var kind := int(w[4])
 	var mb = ctx.mb
-	if kind == 2:
+	if kind == WALL_SHORE:
+		pass
+	elif kind == 2:
 		Props.fence(mb, [], _v3(a, GROUND_Y), _v3(b, GROUND_Y), CHAIN, 2.2)
 	else:
 		var face := BANK if kind == 0 else SEAWALL.darkened(0.25)
@@ -995,6 +1018,64 @@ static func _pond(ctx: Ctx, cpt: Vector2) -> void:
 	for i in 8:
 		var a := TAU * i / 8.0 + ctx.rng.randf() * 0.4
 		Props.grass(ctx.mb, _v3(cpt + Vector2(cos(a), sin(a)) * r * 1.05, GROUND_Y), ctx.rng.randf_range(0.8, 1.4), ctx.rng.randi())
+
+
+## The hill lakes' water in this tile: each lake's edge clipped to the
+## tile, flat at LAKE_DROP under its level (the dug bed and the rising
+## shore hold it).
+static func _lakes(ctx: Ctx) -> void:
+	var r := ctx.rect
+	var box := PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)])
+	for l in ctx.country.lakes:
+		if not (l.rect as Rect2).intersects(r):
+			continue
+		var y: float = l.level - LAKE_DROP
+		for piece in Geometry2D.intersect_polygons(l.poly, box):
+			if piece.size() < 3:
+				continue
+			var idx := Geometry2D.triangulate_polygon(piece)
+			for k in range(0, idx.size(), 3):
+				ctx.water.tri(_v3(piece[idx[k]], y), _v3(piece[idx[k + 1]], y), _v3(piece[idx[k + 2]], y), Vector3.UP, LAKE)
+
+
+## The streams' segments whose middles lie in this tile: a ribbon `w` wide
+## on the ground, cut into STREAM_PIECE lengths so it follows the slope,
+## its sides mitred at each bend so the pieces join.
+static func _streams(ctx: Ctx) -> void:
+	var c = ctx.country
+	for pair in c.stream_tiles.get(ctx.key, []):
+		var st: Dictionary = c.streams[int(pair[0])]
+		var pts: PackedVector2Array = st.pts
+		var k := int(pair[1])
+		var half: float = st.w * 0.5
+		var na := _stream_side(pts, k) * half
+		var nb := _stream_side(pts, k + 1) * half
+		var steps := maxi(1, ceili(pts[k].distance_to(pts[k + 1]) / STREAM_PIECE))
+		for i in steps:
+			var t0 := float(i) / steps
+			var t1 := float(i + 1) / steps
+			var p0 := pts[k].lerp(pts[k + 1], t0)
+			var p1 := pts[k].lerp(pts[k + 1], t1)
+			var s0 := na.lerp(nb, t0)
+			var s1 := na.lerp(nb, t1)
+			var q := [p0 + s0, p1 + s1, p1 - s1, p0 - s0]
+			var v: Array = []
+			for e in q:
+				v.append(Vector3(e.x, Terrain.height(e.x, e.y) + STREAM_LIFT, e.y))
+			ctx.water.quad(v[0], v[1], v[2], v[3], Vector3.UP, STREAM)
+
+
+## The unit side vector (left of the flow) at point k of a stream, the
+## mitre of the two segments meeting there.
+static func _stream_side(pts: PackedVector2Array, k: int) -> Vector2:
+	var d := Vector2.ZERO
+	if k > 0:
+		d += (pts[k] - pts[k - 1]).normalized()
+	if k < pts.size() - 1:
+		d += (pts[k + 1] - pts[k]).normalized()
+	if d.length_squared() < 1e-6:
+		d = pts[mini(k + 1, pts.size() - 1)] - pts[maxi(k - 1, 0)]
+	return Vector2(-d.y, d.x).normalized()
 
 
 static func _trees(ctx: Ctx) -> void:

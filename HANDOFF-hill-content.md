@@ -47,6 +47,21 @@ on top; built in phases, each committed; `/effort xhigh` suits it.
   a helicopter (#115) or a cliff BASE exit.
 - Stunt ramps need a surface above the ground grid: built as the first use
   of the phase-4 deck layer, or as a ramp pad in the grid if that is enough.
+- Hill places run after every other lot step and the trailer clusters draw
+  from their own rng (HILL_SEED), so no existing lot moves.
+- Lakes fill real closed basins of the raw grid below a set level
+  (HILL_LAKES), so shores are natural; the bed is dug up to LAKE_DEPTH
+  (mountain.grid, `lakes`), the water mesh runs LAKE_EDGE past the shore
+  under the rising ground, at level - 0.3; invisible kind-3 walls on the
+  shore keep movers out (no swimming yet).
+- Streams: steepest descent on the smoothed grid from HILL_STREAMS springs,
+  stopping at a lake, the sea or height 3; cut at roads (culverts implied
+  until phase 4 adds crossings); ribbons in the tile's `water` mesh.
+- Lab road (lane, 14 % at the cap) and Timber Haul (track, 21 %, low wet
+  bridge over the Morrow) are mountain_plan SPECS.
+- Village walks: a loop down both shoulders of each village road (no
+  sidewalks on hill roads). Village diners/stores open as places in their
+  own cap (places.gd HILL_MAX) after the suburbs', so suburb picks hold.
 
 ## Facts
 
