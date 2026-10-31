@@ -85,10 +85,10 @@ index 0000000..4f1d6a5
 +    	return []
 diff --git a/game/scripts/bungee.gd b/game/scripts/bungee.gd
 new file mode 100644
-index 0000000..c573b09
+index 0000000..db014d1
 --- /dev/null
 +++ b/game/scripts/bungee.gd
-@@ -0,0 +1,563 @@
+@@ -0,0 +1,572 @@
 +extends Node
 +## The bungee jump at the Calder platform lot (HANDOFF-air-sports.md). The
 +## lot sits on a level pad, so a steel jump arm reaches out from the pad's
@@ -106,7 +106,6 @@ index 0000000..c573b09
 +const Terrain = preload("res://scripts/terrain.gd")
 +const GameLog = preload("res://scripts/game_log.gd")
 +const Parachute = preload("res://scripts/parachute.gd")
-+const Tiles = preload("res://scripts/country_tiles.gd")
 +
 +const LOT_ID := "calder_bungee"
 +## The lot's centre, when the country data has no such lot.
@@ -150,10 +149,6 @@ index 0000000..c573b09
 +## The jump ends after LOWS low points, or MAX_TIME s on the rope.
 +const LOWS := 4
 +const MAX_TIME := 30.0
-+## The site is searched for on a worker thread once the player comes this
-+## close (well before the country tiles there build, so the clearings for
-+## the arm count), and the arm built when it is found.
-+const PREPARE_RANGE := 1200.0
 +const G := 9.8
 +
 +var game
@@ -168,11 +163,14 @@ index 0000000..c573b09
 +var lowest_clear := INF
 +var _site := {}
 +var _site_done := false
-+var _prepare_tick := 0.0
 +## The search on the worker thread (-1: none) and what it found:
 +## [score, x, z, angle, length], score -INF for nothing.
 +var _task := -1
 +var _found: Array = []
++## The clearings ([centre, yaw, half-size]) this node keeps the country's
++## plants off, and those still waiting for a tile build to finish.
++var clearings: Array = []
++var _pending: Array = []
 +var _t := 0.0
 +var _p := Vector3.ZERO
 +var _v := Vector3.ZERO
@@ -201,18 +199,18 @@ index 0000000..c573b09
 +	add_child(_rope)
 +
 +
-+func _process(delta: float) -> void:
-+	_prepare_tick -= delta
++func _process(_delta: float) -> void:
++	# The site search starts on a worker as soon as the terrain is there,
++	# wherever the player is: a taxi skip or a mission replay can put them
++	# at the lot within a frame, and the tiles there build at once.
 +	if _task >= 0:
 +		if WorkerThreadPool.is_task_completed(_task):
 +			site()
-+	elif not _site_done and _prepare_tick <= 0.0:
-+		_prepare_tick = 0.5
-+		var p = game.get("player") if game != null else null
-+		var lot := _lot()
-+		if p != null and Terrain.nx > 0 and Vector2(p.global_position.x, p.global_position.z).distance_to(lot) < PREPARE_RANGE:
-+			_task = WorkerThreadPool.add_task(_search_arm.bind(lot), false, "Bungee arm search")
-+	if player != null and state in ["ready", "fall", "winch"]:
++	elif not _site_done and Terrain.nx > 0:
++		_task = WorkerThreadPool.add_task(_search_arm.bind(_lot()), false, "Bungee arm search")
++	if not _pending.is_empty() and Parachute.add_clearings(game, _pending):
++		_pending = []
++	if player != null and (state == "ready" or state == "fall" or state == "winch"):
 +		var feet: Vector3 = player.get_global_transform_interpolated().origin
 +		var eye := _anchor() + Vector3(0.0, -0.35, 0.0)
 +		_rope.global_transform = Transform3D(Kit.along(eye, feet), eye)
@@ -256,7 +254,9 @@ index 0000000..c573b09
 +	var deck := root.y + DECK_H
 +	var tip := root + dir * length
 +	tip.y = deck
-+	var drop := deck - _highest_near(tip.x, tip.z)
++	# The drawn land, as the clearance is measured (the search, on its
++	# worker, reads only Terrain.height, which is never under it).
++	var drop := deck - _highest_near(tip.x, tip.z, true)
 +	# The rope: the ankles may reach `reach` under the anchor, so the body
 +	# (BODY under them) stops CLEAR + MARGIN over the highest ground there.
 +	var reach := drop - BODY - CLEAR - MARGIN
@@ -344,19 +344,18 @@ index 0000000..c573b09
 +	var v := dir * DIVE_OUT + Vector3.UP * DIVE_UP
 +	var dt := 1.0 / Engine.physics_ticks_per_second
 +	for i in int(MAX_TIME / dt):
-+		var step := rope_step(p, v, anchor, rope, dt)
 +		var falling := v.y < 0.0
-+		p = step[0]
-+		v = step[1]
++		v += rope_accel(p, v, anchor, rope) * dt
++		p += v * dt
 +		if falling and v.y >= 0.0:
 +			break
 +	return anchor.y - p.y
 +
 +
-+## One step of the jumper's ankles at `p` moving `v` (semi-implicit Euler):
-+## gravity, the rope's spring and damping while it is stretched and
-+## pulling, the air's drag. [p, v] after `dt` s.
-+static func rope_step(p: Vector3, v: Vector3, anchor: Vector3, rope: Dictionary, dt: float) -> Array:
++## The acceleration of the jumper's ankles at `p` moving `v`: gravity, the
++## rope's spring and damping while it is stretched and pulling, the air's
++## drag. A step is semi-implicit Euler: v += a dt, then p += v dt.
++static func rope_accel(p: Vector3, v: Vector3, anchor: Vector3, rope: Dictionary) -> Vector3:
 +	var a := Vector3(0.0, -G, 0.0) - v * v.length() * AIR
 +	a.x -= v.x * HDAMP
 +	a.z -= v.z * HDAMP
@@ -368,8 +367,7 @@ index 0000000..c573b09
 +		var f: float = rope.k * (d - l0) + rope.c * v.dot(u)
 +		if f > 0.0:
 +			a -= u * f
-+	v += a * dt
-+	return [p + v * dt, v]
++	return a
 +
 +
 +static func _root_ok(x: float, z: float, pad: float) -> bool:
@@ -411,12 +409,14 @@ index 0000000..c573b09
 +	return d - 0.6 * l - 0.2 * dist
 +
 +
-+## The highest ground within 2.5 m of (x, z): where a swinging body could reach.
-+static func _highest_near(x: float, z: float) -> float:
-+	var m := Terrain.height(x, z)
-+	for a in 8:
-+		var ang := TAU * a / 8.0
-+		m = maxf(m, Terrain.height(x + cos(ang) * 2.5, z + sin(ang) * 2.5))
++## The highest ground within 2.5 m of (x, z): where a swinging body could
++## reach. `land`: the drawn land (Parachute.ground_under, main thread only),
++## else Terrain.height (worker-safe, never under the land).
++static func _highest_near(x: float, z: float, land := false) -> float:
++	var m := -INF
++	for a in 9:
++		var q := Vector2(x, z) + (Vector2(2.5, 0.0).rotated(TAU * a / 8.0) if a < 8 else Vector2.ZERO)
++		m = maxf(m, Parachute.ground_under(q.x, q.y) if land else Terrain.height(q.x, q.y))
 +	return m
 +
 +
@@ -435,8 +435,14 @@ index 0000000..c573b09
 +	# No trees along the arm and its stays or in the fall under its tip.
 +	var stays := Kit.stay_back(length)
 +	var mid := root + dir * ((length - stays) * 0.5)
-+	Tiles.clearings.append([Vector2(mid.x, mid.z), yaw, Vector2(3.0, (length + stays) * 0.5 + 2.0)])
-+	Tiles.clearings.append([Vector2(_site.tip.x, _site.tip.z), yaw, Vector2(6.0, 6.0)])
++	var rects := [[Vector2(mid.x, mid.z), yaw, Vector2(3.0, (length + stays) * 0.5 + 2.0)],
++			[Vector2(_site.tip.x, _site.tip.z), yaw, Vector2(6.0, 6.0)]]
++	clearings.append_array(rects)
++	# Into Tiles.clearings now if no country tile is building, else on a
++	# later frame (_process): see Parachute.add_clearings.
++	_pending.append_array(rects)
++	if Parachute.add_clearings(game, _pending):
++		_pending = []
 +
 +
 +func _anchor() -> Vector3:
@@ -445,16 +451,15 @@ index 0000000..c573b09
 +
 +# --- The HUD and E ------------------------------------------------------------
 +
++## Whether the player stands at the steps. Only once the search (on its
++## worker) is done: never a search on the main thread from here.
 +func _at_gate() -> bool:
++	if not _site_done or _site.is_empty():
++		return false
 +	var p = game.get("player") if game != null else null
 +	if p == null or p.vehicle != null or p.dead or p.knocked_time > 0.0 or p.air != null or not p.controllable:
 +		return false
-+	if Vector2(p.global_position.x, p.global_position.z).distance_to(_lot()) > ROOT_R + 30.0:
-+		return false
-+	var s := site()
-+	if s.is_empty():
-+		return false
-+	var at: Vector3 = s.gate
++	var at: Vector3 = _site.gate
 +	return Vector2(p.global_position.x - at.x, p.global_position.z - at.z).length() <= REACH
 +
 +
@@ -514,6 +519,10 @@ index 0000000..c573b09
 +		_hand_to_fall(p)
 +		return
 +	_t += delta
++	# A hit that knocks the player down on the rope: the knock-down's clock
++	# runs here and the body stays off every layer. The jump takes no input,
++	# so a cutscene (p.controllable false) changes nothing either.
++	Parachute._hold_air_layers(p, 0, delta)
 +	var dir: Vector3 = _site.dir
 +	var root: Vector3 = _site.root
 +	var deck: float = _site.deck
@@ -601,19 +610,19 @@ index 0000000..c573b09
 +func _rope_step(delta: float) -> void:
 +	var anchor := _anchor()
 +	var vy_was := _v.y
-+	var step := rope_step(_p, _v, anchor, _site, delta)
-+	_p = step[0]
-+	_v = step[1]
++	_v += rope_accel(_p, _v, anchor, _site) * delta
++	_p += _v * delta
 +	if vy_was < 0.0 and _v.y >= 0.0:
 +		lows.append(_p.y - anchor.y)
 +	elif vy_was > 0.0 and _v.y <= 0.0 and _t > 0.5:
 +		highs.append(_p.y - anchor.y)
 +
 +
++## The head (BODY under the ankles) over the drawn land, as a landing is.
 +func _track_clearance(p) -> void:
-+	if state in ["fall", "winch"]:
++	if state == "fall" or state == "winch":
 +		var head: Vector3 = p.global_position
-+		lowest_clear = minf(lowest_clear, head.y - BODY - Terrain.height(head.x, head.z))
++		lowest_clear = minf(lowest_clear, head.y - BODY - Parachute.ground_under(head.x, head.z))
 +
 +
 +func _finish(p) -> void:
@@ -631,8 +640,8 @@ index 0000000..c573b09
 +	_pitch = 0.0
 +	_pose(p)
 +	p.velocity = Vector3.ZERO
-+	if not p.dead:
-+		p._set_standing_layers()
++	# Standing, or down (dead, or still knocked down from a hit on the rope).
++	Parachute._ground_layers(p)
 +	p.set("_drop_at", Vector2.INF)
 +	p.reset_physics_interpolation()
 +
@@ -900,10 +909,10 @@ index 0000000..c55e960
 +uid://c5vicg6hjdxhj
 diff --git a/game/scripts/parachute.gd b/game/scripts/parachute.gd
 new file mode 100644
-index 0000000..9bd9790
+index 0000000..09c8d2f
 --- /dev/null
 +++ b/game/scripts/parachute.gd
-@@ -0,0 +1,677 @@
+@@ -0,0 +1,684 @@
 +extends Node
 +## Parachuting (HANDOFF-air-sports.md). A bail from a helicopter MIN_HEIGHT m
 +## or more over the ground free-falls, then flies a canopy down: OPEN (E) or,
@@ -1385,36 +1394,44 @@ index 0000000..9bd9790
 +	return country != null and not country.lakes.is_empty() and not country.lake_at(q).is_empty()
 +
 +
-+## The nearest open, dry ground to `p` (no roof over it), rings out to 80 m.
++## The nearest open, dry ground to `p` (nothing built or growing over it):
++## on OPEN_RINGS (a point every 12 m or so round each), else the nearest road
++## junction (a lake's middle or a block of towers), else `p`.
 +func _open_ground_near(p: Vector3) -> Vector3:
 +	if not is_inside_tree():
 +		return p
 +	var space := get_viewport().find_world_3d().direct_space_state
-+	for r: float in [0.0, 6.0, 12.0, 20.0, 30.0, 45.0, 60.0, 80.0]:
-+		for k in (1 if r == 0.0 else 12):
-+			var q := p + Vector3(r, 0.0, 0.0).rotated(Vector3.UP, TAU * k / 12.0)
++	for r: float in OPEN_RINGS:
++		var count := 1 if r == 0.0 else maxi(12, ceili(TAU * r / 12.0))
++		for k in count:
++			var q := p + Vector3(r, 0.0, 0.0).rotated(Vector3.UP, TAU * k / count)
 +			var g := ground_under(q.x, q.z)
 +			if _wet(q, g):
 +				continue
-+			var ray := PhysicsRayQueryParameters3D.create(Vector3(q.x, g + 200.0, q.z), Vector3(q.x, g - 0.5, q.z), L.WORLD)
++			var ray := PhysicsRayQueryParameters3D.create(Vector3(q.x, g + 500.0, q.z), Vector3(q.x, g - 0.5, q.z), FLY_MASK)
 +			var hit := space.intersect_ray(ray)
 +			if hit.is_empty() or float(hit.position.y) <= g + 1.0:
 +				return Vector3(q.x, g, q.z)
++	var city = game.get("city") if game != null else null
++	var n: int = city.nearest_node(p) if city != null else -1
++	if n >= 0:
++		var at: Vector3 = city.node_pos(n)
++		return Vector3(at.x, ground_under(at.x, at.z), at.z)
 +	return p
 +
 +
 +# --- Drawing ------------------------------------------------------------------
 +
 +func _process(delta: float) -> void:
-+	_prepare_tick -= delta
++	# The site search starts on a worker as soon as the terrain is there,
++	# wherever the player is: a taxi skip or a mission replay can put them
++	# by the lip within a frame, and the tiles there build at once.
 +	if _task >= 0:
 +		if WorkerThreadPool.is_task_completed(_task):
 +			base_site()
-+	elif not _site_done and _prepare_tick <= 0.0:
-+		_prepare_tick = 0.5
-+		var p = game.get("player") if game != null else null
-+		if p != null and Terrain.nx > 0 and Vector2(p.global_position.x, p.global_position.z).distance_to(BASE_NEAR) < PREPARE_RANGE:
-+			_task = WorkerThreadPool.add_task(_search_lip, false, "BASE exit search")
++	elif not _site_done and Terrain.nx > 0:
++		_task = WorkerThreadPool.add_task(_search_lip, false, "BASE exit search")
++	_flush_clearings()
 +	if player != null and state != "":
 +		var xf: Transform3D = player.get_global_transform_interpolated()
 +		_rig.global_transform = Transform3D(Basis.from_euler(Vector3(0.0, heading, bank)), xf.origin)
@@ -1537,19 +1554,18 @@ index 0000000..9bd9790
 +	add_child(_marker)
 +	_marker.global_transform = Transform3D(Basis(Vector3.UP, atan2(-dir.x, -dir.z)), lip)
 +	# No trees or stones on the exit.
-+	Tiles.clearings.append([Vector2(lip.x, lip.z), 0.0, Vector2(5.0, 5.0)])
++	_clear_ground([[Vector2(lip.x, lip.z), 0.0, Vector2(5.0, 5.0)]])
 +
 +
++## Whether the player stands at the lip. Only once the search (on its
++## worker) is done: never a search on the main thread from here.
 +func _at_lip() -> bool:
++	if not _site_done or _site.is_empty():
++		return false
 +	var p = game.get("player") if game != null else null
 +	if p == null or p.vehicle != null or p.dead or p.knocked_time > 0.0 or p.air != null or not p.controllable:
 +		return false
-+	if Vector2(p.global_position.x, p.global_position.z).distance_to(BASE_NEAR) > BASE_R + 20.0:
-+		return false
-+	var s := base_site()
-+	if s.is_empty():
-+		return false
-+	var at: Vector3 = s.stand
++	var at: Vector3 = _site.stand
 +	return Vector2(p.global_position.x - at.x, p.global_position.z - at.z).length() <= BASE_REACH
 +
 +
