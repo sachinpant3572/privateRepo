@@ -1459,7 +1459,7 @@ index 0000000..e11fc5b
 +script = ExtResource("1")
 diff --git a/game/tests/ground_tests.gd b/game/tests/ground_tests.gd
 new file mode 100644
-index 0000000..e3f0c11
+index 0000000..964ac59
 --- /dev/null
 +++ b/game/tests/ground_tests.gd
 @@ -0,0 +1,486 @@
@@ -1799,7 +1799,7 @@ index 0000000..e3f0c11
 +		var v: float = run[1]
 +		var site: Dictionary = s.sites[id]
 +		var fwd: Vector2 = site.fwd
-+		var car = _car(t, "sports", Vector2(site.foot.x, site.foot.z) - fwd * 60.0, Stunts.jump(id).yaw)
++		var car = _car(t, "sports", Vector2(site.foot.x, site.foot.z) - fwd * float(Stunts.jump(id).run), Stunts.jump(id).yaw)
 +		var r := await _run(t, car, _ramp_path(s, id), v, 9.0)
 +		var f: Dictionary = car.last_flight
 +		t.check(r.took == 1 and r.landed == 1 and f.get("deck", "") == Stunts.DECK_PREFIX + id,
@@ -1911,9 +1911,9 @@ index 0000000..e3f0c11
 +		var got := {"n": 0}
 +		var count := func(_info): got.n += 1
 +		s.jumped.connect(count)
-+		Controls.override_vector = Vector2(0, -0.6)
++		# The player at the wheel; the script driver holds the line and speed.
++		car.drive_path(_ramp_path(s, "shale"), 24.0 / car.max_speed)
 +		await t._within(func(): return got.n > 0, 20.0)
-+		Controls.override_vector = null
 +		s.jumped.disconnect(count)
 +		var lj: Dictionary = s.last_jump
 +		t.check(got.n == 1 and lj.get("id", "") == "shale" and lj.made, "run %d: a jump on Shale Hop is made (%s)" % [k + 1, lj])
