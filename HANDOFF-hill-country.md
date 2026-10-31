@@ -41,7 +41,7 @@ His earlier asks are in TODO.md ("hill country behind Bellerive").
   mountain_plan.py [ids] and mountain_world_map.py. Re-dump the plan first.
   A change in RNG use shifts lots everywhere.
 - Tests that pin it: test_mount_calder (6226; >= 4 lesser peaks of
-  380-780 m, the grade caps of 8 named roads), test_hill_districts,
+  380-780 m, the grade caps of 19 named roads), test_hill_districts,
   test_bellerive_hills, test_hill_heights_are_flat_checks,
   test_rail_crossings_are_grade_separated, test_country_joins_the_city,
   test_movers_stand_on_hill_ground, test_flora_kit_and_hill_ecology,
@@ -49,15 +49,7 @@ His earlier asks are in TODO.md ("hill country behind Bellerive").
 - The "about 5.1 km² of usable ground" in TODO.md has no traceable
   source. Step 0 measures it again with a defined metric.
 
-## Step 0: measure (tools/hill_area.py, 2026-10-31)
-
-Hill ground = 3-450 m, slope <= 0.45, within 150 m of a road, track or
-trail. Today: 3.54 km² (6.11 km² with no reach limit; 14.14 km² of
-ground over 3 m). By band (gentle and reached): 3-50 m 1.69, 50-120 1.17,
-120-200 0.32, 200-300 0.21, 300-450 0.16. True rolling hills (50-450 m)
-reached: ~1.86 km². The range is a steep dome; only a thin ring is gentle,
-and the east and north-east apron (x 2400-3450, y -4400..-1500, 0-60 m,
-gentle, in the mountain zone and the play area) has no road at all.
+## Step 0: measure (in HANDOFF-hill-country-archive.md; metric in tools/hill_area.py)
 
 ## Design (built 2026-10-31)
 
@@ -73,7 +65,7 @@ gentle, in the mountain zone and the play area) has no road at all.
   tops west, so the labels moved onto them): Whistler Hill (2536,-3656)
   168 m, Tallow Knob (2576,-3968) 136 m, Fernmoor Hill (1944,-4704) 118 m,
   Copperback (2600,-2720) 132 m, a shoulder under the East Ridge (like
-  Larkspur Knob). Designed 165-265 m; the cap keeps them lower.
+  Larkspur Knob; existing ground, only labelled now, so three tops are new). Designed 165-265 m; the cap keeps them lower.
 - **Roads** (mountain_plan.py, tag "hills" except the two shortcuts):
   East Hills Road (lane, 2.6 km) from Old Post Road (2750,-2010) up the
   hills' east side to Route 9's end; a track to each top (Copperback,
@@ -105,8 +97,31 @@ gentle, in the mountain zone and the play area) has no road at all.
 Hill ground 4.85 km² (was 3.54); true rolling hills (50-450 m, gentle,
 reached) 3.10 km² (was 1.86): 50-120 2.04, 120-200 0.62, 200-300 0.24,
 300-450 0.20. Ask "3 km² or more": met. Not clipped to the play area.
-In-game test_east_hills: the hills' box (x 1800..3000, y -4750..-2550) in
-the play area holds 1.21 km² of gentle 50-450 m ground (HILL_KM2 1.1).
+Clipped to the play area: 3.07 km². In-game test_east_hills: the hills'
+box (x 1800..3000, y -4750..-2550) in the play area holds 1.21 km² of
+gentle 50-450 m ground (HILL_KM2 1.1; the old terrain held 0.62, so the
+check fails on it).
+
+## Design map (tools/hill_design_map.py, 2026-10-31)
+
+`docs/hill_country_design_map.png`: the land as built plus PROPOSED
+content (nothing built; lists at the top of the tool, which prints each
+place's height and nearest road). Zones: quiet (Fernmoor country, the
+Whistler-Tallow ridge, the high range), busy (East Hills Road strip,
+Copperback race country) with a 250 m buffer ring, the closed lab valley,
+the great forest across the back of the range (-550..1150, -4950..-3500).
+Places: Brackett village (2300,-2180), truck stop (2800,-2300), trailer
+town (2720,-2900), race start, stunt jump on Copperback Cut, two rave
+clearings in Copperback country, cult compound at East Hills Road's west
+end (2140,-3960), secret lab in a hidden valley 513 m up (1180,-3720),
+318 m from any way, its one guarded road Hollin Trail widened from the
+gate on Route 9 (1394,-4273); hot springs Raven (560,-3330) and Fernmoor
+(2050,-4600), cold springs Whistler (2620,-3800) and Tallow (2440,-4040);
+illegal logging camp (-300,-3800); hotels by the summit restaurant and at
+Whistler. Water from the ground itself: streams traced downhill (Raven
+Creek 1.3 km to the plain; the lab creek to Fernmoor Pond), and the two
+basins, Tallow Lake (2248,-4144, 57 m) and Fernmoor Pond (1752,-4512).
+Stream crossings need bridges (#110).
 
 ## Traps
 
@@ -115,6 +130,10 @@ the play area holds 1.21 km² of gentle 50-450 m ground (HILL_KM2 1.1).
   Let the planner choose the switchbacks.
 - A trail joined at a hairpin wound round through it (cut 2 m) and broke
   it; Hollin Trail is a dead end instead.
+- Trails are ungated for grade. Over 32 m on the 8 m grid: Hollin 0.47,
+  Tallow 0.32, Moor 0.27 (older: Calder 0.56, Raven 0.59). Known, fine on foot.
+- On the map each new top's peak label and its view_ landmark share a
+  position, so the viewpoint icon sits on the label. Left as is.
 - mountain_check "steepest" is a 4 m spot value; the gate is the 32 m
   check in test_mount_calder (list new driven lines there).
 

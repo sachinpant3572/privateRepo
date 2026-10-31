@@ -6399,7 +6399,20 @@ func test_east_hills() -> void:
 	var m: Dictionary = c.mountain
 	for id in ["tallow_knob", "whistler_hill", "copperback", "fernmoor_hill"]:
 		var pk: Array = m.peaks.get(id, [0, 0, 0])
-		_check(Terrain.height(float(pk[0]), float(pk[1])) >= 80.0, "%s stands %.0f m up" % [id, Terrain.height(float(pk[0]), float(pk[1]))])
+		_check(Terrain.height(float(pk[0]), float(pk[1])) >= 110.0, "%s stands %.0f m up" % [id, Terrain.height(float(pk[0]), float(pk[1]))])
+	# The new roads and tracks are built, and a track ends at each top.
+	var names := {}
+	for rd in c.roads:
+		names[rd.name] = true
+	for nm in ["East Hills Road", "Copperback Track", "Whistler Track", "Tallow Track", "Fernmoor Track", "Copperback Cut",
+			"Spur Track", "Tallow Top Track", "Whistler Top Track", "Fernmoor Ridge Track", "Brackett Track"]:
+		_check(names.has(nm), "%s is built" % nm)
+	for id in ["tallow_knob", "whistler_hill", "copperback", "fernmoor_hill", "east_peak"]:
+		var site: Dictionary = m.sites.get("view_" + id, {})
+		var near := INF
+		for p in c.node_pos:
+			near = minf(near, (p as Vector2).distance_to(Vector2(float(site.get("x", 0)), float(site.get("y", 0)))))
+		_check(not site.is_empty() and near < 10.0, "a track reaches the %s viewpoint (%.1f m)" % [id, near])
 	# Rolling ground on the East Hills: 50-450 m up, no steeper than 0.45.
 	var gentle := 0
 	var cell: float = Terrain.cell

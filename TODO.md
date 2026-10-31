@@ -70,7 +70,8 @@ Plan (not started, awaiting his word; rough cost 6-10 h with gates):
 
 Status: the land step he approved ("Lets go!", 2026-10-30) is built: the East Hills (Whistler,
 Tallow, Copperback, Fernmoor), East Hills Road, dirt tracks and trails to each top, two
-shortcuts, back-country lines and seven viewpoints; true rolling hills 3.10 km² (was 1.86).
+shortcuts, back-country lines and seven viewpoints; true rolling hills 3.10 km² (was 1.86);
+the design map `docs/hill_country_design_map.png` places the content below as proposals.
 Details: `HANDOFF-hill-country.md`. Content (places, wildlife, hunting, events) waits for his word.
 
 Sachin, 2026-10-30: "I think Hills area should be increased to at least 3 km2, as it is
@@ -86,10 +87,12 @@ Then: "Also, events that happen only in small towns or counties + secret govt/mi
 research labs in mountains, far away from the city, religious cults, hunters, animals,
 flora and fauna, can add hunting activity too, hikers, runners, etc too"
 
-Status: **proposal, not approved to build**. Stage C (#118) finishes first. Proposed
-order, rough costs:
-0. Hill-country design map placing everything below on the 8 peaks (~2-4 h).
-1. Land: hills to >= 3 km2 (about 5.1 km2 of usable ground exists), more peaks with
+Status: steps 0 and 1 **done** (2026-10-31); steps 2-4 **not approved**, wait for his word.
+Order, rough costs:
+0. Done: design map `docs/hill_country_design_map.png` (tools/hill_design_map.py),
+   everything below placed as proposals, quiet and busy zones with buffers.
+1. Done: land, true rolling hills (50-450 m, slope <= 0.45, within 150 m of a way)
+   1.86 -> 3.10 km2 (tools/hill_area.py), more peaks with
    roads and viewpoints (~8-14 h).
 2. Places: villages, towns, trailer towns, truck stops, petrol pumps, eateries, scenic,
    shady, creepy and mystery spots, an original cult compound (fictional beliefs, no real
