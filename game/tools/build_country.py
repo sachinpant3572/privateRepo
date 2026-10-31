@@ -2175,25 +2175,12 @@ class Country:
         return False
 
     def _site_skew(self, q, yaw, d):
-        """Degrees between a site lot's front and the road edge it fronts,
-        when the front's middle is within 10 m of one (0 otherwise): the
-        lot facing the nearest road point from its centre is not square to
-        the road when that point lies round a bend (the Kestrel lab stood
-        80 deg off Kestrel Hollow Road; test_country_plots_square_to_their_roads)."""
-        edge = getattr(self, "_road_edge", None)
-        if edge is None:
-            edge = self._road_edge = self.road_area.boundary
-        front = Point(frame_point(q, yaw, 0.0, -d * 0.5))
-        if edge.distance(front) > 10.0:
-            return 0.0
-        t = edge.project(front)
-        a, b = edge.interpolate(t - 2.0), edge.interpolate(t + 2.0)
-        tx, ty = b.x - a.x, b.y - a.y
-        n = math.hypot(tx, ty)
-        if n < 1e-6:
-            return 0.0
-        ax, ay = math.cos(yaw), -math.sin(yaw)
-        return math.degrees(math.asin(min(1.0, abs(ax * ty - ay * tx) / n)))
+        """Degrees a site lot's front turns off the road edge within 8 m of
+        it, as the tests measure it (_road_turn), 0 with none near: facing
+        the nearest road point from the centre is not square to the road
+        when that point is a road's end or round a bend (the Kestrel lab
+        stood 80 deg off Kestrel Hollow Road)."""
+        return max(self._road_turn(frame_point(q, yaw, 0.0, -d * 0.5), yaw), 0.0)
 
     def hill_places(self):
         """The hill country's villages, roadside stops, trailer town and

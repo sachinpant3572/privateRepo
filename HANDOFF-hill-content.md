@@ -102,8 +102,10 @@ Last full suite (before the two fixes below): 2132 passed, 2 failed:
   12 m off); the fix is committed but not yet re-run.
 - test_country_plots_square_to_their_roads: kestrel_lab 80.2 deg off
   Kestrel Hollow Road; fails on 4197417 too (previous session). Fix:
-  build_country.py `_site_skew` rejects a site spot whose front is within
-  10 m of a road and more than 3.5 deg off it (committed). The country
+  build_country.py `_site_skew` (= `_road_turn`, the test's own measure on
+  graph edges) rejects a site spot more than 3.5 deg off the road edge
+  within 8 m of its front (committed). A first try on the road-area outline
+  missed it (a road's end cap looks square). The country
   data is NOT rebuilt yet (see step 1).
 Next steps, in order:
 1. Rebuild the country (README "The country is generated"): plan_dump,
