@@ -71,7 +71,7 @@ Plan (not started, awaiting his word; rough cost 6-10 h with gates):
 Status: the land step he approved ("Lets go!", 2026-10-30) is built: the East Hills (Whistler,
 Tallow, Copperback, Fernmoor), East Hills Road, dirt tracks and trails to each top, two
 shortcuts, back-country lines and seven viewpoints; true rolling hills 3.10 km² (was 1.86);
-the design map `docs/hill_country_design_map.png` places the content below as proposals.
+the design map `docs/hill_country_design_map.png` places most of the content below as proposals.
 Details: `HANDOFF-hill-country.md`. Content (places, wildlife, hunting, events) waits for his word.
 
 Sachin, 2026-10-30: "I think Hills area should be increased to at least 3 km2, as it is
@@ -89,8 +89,12 @@ flora and fauna, can add hunting activity too, hikers, runners, etc too"
 
 Status: steps 0 and 1 **done** (2026-10-31); steps 2-4 **not approved**, wait for his word.
 Order, rough costs:
-0. Done: design map `docs/hill_country_design_map.png` (tools/hill_design_map.py),
-   everything below placed as proposals, quiet and busy zones with buffers.
+0. Done: design map `docs/hill_country_design_map.png` (tools/hill_design_map.py):
+   quiet, busy (250 m buffers), closed and forest zones; 25 numbered places (towns, truck
+   stop, motel, trailer town, race, jump, raves, cult, lab with guarded road, springs,
+   logging camp and haul, ranger post, hotels, mine, stone ring, bungee, parachutes,
+   downhill bike); sky bridge; streams and lakes; a rail branch (1.6 km of it tunnel).
+   Not placed: wildlife (forest zone only) and small-town events (busy zones only).
 1. Done: land, true rolling hills (50-450 m, slope <= 0.45, within 150 m of a way)
    1.86 -> 3.10 km2 (tools/hill_area.py), more peaks with
    roads and viewpoints (~8-14 h).

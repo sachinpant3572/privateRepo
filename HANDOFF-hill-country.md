@@ -46,8 +46,6 @@ His earlier asks are in TODO.md ("hill country behind Bellerive").
   test_rail_crossings_are_grade_separated, test_country_joins_the_city,
   test_movers_stand_on_hill_ground, test_flora_kit_and_hill_ecology,
   test_heli_walls_and_mountain_stop_it, and a labels check (>= 5 peaks).
-- The "about 5.1 km² of usable ground" in TODO.md has no traceable
-  source. Step 0 measures it again with a defined metric.
 
 ## Step 0: measure (in HANDOFF-hill-country-archive.md; metric in tools/hill_area.py)
 
@@ -104,24 +102,31 @@ check fails on it).
 
 ## Design map (tools/hill_design_map.py, 2026-10-31)
 
-`docs/hill_country_design_map.png`: the land as built plus PROPOSED
-content (nothing built; lists at the top of the tool, which prints each
-place's height and nearest road). Zones: quiet (Fernmoor country, the
-Whistler-Tallow ridge, the high range), busy (East Hills Road strip,
-Copperback race country) with a 250 m buffer ring, the closed lab valley,
-the great forest across the back of the range (-550..1150, -4950..-3500).
-Places: Brackett village (2300,-2180), truck stop (2800,-2300), trailer
-town (2720,-2900), race start, stunt jump on Copperback Cut, two rave
-clearings in Copperback country, cult compound at East Hills Road's west
-end (2140,-3960), secret lab in a hidden valley 513 m up (1180,-3720),
-318 m from any way, its one guarded road Hollin Trail widened from the
-gate on Route 9 (1394,-4273); hot springs Raven (560,-3330) and Fernmoor
-(2050,-4600), cold springs Whistler (2620,-3800) and Tallow (2440,-4040);
-illegal logging camp (-300,-3800); hotels by the summit restaurant and at
-Whistler. Water from the ground itself: streams traced downhill (Raven
-Creek 1.3 km to the plain; the lab creek to Fernmoor Pond), and the two
-basins, Tallow Lake (2248,-4144, 57 m) and Fernmoor Pond (1752,-4512).
-Stream crossings need bridges (#110).
+`docs/hill_country_design_map.png`: the land as built (with the Morrow)
+plus PROPOSED content, numbered 1-25 with a key panel; nothing built. The
+tool prints each place's height, slope and nearest way, line lengths and
+the rail's tunnels. Zones: quiet (Fernmoor, Whistler-Tallow ridge, high
+range to x 1880), busy (Hollin Crossing, East Hills Road strip, Copperback
+race country) with a 250 m ring, the forest (tint on hills only). East
+Hills Road crosses the quiet ridge as a through way; the race loop
+(existing ways) is drawn only south of y -3340. Places sit on ground with
+slope <= 0.36 unless the cliff is the point (mine, bungee, summit set):
+Brackett village (2412,-2116), Hollin Crossing village with the sawmill
+(1448,-4408), truck stop (2790,-2310), shady motel by Route 1, trailer
+town, race start, jump, 2 raves, cult (2316,-4024, 108 m off Spur Track),
+4 springs, logging camp on the Morrow's far bank (-332,-4300; no flat
+ground on the near side), ranger post, 2 hotels, mine, stone ring,
+bungee, parachutes, Calder Trail downhill. Secret lab in a real hollow
+(528,-4048), 129 m up, rim +247 m, 232 m from any way; no public way
+enters its box; guarded road (dashed red, 285 m, needs switchbacks) up the
+outlet from the gate on Route 9 (472,-4288). Haul: log bridge over the
+Morrow to Route 9. Sky bridge North Knob-Raven Peak (798 m). Rail branch
+Freight Line to Corran Commuter at 2 %: 1.9 km, 1.6 km of it tunnel (the
+hills stand 45-110 m over both ends), so #110/#111 decide if it is worth
+it. Water traced from the ground: Raven Creek through the lab hollow to the
+Morrow, Hollin creek to Fernmoor Pond, Copperback brook to Tallow Lake
+(2248,-4144, 57 m), Whistler brook east. Not placed: wildlife (forest zone
+only), small-town events (busy zones only). Crossings need #110.
 
 ## Traps
 
@@ -139,10 +144,6 @@ Stream crossings need bridges (#110).
 
 ## Decisions
 
-- East apron for the new hills: it is the only large gentle ground left
-  in the play area with no roads, far from the city (no CITY_FADE clash),
-  and next to East Peak, so new crests join the range naturally. Rejected:
-  raising the south foothills (hill districts and the city edge there are
-  pinned by tests), and the north (y < -4800 lies outside the play area).
+- East apron for the hills (why: HANDOFF-hill-country-archive.md).
 - Grass is not part of this: it is optional, 6-10 h, and it is a separate
   rendering job. It can follow once the land is final.
