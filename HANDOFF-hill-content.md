@@ -83,8 +83,8 @@ on top; built in phases, each committed; `/effort xhigh` suits it.
 Kept current at each milestone (Sachin 10-31: a handoff with proper
 details for when the 5-hour limit is reached; a limit stop gives no
 warning, so this section is the handoff). Branch
-`claude/gangstar-game-content-tunnels-kszhz9`, pushed. Session 2 notes:
-archive.
+`ccr-ac909a1c-kp0vp0` (draft PR #3, stacked on #2; was
+`claude/gangstar-game-content-tunnels-kszhz9`), pushed. Session 2: archive.
 
 Done this session:
 1. Full suite on fe9f7ec: exit 0, 2134 passed, 0 failed.
@@ -98,9 +98,9 @@ Done this session:
    load. 9 focused tests PASS (77 checks); full suite after the fixes:
    exit 0, 2145 passed, 0 failed. No second review needed (no High).
 
-Session 4 (10-31, other account): new container; wave A relaunched from
-wip/snapshots (isolation worktrees on acb9be2; R moves its main/hud/
-player/mission_manager edits into its note as patches).
+Sessions 4-5 (10-31): session 4's builders were lost with its container
+(no snapshot after 11:51); session 5 relaunched wave A from wip/snapshots.
+R puts its main/hud/player/mission_manager edits in its report as patches.
 
 In progress: phase 3 wave A, three builders in local worktrees (branches
 not pushed; base fe9f7ec). Their briefs: wip/briefs/ (paths made
