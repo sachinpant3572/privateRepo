@@ -98,6 +98,12 @@ Done this session:
    load. 9 focused tests PASS (77 checks); full suite after the fixes:
    exit 0, 2145 passed, 0 failed. No second review needed (no High).
 
+Session 4 (2026-10-31, other account): new container; setup_cloud ok;
+wave A relaunched from wip/snapshots (G, P Opus xhigh; R Sonnet xhigh,
+isolation worktrees on acb9be2; R told to move its main/hud/player/
+mission_manager edits into its note). If this stops too, resume the same
+way from the snapshots (re-run wip/snapshot.sh first if worktrees exist).
+
 In progress: phase 3 wave A, three builders in local worktrees (branches
 not pushed; base fe9f7ec). Their briefs: wip/briefs/ (paths made
 worktree-relative in c53c27b).
