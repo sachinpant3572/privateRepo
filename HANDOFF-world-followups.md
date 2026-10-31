@@ -118,10 +118,11 @@ C. **Sloped districts** (~40-70 h, Sachin's yes): the foothills north of
    Built 2026-10-30 (country zone, option B): HANDOFF-hill-districts.md.
 D. **A bay and a beach borough** (~10-16 h): a second water body in the
    plan (bank logic), a barrier-island beach borough reached by 2-3
-   causeways (the existing bridge class).
-Total ~72-118 h. Cheaper option: A + B only (~22-32 h, ~8 km², flat, no
-bay); D can be dropped and the beach kept on the Gulf shore.
-Milestone APK after A (with #114 and the helicopters), then after B, C, D.
+   causeways (the existing bridge class). DROPPED 2026-10-30 (Sachin
+   approved the recommendation, "Lets go!"): the beach stays on the Gulf
+   coast; the city reached its size without it.
+Milestone APK after A (with #114 and the helicopters), then after B and C
+(0.26, 2026-10-31: HANDOFF-close-out-026.md).
 
 Stage A build (approach in the archive):
 - Built (stage A): sites as above, all 9 one block each; ponds 2,000-2,500

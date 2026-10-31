@@ -758,11 +758,14 @@ func test_busted_when_cop_holds_player() -> void:
 func test_wasted_respawns_at_hospital() -> void:
 	await _new_game(false)
 	var p = game.player
+	Fx.explosion(p.global_position + Vector3(6.0, 0.0, 0.0), 1.0)
+	_check(Fx.boom._scorch.any(func(m): return m.visible), "a blast leaves a burn mark")
 	p.take_hit(null, 999.0, Vector3.ZERO)
 	_check(p.dead, "player dies")
 	await _frames(200)
 	_check(not p.dead and p.health == p.max_health, "player revived")
 	_check(p.global_position.distance_to(game.city.hospital) < 2.0, "respawn at the hospital")
+	_check(Fx.boom.running() == 0 and Fx.boom._scorch.all(func(m): return not m.visible), "no blast or burn mark is left from before")
 
 
 func test_city_runs_with_population() -> void:
@@ -11558,6 +11561,15 @@ func test_heli_exit_only_when_low() -> void:
 	_check(over.is_empty() or over.position.y <= Terrain.height(at.x, at.z) + 1.0, "thrown over a roof, the fall is to open ground, not inside the building")
 	await _frames(240)
 	_check(player.health < player.max_health - 25.0, "and the drop hurts more than a thrown exit (%.0f left)" % player.health)
+	# Never into water: 20 m into the river the search finds the bank.
+	var rv: Array = Array(city.plan._river)
+	var k: int = rv.size() / 2
+	var along: Vector2 = (rv[k + 1] - rv[k]).normalized()
+	var wet: Vector2 = (rv[k] + rv[k + 1]) * 0.5 + Vector2(-along.y, along.x) * 60.0
+	_check(city.plan.is_water_point(wet), "the probe point is in the river")
+	var dry: Vector3 = heli.open_ground_near(Vector3(wet.x, 0.0, wet.y))
+	_check(dry.distance_to(Vector3(wet.x, 0.0, wet.y)) > 1.0 and not heli._wet(city.plan, Vector2(dry.x, dry.z), heli._ground(dry.x, dry.z)),
+		"open ground is never water (%.0f m from the river line)" % city.plan.river_distance(Vector2(dry.x, dry.z)))
 
 
 ## Streaming: flying flat out near the ceiling from downtown out over the

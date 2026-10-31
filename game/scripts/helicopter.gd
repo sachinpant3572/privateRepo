@@ -64,6 +64,8 @@ const STEP := 0.8
 const LOW := 3.0
 ## A support this far over the land under it is a roof.
 const ROOF := 1.0
+## Ground under this is water (city.gd draws the water plane at -0.55).
+const WATER_Y := -0.5
 ## Into a wall (or a hillside) slower than this (m/s) it only slides along:
 ## no bounce and no harm, so holding the stick against a tower after the
 ## blow doesn't grind it down.
@@ -325,21 +327,42 @@ func height_over_floor() -> float:
 	return global_position.y - _floor
 
 
-## The nearest open ground to `p` (no roof over the land), rings out to 80 m;
-## `p` itself if none is found.
+## The nearest open ground to `p` (no roof over the land, no water),
+## rings out to 80 m; `p` itself if none is found.
 func open_ground_near(p: Vector3) -> Vector3:
 	if not is_inside_tree():
 		return p
 	var space := get_world_3d().direct_space_state
+	var game = get_tree().get_first_node_in_group("game")
+	var city = game.get("city") if game != null else null
+	var plan = city.plan if city != null else null
 	for r in [0.0, 6.0, 12.0, 20.0, 30.0, 45.0, 60.0, 80.0]:
 		for k in (1 if r == 0.0 else 12):
 			var q := p + Vector3(r, 0.0, 0.0).rotated(Vector3.UP, TAU * k / 12.0)
 			var g := _ground(q.x, q.z)
+			if _wet(plan, Vector2(q.x, q.z), g):
+				continue
 			var ray := PhysicsRayQueryParameters3D.create(Vector3(q.x, g + 200.0, q.z), Vector3(q.x, g - 0.5, q.z), L.WORLD, [get_rid()])
 			var hit := space.intersect_ray(ray)
 			if hit.is_empty() or float(hit.position.y) <= g + ROOF:
 				return Vector3(q.x, g, q.z)
 	return p
+
+
+## Water at (x, z) with ground g: the sea and the banks lie under the water
+## plane (-0.55, city.gd); the plan's river and park lakes are drawn over flat
+## ground.
+static func _wet(plan, p: Vector2, g: float) -> bool:
+	if g < WATER_Y:
+		return true
+	if plan == null:
+		return false
+	if plan.is_water_point(p):
+		return true
+	for lake in plan.lakes:
+		if Geometry2D.is_point_in_polygon(p, lake):
+			return true
+	return false
 
 
 ## The top of a roof (or anything solid) under it, or -INF.

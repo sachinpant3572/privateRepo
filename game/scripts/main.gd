@@ -290,6 +290,7 @@ func _respawn(text: String, point: Vector3) -> void:
 	interiors.force_out()
 	Wanted.clear()
 	police.clear_all()
+	Fx.boom.clear() # no blast or burn mark left from before
 	city.stream_now(point)
 	player.respawn(point)
 	camera.snap()
