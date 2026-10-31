@@ -79,9 +79,6 @@ on top; built in phases, each committed; `/effort xhigh` suits it.
   check) in the phase-4 rebuild. Its arm is drawn raised until then.
 - Bungee platform sits on a level pad: phase 3 needs a cliff-edge site.
 
-## Status
-Phases 1-2 history (status, the 10-31 handover list): archive.
-
 ## Handover (session 3, 2026-10-31) - start here
 Kept current at each milestone (Sachin 10-31: a handoff with proper
 details for when the 5-hour limit is reached; a limit stop gives no
@@ -110,9 +107,8 @@ worktree-relative in c53c27b).
 | R races/cycling | Sonnet xhigh | agent-a9c0ec2e48144bf73 | races.gd, race_course.gd (moved from wip/R), race_shots, race_calib |
 - R had edited main.gd, hud.gd, player.gd, mission_manager.gd against its
   brief; told to revert them and report patches instead.
-- Snapshots: `wip/snapshot.sh` writes each worktree's work (commits +
-  uncommitted + untracked, temp index) to wip/snapshots/<pkg>.patch; run it
-  and commit at each milestone. Untested until the builder says so.
+- `wip/snapshot.sh` saves each worktree's work (commits, uncommitted,
+  untracked) to wip/snapshots/<pkg>.patch; run and commit at milestones.
 
 Resume (if this session stopped):
 - Same container (`git worktree list` shows the three): the builders
@@ -153,4 +149,5 @@ not found; check `pgrep -af godot`).
   1.5-3 h plus a 20-40 min Opus review; started while the step-1 suite ran
   (own worktrees, shared /tmp/godot.lock).
 
-Phase 2 package plan: HANDOFF-hill-content-archive.md.
+Archive (HANDOFF-hill-content-archive.md): phase 1-2 history, phase 2
+package plan, session 2 handover.
