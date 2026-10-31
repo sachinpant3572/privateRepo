@@ -421,13 +421,17 @@ func _mountain(game) -> void:
 	game.hud.full_map.close()
 
 
-## The East Hills (hill country land): the hills from high over each half,
-## then every viewpoint's pull-out up close (east_hills_1 to _2, then
-## east_hills_view_<peak>).
+## The East Hills (hill country land): the hills from 300 m over five
+## stretches, then every viewpoint's pull-out up close (east_hills_1 to _5,
+## then east_hills_view_<peak>), then the full map.
 func _east_hills(game) -> void:
 	var s: Dictionary = game.city.country.mountain.sites
-	var stops := [["east_hills_1_south", Vector2(2450, -2700), 700.0],
-			["east_hills_2_north", Vector2(2300, -4150), 700.0]]
+	# Wider than about 300 m the view runs past what streams in.
+	var stops := [["east_hills_1_brackett", Vector2(2500, -2300), 300.0],
+			["east_hills_2_copperback", Vector2(2650, -2850), 300.0],
+			["east_hills_3_whistler", Vector2(2600, -3450), 300.0],
+			["east_hills_4_tallow", Vector2(2500, -4050), 300.0],
+			["east_hills_5_fernmoor", Vector2(2050, -4500), 300.0]]
 	for k in s:
 		if String(k).begins_with("view_"):
 			stops.append(["east_hills_" + String(k), Vector2(float(s[k].x), float(s[k].y)), 90.0])
@@ -444,6 +448,12 @@ func _east_hills(game) -> void:
 		await _shot(stop[0] + ".png")
 	game.camera.fixed_focus = null
 	game.camera.room_size = 0.0
+	game.hud.full_map.open()
+	for i in 4:
+		await get_tree().process_frame
+	await _shot("east_hills_map.png")
+	game.hud.full_map.close()
+
 
 ## The hills' ecology (0.23): a wet canyon floor, a dry south face, a
 ## green north face, the pines up high, a eucalyptus grove, and two wide
