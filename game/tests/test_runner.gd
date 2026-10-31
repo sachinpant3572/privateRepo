@@ -106,7 +106,7 @@ func _run() -> void:
 		"test_country_kit_builds_every_kind",
 		"test_country_plots_square_to_their_roads", "test_estates_and_clusters", "test_grounds_kit_builds_every_part",
 		"test_bellerive_hills", "test_mount_calder", "test_east_hills", "test_hill_districts", "test_hill_heights_are_flat_checks", "test_freight_line_crosses_cleanly", "test_rail_crossings_are_grade_separated", "test_golden_flats_farmland", "test_every_home_has_a_way_in", "test_homes_by_wealth",
-		"test_new_home_kinds_and_live_cars", "test_people_walk_the_suburbs", "test_suburb_home_cars_are_live",
+		"test_new_home_kinds_and_live_cars", "test_people_walk_the_suburbs", "test_hikers_walk_the_trails", "test_suburb_home_cars_are_live",
 		"test_road_surfaces_and_roadworks", "test_traffic_flows_past_roadworks", "test_boundaries_vary_by_household",
 		"test_game_log_file_and_rotation", "test_game_log_snapshot_and_events", "test_game_log_report_copy_and_off",
 		"test_screen_shake_setting", "test_settings_sliders_snap_and_apply",
@@ -5302,6 +5302,43 @@ func test_country_tiles_stream() -> void:
 
 ## People walk the suburbs' sidewalks (BX-1): out on the east side, the
 ## crowd spawns on the country's loops, on the ground by the streets.
+## The hill trails carry loops of their own (country.gd trail_walks) and
+## the people put on them are hikers, runners and hunters, not the
+## street crowd.
+func test_hikers_walk_the_trails() -> void:
+	await _new_game(true)
+	var city = game.city
+	var trail: Array = []
+	for li in city.sidewalk_loops.size():
+		if city.loop_kind(li) == "trail":
+			trail.append(li)
+	_check(trail.size() >= 10, "the hill trails have hiker loops, got %d" % trail.size())
+	if trail.is_empty():
+		return
+	var seen := {}
+	for k in 12:
+		var li: int = trail[k % trail.size()]
+		var ped = game.population._add_ped(li, 0)
+		seen[ped.category] = true
+		ped.queue_free()
+		game.population.peds.erase(ped)
+	_check(seen.keys().all(func(c): return c in ["hiker", "athlete", "hunter"]) and seen.has("hiker"),
+		"trail people are hikers, runners and hunters, got %s" % [seen.keys()])
+	var street := -1
+	for li in city.sidewalk_loops.size():
+		if city.loop_kind(li) == "":
+			street = li
+			break
+	_check(street >= 0 and not (game.population._add_ped(street, 0).category in ["hiker", "hunter"]),
+		"the street crowd stays as it was")
+	# A trail loop runs on the trail, on the ground, not off in the trees.
+	var loop: PackedVector3Array = city.sidewalk_loops[trail[0]]
+	var off := 0.0
+	for q in loop:
+		off = maxf(off, absf(q.y - (Terrain.height(q.x, q.z) - Terrain.drop(q.x, q.z))))
+	_check(off < 1.5, "the hikers' loop keeps to the ground, worst %.2f m" % off)
+
+
 func test_people_walk_the_suburbs() -> void:
 	await _new_game(true)
 	var city = game.city
