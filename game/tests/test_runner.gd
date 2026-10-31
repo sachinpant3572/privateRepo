@@ -11561,7 +11561,7 @@ func test_heli_exit_only_when_low() -> void:
 	_check(over.is_empty() or over.position.y <= Terrain.height(at.x, at.z) + 1.0, "thrown over a roof, the fall is to open ground, not inside the building")
 	await _frames(240)
 	_check(player.health < player.max_health - 25.0, "and the drop hurts more than a thrown exit (%.0f left)" % player.health)
-	# Never into water: 20 m into the river the search finds the bank.
+	# Never into water: 60 m off the river line (in the water) the search finds the bank.
 	var rv: Array = Array(city.plan._river)
 	var k: int = rv.size() / 2
 	var along: Vector2 = (rv[k + 1] - rv[k]).normalized()
@@ -11570,6 +11570,17 @@ func test_heli_exit_only_when_low() -> void:
 	var dry: Vector3 = heli.open_ground_near(Vector3(wet.x, 0.0, wet.y))
 	_check(dry.distance_to(Vector3(wet.x, 0.0, wet.y)) > 1.0 and not heli._wet(city.plan, Vector2(dry.x, dry.z), heli._ground(dry.x, dry.z)),
 		"open ground is never water (%.0f m from the river line)" % city.plan.river_distance(Vector2(dry.x, dry.z)))
+	# Nor into a park lake: from the middle of one the search finds its shore.
+	_check(city.plan.lakes.size() > 0, "the plan has park lakes")
+	if city.plan.lakes.size() > 0:
+		var lake: PackedVector2Array = city.plan.lakes[0]
+		var mid := Vector2.ZERO
+		for q in lake:
+			mid += q
+		mid /= lake.size()
+		_check(Geometry2D.is_point_in_polygon(mid, lake) and heli._wet(city.plan, mid, heli._ground(mid.x, mid.y)), "the middle of a lake is wet")
+		var shore: Vector3 = heli.open_ground_near(Vector3(mid.x, 0.0, mid.y))
+		_check(not Geometry2D.is_point_in_polygon(Vector2(shore.x, shore.z), lake), "open ground is never in a lake")
 
 
 ## Streaming: flying flat out near the ceiling from downtown out over the
