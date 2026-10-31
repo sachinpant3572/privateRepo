@@ -53,7 +53,7 @@ a leftover); `open_ground_near` looks the game node up again (harmless).
 - Full suite before review: exit 0, 1824 checks passed, 0 failed.
 - Focused after the fixes: test_heli_exit_only_when_low,
   test_wasted_respawns_at_hospital PASS.
-- Full suite after the fixes: RESULT
+- Full suite after the fixes: exit 0, 1827 checks passed, 0 failed.
 - APK: tools/build_apk.sh exit 0, signed, 32.2 MB,
   build/solvera-0.26-debug.apk (the test-only fix does not change it; tests/
   is excluded from export).
