@@ -239,11 +239,13 @@ func _events() -> void:
 		var info := _text("%s%s" % ["On now · " if e.active else "", e.text], 16, Color(0.7, 0.72, 0.78))
 		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(info)
-		var go := _button("GO", func():
-			game.waypoint = game.city.node_pos(game.city.nearest_node(e.pos))
-			close())
-		go.custom_minimum_size = Vector2(80, 48)
-		row.add_child(go)
+		# No GO for an event whose place is not in the map (pos is INF).
+		if is_finite(e.pos.x):
+			var go := _button("GO", func():
+				game.waypoint = game.city.node_pos(game.city.nearest_node(e.pos))
+				close())
+			go.custom_minimum_size = Vector2(80, 48)
+			row.add_child(go)
 		_body.add_child(row)
 
 func _missions() -> void:

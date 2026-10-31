@@ -6,6 +6,7 @@ extends RefCounted
 
 const Calendar = preload("res://scripts/calendar.gd")
 const Events = preload("res://scripts/events.gd")
+const PeopleBuilder = preload("res://scripts/people_builder.gd")
 const Terrain = preload("res://scripts/terrain.gd")
 
 const TESTS := [
@@ -321,6 +322,23 @@ func test_calendar_rave_comes_and_goes(t) -> void:
 	t.check(not ev.is_built(id) and Events.lights_used == 0, "with the player far it is freed")
 	await t._frames(3)
 	t.check(game.get_tree().get_nodes_in_group("goers").is_empty(), "and its people are gone")
+
+	# Freed while its people are still on order: the queued builds are
+	# dropped, not made for nobody (calendar review Low).
+	_setup(t, cal, c, 14, 23.0)
+	ev.poll()
+	await t._frames(2)
+	var inst = ev._live.get(id)
+	var tickets: Array = []
+	if inst != null:
+		for f in inst.flight:
+			tickets.append(f[0])
+	var queued := tickets.filter(func(k): return PeopleBuilder._queue.has(k))
+	t.check(not queued.is_empty(), "a fresh rave has people waiting to be built (%d on order)" % tickets.size())
+	t._place_player_at(Vector3(c.x, 300.0, c.z + 900.0))
+	ev.poll()
+	queued = tickets.filter(func(k): return PeopleBuilder._queue.has(k))
+	t.check(not ev.is_built(id) and queued.is_empty(), "freeing it drops its queued builds, %d left" % queued.size())
 
 
 func test_calendar_fair_and_market(t) -> void:

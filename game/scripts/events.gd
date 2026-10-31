@@ -681,6 +681,10 @@ func _free(inst: Instance) -> void:
 	_live.erase(inst.spec.id)
 	lights_used = maxi(lights_used - inst.lights.size(), 0)
 	inst.lights.clear()
+	# People still queued for this event would be built for nobody.
+	for f in inst.flight:
+		PeopleBuilder.cancel(f[0])
+	inst.flight.clear()
 	for n in [inst.dress, inst.crowd]:
 		if is_instance_valid(n):
 			n.queue_free()
@@ -694,6 +698,8 @@ func _free(inst: Instance) -> void:
 func _exit_tree() -> void:
 	for inst in _live.values():
 		lights_used = maxi(lights_used - inst.lights.size(), 0)
+		for f in inst.flight:
+			PeopleBuilder.cancel(f[0])
 	_live.clear()
 	for kind in _dress_jobs.keys():
 		_collect(kind, true)

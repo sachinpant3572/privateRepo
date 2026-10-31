@@ -45,6 +45,13 @@ static func ready(t: Ticket) -> bool:
 	return t.done
 
 
+## Drops `t` if it is still waiting its turn (its owner was freed), so the
+## worker never builds it; a build already running finishes and is dropped
+## with the ticket.
+static func cancel(t: Ticket) -> void:
+	_queue.erase(t)
+
+
 ## How many builds are running or waiting.
 static func busy() -> int:
 	_collect(false)
