@@ -307,8 +307,10 @@ func join_party(lead, at: Vector2) -> void:
 func _following() -> bool:
 	if leader == null:
 		return false
+	# Apart on the map, not in height: a new party comes in at the loop's
+	# flat points and settles onto the hillside a frame later.
 	if not is_instance_valid(leader) or leader.dead or leader.loop_index != loop_index \
-			or leader.global_position.distance_to(global_position) > 25.0:
+			or Vector2(leader.global_position.x - global_position.x, leader.global_position.z - global_position.z).length() > 25.0:
 		leader = null
 		return false
 	return true

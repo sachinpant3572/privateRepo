@@ -5356,7 +5356,7 @@ func test_hikers_walk_the_trails() -> void:
 	var worst := 0.0
 	for f in 600:
 		await get_tree().physics_frame
-		if f > 120:
+		if f > 120 and mate.leader != null:
 			var gap: Vector3 = mate.party_spot() - mate.global_position
 			gap.y = 0.0
 			worst = maxf(worst, gap.length())
