@@ -30,11 +30,14 @@ const BUILD_WAIT := 90.0
 
 # --- Helpers ---------------------------------------------------------------------------
 
-## A calendar and an events node on the test game, with the clock frozen.
+## The game's calendar and events nodes (made here if the game has none),
+## with the clock frozen. A second events node would build every event twice.
 func _rig(t) -> Array:
 	var game = t.game
 	game.atmosphere.minutes_per_second = 0.0
 	game.atmosphere.weather_changes = false
+	if game.get("calendar") != null and game.get("events") != null:
+		return [game.calendar, game.events]
 	var cal = Calendar.new()
 	cal.game = game
 	game.add_child(cal)
