@@ -21,7 +21,7 @@ const PeopleBuilder = preload("res://scripts/people_builder.gd")
 ## `const TESTS` and defines `func test_x(t) -> void` (may await), where
 ## `t` is this runner (t.check, t.game, t._new_game, t._frames ...). A
 ## module whose file is missing is skipped, so packages can land apart.
-const TEST_MODULES := ["res://tests/wildlife_tests.gd", "res://tests/calendar_tests.gd"]
+const TEST_MODULES := ["res://tests/wildlife_tests.gd", "res://tests/calendar_tests.gd", "res://tests/hunting_tests.gd"]
 const KIT_TESTS := ["test_body_kit_builds_bodies", "test_body_seams_hats_and_build_time", "test_people_wear_modern_clothes"]
 
 var game
