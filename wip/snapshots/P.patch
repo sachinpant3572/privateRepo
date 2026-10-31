@@ -775,10 +775,10 @@ index 0000000..46822ec
 +	return Basis(x, u * l, z)
 diff --git a/game/scripts/parachute.gd b/game/scripts/parachute.gd
 new file mode 100644
-index 0000000..e3de66c
+index 0000000..6d6e77c
 --- /dev/null
 +++ b/game/scripts/parachute.gd
-@@ -0,0 +1,545 @@
+@@ -0,0 +1,547 @@
 +extends Node
 +## Parachuting (HANDOFF-air-sports.md). A bail from a helicopter MIN_HEIGHT m
 +## or more over the ground free-falls, then flies a canopy down: OPEN (E) or,
@@ -1010,7 +1010,9 @@ index 0000000..e3de66c
 +	if Controls.just_pressed("interact"):
 +		_brake = BRAKE_TIME
 +	_brake = maxf(_brake - delta, 0.0)
-+	if not _flare and hag < FLARE_HEIGHT and (state == "canopy" or _t > OPEN_DELAY + 0.5):
++	if _flare and hag > FLARE_HEIGHT + 4.0:
++		_flare = false # flown off a lip or over a dip: the full glide again
++	elif not _flare and hag < FLARE_HEIGHT and velocity.y < 0.0 and (state == "canopy" or _t > OPEN_DELAY + 0.5):
 +		_flare = true
 +	var sink := SINK
 +	var fwd := FORWARD
@@ -1577,10 +1579,10 @@ index 0000000..4cc49ee
 +script = ExtResource("1")
 diff --git a/game/tests/air_sports_tests.gd b/game/tests/air_sports_tests.gd
 new file mode 100644
-index 0000000..95ae717
+index 0000000..a2a52ea
 --- /dev/null
 +++ b/game/tests/air_sports_tests.gd
-@@ -0,0 +1,352 @@
+@@ -0,0 +1,351 @@
 +extends RefCounted
 +## Parachuting and bungee (scripts/parachute.gd, scripts/bungee.gd): a
 +## helicopter bail that flies a canopy down, the bails that keep the old
@@ -1825,7 +1827,6 @@ index 0000000..95ae717
 +	# The hill falls away under the glide (1.6 : 1 against about 1.5 : 1),
 +	# down to the valley some 650 m below: a flight of minutes.
 +	var r := await _watch_flight(t, chute, 300.0)
-+	print("DBG base end ", chute.state, " ", p.global_position, " hag ", p.above_land, " lip ", lip, " states ", r.states, " t ", chute._t)
 +	t.check(not r.nan and r.ended, "the flight ends on the ground")
 +	t.check(r.under <= 0.05, "never under the ground (%.2f m)" % r.under)
 +	var land: Dictionary = chute.last_landing

@@ -1,3 +1,85 @@
+diff --git a/HANDOFF-ground.md b/HANDOFF-ground.md
+new file mode 100644
+index 0000000..77ea458
+--- /dev/null
++++ b/HANDOFF-ground.md
+@@ -0,0 +1,76 @@
++# Handoff: ground layer, vehicle air state, stunt jumps (package G, hill phase 3)
++
++## What is where
++- `game/scripts/ground.gd`: static `Ground` (decks, ramps, cuts in a 32 m grid; API in its header). Movers ask
++  `Ground.surface(x, z, base, y_hint)`; one-off look-ups `Ground.height(x, z, y_hint)`. A cell with no deck costs one
++  dictionary miss and returns the caller's terrain value exactly.
++- `game/scripts/vehicle.gd`: air state (`airborne`, `air_vy`, `air_time`, `last_flight`, `ground_gap`, signals
++  `took_off`, `air_landed(car, time, distance, height)`); `_ride_ground` / `_take_off` / `_air_drive` / `_air_land`.
++- `game/scripts/humanoid.gd`: `_stand` uses Ground (walks ramps and decks); a drop over LEDGE_STEP 0.6 m is a fall
++  under gravity, knock-down from 2 m, hurt past 3 m.
++- `game/scripts/stunts.gd` + `game/scripts/kits/ramp_kit.gd`: four ramps on Copperback Cut's shoulders.
++- `game/tests/ground_tests.gd` (8 tests, in TEST_MODULES), `game/tests/stunt_shots.tscn` (7 shots).
++
++## Decisions
++- Take-off: the car carries its last slope; if that line, less a frame of gravity, is more than
++  `AIR_LIFT 0.3 + AIR_KINK 0.5 * step` over the ground, it flies with vy = slope x speed. The step term is what keeps
++  the sharpest road crest (West Ridge Track near (489, -3016): 0.33 m gap at 30 m/s) on the ground; the lip of a
++  ramp (slope 0.35+ to ground below) clears it at any speed over ~8 m/s.
++- "Placed" movers (code moved y, or xz by > 3 m car / 2 m person) snap with their placed y as the hint; they never fly.
++- Landing impact = speed into the surface along its normal; over AIR_SAFE 12 m/s: Fx.crash + 2.5 hp per m/s; a
++  rider is thrown from 1.6 x the class's throw speed; tyres scrub 1.5 % per m/s (max 30 %).
++- Jumps (compass heading; zone along the heading from the lip, half width; min take-off 15 m/s, all):
++  bend 153.4 deg timber, zone 24-100 m +-14, $300; rise 0 deg timber, 16-85 +-10, $150;
++  crest_south 180 deg steel, 22-105 +-12, $200; crest_north 0 deg steel, 22-95 +-10, $200.
++  Simulated flights (raw terrain): 15 m/s 20-28 m, 20 m/s 35-47 m, 25 m/s 55-66 m, 30 m/s 76-97 m.
++- Decks are laid on Terrain.height - Terrain.drop at 11 stations; the deck stays 3 cm over the ground under both
++  edges (hillside across a ramp). Ramp colliders: side walls (also the rails) and a core 1.2 m under the deck.
++- Stunts adds its tree clearings to `Country.Tiles.clearings` in `_ready` (only tiles built later are cleared).
++
++## Traps
++- Ground is static across games: anything that adds decks must remove them (`Stunts._exit_tree` does).
++- vehicle.gd constants are AIR_*: helicopter.gd already has LAND_HURT (redeclaring a parent const is a parse error).
++- A spawner or exit spot that uses `Terrain.height - Terrain.drop` puts a person under a deck (patch below).
++- Long vehicles (semi, bus) scrape the ramp core: the kit's clearance holds for hulls within 3 m of the centre.
++- The landing zones run off the road; a car that lands on a fence or tree there just crashes.
++
++## Open items
++- hud.gd: no live readout yet (stunts calls hud.show_card / show_message itself; `stunts.jumped` is there for one).
++- Ramps draw to 450 m (visibility_range_end); no LOD.
++
++## Patches for the main session (files G may not edit)
++main.gd:
++```
++ const Hunting = preload("res://scripts/hunting.gd")
+++const Stunts = preload("res://scripts/stunts.gd")
++ var hunting
+++var stunts
++-	Country.Tiles.clearings = Heliports.clearings()
+++	Country.Tiles.clearings = Heliports.clearings() + Stunts.clearings()
++ 	hunting = Hunting.new()
++ 	add_child(hunting)
+++	stunts = Stunts.new()
+++	stunts.game = self
+++	add_child(stunts)
++```
++missions/mission_manager.gd: save_game (line 315) add `"stunts": game.stunts.to_save(),` to the data; load_game
++(after line 336) `var stunt = data.get("stunts")` / `game.stunts.load_save(stunt if typeof(stunt) == TYPE_DICTIONARY else {})`;
++reset_progress (after line 349) `game.stunts.load_save({})`.
++player.gd (exit spots and bail on a ramp or bridge; Ground is a const of humanoid.gd):
++```
++-		var ground := Terrain.height(global_position.x, global_position.z) - Terrain.drop(global_position.x, global_position.z)
+++		var ground := Ground.height(global_position.x, global_position.z, from_y)
++-		spot.y = Terrain.height(spot.x, spot.z) - Terrain.drop(spot.x, spot.z)
+++		spot.y = Ground.height(spot.x, spot.z, origin.y)
++-	fallback.y = Terrain.height(fallback.x, fallback.z) - Terrain.drop(fallback.x, fallback.z)
+++	fallback.y = Ground.height(fallback.x, fallback.z, origin.y)
++```
++README.md: list `res://tests/stunt_shots.tscn` with the other shot scenes.
++
++## Phase 4 (bridges, tunnels)
++- Bridge: `Ground.add_strip(id, centreline, deck heights, carriageway + kerbs)`; piers and parapets are colliders,
++  the deck needs none. Traffic under it keeps its lane (hint = own y). Spawners on a lane under a bridge must pass
++  the lane height as y_hint (INF finds the bridge).
++- Tunnel: `Ground.add_cut(id, centreline, roof heights, bore width)` plus `add_strip` for the floor; walls are
++  colliders. Keep a cell under ~1000 segments.
++- Off a deck's side the car flies (deck edge = take-off); parapets keep traffic on.
 diff --git a/game/scripts/ground.gd b/game/scripts/ground.gd
 new file mode 100644
 index 0000000..1e16551
@@ -607,10 +689,10 @@ index 0000000..ae827f6
 +uid://d2j0yxfj05ld7
 diff --git a/game/scripts/stunts.gd b/game/scripts/stunts.gd
 new file mode 100644
-index 0000000..7382139
+index 0000000..bd3c709
 --- /dev/null
 +++ b/game/scripts/stunts.gd
-@@ -0,0 +1,305 @@
+@@ -0,0 +1,310 @@
 +extends Node
 +## Stunt jumps (phase 3 of the hill content; HANDOFF-ground.md). Four
 +## kicker ramps on the shoulders of Copperback Cut, by the stunt site in
@@ -749,6 +831,11 @@ index 0000000..7382139
 +		front.append(_ground(foot - fwd * 4.0 * (i + 1)))
 +	return {"id": j.id, "deck_id": DECK_PREFIX + String(j.id), "yaw": yaw, "fwd": fwd, "right": right, "foot": foot,
 +		"lip": foot + fwd * length, "y0": gc[0], "deck": deck, "ground_l": gl, "ground_r": gr, "front": front, "jump": j}
++
++
++## The drawn ground at p (the hills' ground sits Terrain.drop under the grid).
++static func _ground(p: Vector2) -> float:
++	return Terrain.height(p.x, p.y) - Terrain.drop(p.x, p.y)
 +
 +
 +## Rects [centre, yaw, half size] round each ramp, its run-up and its
@@ -916,6 +1003,13 @@ index 0000000..7382139
 +		hud.show_message("%s missed: %s (%s)" % [rec.name, why.get(rec.why, "missed"), stats])
 +	elif rec.time >= SHOW_AIR:
 +		hud.show_message("Air: " + stats)
+diff --git a/game/scripts/stunts.gd.uid b/game/scripts/stunts.gd.uid
+new file mode 100644
+index 0000000..1a3a117
+--- /dev/null
++++ b/game/scripts/stunts.gd.uid
+@@ -0,0 +1 @@
++uid://b1ckgi1l6q7eb
 diff --git a/game/scripts/vehicle.gd b/game/scripts/vehicle.gd
 index af590f1..7106570 100644
 --- a/game/scripts/vehicle.gd
@@ -1268,7 +1362,7 @@ index af590f1..7106570 100644
  		faint = false
 diff --git a/game/tests/ground_tests.gd b/game/tests/ground_tests.gd
 new file mode 100644
-index 0000000..df153e7
+index 0000000..1a0b054
 --- /dev/null
 +++ b/game/tests/ground_tests.gd
 @@ -0,0 +1,517 @@
@@ -1413,7 +1507,7 @@ index 0000000..df153e7
 +	var car = _car(t, "sedan", Vector3(x, 0.0, z + 30.0), 0.0, 15.0)
 +	var worst := 0.0
 +	var flew := false
-+	for i in 150:
++	for i in 200:
 +		_cruise(car, 15.0)
 +		await t._frames(1)
 +		worst = maxf(worst, absf(car.global_position.y))
@@ -1789,6 +1883,13 @@ index 0000000..df153e7
 +	car.queue_free()
 +	await t._frames(1)
 +	return rec
+diff --git a/game/tests/ground_tests.gd.uid b/game/tests/ground_tests.gd.uid
+new file mode 100644
+index 0000000..a917bca
+--- /dev/null
++++ b/game/tests/ground_tests.gd.uid
+@@ -0,0 +1 @@
++uid://7csyf64o8bwc
 diff --git a/game/tests/stunt_shots.gd b/game/tests/stunt_shots.gd
 new file mode 100644
 index 0000000..3c3c61b
