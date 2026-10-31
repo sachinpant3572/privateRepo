@@ -437,6 +437,12 @@ func test_wildlife_night_lion_hurts_a_player_who_stays(t) -> void:
 		await t._frames(1)
 		again = again or lion.state == "stalk" or lion.state == "charge"
 	t.check(lion.state == "leave" and not again, "after its strike it walks off for good (%s, stalked again %s)" % [lion.state, again])
+	# A blocked retreat can leave it idle (_avoid turns it to alert, _rest to
+	# idle): a spent lion still walks off rather than wandering near (L3).
+	lion.state = "idle"
+	lion.timer = 5.0
+	await t._frames(3)
+	t.check(lion.state == "leave", "a spent lion left idle walks off again (%s)" % lion.state)
 	# A player who backs away is left alone, and a lion by day just wanders.
 	player.health = player.max_health
 	t.game.atmosphere.hour = 12.0

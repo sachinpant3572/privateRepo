@@ -309,7 +309,8 @@ func spawn(kind: String, pos: Vector3, count := 0) -> Array:
 ## Kills `animal` (one of animals_in's): blood, a carcass that lies for a
 ## minute, the killed signal, and its herd bolts. `dir` is the way the blow
 ## went (its length a speed in m/s for the slide, up to 6); `by` is "car",
-## "player" (the hunting rifle) or "other".
+## "rifle" (the player's hunting rifle), "player" (bare hands) or "other",
+## kept on the carcass (only a rifle kill gives a pelt: hunting.gd).
 func kill(animal, dir := Vector3.ZERO, by := "player") -> void:
 	if not animal is Dictionary or not animals.has(animal) or not animal.alive:
 		return
@@ -318,6 +319,7 @@ func kill(animal, dir := Vector3.ZERO, by := "player") -> void:
 	var flat := Vector3(dir.x, 0.0, dir.z)
 	var pos: Vector3 = animal.position
 	animal.alive = false
+	animal.by = by
 	animal.state = "dead"
 	animal.hp = 0.0
 	animal.dead_t = 0.0
@@ -366,12 +368,13 @@ func hurt(animal, damage: float, dir := Vector3.ZERO, by := "player") -> bool:
 	return false
 
 
-## The nearest carcass within `radius` (flat) of `pos`, or {}.
-func carcass_near(pos: Vector3, radius: float) -> Dictionary:
+## The nearest carcass within `radius` (flat) of `pos`, or {}; with `by`
+## set, only carcasses killed that way (kill()'s `by`).
+func carcass_near(pos: Vector3, radius: float, by := "") -> Dictionary:
 	var best := {}
 	var best_d := radius
 	for a in animals:
-		if a.alive:
+		if a.alive or (by != "" and a.get("by", "") != by):
 			continue
 		var p: Vector3 = a.position
 		var d := Vector2(p.x - pos.x, p.z - pos.z).length()
@@ -475,7 +478,7 @@ func _make(kind: String, model: String, pos: Vector3, group) -> Dictionary:
 		"look": Vector2.ZERO, "flee_dir": Vector2.RIGHT, "zig": 0.0, "detour": Vector2.ZERO, "detour_t": 0.0,
 		"look_t": rng.randf() * 0.15, "drop": drop, "drop_t": rng.randf() * 0.5,
 		"amp": 0.0, "phase": rng.randf(), "head": 0.0, "tail": 0.0, "size": rng.randf_range(0.94, 1.06),
-		"cool": 0.0, "threat_t": 0.0, "dead_t": 0.0, "roll": 0.0, "side": 1.0, "slide": Vector2.ZERO,
+		"cool": 0.0, "threat_t": 0.0, "dead_t": 0.0, "by": "", "roll": 0.0, "side": 1.0, "slide": Vector2.ZERO,
 	}
 	_next_id += 1
 	a.state = "graze" if rng.randf() < float(k.graze) else "idle"
@@ -1010,7 +1013,15 @@ func _step_lion(a: Dictionary, k: Dictionary, delta: float) -> void:
 		"leave":
 			_leave_step(a, k)
 		_:
-			if hunting and d < 55.0 and not a.get("spent", false):
+			if a.get("spent", false):
+				# A lion that has struck walks off for good, even when a blocked
+				# retreat left it idle (review L3).
+				a.state = "leave"
+				if dir != Vector2.ZERO:
+					a.flee_dir = -dir
+				_leave_step(a, k)
+				return
+			if hunting and d < 55.0:
 				a.state = "stalk"
 				a.threat_t = 0.0
 				if not a.get("warned", false):

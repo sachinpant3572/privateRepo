@@ -136,7 +136,14 @@ func start(id: String, teleport := false) -> void:
 		game.player.stand_at(p)
 		game.camera.snap()
 	if m.start_hour() >= 0.0:
-		game.atmosphere.hour = m.start_hour()
+		# Forward to the start hour through advance(), so the calendar counts
+		# the night that passes (licences, weekly events, the moon); a start
+		# less than an hour behind the clock just steps it back, same day.
+		var ahead := fposmod(m.start_hour() - game.atmosphere.hour, 24.0)
+		if ahead > 23.0:
+			game.atmosphere.hour = m.start_hour()
+		else:
+			game.atmosphere.advance(ahead)
 	changed.emit()
 	_run(m)
 

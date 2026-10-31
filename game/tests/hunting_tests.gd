@@ -49,10 +49,10 @@ func test_hunting_pelts_and_save(t) -> void:
 	var game = t.game
 	var h = game.hunting
 	var mm = game.missions
-	h.pelts = {"deer": 2, "rabbit": 1, "lion": 1}
-	t.check(h.pelts_total() == 4 and h.pelt_value() == 2 * 90 + 14, "the store values deer and rabbit, not the lion")
+	h.pelts = {"deer": 2, "rabbit": 1}
+	t.check(h.pelts_total() == 3 and h.pelt_value() == 2 * 90 + 14, "the store values deer and rabbit")
 	game.cash = 0
-	t.check(h.sell_pelts() == 194 and game.cash == 194 and h.pelts == {"lion": 1}, "selling keeps the lion pelt")
+	t.check(h.sell_pelts() == 194 and game.cash == 194 and h.pelts.is_empty(), "selling empties the bag")
 	h.rifle = true
 	h.ammo = 23
 	h.licence_until = 9
@@ -67,6 +67,9 @@ func test_hunting_pelts_and_save(t) -> void:
 			"rifle, rounds, licence and pelts survive save and load, got %s" % [h.to_save()])
 	h.load_save({"rifle": true, "ammo": 999, "pelts": {"deer": 50, "unicorn": 2}})
 	t.check(h.ammo == Hunting.AMMO_MAX and h.pelts == {"deer": Hunting.PELT_MAX}, "a bad save is clamped")
+	h.load_save({"pelts": {"lion": 1, "deer": 4, "coyote": 4, "rabbit": 4}})
+	t.check(not h.pelts.has("lion") and h.pelts_total() == Hunting.PELT_MAX,
+			"an old save's lion pelt is dropped and the total is capped, got %s" % [h.pelts])
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(mm.save_path))
 
 
@@ -120,7 +123,7 @@ func test_hunting_shoots_a_deer_in_season(t) -> void:
 	w.killed.connect(func(kind, _pos, by): kills.append([kind, by]))
 	var hit = h.shoot()
 	t.check(hit == deer and not deer.alive, "the round drops the deer")
-	t.check(kills == [["deer", "player"]], "the kill is the player's, got %s" % [kills])
+	t.check(kills == [["deer", "rifle"]], "the kill is the player's rifle's, got %s" % [kills])
 	t.check(h.ammo == 8, "two rounds spent, %d left" % h.ammo)
 	t.check(Wanted.level == 0, "a licensed kill in season brings no star")
 	var deer2 := _ahead(t, w, "deer", 12.0)
@@ -181,3 +184,14 @@ func test_hunting_skins_a_carcass(t) -> void:
 	h.pelts = {}
 	var live := _ahead(t, w, "rabbit", 1.5)
 	t.check(not live.is_empty() and h.prompt().is_empty() and not h.try_interact(), "a live rabbit is not a carcass")
+	# Only the player's own rifle kills of the kinds the store buys give a
+	# pelt: roadkill and a punched animal are ruined, and a lion is not skinned.
+	for c in [["deer", "car", "roadkill"], ["rabbit", "player", "a punched rabbit"], ["lion", "rifle", "a shot lion"]]:
+		var a := _ahead(t, w, c[0], 1.5)
+		t.check(not a.is_empty(), "%s: one stands near" % c[2])
+		if a.is_empty():
+			continue
+		w.kill(a, Vector3.ZERO, c[1])
+		t.check(not a.alive and h.prompt().is_empty() and not h.try_interact() and h.pelts.is_empty(),
+				"%s gives no pelt, got %s" % [c[2], h.pelts])
+		w.take_carcass(a)

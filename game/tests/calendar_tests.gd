@@ -19,6 +19,7 @@ const TESTS := [
 	"test_calendar_far_player_builds_nothing",
 	"test_calendar_lights_and_phone_list",
 	"test_calendar_skips_and_indoors_keep_the_day",
+	"test_calendar_mission_start_counts_the_night",
 	"test_calendar_event_lights_share_the_lamp_budget",
 ]
 
@@ -555,6 +556,29 @@ func test_calendar_skips_and_indoors_keep_the_day(t) -> void:
 	atm._apply(0.0)
 	t.check(atm.sky.day == 9 and absf(atm.sky.moon_phase - cal.moon_phase(1.0)) < 0.0001,
 			"out again the moon is on the calendar's day (sky %d, phase %.3f vs %.3f)" % [atm.sky.day, atm.sky.moon_phase, cal.moon_phase(1.0)])
+
+
+## Review L2 (whole-task review): a mission's start hour moves the clock
+## forward through Atmosphere.advance, so the night that passes counts:
+## 22:00 -> a 20:30 start is the next day, 20:00 -> 20:30 the same day, and
+## a start just behind the clock steps it back on the same day.
+func test_calendar_mission_start_counts_the_night(t) -> void:
+	await t._new_game(false)
+	var game = t.game
+	var atm = game.atmosphere
+	var cal = game.calendar
+	var mm = game.missions
+	atm.minutes_per_second = 0.0
+	atm.weather_changes = false
+	for c in [[22.0, 4], [20.0, 3], [20.9, 3]]:
+		mm.abandon()
+		cal.set_day(3)
+		atm.hour = c[0]
+		cal.tick(c[0])
+		mm.start("m03_lantern_lights", false)
+		t.check(absf(atm.hour - 20.5) < 0.001 and cal.day() == c[1],
+				"from %.1f the 20:30 start is day %d, got day %d at %.2f" % [c[0], c[1], cal.day(), atm.hour])
+	mm.abandon()
 
 
 ## Review M3: lights an event holds come out of the street-lamp budget, so

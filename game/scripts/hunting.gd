@@ -21,7 +21,7 @@ const GEAR := {
 	"ammo": {"name": "Rifle rounds (box of 10)", "price": 18, "note": "Carry up to 40"},
 }
 const PELT_PRICE := {"deer": 90, "coyote": 45, "rabbit": 14}
-const PELT_NAMES := {"deer": "deer", "coyote": "coyote", "rabbit": "rabbit", "lion": "mountain lion"}
+const PELT_NAMES := {"deer": "deer", "coyote": "coyote", "rabbit": "rabbit"}
 const LICENCE_DAYS := 28
 const AMMO_MAX := 40
 const PELT_MAX := 6
@@ -113,7 +113,7 @@ func shoot():
 	if randf() > chance:
 		return null
 	var kind: String = target.kind
-	w.kill(target, (pos - player.global_position).normalized())
+	w.kill(target, (pos - player.global_position).normalized(), "rifle")
 	if defence:
 		game.hud.show_message("Self-defence: the rangers let it go")
 	elif not (licence_valid() and _open_season(kind)):
@@ -180,8 +180,10 @@ func _carcass():
 	var p = game.player if game != null else null
 	if w == null or p == null or p.vehicle != null or not w.has_method("carcass_near"):
 		return null
-	var c: Dictionary = w.carcass_near(p.global_position, SKIN_RANGE)
-	return null if c.is_empty() else c
+	# Only the player's own rifle kills of the kinds the store buys: roadkill
+	# and a punched rabbit are ruined, and the rangers take a lion.
+	var c: Dictionary = w.carcass_near(p.global_position, SKIN_RANGE, "rifle")
+	return null if c.is_empty() or not PELT_PRICE.has(c.kind) else c
 
 
 ## Skins the carcass at the player's feet. True when it did.
@@ -208,8 +210,7 @@ func pelts_total() -> int:
 	return n
 
 
-## What the store pays for the pelts it takes (a mountain lion's it won't
-## touch: they are never in season).
+## What the store pays for the pelts it carries.
 func pelt_value() -> int:
 	var v := 0
 	for k in pelts:
@@ -267,6 +268,8 @@ func load_save(d: Dictionary) -> void:
 	pelts = {}
 	var p = d.get("pelts", {})
 	if typeof(p) == TYPE_DICTIONARY:
+		# Only kinds the store buys (an older save may hold a lion pelt, which
+		# could never be sold) and no more than PELT_MAX in all.
 		for k in p:
-			if PELT_NAMES.has(k):
-				pelts[k] = clampi(int(p[k]), 0, PELT_MAX)
+			if PELT_PRICE.has(k):
+				pelts[k] = clampi(int(p[k]), 0, PELT_MAX - pelts_total())
