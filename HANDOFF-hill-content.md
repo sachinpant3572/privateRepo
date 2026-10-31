@@ -103,15 +103,14 @@ Session 4 (10-31, other account): new container; wave A relaunched from
 wip/snapshots (isolation worktrees on acb9be2; R moves its main/hud/
 player/mission_manager edits into its note as patches).
 
-In progress: phase 3 wave A, three builders in local worktrees (branches
-not pushed; base fe9f7ec). Their briefs: wip/briefs/ (paths made
-worktree-relative in c53c27b).
-| pkg | builder | worktree (.claude/worktrees/) | files so far |
-| G ground/air/stunts | Opus xhigh | agent-a51e54d60601755b1 | ground.gd, ramp_kit.gd, vehicle.gd, humanoid.gd |
-| P parachute/bungee | Opus xhigh | agent-a33a1bd59f718629f | parachute.gd, bungee.gd, kits/air_sports_kit.gd, player.gd |
-| R races/cycling | Sonnet xhigh | agent-a9c0ec2e48144bf73 | races.gd, race_course.gd (moved from wip/R), race_shots, race_calib |
-- R had edited main.gd, hud.gd, player.gd, mission_manager.gd against its
-  brief; told to revert them and report patches instead.
+Wave A status (session 4, worktrees .claude/worktrees/agent-<id>, base acb9be2):
+| pkg | worktree id | state |
+| R races/cycling | acaa1ad497ea74309 | MERGED 794893e + wired aebc7d5; 2 reviews; 20 tests 196 checks PASS |
+| P parachute/bungee | a917178cc1affb0a5 | review 1 (1H 3M 7L) -> builder fixing; then review 2, merge, hand-merge hooks with R's |
+| G ground/air/stunts | a69e1efc71ef57b4d | review 1 (1H 4M) -> builder fixing (H1 player.gd exit/bail patch: hand-merge with P's bail) |
+- Main-session wiring still to add: G's mission_manager save + player.gd
+  exit patch; P's main/hud hooks (air prompt after hunting); a save/load
+  test through mission_manager for stunts; P's ground_under -> Ground.height.
 - `wip/snapshot.sh` saves each worktree's work (commits, uncommitted,
   untracked) to wip/snapshots/<pkg>.patch; run and commit at milestones.
 
