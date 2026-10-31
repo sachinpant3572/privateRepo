@@ -143,9 +143,7 @@ hung at the Godot banner once (check `pgrep -af godot`).
   and bungee; Opus xhigh, physics). Wave B after G: bridges and tunnels
   (Opus). Main session wires each into main.gd/hud.gd and merges.
   Cheaper option named for Sachin: all in the main session, sequential.
-- Session 3 launch cost: R Sonnet xhigh, G and P Opus xhigh, each about
-  1.5-3 h plus a 20-40 min Opus review; started while the step-1 suite ran
-  (own worktrees, shared /tmp/godot.lock).
+- Launch cost: G, P Opus xhigh, R Sonnet xhigh, 1.5-3 h each + Opus review.
 
 Archive (HANDOFF-hill-content-archive.md): phase 1-2 history, phase 2
 package plan, session 2 handover.
