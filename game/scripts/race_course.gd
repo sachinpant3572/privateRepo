@@ -267,7 +267,7 @@ static func hill(country, laps := 2) -> Dictionary:
 	if lead_nodes.is_empty():
 		return {}
 	var j1: int = lead_nodes[lead_nodes.size() - 1]
-	var heading := (country.pos(j1) - START).normalized()
+	var heading: Vector2 = (country.pos(j1) - START).normalized()
 	if lead_nodes.size() > 1:
 		heading = (country.pos(j1) - country.pos(lead_nodes[lead_nodes.size() - 2])).normalized()
 	var ring := _ring(country, core, j1, heading)
