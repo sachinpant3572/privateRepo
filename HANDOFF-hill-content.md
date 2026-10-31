@@ -152,5 +152,12 @@ reviewer could not measure in_city cost on a device.
 - Session 3 step 1: full suite on fe9f7ec exit 0, 2134 passed, 0 failed.
   Step 2 review (Opus) started on 4197417..fe9f7ec plus integration of
   75eda1f^..fe9f7ec.
+- Step 2 review: 0 High, M1 (pelts from roadkill/punches, no licence
+  check), L1 (lion pelt stuck in the bag), L2 (mission start hour skipped
+  Atmosphere.advance), L3 (spent lion idles near when its retreat is
+  blocked), L4 (pelt total over cap on load). All fixed in b6efeeb:
+  kill() keeps `by` on the carcass, only "rifle" kills of PELT_PRICE kinds
+  skin; mission start advances (a start < 1 h behind steps back, same
+  day); spent lion -> leave. 9 focused tests PASS (77 checks).
 
 Phase 2 package plan: HANDOFF-hill-content-archive.md.
