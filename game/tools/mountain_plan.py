@@ -537,8 +537,7 @@ SPECS = [
     dict(id="lab_road", cls="lane", name="Kestrel Hollow Road", tag="hills",
          way=[("on", "route_9", (472, -4288)), (552, -4192), (540, -4085)], gmax=0.10, hairpin_r=12.0),
     dict(id="timber_haul", cls="track", name="Timber Haul", tag="hills",
-         way=[(-300, -4290), (-120, -4425), (-85, -4165), ("on", "route_9", (-127, -4103))], gmax=0.16, hairpin_r=8.0, bridge=BRIDGE,
-         low_bridges=True),
+         way=[(230, -4120), ("on", "route_9", (110, -4200))], gmax=0.16, hairpin_r=8.0),
 ]
 # The rail pass (Morrow Freight Line round the range): a shelf on the
 # Morrow gorge's inner wall round the range's west and north foot (the river

@@ -57,8 +57,11 @@ on top; built in phases, each committed; `/effort xhigh` suits it.
 - Streams: steepest descent on the smoothed grid from HILL_STREAMS springs,
   stopping at a lake, the sea or height 3; cut at roads (culverts implied
   until phase 4 adds crossings); ribbons in the tile's `water` mesh.
-- Lab road (lane, 14 % at the cap) and Timber Haul (track, 21 %, low wet
-  bridge over the Morrow) are mountain_plan SPECS.
+- Lab road (lane, 14 % at the cap) and Timber Haul (track, 25 %) are
+  mountain_plan SPECS. The design's logging camp on the ridge west of the
+  Morrow (-332, -4300) is off the play land (A), and a crossing there lands
+  on a 13 m bank the game's low deck can't climb, so the camp and the haul
+  moved into the forest east of Route 9 (250, -4110); no bridge.
 - Village walks: a loop down both shoulders of each village road (no
   sidewalks on hill roads). Village diners/stores open as places in their
   own cap (places.gd HILL_MAX) after the suburbs', so suburb picks hold.
@@ -75,5 +78,9 @@ on top; built in phases, each committed; `/effort xhigh` suits it.
   (HANDOFF-hill-country.md). RNG use changes shift lots everywhere.
 
 ## Traps
+
+- `_wet_only` keeps a planned bridge only over water; when the planner's
+  span ends high on a bank, the road climbs it at 90 %+ (check the build
+  log's "steepest" lines after adding a bridged way).
 
 ## Open

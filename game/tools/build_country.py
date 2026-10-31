@@ -193,7 +193,7 @@ HILL_PLACES = [
     ("research_lab", 540.0, -4060.0, "kestrel_lab", "site", 140.0),
     ("lab_gate", 492.0, -4262.0, "kestrel_lab_gate", "front", 40.0),
     ("ranger_post", 584.0, -4200.0, "ranger_post", "front", 120.0),
-    ("logging_camp", -310.0, -4300.0, "logging_camp", "site", 140.0),
+    ("logging_camp", 250.0, -4110.0, "logging_camp", "site", 140.0),
     ("lodge_hotel", 2472.0, -3538.0, "whistler_lodge", "front", 160.0),
     ("cult_compound", 2316.0, -4024.0, "cult_compound", "site", 80.0),
     ("mountain_hotel", 905.0, -2800.0, "calder_summit_hotel", "site", 100.0),
