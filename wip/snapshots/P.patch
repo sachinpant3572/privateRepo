@@ -900,10 +900,10 @@ index 0000000..c55e960
 +uid://c5vicg6hjdxhj
 diff --git a/game/scripts/parachute.gd b/game/scripts/parachute.gd
 new file mode 100644
-index 0000000..18eeada
+index 0000000..9bd9790
 --- /dev/null
 +++ b/game/scripts/parachute.gd
-@@ -0,0 +1,577 @@
+@@ -0,0 +1,677 @@
 +extends Node
 +## Parachuting (HANDOFF-air-sports.md). A bail from a helicopter MIN_HEIGHT m
 +## or more over the ground free-falls, then flies a canopy down: OPEN (E) or,
@@ -969,10 +969,18 @@ index 0000000..18eeada
 +const BASE_REACH := 3.0
 +const EXIT_SPEED := 5.0
 +const EXIT_UP := 2.0
-+## The site is searched for on a worker thread once the player comes this
-+## close (well before the country tiles there build, so the clearing for
-+## the marker counts), and the marker made when it is found.
-+const PREPARE_RANGE := 1200.0
++## How far under the player the ground or a roof is: the land every frame,
++## a ray down onto the world's bodies (roofs) every ROOF_EVERY frames.
++const ROOF_EVERY := 6
++## In the air the body is on no layer (shots and cars pass it) and meets
++## the world's walls and roofs and the props (tree trunks, posts).
++const FLY_MASK := L.WORLD | L.PROPS
++## The country's tile builders keep plants up to this many metres off a
++## clearing (ponds; trees 2.5): loaded tiles that near one are built again.
++const CLEAR_ROOM := 10.0
++## Open ground for a landing on a roof or in a lake: the nearest on these
++## rings (m), else the nearest road junction.
++const OPEN_RINGS := [0.0, 6.0, 12.0, 20.0, 30.0, 45.0, 60.0, 80.0, 110.0, 150.0, 200.0]
 +
 +var game
 +## Test hook: false never opens the canopy by itself.
@@ -994,11 +1002,21 @@ index 0000000..18eeada
 +var _flare := false
 +var _site := {}
 +var _site_done := false
-+var _prepare_tick := 0.0
 +## The search on the worker thread (-1: none) and what it found:
 +## [score, x, z, angle], score -INF for nothing.
 +var _task := -1
 +var _found: Array = []
++## The clearings ([centre, yaw, half-size]) this node keeps the country's
++## plants off, and those still waiting for a tile build to finish.
++var clearings: Array = []
++var _pending: Array = []
++## The land under the player (as of the last move), the top of the world's
++## bodies under it (-INF: none), frames to the next ray down, and the
++## height the flight began at.
++var _ground_y := 0.0
++var _roof_y := -INF
++var _roof_tick := 0
++var _top := 0.0
 +var _rig: Node3D
 +var _wing: Node3D
 +var _collapse := -1.0
@@ -1042,6 +1060,42 @@ index 0000000..18eeada
 +	return AUTO_CLEAR + v * OPEN_DELAY + maxf(v - SINK, 0.0) * OPEN_TAU + SINK * INFLATE
 +
 +
++## Adds `rects` ([centre, yaw, half-size]) to Tiles.clearings and returns
++## true, or returns false while a country tile builds on a worker thread
++## (country_tiles.gd `_clear` loops over the list there, and an append could
++## move it from under that loop): try again on a later frame. Loaded tiles
++## near a new clearing were built without it, so they are dropped and the
++## country builds them again.
++static func add_clearings(game, rects: Array) -> bool:
++	var city = game.get("city") if game != null else null
++	var country = city.get("country") if city != null else null
++	if country != null and country._task >= 0:
++		return false
++	Tiles.clearings.append_array(rects)
++	if country == null:
++		return true
++	for cl: Array in rects:
++		var centre: Vector2 = cl[0]
++		var half: Vector2 = cl[2]
++		for key in country.tiles_near(Vector3(centre.x, 0.0, centre.y), half.length() + CLEAR_ROOM):
++			if country.tile_node(key) != null:
++				country._unload(key)
++	return true
++
++
++## Keeps `rects` off the country's plants: now if no tile is building, else
++## on a later frame (_flush_clearings, each frame).
++func _clear_ground(rects: Array) -> void:
++	clearings.append_array(rects)
++	_pending.append_array(rects)
++	_flush_clearings()
++
++
++func _flush_clearings() -> void:
++	if not _pending.is_empty() and add_clearings(game, _pending):
++		_pending = []
++
++
 +func flying() -> bool:
 +	return state != ""
 +
@@ -1077,9 +1131,13 @@ index 0000000..18eeada
 +	p.velocity = Vector3.ZERO
 +	p.knocked_time = 0.0
 +	p.collision_layer = 0
-+	p.collision_mask = L.WORLD
++	p.collision_mask = FLY_MASK
 +	p.gesture = "hands_up"
-+	_from = start.y - ground_under(start.x, start.z)
++	_ground_y = ground_under(start.x, start.z)
++	_roof_y = -INF
++	_roof_tick = 0
++	_top = start.y
++	_from = start.y - _ground_y
 +	min_clear = _from
 +	p.flies = true
 +	p.above_land = _from
@@ -1094,8 +1152,7 @@ index 0000000..18eeada
 +	_rig.visible = true
 +	_wing.scale = Vector3(0.12, 0.2, 0.3)
 +	heading = player.rotation.y
-+	GameLog.event("chute_open", {"height": player.global_position.y - ground_under(player.global_position.x, player.global_position.z),
-+			"speed": velocity.length()})
++	GameLog.event("chute_open", {"height": player.global_position.y - maxf(_ground_y, _roof_y), "speed": velocity.length()})
 +
 +
 +# --- In the air ---------------------------------------------------------------
@@ -1106,18 +1163,57 @@ index 0000000..18eeada
 +		_hand_to_fall(p)
 +		return
 +	_t += delta
++	_hold_air_layers(p, FLY_MASK, delta)
++	# Hands on the controls: not in a cutscene, not knocked silly by a hit.
++	var hands: bool = p.controllable and p.knocked_time <= 0.0
 +	var pos: Vector3 = p.global_position
-+	var hag := pos.y - ground_under(pos.x, pos.z)
-+	if state == "free" and (Controls.just_pressed("interact") or (auto_open and hag <= open_height(-velocity.y))):
++	var hag := pos.y - _under(p, pos)
++	var e: bool = hands and Controls.just_pressed("interact")
++	if state == "free" and (e or (auto_open and hag <= open_height(-velocity.y))):
 +		_open()
-+	var stick := Controls.world_move()
++	var stick := Controls.world_move() if hands else Vector3.ZERO
 +	stick.y = 0.0
 +	if state == "free" or (state == "opening" and _t < OPEN_DELAY):
 +		_fall_step(stick, delta)
 +	else:
-+		_canopy_step(stick, hag, delta)
++		_canopy_step(stick, hag, e, delta)
 +	_pose(p, stick, delta)
 +	_move(p, delta)
++
++
++## While a sport flies the player, humanoid.gd's physics (skipped) does not
++## run the clock of a knock-down from a hit, and knock_down puts the body
++## on the downed layers: the clock runs here and the flight's layers stay.
++static func _hold_air_layers(p, mask: int, delta: float) -> void:
++	if p.knocked_time > 0.0:
++		p.knocked_time = maxf(p.knocked_time - delta, 0.0)
++	if p.collision_layer != 0 or p.collision_mask != mask:
++		p.collision_layer = 0
++		p.collision_mask = mask
++
++
++## Where the feet would come down: the land, or the top of a roof (any
++## world body) under the player, found with a ray every ROOF_EVERY frames.
++func _under(p, pos: Vector3) -> float:
++	_roof_tick -= 1
++	if _roof_tick <= 0 and p.is_inside_tree():
++		_roof_tick = ROOF_EVERY
++		_roof_y = -INF
++		var ray := PhysicsRayQueryParameters3D.create(pos + Vector3.UP * 0.5, Vector3(pos.x, _ground_y - 0.5, pos.z), L.WORLD)
++		var hit := p.get_world_3d().direct_space_state.intersect_ray(ray)
++		if not hit.is_empty():
++			_roof_y = float(hit.position.y)
++	return maxf(_ground_y, _roof_y)
++
++
++## Back from the air: on the feet, or down if dead or still knocked down
++## (humanoid.gd stands them up when the clock runs out).
++static func _ground_layers(p) -> void:
++	if p.dead or p.knocked_time > 0.0:
++		p.collision_layer = L.DOWNED
++		p.collision_mask = L.WORLD | L.PROPS
++	else:
++		p._set_standing_layers()
 +
 +
 +func _fall_step(stick: Vector3, delta: float) -> void:
@@ -1129,7 +1225,7 @@ index 0000000..18eeada
 +		velocity.z = flat.z
 +
 +
-+func _canopy_step(stick: Vector3, hag: float, delta: float) -> void:
++func _canopy_step(stick: Vector3, hag: float, brake: bool, delta: float) -> void:
 +	if state == "opening" and _t >= OPEN_DELAY + INFLATE:
 +		state = "canopy"
 +	var turn := 0.0
@@ -1139,7 +1235,7 @@ index 0000000..18eeada
 +		turn = clampf(diff * 2.0, -TURN, TURN)
 +		heading = wrapf(heading + turn * delta, -PI, PI)
 +	bank = lerpf(bank, turn * 0.3, 1.0 - exp(-4.0 * delta))
-+	if Controls.just_pressed("interact"):
++	if brake:
 +		_brake = BRAKE_TIME
 +	_brake = maxf(_brake - delta, 0.0)
 +	if not _flare and hag < FLARE_HEIGHT and (state == "canopy" or _t > OPEN_DELAY + 0.5):
@@ -1188,7 +1284,10 @@ index 0000000..18eeada
 +		velocity = velocity.slide(n)
 +		p.move_and_collide(col.get_remainder().slide(n))
 +	var pos: Vector3 = p.global_position
++	# The one ground_under of the frame (Terrain.drop asks the country): the
++	# next drive reads it as the land under where the player is.
 +	var g := ground_under(pos.x, pos.z)
++	_ground_y = g
 +	if pos.y <= g:
 +		p.global_position.y = g
 +		if velocity.y <= 0.0:
@@ -1212,9 +1311,11 @@ index 0000000..18eeada
 +		var drop := impact * impact / (2.0 * G)
 +		damage = maxf(drop - BAIL_SAFE, 0.0) * BAIL_HURT
 +	else:
-+		damage = maxf(_from - BAIL_SAFE, 0.0) * BAIL_HURT # as player.gd's bail
++		# As player.gd's bail, from the height fallen (onto a roof: to it).
++		var fell := _top - pos.y if roof else _from
++		damage = maxf(fell - BAIL_SAFE, 0.0) * BAIL_HURT
 +	_release(p)
-+	if roof or _wet(pos, ground_under(pos.x, pos.z)):
++	if roof or _wet(pos, _ground_y):
 +		pos = _open_ground_near(pos)
 +	pos.y = ground_under(pos.x, pos.z)
 +	p.global_position = pos
@@ -1248,8 +1349,7 @@ index 0000000..18eeada
 +	p.rotation.x = 0.0
 +	p.rotation.z = 0.0
 +	p.velocity = Vector3.ZERO
-+	if not p.dead:
-+		p._set_standing_layers()
++	_ground_layers(p)
 +	# The ground's draw drop is looked up afresh where they land.
 +	p.set("_drop_at", Vector2.INF)
 +

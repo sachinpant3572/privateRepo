@@ -1,54 +1,48 @@
 diff --git a/HANDOFF-ground.md b/HANDOFF-ground.md
 new file mode 100644
-index 0000000..74baa68
+index 0000000..c7ce419
 --- /dev/null
 +++ b/HANDOFF-ground.md
-@@ -0,0 +1,81 @@
+@@ -0,0 +1,79 @@
 +# Package G: ground layer, vehicle air state, stunt jumps
-+
-+Branch `worktree-agent-a69e1efc71ef57b4d`. Part of HANDOFF-hill-content.md phase 3.
++Branch `worktree-agent-a69e1efc71ef57b4d`; HANDOFF-hill-content.md phase 3.
 +
 +## What is here
-+- `game/scripts/ground.gd` (static, like Terrain): `Ground.height(x, z, y_hint)`,
-+  `surface(x, z, base, y_hint)` (+ `hit`, `hit_grad`), `normal`, `terrain_grad`,
-+  `add_strip`, `add_ramp`, `add_cut`, `remove`, `clear`, `deck`, `ids`. Decks
-+  and cuts bucketed in 32 m cells; no deck in a cell = the caller's terrain
-+  value after one dictionary look-up. Rules in the file header.
-+- `vehicle.gd`: ground from Ground (own y as hint); air state: takes off when
-+  the ground falls more than `AIR_LIFT` (0.3 m) in one frame below where
-+  the car's climb and gravity carry it, flies ballistic, lands with an impact from the vertical speed
-+  against the ground's slope (damage over `AIR_LAND_SAFE` 12 m/s). Signals
++- `scripts/ground.gd` (static): `height(x, z, y_hint)`, `surface(x, z, base,
++  y_hint)` (+ `hit`, `hit_grad`), `normal`, `terrain_grad`, `add_strip`,
++  `add_ramp`, `add_cut`, `remove`, `clear`, `deck`, `ids`; rules in its
++  header. No deck in a 32 m cell = the caller's terrain value.
++- `vehicle.gd`: ground from Ground (own y as hint). Air state: takes off
++  when the ground falls over `AIR_LIFT` (0.3 m) in a frame below where its
++  climb and gravity carry it; ballistic; landing hurts over 12 m/s. Signals
 +  `took_off(car)`, `air_landed(car, air_time, distance, height)`;
 +  `last_flight` {from, to, time, distance, height, rise, speed, impact, deck}.
-+- `humanoid.gd`: feet on Ground (hint = feet y). `kits/ramp_kit.gd`: timber
-+  and steel kickers (mesh, side-wall and core colliders; the deck is a
-+  Ground ramp). `stunts.gd`: four ramps on Copperback Cut (bend $750, crest
-+  $500, shale $400, hump $400), zones, pay once, save/load, readout.
-+  `tests/ground_tests.gd`: 8 tests, in TEST_MODULES.
++- `humanoid.gd`: feet on Ground. `kits/ramp_kit.gd`: timber and steel
++  kickers (mesh, side-wall and core colliders; the deck is a Ground ramp).
++  `stunts.gd`: three ramps on Copperback Cut (bend $750, crest $500, hump
++  $400), zones, pay once, save/load, readout. `tests/ground_tests.gd`: 8.
 +
 +## Decisions
-+- Deck counts only at or below `y_hint + 0.6` (STEP): bridge found from
-+  above, ignored from the road below; terrain always solid outside a cut.
-+- Round joins only in the join's wedge (past the end of one segment and
-+  before the start of the next). The first version let any segment within
-+  the half width answer past its end; ramp stations (1.4 m apart, half
-+  width 2.3 m) then answered for stations two away and cars took off 4 m
-+  before the lip. Tests now check every ramp edge to edge against its
-+  profile and a bending deck of 1.2 m segments along its middle.
-+- Landing zones from probes (sports car, 16 to 42 m/s, landing distance
-+  past the lip): bend 29-140 m, crest 22-109, shale 17-118, hump 26-160.
-+  Zones cover 16 to about 36 m/s: bend 20-115, crest 16-92, shale 12-96,
-+  hump 20-122 m, half widths 9-10 m.
-+- Crest ramp moved to foot (2646.6, -3004): its run-up crossed the bend
-+  ramp. `Stunts.clearings()` covers run-up, ramp and landing zone.
++- A deck counts only at or below `y_hint + 0.6` (STEP): found from above,
++  ignored from below; the terrain is solid outside a cut.
++- Round joins only in the join's wedge: answering past a segment's end
++  anywhere in the half width made cars take off 4 m before a ramp's lip.
++  Tests check each ramp edge to edge.
++- Landing zones from probes (sports car 16-42 m/s lands bend 29-140 m past
++  the lip, crest 22-109, hump 26-160), for 16 to ~36 m/s: bend 20-115,
++  crest 16-92, hump 20-122, half widths 9-10 m.
++- Dropped a fourth ramp (shale, west verge): the Cut's power poles stand
++  6 m west of its middle every 15.6 m (country_tiles.gd `_pole_at`, not
++  stopped by clearings), on its run-up and landing line. To restore: the
++  pole patch below, then `{"id": "shale", "name": "Shale Hop", "style":
++  "timber", "foot": Vector2(2633.6, -2960.0), "yaw": 0.0, "length": 11.0,
++  "width": 4.0, "lip": 1.3, "land": [12.0, 96.0, 9.0], "run": 40.0, "prize": 400}`.
++- Crest ramp moved to foot (2646.6, -3004): its run-up crossed the bend's.
 +
 +## Traps
-+- Ramps sit on the Cut's verges (3.9-4.4 m off a 6 m track): traffic and
-+  races that run wide at the Copperback bend can clip the bend ramp's walls.
-+- Country tiles stream trees round the player: set the clearings before
-+  placing anyone at a ramp, or trees end up in the run-up.
-+- Spawners that use Terrain.height directly (traffic, peds, exits) ignore
-+  decks; fine for ramps, not for phase-4 bridges (see below).
++- Traffic or races running wide at the bend can clip the bend ramp.
++- Country tiles (trees, poles) stream in round the player only: set the
++  clearings and put the player in the car before testing at a ramp.
 +
 +## Patches for the main session (not applied here)
 +main.gd:
@@ -63,27 +57,31 @@ index 0000000..74baa68
 +```
 +missions/mission_manager.gd (as hunting):
 +```gdscript
-+# save dict, after "hunting": ..., add: "stunts": game.stunts.to_save(),
-+var stunt  # load, after the hunting load = data.get("stunts")
++# save dict, after the "hunting" entry: "stunts": game.stunts.to_save(),
++var stunt = data.get("stunts")  # load, after the hunting load
 +game.stunts.load_save(stunt if typeof(stunt) == TYPE_DICTIONARY else {})
 +game.stunts.load_save({})  # reset, after game.hunting.load_save({})
 +```
-+hud.gd: none needed; stunts.gd calls `game.hud.show_message` ("Stunt jump
-+n/N  +$prize" / "Stunt jump" / "Stunt jump missed" + readout). player.gd:
-+none; stunts watches `game.player.vehicle`.
++hud.gd, player.gd: none (stunts.gd calls `game.hud.show_message`, "Stunt
++jump n/N  +$prize" + readout, and watches `game.player.vehicle`).
++Optional, country_tiles.gd `_road`: no pole (or `next`) inside `clearings`.
 +
 +## Phase 4 (bridges, tunnels)
 +- Bridge: `Ground.add_strip(id, centreline, deck top heights, carriageway
-+  + kerbs width, "bridge")`; piers and parapets are colliders, not the deck.
-+- Tunnel: `Ground.add_cut(id, portal-to-portal centreline, roof heights,
-+  bore width)` plus `add_strip` for its floor (the road's heights); walls
-+  are colliders. The hill over it stays solid from above.
-+- Anything placed under a bridge must pass its own height as `y_hint` (INF
-+  finds the bridge). Keep under ~1000 segments per 32 m cell.
++  + kerbs width, "bridge")`; piers and parapets are colliders, the deck not.
++- Tunnel: `Ground.add_cut(id, centreline, roof heights, bore width)` + `add_strip` floor; walls collide.
++- Whatever is placed under a bridge passes its own height as `y_hint` (INF
++  finds the bridge): spawners that use Terrain.height directly (traffic,
++  peds, car exits) need that. Keep under ~1000 segments per 32 m cell.
++
++## Gates (2026-10-31)
++8 ground + 62 vehicle/traffic/taxi/heli/walk tests: 70 PASS, 706 checks
++passed, 0 failed. Shots (scratch scene, deleted): 7 saved, no script
++errors; three ramps on the road, a sports car 4-8 m up, 9-23 m past a lip.
 +
 +## Open items
-+- West Ridge Track (a track) launches a car at 25 m/s or more; Crest Drive
-+  peaks at 0.19 m of lift a frame at 30 m/s (limit 0.3).
++- West Ridge Track launches a car at 25 m/s or more; Crest Drive peaks at
++  0.19 m of lift a frame at 30 m/s (limit 0.3).
 +- Landings over 12 m/s vertical hurt (42 m/s off the bend: health 71/100).
 diff --git a/game/scripts/ground.gd b/game/scripts/ground.gd
 new file mode 100644
@@ -688,12 +686,12 @@ index 0000000..ae827f6
 +uid://d2j0yxfj05ld7
 diff --git a/game/scripts/stunts.gd b/game/scripts/stunts.gd
 new file mode 100644
-index 0000000..82d480c
+index 0000000..42b0562
 --- /dev/null
 +++ b/game/scripts/stunts.gd
-@@ -0,0 +1,294 @@
+@@ -0,0 +1,293 @@
 +extends Node
-+## Stunt jumps (phase 3 of HANDOFF-hill-content.md; HANDOFF-ground.md): four
++## Stunt jumps (phase 3 of HANDOFF-hill-content.md; HANDOFF-ground.md): three
 +## kickers at the stunt site on Copperback Cut (tools/hill_design_map.py
 +## "jump", 2610, -3050), timber or steel (kits/ramp_kit.gd). Each ramp is a
 +## mesh, its side walls and core as colliders, and a deck in Ground
@@ -744,17 +742,16 @@ index 0000000..82d480c
 +## ramp's heading and half its width; run: metres of run-up kept bare
 +## before the foot.
 +const JUMPS := [
-+	# Straight on at the bend where the Cut turns north: off the outside
-+	# of the bend and down the open hillside.
++	# Southbound, straight on where the Cut bends from south-southeast to
++	# south: off the outside of the bend and down the open hillside.
 +	{"id": "bend", "name": "Copperback Leap", "style": "steel", "foot": Vector2(2646.0, -3058.0), "yaw": 0.4636 - PI,
 +		"length": 12.0, "width": 4.6, "lip": 1.7, "land": [20.0, 115.0, 10.0], "run": 30.0, "prize": 750},
-+	# The east verge up to the crest, its lip at the top: over it northbound.
++	# The east verge up to the crest, its lip at the top: over it southbound.
 +	{"id": "crest", "name": "Crest Kicker", "style": "steel", "foot": Vector2(2646.6, -3004.0), "yaw": PI,
 +		"length": 14.0, "width": 4.4, "lip": 1.8, "land": [16.0, 92.0, 9.0], "run": 40.0, "prize": 500},
-+	# The west verge north of the crest, over it southbound.
-+	{"id": "shale", "name": "Shale Hop", "style": "timber", "foot": Vector2(2633.6, -2960.0), "yaw": 0.0,
-+		"length": 11.0, "width": 4.0, "lip": 1.3, "land": [12.0, 96.0, 9.0], "run": 40.0, "prize": 400},
-+	# The east verge in the dip, over the hump northbound.
++	# The east verge in the dip, over the hump southbound. (The west verge
++	# has the Cut's power poles every 15.6 m, 6 m off its middle: no ramp
++	# there; HANDOFF-ground.md.)
 +	{"id": "hump", "name": "Ridge Hopper", "style": "timber", "foot": Vector2(2646.4, -2885.0), "yaw": PI,
 +		"length": 11.0, "width": 4.0, "lip": 1.4, "land": [20.0, 122.0, 9.0], "run": 40.0, "prize": 400},
 +]
@@ -1328,141 +1325,12 @@ index af590f1..40e735d 100644
  		rear = 0.0
  		front = 0.0
  		faint = false
-diff --git a/game/tests/g_scratch_shots.gd b/game/tests/g_scratch_shots.gd
-new file mode 100644
-index 0000000..6b42eff
---- /dev/null
-+++ b/game/tests/g_scratch_shots.gd
-@@ -0,0 +1,111 @@
-+extends Node
-+## Scratch (not committed): the stunt ramps and a car in the air.
-+##   xvfb-run godot --rendering-driver opengl3 res://tests/g_scratch_shots.tscn -- <out_dir>
-+
-+const MainScene = preload("res://main.tscn")
-+const Terrain = preload("res://scripts/terrain.gd")
-+const Ground = preload("res://scripts/ground.gd")
-+const Stunts = preload("res://scripts/stunts.gd")
-+const Vehicle = preload("res://scripts/vehicle.gd")
-+const CountryTiles = preload("res://scripts/country_tiles.gd")
-+
-+var out_dir := "user://"
-+var game
-+
-+
-+func _ready() -> void:
-+	var args := OS.get_cmdline_user_args()
-+	if not args.is_empty():
-+		out_dir = args[0]
-+	_run.call_deferred()
-+
-+
-+func _run() -> void:
-+	game = MainScene.instantiate()
-+	game.settings["camera_turn"] = "north"
-+	game.missions_enabled = false
-+	game.save_enabled = false
-+	add_child(game)
-+	game.atmosphere.minutes_per_second = 0.0
-+	game.atmosphere.weather_changes = false
-+	game.atmosphere.hour = 12.5
-+	CountryTiles.clearings = CountryTiles.clearings + Stunts.clearings()
-+	var s = Stunts.new()
-+	s.game = game
-+	game.add_child(s)
-+	await _frames(30)
-+	# The ramps: the steel bend and crest kickers, then the timber hump.
-+	await _view(s, "bend", 6.0, 34.0, "g1_bend_ramp.png")
-+	await _view(s, "crest", 6.0, 34.0, "g2_crest_ramp.png")
-+	await _view(s, "hump", 5.0, 30.0, "g3_hump_ramp.png")
-+	await _view(s, "shale", 30.0, 140.0, "g4_site_wide.png")
-+	# A sports car off the bend kicker at 25 m/s, in the air.
-+	await _jump(s, "bend", 25.0, [0.35, 0.9], "g5_bend_air")
-+	await _jump(s, "shale", 22.0, [0.5], "g6_shale_air")
-+	get_tree().quit()
-+
-+
-+func _view(s, id: String, ahead: float, size: float, file: String) -> void:
-+	var site: Dictionary = s.sites[id]
-+	var at: Vector3 = site.lip + Vector3(site.fwd.x, 0.0, site.fwd.y) * ahead
-+	at.y = Ground.height(at.x, at.z)
-+	_look(at, size, site.right)
-+	await _frames(40)
-+	await _shot(file)
-+
-+
-+func _look(at: Vector3, size: float, side: Vector2) -> void:
-+	game.player.global_position = at + Vector3(side.x, 0.0, side.y) * 14.0 + Vector3(0, 0.5, 0)
-+	game.player.global_position.y = Terrain.height(game.player.global_position.x, game.player.global_position.z) + 0.5
-+	game.city.stream_now(at)
-+	game.camera.fixed_focus = at
-+	game.camera.room_size = size
-+	game.camera.size = size
-+	game.camera.snap()
-+
-+
-+func _jump(s, id: String, v: float, after: Array, prefix: String) -> void:
-+	var site: Dictionary = s.sites[id]
-+	var fwd := Vector3(site.fwd.x, 0.0, site.fwd.y)
-+	var foot := Vector3(site.foot.x, 0.0, site.foot.z)
-+	var lip: Vector3 = site.lip
-+	var start := foot - fwd * 40.0
-+	_look(lip, 40.0, site.right)
-+	await _frames(40)
-+	var car = Vehicle.new()
-+	car.kind = "sports"
-+	car.city = game.city
-+	car.position = Vector3(start.x, Ground.height(start.x, start.z), start.z)
-+	car.rotation.y = Stunts.jump(id).yaw
-+	game.add_child(car)
-+	await _frames(2)
-+	car.speed = v
-+	car.velocity = fwd * v
-+	car.drive_path(PackedVector3Array([foot, Vector3(lip.x, 0.0, lip.z), Vector3(lip.x, 0.0, lip.z) + fwd * 150.0]), minf(v / car.max_speed, 1.0))
-+	var took := -1
-+	var k := 0
-+	for i in 600:
-+		await get_tree().physics_frame
-+		game.camera.fixed_focus = car.global_position
-+		if car.airborne and took < 0:
-+			took = i
-+		if took >= 0 and k < after.size() and i - took >= int(after[k] * 60.0):
-+			var p: Vector3 = car.global_position
-+			print("%s air %.2f s: %.1f m over the ground, %.1f m past the lip" % [prefix, after[k], p.y - Ground.height(p.x, p.z), (p - lip).dot(fwd)])
-+			await _shot("%s_%d.png" % [prefix, k + 1])
-+			k += 1
-+		if k >= after.size():
-+			break
-+	car.queue_free()
-+	await _frames(2)
-+
-+
-+func _shot(file: String) -> void:
-+	await RenderingServer.frame_post_draw
-+	get_viewport().get_texture().get_image().save_png(out_dir.path_join(file))
-+	print("saved ", file)
-+
-+
-+func _frames(n: int) -> void:
-+	for i in n:
-+		await get_tree().physics_frame
-diff --git a/game/tests/g_scratch_shots.tscn b/game/tests/g_scratch_shots.tscn
-new file mode 100644
-index 0000000..e11fc5b
---- /dev/null
-+++ b/game/tests/g_scratch_shots.tscn
-@@ -0,0 +1,6 @@
-+[gd_scene load_steps=2 format=3]
-+
-+[ext_resource type="Script" path="res://tests/g_scratch_shots.gd" id="1"]
-+
-+[node name="GScratchShots" type="Node"]
-+script = ExtResource("1")
 diff --git a/game/tests/ground_tests.gd b/game/tests/ground_tests.gd
 new file mode 100644
-index 0000000..54c31c8
+index 0000000..8af88fc
 --- /dev/null
 +++ b/game/tests/ground_tests.gd
-@@ -0,0 +1,496 @@
+@@ -0,0 +1,502 @@
 +extends RefCounted
 +## The ground layer (scripts/ground.gd), the vehicle air state (vehicle.gd)
 +## and the stunt jumps (scripts/stunts.gd). Run from tests/test_runner.gd
@@ -1570,6 +1438,13 @@ index 0000000..54c31c8
 +		var p: Vector3 = car.global_position
 +		out.upright = model.global_basis.y.normalized().dot(Ground.normal(p.x, p.z, p.y))
 +	return out
++
++
++## Gets the player out of `car` (if in it) and frees the car.
++func _drop(t, car) -> void:
++	if t.game.player.vehicle == car:
++		t.game.player.exit_vehicle()
++	car.queue_free()
 +
 +
 +func _path(pts: Array) -> PackedVector3Array:
@@ -1794,18 +1669,21 @@ index 0000000..54c31c8
 +				if absf(got - want) > 0.001:
 +					off.append([j.id, snappedf(along, 0.1), across, snappedf(got - want, 0.01)])
 +	t.check(off.is_empty(), "each ramp is its profile, straight between stations, edge to edge; off at %s" % [off.slice(0, 4)])
-+	for run in [["bend", 25.0], ["crest", 30.0], ["shale", 20.0]]:
++	for run in [["bend", 25.0], ["crest", 30.0], ["hump", 20.0]]:
 +		var id: String = run[0]
 +		var v: float = run[1]
 +		var site: Dictionary = s.sites[id]
 +		var fwd: Vector2 = site.fwd
 +		var car = _car(t, "sports", Vector2(site.foot.x, site.foot.z) - fwd * float(Stunts.jump(id).run), Stunts.jump(id).yaw)
++		# The player rides, so the country (plants, poles) streams in round
++		# the run as in play.
++		t.game.player.enter_vehicle(car)
 +		var r := await _run(t, car, _ramp_path(s, id), v, 9.0)
 +		var f: Dictionary = car.last_flight
 +		t.check(r.took == 1 and r.landed == 1 and f.get("deck", "") == Stunts.DECK_PREFIX + id,
 +				"%s at %d m/s: one flight, off the ramp (%d take-offs, deck %s)" % [id, v, r.took, f.get("deck", "")])
 +		if f.is_empty():
-+			car.queue_free()
++			_drop(t, car)
 +			continue
 +		var lip: Vector3 = site.lip
 +		var from := Vector2(f.from.x - lip.x, f.from.z - lip.z).dot(fwd)
@@ -1817,11 +1695,12 @@ index 0000000..54c31c8
 +		t.check(not r.nan and r.below < 0.35, "%s: never under the surface (%.2f m) and no NaN" % [id, r.below])
 +		t.check(r.upright > 0.9 and not car.wrecked and car.health > car.max_health * 0.5,
 +				"%s: lands upright and whole (up %.3f, health %d)" % [id, r.upright, car.health])
-+		car.queue_free()
++		_drop(t, car)
 +		await t._frames(1)
 +	# Too slow it rolls off the lip and drops short of the landing zone.
 +	var site: Dictionary = s.sites.crest
 +	var slow = _car(t, "sports", Vector2(site.foot.x, site.foot.z) - site.fwd * 20.0, Stunts.jump("crest").yaw)
++	t.game.player.enter_vehicle(slow)
 +	var r := await _run(t, slow, _ramp_path(s, "crest"), 6.0, 10.0)
 +	var sf: Dictionary = slow.last_flight
 +	var on: float = -1.0
@@ -1831,7 +1710,7 @@ index 0000000..54c31c8
 +			"at 6 m/s it drops off the lip short of the zone (%.1f m on)" % on)
 +	t.check(not r.nan and r.below < 0.35 and not slow.wrecked and slow.health > slow.max_health * 0.5,
 +			"and is whole, never under the surface (%.2f m)" % r.below)
-+	slow.queue_free()
++	_drop(t, slow)
 +	CountryTiles.clearings = kept
 +
 +
@@ -1856,17 +1735,17 @@ index 0000000..54c31c8
 +	await t._frames(1)
 +	var kept: Array = CountryTiles.clearings
 +	CountryTiles.clearings = kept + Stunts.clearings()
-+	var j := Stunts.jump("shale")
-+	var site: Dictionary = s.sites.shale
++	var j := Stunts.jump("hump")
++	var site: Dictionary = s.sites.hump
 +	var fwd: Vector2 = site.fwd
-+	t.check(fwd.distance_to(Vector2(0, -1)) < 0.01, "Shale Hop runs north, as the stick")
++	t.check(t.game.settings.get("camera_turn") == "north", "the stick's up is north (-z), so the stick pushed along the ramp walks up it")
 +	var foot := Vector2(site.foot.x, site.foot.z)
 +	var at := foot - fwd * 3.0
 +	var p = t.game.player
 +	t._place_player_at(Vector3(at.x, _terrain(at.x, at.y), at.y))
 +	var health: float = p.health
 +	await t._frames(2)
-+	Controls.override_vector = Vector2(0, -1)
++	Controls.override_vector = fwd
 +	var seen := {"on": 0, "off": 0.0, "top": -INF, "far": -INF}
 +	for i in 360:
 +		await t.get_tree().physics_frame
@@ -1875,7 +1754,7 @@ index 0000000..54c31c8
 +		seen.far = maxf(seen.far, s_along)
 +		if s_along > 1.0 and s_along < j.length - 0.5:
 +			var deck := Ground.height(q.x, q.z, q.y)
-+			if Ground.hit != null and Ground.hit.id == Stunts.DECK_PREFIX + "shale":
++			if Ground.hit != null and Ground.hit.id == Stunts.DECK_PREFIX + "hump":
 +				seen.on += 1
 +				seen.off = maxf(seen.off, absf(q.y - deck))
 +				seen.top = maxf(seen.top, q.y - _terrain(q.x, q.z))
@@ -1898,10 +1777,10 @@ index 0000000..54c31c8
 +	CountryTiles.clearings = kept + Stunts.clearings()
 +	await t._frames(1)
 +	game.cash = 0
-+	var site: Dictionary = s.sites.shale
++	var site: Dictionary = s.sites.hump
 +	var fwd: Vector2 = site.fwd
-+	var back := float(Stunts.jump("shale").run)
-+	var car = _car(t, "sports", Vector2(site.foot.x, site.foot.z) - fwd * back, Stunts.jump("shale").yaw)
++	var back := float(Stunts.jump("hump").run)
++	var car = _car(t, "sports", Vector2(site.foot.x, site.foot.z) - fwd * back, Stunts.jump("hump").yaw)
 +	await t._frames(2)
 +	game.player.enter_vehicle(car)
 +	for k in 2:
@@ -1913,20 +1792,14 @@ index 0000000..54c31c8
 +		var count := func(_info): got.n += 1
 +		s.jumped.connect(count)
 +		# The player at the wheel; the script driver holds the line and speed.
-+		car.drive_path(_ramp_path(s, "shale"), 24.0 / car.max_speed)
-+		var dbg := {"n": 0}
++		car.drive_path(_ramp_path(s, "hump"), 24.0 / car.max_speed)
 +		for f in 600:
 +			if got.n > 0:
 +				break
 +			await t.get_tree().physics_frame
-+			for ci in car.get_slide_collision_count():
-+				var col = car.get_slide_collision(ci).get_collider()
-+				if col != null and dbg.n < 6 and not (col is StaticBody3D and col.name.begins_with("Terrain")):
-+					dbg.n += 1
-+					print("GDBG hit %s %s at %s car %s" % [col, col.get_path() if col is Node else "", car.get_slide_collision(ci).get_position(), car.global_position])
 +		s.jumped.disconnect(count)
 +		var lj: Dictionary = s.last_jump
-+		t.check(got.n == 1 and lj.get("id", "") == "shale" and lj.made, "run %d: a jump on Shale Hop is made (%s)" % [k + 1, lj])
++		t.check(got.n == 1 and lj.get("id", "") == "hump" and lj.made, "run %d: a jump on Ridge Hopper is made (%s)" % [k + 1, lj])
 +		if k == 0:
 +			t.check(lj.first and lj.prize == 400 and game.cash == 400 and s.count() == 1, "the first pays $400 (cash %d)" % game.cash)
 +			t.check(s.readout().begins_with("Air "), "the HUD readout: %s" % s.readout())
@@ -1935,7 +1808,7 @@ index 0000000..54c31c8
 +		car.speed = 0.0
 +		car.velocity = Vector3.ZERO
 +		await t._frames(30)
-+	t.check(s.best.get("shale", 0.0) > 10.0, "its best distance is kept, %.1f m" % s.best.get("shale", 0.0))
++	t.check(s.best.get("hump", 0.0) > 10.0, "its best distance is kept, %.1f m" % s.best.get("hump", 0.0))
 +	# Missed: too slow, or out of the zone.
 +	var crest: Dictionary = s.sites.crest
 +	var lip: Vector3 = crest.lip
@@ -1945,19 +1818,20 @@ index 0000000..54c31c8
 +	t.check(game.cash == 400 and s.count() == 1, "a miss pays nothing")
 +	# Saved and loaded (as the save file: JSON), in a new game.
 +	var text := JSON.stringify(s.to_save())
++	var best: float = s.best.get("hump", 0.0)
 +	CountryTiles.clearings = kept
 +	await t._new_game(false)
 +	game = t.game
 +	var s2 = _stunts(t)
 +	await t._frames(1)
 +	s2.load_save(JSON.parse_string(text))
-+	t.check(s2.count() == 1 and s2.done.has("shale") and absf(s2.best.shale - s.best.shale) < 0.01, "the jump made survives save and load")
++	t.check(s2.count() == 1 and s2.done.has("hump") and absf(s2.best.get("hump", 0.0) - best) < 0.01, "the jump made survives save and load")
 +	game.cash = 0
-+	t.check(s2.record("shale", 2.0, 40.0, 4.0, 25.0, s2.sites.shale.lip + Vector3(fwd.x, 0.0, fwd.y) * 30.0).made and game.cash == 0,
-+			"loaded, Shale Hop pays no more")
++	t.check(s2.record("hump", 2.0, 40.0, 4.0, 25.0, s2.sites.hump.lip + Vector3(fwd.x, 0.0, fwd.y) * 30.0).made and game.cash == 0,
++			"loaded, Ridge Hopper pays no more")
 +	var made = s2.record("crest", 2.0, 40.0, 4.0, 25.0, s2.sites.crest.lip + cf * 30.0)
 +	t.check(made.first and game.cash == 500 and s2.count() == 2, "Crest Kicker still pays $500 (cash %d)" % game.cash)
-+	s2.load_save({"done": ["nowhere", 3], "best": {"shale": "x", "crest": 1e9}})
++	s2.load_save({"done": ["nowhere", 3], "best": {"hump": "x", "crest": 1e9}})
 +	t.check(s2.count() == 0 and s2.best.get("crest", 0.0) <= 1000.0, "a bad save loads nothing strange")
 diff --git a/game/tests/ground_tests.gd.uid b/game/tests/ground_tests.gd.uid
 new file mode 100644
