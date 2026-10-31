@@ -17,6 +17,11 @@ const CharKit = preload("res://scripts/kits/character_kit.gd")
 const RigScript = preload("res://scripts/rig.gd")
 const GameLog = preload("res://scripts/game_log.gd")
 const PeopleBuilder = preload("res://scripts/people_builder.gd")
+## Test modules: each script extends RefCounted, lists its tests in
+## `const TESTS` and defines `func test_x(t) -> void` (may await), where
+## `t` is this runner (t.check, t.game, t._new_game, t._frames ...). A
+## module whose file is missing is skipped, so packages can land apart.
+const TEST_MODULES := ["res://tests/wildlife_tests.gd", "res://tests/calendar_tests.gd"]
 const KIT_TESTS := ["test_body_kit_builds_bodies", "test_body_seams_hats_and_build_time", "test_people_wear_modern_clothes"]
 
 var game
@@ -124,6 +129,15 @@ func _run() -> void:
 		"test_heli_walls_and_mountain_stop_it", "test_heli_exit_only_when_low", "test_heli_stream_keeps_up",
 		"test_heli_touch_controls", "test_heliport_pads_are_clear",
 	]
+	var module_of := {}
+	for path: String in TEST_MODULES:
+		if not ResourceLoader.exists(path):
+			continue
+		var script: GDScript = load(path)
+		var mod: RefCounted = script.new()
+		for t: String in script.TESTS:
+			module_of[t] = mod
+			tests.append(t)
 	# ONLY=name1,name2 runs just those (handy while working on one test).
 	var only := OS.get_environment("ONLY")
 	if only != "":
@@ -136,7 +150,10 @@ func _run() -> void:
 		var kit_test: bool = name in KIT_TESTS
 		if kit_test:
 			CharKit.lock.lock()
-		await call(name)
+		if module_of.has(name):
+			await module_of[name].call(name, self)
+		else:
+			await call(name)
 		if kit_test:
 			CharKit.lock.unlock()
 		print("%s %s" % ["PASS" if failed == before else "FAIL", name])
@@ -2851,6 +2868,11 @@ func _frames(n: int) -> void:
 ## Equal to within 8-bit image rounding.
 func _same_color(a: Color, b: Color) -> bool:
 	return absf(a.r - b.r) < 0.01 and absf(a.g - b.g) < 0.01 and absf(a.b - b.b) < 0.01
+
+
+## For test modules (TEST_MODULES).
+func check(condition: bool, message: String) -> void:
+	_check(condition, message)
 
 
 func _check(condition: bool, message: String) -> void:
