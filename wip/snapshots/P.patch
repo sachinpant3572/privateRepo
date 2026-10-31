@@ -1,6 +1,6 @@
 diff --git a/HANDOFF-air-sports.md b/HANDOFF-air-sports.md
 new file mode 100644
-index 0000000..4f1d6a5
+index 0000000..0f92179
 --- /dev/null
 +++ b/HANDOFF-air-sports.md
 @@ -0,0 +1,79 @@
@@ -9,59 +9,56 @@ index 0000000..4f1d6a5
 +
 +## What is built
 +
-+- `game/scripts/parachute.gd`: a bail 40 m or more over the land free-falls (terminal 50 m/s), opens on
-+  E or by itself at `open_height(v)`, flies a canopy (5 m/s down, 8 ahead, stick steers, E brakes,
-+  flare at 4 m) and lands. BASE exit near (1035, -2740) with a marker: "E: BASE JUMP".
-+  API: `take_bail(p, start, v0)`, `drive(p, delta)`, `cancel()`, `prompt()`, `try_interact()`,
-+  `base_site()`, `static ground_under(x, z)`, `last_landing`, `auto_open` (test hook).
-+- `game/scripts/bungee.gd`: jump arm at the Calder lot, $60; states climb, walk_out, ready, fall,
-+  winch, flip, walk_back, down. API: `site()`, `prompt()`, `try_interact()`, `drive()`, `cancel()`,
-+  `lows`/`highs`, `static fit_rope()`, `static rope_step()`.
-+- `game/scripts/kits/air_sports_kit.gd`: canopy, risers, BASE marker, jump arm, rope meshes.
-+- `game/scripts/player.gd` (bail/fall code and hooks only): `air` (controller driving the player),
-+  `flies`/`above_land` (read by the camera), `_chute_bail()` in exit_vehicle, `_air_sport_interact()`
-+  in _think, `air.cancel()` in respawn and stand_at.
-+- `game/tests/air_sports_tests.gd` (7 tests, in TEST_MODULES); `game/tests/air_sports_shots.tscn`.
++- `game/scripts/parachute.gd`: a bail 40 m+ over the land free-falls (terminal 50 m/s), opens on E or
++  at `open_height(v)`, flies a canopy (5 m/s down, 8 ahead, stick steers, E brakes, flare at 4 m),
++  lands. BASE exit near (1035, -2740): "E: BASE JUMP". API: `take_bail(p, start, v0)`, `drive()`,
++  `cancel()`, `prompt()`, `try_interact()`, `base_site()`, statics `ground_under`, `add_clearings`.
++- `game/scripts/bungee.gd`: jump arm at the Calder lot, $60 (climb, walk_out, ready, fall, winch, flip,
++  walk_back, down). API: `site()`, `prompt()`, `try_interact()`, `drive()`, `cancel()`, `lows`/`highs`,
++  statics `fit_rope`, `rope_accel`. Both: `last_landing`/`lowest_clear` for tests.
++- `kits/air_sports_kit.gd` (meshes); `tests/air_sports_tests.gd` (15 tests); `air_sports_shots.tscn`.
++- `game/scripts/player.gd` (bail/fall code and hooks only): `air`, `flies`/`above_land` (camera),
++  `_chute_bail()` in exit_vehicle, `_air_sport_interact()` in _think, `air.cancel()` in respawn/stand_at.
 +
 +## Decisions
 +
-+- Landing height goes through one function, `Parachute.ground_under(x, z)` = Terrain.height -
-+  Terrain.drop. Switch its body to package G's `Ground.height(x, z, y_hint)` when that lands.
-+- Auto-open height = 32 m + fall during the 0.6 s delay + the slowing (0.6 s tau) + 5 m/s x 1.8 s
-+  inflation; without the last term the full canopy came only about 20 m up. Opens about 77 m up.
-+- The flare lets go above 8 m (FLARE_OFF): a low pass over a ridge had latched it (1.2 m/s glide).
-+- Bungee arm up to 40 m (38 m used): a terrain scan found no sheer 60 m cliff within 600 m of the
-+  lot (about 1.5 m down per m out). Cheaper option: ARM_MAX 20 gives a 35-40 m drop.
-+- The rope is fitted: damping and drag left the energy-sum rope about 15 m short, so `fit_rope`
-+  simulates the first fall with the game's own step and moves the aim. Head stops 3-4 m up.
-+- Site searches (BASE 60-70 ms, bungee 150-170 ms) run on a WorkerThreadPool task from 1200 m out,
-+  so the clearings are in `Tiles.clearings` before those tiles build, with no frame hitch.
++- Heights go through `Parachute.ground_under(x, z)` (Terrain.height - drop): switch to G's `Ground.height`.
++- Auto-open height = 32 m + fall in the 0.6 s delay + the slowing + 5 m/s x 1.8 s inflation (about
++  77 m). Auto-open and the flare measure to a roof too (a down ray on L.WORLD every 6 frames). The
++  flare lets go above 8 m (FLARE_OFF): a low pass over a ridge had latched it.
++- Bungee arm up to 40 m (38 used): no sheer 60 m cliff within 600 m of the lot (cheaper: ARM_MAX
++  20). The rope is fitted: `fit_rope` simulates the first fall with the game's step (head 3-4 m up).
++- Site searches (BASE 60-70 ms, bungee 150-170 ms) start on a worker once Terrain.nx > 0, wherever
++  the player is (a taxi skip); the E prompts wait for them. Clearings go into `Tiles.clearings` only
++  while `country._task < 0` (a worker build loops over it), else wait a frame; loaded tiles within
++  the half-diagonal + 10 m are unloaded to rebuild without the trees.
++- The bungee search reads only Terrain.height (worker-safe, never below ground_under: conservative);
++  the site's drop and the jump's clearance go through `ground_under`.
++- In the air the body is on no layer and meets WORLD|PROPS (`FLY_MASK`); each tick re-asserts that
++  (a hit's knock_down sets DOWNED) and ticks `knocked_time`. Stick and E need `controllable` and no
++  knock; auto-open needs neither. Landing puts the dead or knocked on DOWNED layers, others standing.
++  A roof or lake landing goes to open ground (rings out to 200 m), else the nearest road junction.
 +
 +## Traps
 +
-+- Euler round trip: setting `global_position` makes Godot re-read `rotation` from the basis; past a
-+  quarter pitch it reads (0, yaw + PI, PI), so setting only `rotation.x = -PI` flipped the jumper
-+  upright every other frame. bungee.gd writes `p.basis` from its own `_yaw`/`_pitch`, and the test
-+  checks head-down on every frame. parachute.gd keeps pitch in [-PI/2, 0], where it is safe.
-+- The BASE glide is long (about 135 s, 637 m down); tests give it 9000 frames.
++- Euler round trip: setting `global_position` re-reads `rotation`; past a quarter pitch it reads
++  (0, yaw + PI, PI). bungee.gd writes `p.basis` whole; parachute.gd keeps pitch in [-PI/2, 0].
++- The BASE glide is long (about 135 s, 637 m down); tests give it 9000 frames. user:// is shared
++  between builders: tests set cash and never rely on saves.
 +- main.gd resets `Tiles.clearings` each new game (line 74); the nodes append theirs later.
-+- user:// is shared between builders: tests set cash and never rely on saves.
++- A helicopter over a roof gives the "roof" exit, not a bail: the roof test builds its tower after.
 +
 +## Open items
 +
 +- The main.gd and hud.gd patches below are not applied; until then tests and shots make the nodes.
-+- No camera patch needed: top_down_camera.gd reads `flies`/`above_land` (lines 651, 705, 801).
++  No camera patch (the camera reads `flies`/`above_land`); no input patch (`_think` gives E to the
++  cab and hunting first).
 +
 +## Patches for the main session
 +
-+main.gd, after line 17 (`const Hunting = ...`):
-+
-+    const Parachute = preload("res://scripts/parachute.gd")
-+    const Bungee = preload("res://scripts/bungee.gd")
-+
-+main.gd, after line 42 (`var hunting`): `var parachute` and `var bungee`.
-+
-+main.gd, after lines 91-92 (`hunting = Hunting.new()`, `add_child(hunting)`):
++main.gd, after line 17: `const Parachute = preload("res://scripts/parachute.gd")` and
++`const Bungee = preload("res://scripts/bungee.gd")`; after line 42 (`var hunting`): `var parachute`
++and `var bungee`; after lines 91-92 (`hunting = Hunting.new()`, `add_child(hunting)`):
 +
 +    	parachute = Parachute.new()
 +    	parachute.game = self
@@ -70,19 +67,22 @@ index 0000000..4f1d6a5
 +    	bungee.game = self
 +    	add_child(bungee)
 +
-+hud.gd, before line 270 (`elif context_prompt.size() == 2:`), plus a helper:
++hud.gd, after line 247 (`_ride_name_time -= delta`): `	var air_prompt: Array = _air_prompt()`;
++after the hunting branch (lines 279-283), before line 284 (`elif game.interiors ...`):
 +
-+    	elif not _air_prompt().is_empty():
-+    		var air_prompt: Array = _air_prompt()
++    	elif air_prompt.size() == 2:
 +    		_prompt.text = air_prompt[0]
 +    		touch.set_label("interact", air_prompt[1])
 +    		touch.set_label("sprint", "RUN")
 +
++hud.gd, a helper (one prompt call per node, no array literal per frame):
++
 +    func _air_prompt() -> Array:
-+    	for node in [game.get("parachute"), game.get("bungee")]:
-+    		if node != null and not node.prompt().is_empty():
-+    			return node.prompt()
-+    	return []
++    	var chute = game.get("parachute")
++    	var shown: Array = chute.prompt() if chute != null else []
++    	if shown.is_empty() and game.get("bungee") != null:
++    		shown = game.bungee.prompt()
++    	return shown
 diff --git a/game/scripts/bungee.gd b/game/scripts/bungee.gd
 new file mode 100644
 index 0000000..db014d1
@@ -909,10 +909,10 @@ index 0000000..c55e960
 +uid://c5vicg6hjdxhj
 diff --git a/game/scripts/parachute.gd b/game/scripts/parachute.gd
 new file mode 100644
-index 0000000..09c8d2f
+index 0000000..7c7fd48
 --- /dev/null
 +++ b/game/scripts/parachute.gd
-@@ -0,0 +1,684 @@
+@@ -0,0 +1,693 @@
 +extends Node
 +## Parachuting (HANDOFF-air-sports.md). A bail from a helicopter MIN_HEIGHT m
 +## or more over the ground free-falls, then flies a canopy down: OPEN (E) or,
@@ -990,6 +990,8 @@ index 0000000..09c8d2f
 +## Open ground for a landing on a roof or in a lake: the nearest on these
 +## rings (m), else the nearest road junction.
 +const OPEN_RINGS := [0.0, 6.0, 12.0, 20.0, 30.0, 45.0, 60.0, 80.0, 110.0, 150.0, 200.0]
++## ...with this much open ground round the spot (m; the body is 0.35 m wide).
++const ROOM := 1.0
 +
 +var game
 +## Test hook: false never opens the canopy by itself.
@@ -1209,7 +1211,7 @@ index 0000000..09c8d2f
 +		_roof_tick = ROOF_EVERY
 +		_roof_y = -INF
 +		var ray := PhysicsRayQueryParameters3D.create(pos + Vector3.UP * 0.5, Vector3(pos.x, _ground_y - 0.5, pos.z), L.WORLD)
-+		var hit := p.get_world_3d().direct_space_state.intersect_ray(ray)
++		var hit: Dictionary = p.get_world_3d().direct_space_state.intersect_ray(ray)
 +		if not hit.is_empty():
 +			_roof_y = float(hit.position.y)
 +	return maxf(_ground_y, _roof_y)
@@ -1394,9 +1396,10 @@ index 0000000..09c8d2f
 +	return country != null and not country.lakes.is_empty() and not country.lake_at(q).is_empty()
 +
 +
-+## The nearest open, dry ground to `p` (nothing built or growing over it):
-+## on OPEN_RINGS (a point every 12 m or so round each), else the nearest road
-+## junction (a lake's middle or a block of towers), else `p`.
++## The nearest open, dry ground to `p` (nothing built or growing over it or
++## within ROOM of it, so the body is clear of walls): on OPEN_RINGS (a point
++## every 12 m or so round each), else the nearest road junction (a lake's
++## middle or a block of towers), else `p`.
 +func _open_ground_near(p: Vector3) -> Vector3:
 +	if not is_inside_tree():
 +		return p
@@ -1406,11 +1409,9 @@ index 0000000..09c8d2f
 +		for k in count:
 +			var q := p + Vector3(r, 0.0, 0.0).rotated(Vector3.UP, TAU * k / count)
 +			var g := ground_under(q.x, q.z)
-+			if _wet(q, g):
-+				continue
-+			var ray := PhysicsRayQueryParameters3D.create(Vector3(q.x, g + 500.0, q.z), Vector3(q.x, g - 0.5, q.z), FLY_MASK)
-+			var hit := space.intersect_ray(ray)
-+			if hit.is_empty() or float(hit.position.y) <= g + 1.0:
++			if not _wet(q, g) and _clear_at(space, q) and _clear_at(space, q + Vector3(ROOM, 0.0, 0.0)) \
++					and _clear_at(space, q - Vector3(ROOM, 0.0, 0.0)) and _clear_at(space, q + Vector3(0.0, 0.0, ROOM)) \
++					and _clear_at(space, q - Vector3(0.0, 0.0, ROOM)):
 +				return Vector3(q.x, g, q.z)
 +	var city = game.get("city") if game != null else null
 +	var n: int = city.nearest_node(p) if city != null else -1
@@ -1418,6 +1419,14 @@ index 0000000..09c8d2f
 +		var at: Vector3 = city.node_pos(n)
 +		return Vector3(at.x, ground_under(at.x, at.z), at.z)
 +	return p
++
++
++## True when nothing world or prop stands over the ground at `q` (x, z).
++static func _clear_at(space: PhysicsDirectSpaceState3D, q: Vector3) -> bool:
++	var g := ground_under(q.x, q.z)
++	var ray := PhysicsRayQueryParameters3D.create(Vector3(q.x, g + 500.0, q.z), Vector3(q.x, g - 0.5, q.z), FLY_MASK)
++	var hit: Dictionary = space.intersect_ray(ray)
++	return hit.is_empty() or float(hit.position.y) <= g + 1.0
 +
 +
 +# --- Drawing ------------------------------------------------------------------
@@ -1850,10 +1859,10 @@ index 0000000..4cc49ee
 +script = ExtResource("1")
 diff --git a/game/tests/air_sports_tests.gd b/game/tests/air_sports_tests.gd
 new file mode 100644
-index 0000000..566c328
+index 0000000..60e6346
 --- /dev/null
 +++ b/game/tests/air_sports_tests.gd
-@@ -0,0 +1,344 @@
+@@ -0,0 +1,655 @@
 +extends RefCounted
 +## Parachuting and bungee (scripts/parachute.gd, scripts/bungee.gd;
 +## HANDOFF-air-sports.md). Run from tests/test_runner.gd (TEST_MODULES);
@@ -1861,10 +1870,16 @@ index 0000000..566c328
 +
 +const TESTS := ["test_air_chute_bail_lands_softly", "test_air_chute_unopened_falls_as_a_bail",
 +	"test_air_low_bail_keeps_the_fall", "test_air_chute_steering_moves_the_landing",
-+	"test_air_base_jump_from_the_lip", "test_air_bungee_jump", "test_air_bungee_refuses_a_broke_player"]
++	"test_air_base_jump_from_the_lip", "test_air_bungee_jump", "test_air_bungee_refuses_a_broke_player",
++	"test_air_sites_found_on_workers", "test_air_clearings_wait_for_a_tile_build",
++	"test_air_tiles_built_before_the_site_are_rebuilt", "test_air_chute_opens_over_a_roof",
++	"test_air_open_ground_beyond_a_wide_roof", "test_air_canopy_meets_props",
++	"test_air_hit_under_the_canopy", "test_air_hit_on_the_rope"]
 +const Parachute = preload("res://scripts/parachute.gd")
 +const Bungee = preload("res://scripts/bungee.gd")
 +const Terrain = preload("res://scripts/terrain.gd")
++const Tiles = preload("res://scripts/country_tiles.gd")
++const L = preload("res://scripts/layers.gd")
 +const BAIL_SAFE := 2.5
 +const BAIL_HURT := 7.0
 +
@@ -1902,9 +1917,12 @@ index 0000000..566c328
 +
 +## The pilot in the game's helicopter `height` m over (at.x, at.y), facing
 +## `yaw` (north is 0), then BAIL pressed. Returns the parachute node.
-+func _bail(t, at: Vector2, height: float, yaw: float, with_chute := true):
++## `setup` (given the parachute) runs in the new game before the bail.
++func _bail(t, at: Vector2, height: float, yaw: float, with_chute := true, setup := Callable()):
 +	var heli = await t._board_heli()
 +	var chute = _sports(t)[0] if with_chute else null
++	if setup.is_valid():
++		setup.call(chute)
 +	t._hold_heli_at(heli, Vector3(at.x, 0.0, at.y), height, yaw)
 +	await t._frames(20)
 +	t._hold_heli_at(heli, Vector3(at.x, 0.0, at.y), height, yaw)
@@ -1946,6 +1964,29 @@ index 0000000..566c328
 +				out.canopy_fwd.append(Vector2(v.x, v.z).length())
 +		last = pos
 +	return out
++
++
++## A solid box `size` big standing on the ground at `at` on collision
++## `layer` (a stand-in tower or prop). Returns the height of its top.
++func _block(t, at: Vector2, size: Vector3, layer: int) -> float:
++	var g := _ground(at.x, at.y)
++	var body := StaticBody3D.new()
++	body.collision_layer = layer
++	body.collision_mask = 0
++	var shape := CollisionShape3D.new()
++	var box := BoxShape3D.new()
++	box.size = size
++	shape.shape = box
++	body.add_child(shape)
++	t.game.add_child(body)
++	body.global_position = Vector3(at.x, g + size.y * 0.5, at.y)
++	return g + size.y
++
++
++## Whether (x, z) of `p` is inside the clearing `cl` ([centre, yaw, half]).
++static func _in_clearing(p: Vector3, cl: Array) -> bool:
++	var q: Vector2 = (Vector2(p.x, p.z) - cl[0]).rotated(cl[1])
++	return absf(q.x) < cl[2].x and absf(q.y) < cl[2].y
 +
 +
 +static func _mean(a: Array) -> float:
@@ -2113,11 +2154,12 @@ index 0000000..566c328
 +	if site.is_empty():
 +		return
 +	var tip: Vector3 = site.tip
++	# The drawn land (as landings measure it), not Terrain.height over it.
 +	var under := -INF
 +	for a in 16:
 +		var q := tip + Vector3(2.5, 0.0, 0.0).rotated(Vector3.UP, TAU * a / 16.0)
-+		under = maxf(under, Terrain.height(q.x, q.z))
-+	under = maxf(under, Terrain.height(tip.x, tip.z))
++		under = maxf(under, _ground(q.x, q.z))
++	under = maxf(under, _ground(tip.x, tip.z))
 +	t.check(float(site.drop) >= Bungee.WANT_DROP and tip.y - under >= Bungee.WANT_DROP - 1.0,
 +			"the arm (%.0f m) reaches over a %.1f m drop (%.1f sampled finer)" % [float(site.length), float(site.drop), tip.y - under])
 +	t.check(Vector2(site.root.x, site.root.z).distance_to(jump._lot()) <= Bungee.ROOT_R + 1.0,
@@ -2148,12 +2190,14 @@ index 0000000..566c328
 +			states.append(jump.state)
 +		if jump.state in ["fall", "winch"]:
 +			# Hanging head down: the head is BODY under the ankles.
-+			lowest = minf(lowest, pos.y - Bungee.BODY - Terrain.height(pos.x, pos.z))
++			lowest = minf(lowest, pos.y - Bungee.BODY - _ground(pos.x, pos.z))
 +			if jump.state == "winch" or jump._t >= Bungee.DIVE_TIME:
 +				head_up = maxf(head_up, p.global_basis.y.y)
 +	t.check(jump.state == "" and p.air == null and not nan, "the jump ends (%d frames)" % frames)
 +	t.check(states == ["climb", "walk_out", "ready", "fall", "winch", "flip", "walk_back", "down"], "every stage: %s" % [states])
 +	t.check(lowest >= 3.0, "the lowest point is %.1f m over the ground under it (3 or more)" % lowest)
++	t.check(absf(jump.lowest_clear - lowest) < 0.01,
++			"the jump measures it over the drawn land too (%.2f, the test %.2f)" % [jump.lowest_clear, lowest])
 +	t.check(head_up < -0.95, "head down on the rope every frame after the dive (body up axis y at most %.2f)" % head_up)
 +	t.check(absf(p.rotation.x) < 0.01 and absf(p.rotation.z) < 0.01, "upright again at the end (%s)" % p.rotation)
 +	var lows: Array = jump.lows
@@ -2198,6 +2242,282 @@ index 0000000..566c328
 +	t.check(game.cash == Bungee.PRICE - 1 and jump.state == "" and game.player.air == null,
 +			"broke: refused, cash kept (%d), no jump" % game.cash)
 +	t.check(game.hud._message.text.contains("$%d" % Bungee.PRICE), "the HUD says what it costs: %s" % game.hud._message.text)
++
++
++## Both site searches run on worker threads from the first frame, wherever
++## the player is (here 1000 m from the lot), and end with the marker, the
++## arm and their clearings in Tiles.clearings, the tasks freed.
++func test_air_sites_found_on_workers(t) -> void:
++	await t._new_game(false)
++	var sports := _sports(t)
++	var chute = sports[0]
++	var jump = sports[1]
++	var lot: Vector2 = jump._lot()
++	var spawn: Vector3 = t.game.player.global_position
++	var away := Vector2(spawn.x - lot.x, spawn.z - lot.y).normalized()
++	var at := lot + away * 1000.0
++	t._place_player_at(Vector3(at.x, _ground(at.x, at.y), at.y))
++	await t._frames(1)
++	t.check(chute._task >= 0 and jump._task >= 0 and not chute._site_done and not jump._site_done,
++			"1000 m out, both searches run on workers (tasks %d, %d)" % [chute._task, jump._task])
++	var frames := 0
++	while frames < 900 and not (chute._site_done and jump._site_done and chute._pending.is_empty() and jump._pending.is_empty()):
++		await t._frames(1)
++		frames += 1
++	t.check(chute._site_done and jump._site_done and chute._task == -1 and jump._task == -1,
++			"both found and their tasks freed (%d frames)" % frames)
++	t.check(chute.get_node_or_null("BaseExit") != null and jump.get_node_or_null("BungeeArm") != null,
++			"the BASE marker and the jump arm stand")
++	var mine: Array = chute.clearings + jump.clearings
++	var listed := mine.size() == 3
++	for cl in mine:
++		listed = listed and Tiles.clearings.has(cl)
++	t.check(listed and chute._pending.is_empty() and jump._pending.is_empty(),
++			"their 3 clearings are in Tiles.clearings (%d of the list's %d)" % [mine.size(), Tiles.clearings.size()])
++
++
++## A clearing never goes into Tiles.clearings while a country tile builds
++## on a worker (the build loops over that list): it waits, then goes in.
++func test_air_clearings_wait_for_a_tile_build(t) -> void:
++	await t._new_game(false)
++	var country = t.game.city.country
++	country._finish_task()
++	var near := Vector3(Bungee.LOT.x, 0.0, Bungee.LOT.y)
++	var key = null
++	for k in country.tiles_near(near, 400.0):
++		if country.tile_node(k) == null:
++			key = k
++			break
++	t.check(key != null, "a tile by the lot not built yet")
++	if key == null:
++		return
++	var chute = _sports(t)[0]
++	var n: int = Tiles.clearings.size()
++	var rect := [Vector2(near.x, near.z), 0.3, Vector2(2.0, 2.0)]
++	country._start_task(key)
++	var added: bool = Parachute.add_clearings(t.game, [rect])
++	t.check(country._task >= 0 and not added and Tiles.clearings.size() == n,
++			"while tile %s builds on a worker: not added (%s, list %d -> %d)" % [key, added, n, Tiles.clearings.size()])
++	chute._clear_ground([rect])
++	t.check(chute._pending == [rect] and Tiles.clearings.size() == n, "the node holds it back")
++	country._finish_task()
++	chute._flush_clearings()
++	t.check(country._task < 0 and chute._pending.is_empty() and Tiles.clearings.size() == n + 1 and Tiles.clearings.back() == rect,
++			"the build done, it goes in once (list %d)" % Tiles.clearings.size())
++
++
++## The player put at the lot at once (a taxi skip, a mission replay) builds
++## the tiles there before the arm is found: the tiles under its clearings
++## are built again, and no plant stands in them.
++func test_air_tiles_built_before_the_site_are_rebuilt(t) -> void:
++	await t._new_game(false)
++	var jump = _sports(t)[1]
++	var country = t.game.city.country
++	var lot: Vector2 = jump._lot()
++	var at := Vector3(lot.x, _ground(lot.x, lot.y), lot.y)
++	t._place_player_at(at)
++	country.stream_now(at)
++	var before := {}
++	for key in country.loaded_tiles():
++		before[key] = country.tile_node(key).get_instance_id()
++	t.check(not jump._site_done and jump.clearings.is_empty() and before.size() > 0,
++			"%d tiles by the lot built before the arm is found" % before.size())
++	var frames := 0
++	while frames < 900 and not (jump._site_done and jump._pending.is_empty()):
++		await t._frames(1)
++		frames += 1
++	t.check(not jump._site.is_empty() and jump.clearings.size() == 2 and jump._pending.is_empty(),
++			"the arm found and its clearings in (%d frames)" % frames)
++	var p = t.game.player
++	while frames < 2400 and (country._task >= 0 or country._next_missing(p.global_position) != null):
++		await t._frames(1)
++		frames += 1
++	var stale := []
++	var rebuilt := 0
++	var plants := []
++	for cl: Array in jump.clearings:
++		var centre: Vector2 = cl[0]
++		for key in country.tiles_near(Vector3(centre.x, 0.0, centre.y), (cl[2] as Vector2).length() + Parachute.CLEAR_ROOM):
++			var node = country.tile_node(key)
++			if node == null:
++				continue
++			if before.has(key):
++				if node.get_instance_id() == before[key]:
++					stale.append(key)
++				else:
++					rebuilt += 1
++			for body in node.get_children():
++				if body is StaticBody3D and body.collision_layer == L.PROPS:
++					for s in body.get_children():
++						if s is CollisionShape3D and _in_clearing(s.global_position, cl):
++							plants.append(Vector2(s.global_position.x, s.global_position.z))
++	t.check(stale.is_empty() and rebuilt > 0, "the %d tiles under the clearings built again (still old: %s)" % [rebuilt, stale])
++	t.check(plants.is_empty(), "no plant or prop inside the arm's clearings: %s" % [plants])
++
++
++## A bail 150 m over the land, then a tower 100 m tall under the falling
++## jumper (a helicopter over a roof steps off onto it instead of bailing):
++## the canopy opens for the roof (not the land under it), flares onto it,
++## and the jumper is put down on open ground beside the tower, unhurt.
++func test_air_chute_opens_over_a_roof(t) -> void:
++	await t._new_game(false)
++	var at: Vector2 = _field(t)[0]
++	var chute = await _bail(t, at, 150.0, 0.0)
++	var top := [_block(t, at, Vector3(200.0, 100.0, 200.0), L.WORLD)]
++	var p = t.game.player
++	t.check(chute.state == "free" and p.global_position.y - top[0] > Parachute.open_height(-chute.velocity.y),
++			"falling, %.0f m over the new roof" % (p.global_position.y - top[0]))
++	var hp: float = p.health
++	var opened := [-INF]
++	var watch := func(c):
++		if c.state != "free" and opened[0] == -INF:
++			opened[0] = p.global_position.y - top[0]
++	var f: Dictionary = await _fly(t, chute, 60 * 60, watch)
++	var land: Dictionary = chute.last_landing
++	t.check(opened[0] >= Parachute.AUTO_CLEAR, "the canopy opened %.0f m over the roof (%.0f m up)" % [opened[0], top[0] - _ground(at.x, at.y)])
++	t.check(chute.state == "" and land.get("roof", false) and land.get("canopy", false) and float(land.get("impact", 99.0)) <= 3.0,
++			"flared onto the roof (%.1f m/s, roof %s)" % [float(land.get("impact", 99.0)), land.get("roof", false)])
++	var pos: Vector3 = p.global_position
++	var off := absf(pos.x - at.x) > 100.5 or absf(pos.z - at.y) > 100.5
++	t.check(off and absf(pos.y - _ground(pos.x, pos.z)) < 0.05 and not p.dead and hp - p.health <= 10.0 and not f.nan,
++			"down on open ground beside the tower, unhurt (%s, harm %.0f)" % [pos, hp - p.health])
++
++
++## Open ground for a landing on a roof: past 80 m when the roof is wider
++## (a tower block 340 m across), and dry ground from a lake's middle.
++func test_air_open_ground_beyond_a_wide_roof(t) -> void:
++	await t._new_game(false)
++	var chute = _sports(t)[0]
++	var at: Vector2 = _field(t)[0]
++	var top := _block(t, at, Vector3(340.0, 60.0, 340.0), L.WORLD)
++	await t._frames(2)
++	var q: Vector3 = chute._open_ground_near(Vector3(at.x, top, at.y))
++	var off := absf(q.x - at.x) > 170.5 or absf(q.z - at.y) > 170.5
++	t.check(off and absf(q.y - _ground(q.x, q.z)) < 0.01, "from the middle of a roof 340 m across: %s, off it" % q)
++	var country = t.game.city.country
++	var big := {}
++	for lake: Dictionary in country.lakes:
++		if big.is_empty() or (lake.rect as Rect2).get_area() > (big.rect as Rect2).get_area():
++			big = lake
++	t.check(not big.is_empty(), "a lake")
++	if big.is_empty():
++		return
++	var mid: Vector2 = (big.rect as Rect2).get_center()
++	var w: Vector3 = chute._open_ground_near(Vector3(mid.x, float(big.level), mid.y))
++	t.check(country.lake_at(Vector2(w.x, w.z)).is_empty() and not chute._wet(w, w.y),
++			"from the middle of %s (%.0f m across): dry ground at %s" % [big.name, (big.rect as Rect2).size.x, w])
++
++
++## The canopy meets props (tree trunks, posts: L.PROPS) as it meets the
++## world: a canopy coming down on a wide one lands on it and is put down
++## beside it, not through it to the ground inside.
++func test_air_canopy_meets_props(t) -> void:
++	await t._new_game(false)
++	var at: Vector2 = _field(t)[0]
++	var chute = await _bail(t, at, 150.0, 0.0, true, func(_c): _block(t, at, Vector3(200.0, 30.0, 200.0), L.PROPS))
++	var p = t.game.player
++	t.check(p.collision_mask & L.PROPS != 0, "flying, the body meets props (mask %d)" % p.collision_mask)
++	var f: Dictionary = await _fly(t, chute, 60 * 60)
++	var land: Dictionary = chute.last_landing
++	var pos: Vector3 = p.global_position
++	var off := absf(pos.x - at.x) > 100.5 or absf(pos.z - at.y) > 100.5
++	t.check(chute.state == "" and land.get("roof", false) and land.get("canopy", false) and not f.nan,
++			"landed on top of the prop (roof %s, canopy %s)" % [land.get("roof", false), land.get("canopy", false)])
++	t.check(off and absf(pos.y - _ground(pos.x, pos.z)) < 0.05 and not p.dead, "and put down beside it (%s)" % pos)
++
++
++## A hit under the canopy that knocks the player down: the knock-down wears
++## off in the air, the body stays off the layers, no steering while down or
++## while the player has no control; killed, the flight lets go and the body
++## is down (L.DOWNED) and falls to the ground.
++func test_air_hit_under_the_canopy(t) -> void:
++	await t._new_game(false)
++	var spot: Array = _field(t)
++	var chute = await _bail(t, spot[0], 150.0, 0.0)
++	var p = t.game.player
++	var frames := 0
++	while chute.state != "canopy" and frames < 60 * 20:
++		await t._frames(1)
++		frames += 1
++	t.check(chute.state == "canopy", "under the canopy (%d frames)" % frames)
++	p.take_hit(null, 30.0, Vector3.ZERO)
++	t.check(p.knocked_time > 1.0 and not p.dead, "a 30 hit knocks the player down (%.1f s)" % p.knocked_time)
++	var heading: float = chute.heading
++	Controls.override_vector = t._stick_toward(Vector3.RIGHT)
++	var on_no_layer := true
++	var down := 0
++	var turned := 0.0
++	while p.knocked_time > 0.0 and down < 300:
++		await t._frames(1)
++		down += 1
++		on_no_layer = on_no_layer and p.collision_layer == 0 and p.collision_mask == Parachute.FLY_MASK
++		if p.knocked_time > 0.0: # (the tick it runs out, the stick has the canopy again)
++			turned = maxf(turned, absf(angle_difference(heading, chute.heading)))
++	t.check(p.knocked_time <= 0.0 and down <= 95, "the knock-down wears off in the air (%d frames for 1.5 s)" % down)
++	t.check(on_no_layer and p.air == chute and chute.state == "canopy", "flying on, on no layer all the while")
++	t.check(turned < 0.01, "the stick does nothing while down (turned %.3f rad)" % turned)
++	p.controllable = false
++	heading = chute.heading
++	await t._frames(60)
++	t.check(absf(angle_difference(heading, chute.heading)) < 0.01, "nor while the player has no control")
++	p.controllable = true
++	await t._frames(60)
++	t.check(absf(angle_difference(heading, chute.heading)) > 0.3,
++			"then it steers again (turned %.2f rad)" % absf(angle_difference(heading, chute.heading)))
++	Controls.override_vector = null
++	p.take_hit(null, 1000.0, Vector3.ZERO)
++	await t._frames(2)
++	t.check(p.dead and p.air == null and chute.state == "", "killed under the canopy: the flight lets go")
++	t.check(p.collision_layer == L.DOWNED and p.collision_mask == (L.WORLD | L.PROPS),
++			"the body is down (layer %d, mask %d)" % [p.collision_layer, p.collision_mask])
++	await t._frames(400)
++	var pos: Vector3 = p.global_position
++	t.check(absf(pos.y - _ground(pos.x, pos.z)) < 0.3, "and on the ground (%.2f m over it)" % (pos.y - _ground(pos.x, pos.z)))
++
++
++## On the rope: a knock-down hit wears off and the jump goes on, the body on
++## no layer; killed, the jump lets go, the body down and on the ground.
++func test_air_hit_on_the_rope(t) -> void:
++	await t._new_game(false)
++	var jump = _sports(t)[1]
++	var site: Dictionary = jump.site()
++	t.check(not site.is_empty(), "the bungee has a site")
++	if site.is_empty():
++		return
++	var game = t.game
++	var p = game.player
++	game.cash = 100
++	var gate: Vector3 = site.gate
++	gate.y = _ground(gate.x, gate.z)
++	t._place_player_at(gate)
++	await t._frames(3)
++	await t._press("interact")
++	var frames := 0
++	while not (jump.state == "fall" and jump._t > Bungee.DIVE_TIME) and frames < 60 * 20:
++		await t._frames(1)
++		frames += 1
++	t.check(jump.state == "fall", "on the rope (%d frames)" % frames)
++	p.take_hit(null, 30.0, Vector3.ZERO)
++	var on_no_layer := true
++	var down := 0
++	while p.knocked_time > 0.0 and down < 300:
++		await t._frames(1)
++		down += 1
++		on_no_layer = on_no_layer and p.collision_layer == 0 and p.collision_mask == 0
++	t.check(p.knocked_time <= 0.0 and down <= 95 and on_no_layer and p.air == jump and jump.state != "",
++			"a knock-down wears off on the rope (%d frames), the body on no layer, the jump goes on (%s)" % [down, jump.state])
++	while jump.state != "fall" and jump.state != "winch" and frames < 60 * 40:
++		await t._frames(1)
++		frames += 1
++	p.take_hit(null, 1000.0, Vector3.ZERO)
++	await t._frames(2)
++	t.check(p.dead and p.air == null and jump.state == "", "killed on the rope: the jump lets go")
++	t.check(p.collision_layer == L.DOWNED and p.collision_mask == (L.WORLD | L.PROPS),
++			"the body is down (layer %d, mask %d)" % [p.collision_layer, p.collision_mask])
++	await t._frames(400)
++	var pos: Vector3 = p.global_position
++	t.check(absf(pos.y - _ground(pos.x, pos.z)) < 0.3 and absf(p.basis.y.y - 1.0) < 0.01,
++			"and upright on the ground (%.2f m over it)" % (pos.y - _ground(pos.x, pos.z)))
 diff --git a/game/tests/air_sports_tests.gd.uid b/game/tests/air_sports_tests.gd.uid
 new file mode 100644
 index 0000000..c910c59

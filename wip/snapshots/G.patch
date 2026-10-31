@@ -1,94 +1,92 @@
 diff --git a/HANDOFF-ground.md b/HANDOFF-ground.md
 new file mode 100644
-index 0000000..c7ce419
+index 0000000..6ab92ff
 --- /dev/null
 +++ b/HANDOFF-ground.md
-@@ -0,0 +1,79 @@
+@@ -0,0 +1,77 @@
 +# Package G: ground layer, vehicle air state, stunt jumps
 +Branch `worktree-agent-a69e1efc71ef57b4d`; HANDOFF-hill-content.md phase 3.
 +
 +## What is here
-+- `scripts/ground.gd` (static): `height(x, z, y_hint)`, `surface(x, z, base,
-+  y_hint)` (+ `hit`, `hit_grad`), `normal`, `terrain_grad`, `add_strip`,
-+  `add_ramp`, `add_cut`, `remove`, `clear`, `deck`, `ids`; rules in its
-+  header. No deck in a 32 m cell = the caller's terrain value.
-+- `vehicle.gd`: ground from Ground (own y as hint). Air state: takes off
-+  when the ground falls over `AIR_LIFT` (0.3 m) in a frame below where its
-+  climb and gravity carry it; ballistic; landing hurts over 12 m/s. Signals
-+  `took_off(car)`, `air_landed(car, air_time, distance, height)`;
-+  `last_flight` {from, to, time, distance, height, rise, speed, impact, deck}.
-+- `humanoid.gd`: feet on Ground. `kits/ramp_kit.gd`: timber and steel
-+  kickers (mesh, side-wall and core colliders; the deck is a Ground ramp).
-+  `stunts.gd`: three ramps on Copperback Cut (bend $750, crest $500, hump
-+  $400), zones, pay once, save/load, readout. `tests/ground_tests.gd`: 8.
++- `scripts/ground.gd` (static, main thread only): `height`, `surface` (+
++  `hit`, `hit_grad`), `normal`, `terrain_grad`, `add_strip/ramp/cut`,
++  `remove`, `clear`, `deck`, `ids`; rules and API in its header.
++- `vehicle.gd`: ground from Ground (own y as hint); air state (`took_off`,
++  `air_landed`, `last_flight`); `exit_check()` "bail" in the air over 1.5 m
++  up. `humanoid.gd`: feet on Ground. `kits/ramp_kit.gd`: kickers. `stunts.gd`:
++  three ramps on Copperback Cut (bend $750, crest $500, hump $400), zones,
++  pay once, save/load, readout. `tests/ground_tests.gd`: 11 tests.
 +
 +## Decisions
-+- A deck counts only at or below `y_hint + 0.6` (STEP): found from above,
-+  ignored from below; the terrain is solid outside a cut.
-+- Round joins only in the join's wedge: answering past a segment's end
-+  anywhere in the half width made cars take off 4 m before a ramp's lip.
-+  Tests check each ramp edge to edge.
-+- Landing zones from probes (sports car 16-42 m/s lands bend 29-140 m past
-+  the lip, crest 22-109, hump 26-160), for 16 to ~36 m/s: bend 20-115,
-+  crest 16-92, hump 20-122, half widths 9-10 m.
-+- Dropped a fourth ramp (shale, west verge): the Cut's power poles stand
-+  6 m west of its middle every 15.6 m (country_tiles.gd `_pole_at`, not
-+  stopped by clearings), on its run-up and landing line. To restore: the
-+  pole patch below, then `{"id": "shale", "name": "Shale Hop", "style":
-+  "timber", "foot": Vector2(2633.6, -2960.0), "yaw": 0.0, "length": 11.0,
-+  "width": 4.0, "lip": 1.3, "land": [12.0, 96.0, 9.0], "run": 40.0, "prize": 400}`.
-+- Crest ramp moved to foot (2646.6, -3004): its run-up crossed the bend's.
-+
-+## Traps
-+- Traffic or races running wide at the bend can clip the bend ramp.
-+- Country tiles (trees, poles) stream in round the player only: set the
-+  clearings and put the player in the car before testing at a ramp.
++- A deck counts only at or below `y_hint + 0.6` (STEP). In a cut with no
++  deck the answer is `min(terrain, y_hint)` (no jump to the hilltop).
++- Take-off: climb and a frame's fall carry the car over 0.3 m above the
++  ground and its flight clears Ground for 0.2 s (AIR_CLEAR). On terrain the
++  climb is the rise over 2.5 m centred on the car (AIR_SPAN): the West
++  Ridge notch launched cars at 25-40 m/s; lookahead alone or a backward chord did not fix it.
++- In the air a deck counts only if the car was at or over it last frame
++  (hint `y_prev - STEP`, rising and falling): with the hint only while
++  rising, a car topping out within 0.6 m under a deck lands on it falling.
++- Round joins only in the join's wedge (else take-offs 4 m before a lip).
++  Landing zones (probes, 16-36 m/s): bend 20-115 m, crest 16-92, hump 20-122.
++- Dropped a fourth ramp (shale): the Cut's poles (`_pole_at`) stand on its
++  line. To restore: the pole patch, then `{"id": "shale", "name": "Shale Hop",
++  "style": "timber", "foot": Vector2(2633.6, -2960.0), "yaw": 0.0, "length":
++  11.0, "width": 4.0, "lip": 1.3, "land": [12.0, 96.0, 9.0], "run": 40.0, "prize": 400}`.
 +
 +## Patches for the main session (not applied here)
 +main.gd:
 +```gdscript
 +const Stunts = preload("res://scripts/stunts.gd")  # with the preloads
 +var stunts  # with `var hunting`
-+# replaces `Country.Tiles.clearings = Heliports.clearings()`:
-+Country.Tiles.clearings = Heliports.clearings() + Stunts.clearings()
-+stunts = Stunts.new()  # after `add_child(hunting)`
-+stunts.game = self
-+add_child(stunts)
++Country.Tiles.clearings = Heliports.clearings() + Stunts.clearings()  # replaces the old line
++stunts = Stunts.new(); stunts.game = self; add_child(stunts)  # after `add_child(hunting)`
 +```
-+missions/mission_manager.gd (as hunting):
++missions/mission_manager.gd (as hunting): save `"stunts":
++game.stunts.to_save(),` after "hunting"; load `var stunt =
++data.get("stunts")` then `game.stunts.load_save(stunt if typeof(stunt) ==
++TYPE_DICTIONARY else {})`; reset `game.stunts.load_save({})`.
++player.gd, against acb9be2 (`Ground` is humanoid.gd's const; package P's
++`_chute_bail` goes round the bail lines):
 +```gdscript
-+# save dict, after the "hunting" entry: "stunts": game.stunts.to_save(),
-+var stunt = data.get("stunts")  # load, after the hunting load
-+game.stunts.load_save(stunt if typeof(stunt) == TYPE_DICTIONARY else {})
-+game.stunts.load_save({})  # reset, after game.hunting.load_save({})
++# _free_spot_beside, lines 279 and 284:
++spot.y = Ground.height(spot.x, spot.z, car.global_position.y)
++fallback.y = Ground.height(fallback.x, fallback.z, car.global_position.y)
++# exit_vehicle, the bail (line 231):
++var ground := Ground.height(global_position.x, global_position.z, from_y)
 +```
-+hud.gd, player.gd: none (stunts.gd calls `game.hud.show_message`, "Stunt
-+jump n/N  +$prize" + readout, and watches `game.player.vehicle`).
-+Optional, country_tiles.gd `_road`: no pole (or `next`) inside `clearings`.
++hud.gd: none. Optional, country_tiles.gd `_road`: no pole inside `clearings`.
 +
-+## Phase 4 (bridges, tunnels)
-+- Bridge: `Ground.add_strip(id, centreline, deck top heights, carriageway
-+  + kerbs width, "bridge")`; piers and parapets are colliders, the deck not.
-+- Tunnel: `Ground.add_cut(id, centreline, roof heights, bore width)` + `add_strip` floor; walls collide.
-+- Whatever is placed under a bridge passes its own height as `y_hint` (INF
-+  finds the bridge): spawners that use Terrain.height directly (traffic,
-+  peds, car exits) need that. Keep under ~1000 segments per 32 m cell.
++## Phase 4 (bridges, tunnels): to do
++- Bridge: `add_strip(id, centreline, deck tops, carriageway + kerbs,
++  "bridge")`, piers and parapets collide. Tunnel: `add_cut` (roofs, bore
++  width) + floor `add_strip` portal to portal; walls collide. country.json
++  "structures" map onto these.
++- Add `Ground.ceiling` / `in_cut` queries; with them move the camera
++  (top_down_camera.gd:957, 1027), rain, headlights and helicopter landing
++  (helicopter.gd:317) off Terrain; about 20 Terrain readers in all
++  (spawners pass their lane's height as y_hint; INF finds a bridge).
++- Cut holes in the terrain mesh at the portals.
++- Ground is not thread-safe (static `hit`): never call it from the
++  country.gd/city.gd builder threads. Keep under ~1000 segments a 32 m cell.
++
++## Traps
++- Country tiles (trees, poles) stream in round the player only: set the
++  clearings and put the player in the car before testing at a ramp.
++- Rival race lines (1.4 m off the Copperback centreline) clear every ramp
++  collider by 2.3 m or more (test); traffic running wide could clip one.
 +
 +## Gates (2026-10-31)
-+8 ground + 62 vehicle/traffic/taxi/heli/walk tests: 70 PASS, 706 checks
-+passed, 0 failed. Shots (scratch scene, deleted): 7 saved, no script
-+errors; three ramps on the road, a sports car 4-8 m up, 9-23 m past a lip.
++GATES_LINE
 +
 +## Open items
-+- West Ridge Track launches a car at 25 m/s or more; Crest Drive peaks at
-+  0.19 m of lift a frame at 30 m/s (limit 0.3).
 +- Landings over 12 m/s vertical hurt (42 m/s off the bend: health 71/100).
 diff --git a/game/scripts/ground.gd b/game/scripts/ground.gd
 new file mode 100644
-index 0000000..1e49c19
+index 0000000..ca045d0
 --- /dev/null
 +++ b/game/scripts/ground.gd
-@@ -0,0 +1,284 @@
+@@ -0,0 +1,288 @@
 +extends RefCounted
 +## The walkable ground: the hills' height grid (Terrain) plus decks laid
 +## over it (stunt ramps now; bridges and tunnel floors in phase 4) and cuts
@@ -107,7 +105,9 @@ index 0000000..1e49c19
 +##   and at or below `y_hint + STEP` (the hill over a tunnel); below the roof
 +##   it is the hole, so a floor deck under the hill wins there.
 +## - When nothing counts (an asker below every deck in a cut), the lowest
-+##   deck there is the answer.
++##   deck there is the answer; with no deck there either, the asker's own
++##   y_hint (it does not jump to the hilltop; INF: the terrain). Give a
++##   tunnel a floor deck from portal to portal.
 +## With no deck or cut in a point's grid cell the answer is exactly the
 +## caller's terrain value, after one dictionary look-up.
 +##
@@ -220,7 +220,9 @@ index 0000000..1e49c19
 +			low_grad = it.dir[i] * it.slope[i]
 +	if best == -INF:
 +		if low_item == null:
-+			return base
++			# In a cut with no deck here (past a tunnel floor's end or
++			# edge): the hole has no floor, so the asker keeps its height.
++			return minf(base, y_hint)
 +		best = low
 +		best_item = low_item
 +		best_grad = low_grad
@@ -991,7 +993,7 @@ index 0000000..f38c951
 @@ -0,0 +1 @@
 +uid://q62xqquxga6f
 diff --git a/game/scripts/vehicle.gd b/game/scripts/vehicle.gd
-index af590f1..40e735d 100644
+index af590f1..4d00398 100644
 --- a/game/scripts/vehicle.gd
 +++ b/game/scripts/vehicle.gd
 @@ -8,6 +8,7 @@ const MeshBuilder = preload("res://scripts/mesh_builder.gd")
@@ -1015,14 +1017,17 @@ index af590f1..40e735d 100644
  
  ## SCRIPT drives a mission path; CHASER hunts the player like police do.
  enum Driver { NONE, PLAYER, TRAFFIC, POLICE, SCRIPT, CHASER }
-@@ -30,6 +37,23 @@ const DROP_RATE := 1.5
+@@ -30,6 +37,31 @@ const DROP_RATE := 1.5
  ## How much of gravity's pull along a slope reaches the speed (the rest the
  ## engine and brakes take).
  const SLOPE_PULL := 0.6
 +## The air state (_ride_ground, _air_drive): the car takes off when the
 +## ground falls away under it more than AIR_LIFT m in one frame below where
-+## its own climb and gravity carry it (a ramp's lip, a deck's edge; the
-+## hills' road crests stay under 0.25 m at 30 m/s, so they never launch).
++## its own climb and gravity carry it, and that flight would stay over the
++## ground for AIR_CLEAR s (a ramp's lip, a deck's edge). On the terrain its
++## climb is the grid's averaged over AIR_SPAN m along its way, so a notch or
++## kink in the grid shorter than a wheelbase neither kicks it up nor drops
++## it out from under it (ground_tests.gd sweeps the hill roads at 40 m/s).
 +## In the air it flies under AIR_GRAVITY keeping its horizontal velocity;
 +## its nose eases to the flight path (AIR_NOSE, 1/s) and the stick turns it
 +## only AIR_STEER rad/s. Landing faster than AIR_LAND_SAFE m/s into the ground
@@ -1036,10 +1041,15 @@ index af590f1..40e735d 100644
 +const AIR_LAND_HURT := 2.5
 +const AIR_LAND_SCRUB := 0.015
 +const AIR_LAND_SCRUB_MAX := 0.3
++const AIR_SPAN := 2.5
++const AIR_CLEAR := 0.2
++## Getting out in the air more than this high over the ground is a bail
++## (exit_check), a fall like one from a helicopter.
++const EXIT_BAIL := 1.5
  ## Corner assist: a turn the stick asks for that is too tight at this speed
  ## slows the car to the speed at which it can turn on this radius (m).
  const CORNER_RADIUS := 5.0
-@@ -291,6 +315,31 @@ var _heave_v := 0.0
+@@ -291,6 +323,32 @@ var _heave_v := 0.0
  ## a bump or a crest the springs take.
  var _ground_vy := 0.0
  var _last_y := INF
@@ -1054,8 +1064,9 @@ index af590f1..40e735d 100644
 +## (m/s at take-off), "impact" (m/s into the ground)}. Empty before any.
 +var last_flight := {}
 +## The y this car last set (a different y means code placed it: snap), its
-+## xz then, the ground's slope there, the deck it is on ("" for none) and
-+## that deck's normal (ZERO on the terrain).
++## xz then, its climb there (a deck's slope, or the terrain's averaged along
++## its way: terrain_climb), the deck it is on ("" for none) and that deck's
++## normal (ZERO on the terrain).
 +var _y_set := INF
 +var _xz_set := Vector2.INF
 +var _grad := Vector2.ZERO
@@ -1071,7 +1082,7 @@ index af590f1..40e735d 100644
  ## Yaw spin from an off-centre hit (rad/s), dying away.
  var _spin := 0.0
  ## Dented copies of the cached meshes ([body, gloss] arrays and the
-@@ -391,7 +440,7 @@ func _ready() -> void:
+@@ -391,7 +449,7 @@ func _ready() -> void:
  
  
  func _physics_process(delta: float) -> void:
@@ -1080,7 +1091,7 @@ index af590f1..40e735d 100644
  		motion = Vector3.ZERO
  		return # parked: nothing to simulate until something drives or hits it
  	desired_dir = Vector3.ZERO
-@@ -644,9 +693,19 @@ static func footprints_meet(a: Vector3, a_yaw: float, a_size: Vector3, b: Vector
+@@ -644,9 +702,19 @@ static func footprints_meet(a: Vector3, a_yaw: float, a_size: Vector3, b: Vector
  ## Moves the car by `offset` at once, stopping at walls (another car
  ## sunk into it moves it out).
  func shove(offset: Vector3) -> void:
@@ -1102,7 +1113,7 @@ index af590f1..40e735d 100644
  
  
  ## Hit by another vehicle: `push` is already scaled by the two masses (see
-@@ -1264,6 +1323,14 @@ func _police_ai(delta: float) -> void:
+@@ -1264,6 +1332,14 @@ func _police_ai(delta: float) -> void:
  ## velocity follows the heading (lower slides more, and rear-drive cars
  ## lose some under power), and brake and reverse are per model.
  func _drive(delta: float) -> void:
@@ -1117,7 +1128,7 @@ index af590f1..40e735d 100644
  	var fwd := -global_basis.z
  	var target := 0.0
  	var steer := 0.0
-@@ -1366,9 +1433,12 @@ func _drive(delta: float) -> void:
+@@ -1366,9 +1442,12 @@ func _drive(delta: float) -> void:
  	velocity = Vector3(velocity.x, 0.0, velocity.z).lerp(want, clampf(grip * delta, 0.0, 1.0))
  	var before := velocity
  	move_and_slide()
@@ -1133,7 +1144,7 @@ index af590f1..40e735d 100644
  	# Tilt follows how the body really moves, so a car pinned against a
  	# wall with the throttle down stays level.
  	var real := get_real_velocity()
-@@ -1379,6 +1449,164 @@ func _drive(delta: float) -> void:
+@@ -1379,6 +1458,222 @@ func _drive(delta: float) -> void:
  	_handle_collisions(before)
  
  
@@ -1154,22 +1165,70 @@ index af590f1..40e735d 100644
 +func _ride_ground(delta: float, placed: bool) -> void:
 +	var p := global_position
 +	var xz := Vector2(p.x, p.z)
-+	var base := Terrain.height(p.x, p.z) - _ground_drop(delta)
++	var drop := _ground_drop(delta)
++	var base := Terrain.height(p.x, p.z) - drop
 +	var g := Ground.surface(p.x, p.z, base, p.y if placed else _y_set)
 +	var deck = Ground.hit
-+	var grad: Vector2 = Ground.hit_grad if deck != null else Ground.terrain_grad(p.x, p.z)
++	var grad: Vector2 = Ground.hit_grad if deck != null else Vector2.ZERO
 +	if not placed:
-+		var rise := _grad.dot(xz - _xz_set)
-+		var carry := _y_set + rise - 0.5 * AIR_GRAVITY * delta * delta
-+		if carry - g > AIR_LIFT:
-+			_take_off(carry, rise / delta)
++		var step := xz - _xz_set
++		var y := take_off_height(_y_set, _grad, step, xz, g, delta, drop)
++		if not is_nan(y):
++			_take_off(y, _grad.dot(step) / delta)
 +			return
 +	_y_set = g
 +	_xz_set = xz
-+	_grad = grad
++	_grad = grad if deck != null else terrain_climb(xz, Vector2(velocity.x, velocity.z))
 +	_deck_id = deck.id if deck != null else ""
 +	_deck_n = Vector3(-grad.x, 1.0, -grad.y).normalized() if deck != null else Vector3.ZERO
 +	global_position.y = g
++
++
++## The terrain's climb under a car at `xz` heading along `dir` (x z, any
++## length; ZERO when it has none), as a gradient (dy/dx, dy/dz): the grid's
++## rise over AIR_SPAN m centred on it, as its wheels ride it, not the slope
++## of the one grid cell under its middle.
++static func terrain_climb(xz: Vector2, dir: Vector2) -> Vector2:
++	if dir.length_squared() < 1e-6:
++		return Vector2.ZERO
++	var u := dir.normalized()
++	var a := xz + u * (AIR_SPAN * 0.5)
++	var b := xz - u * (AIR_SPAN * 0.5)
++	return u * ((Terrain.height(a.x, a.y) - Terrain.height(b.x, b.y)) / AIR_SPAN)
++
++
++## Whether a car on the ground leaves it this frame: from height `y0`,
++## climbing `climb` (a gradient) and moving `step` (x z) in `delta` s to
++## `xz`, where the ground is `g`, its climb and a frame's fall carry it to a
++## height. When that is over AIR_LIFT above g and its flight from there
++## (stepped as _air_drive steps it) stays over the ground (Terrain less
++## `drop`, and decks) for AIR_CLEAR s, it flies: the height is returned.
++## NAN: it stays on the ground (a dip it would land in at once holds it).
++static func take_off_height(y0: float, climb: Vector2, step: Vector2, xz: Vector2, g: float, delta: float, drop := 0.0) -> float:
++	var rise := climb.dot(step)
++	var y := y0 + rise - 0.5 * AIR_GRAVITY * delta * delta
++	if not (y - g > AIR_LIFT):
++		return NAN
++	var vy := rise / delta
++	var v := step / delta
++	var q := xz
++	var fy := y
++	for k in maxi(roundi(AIR_CLEAR / delta), 1):
++		vy -= AIR_GRAVITY * delta
++		var next := fy + vy * delta
++		q += v * delta
++		if not (next > Ground.surface(q.x, q.y, Terrain.height(q.x, q.y) - drop, air_hint(fy))):
++			return NAN
++		fy = next
++	return y
++
++
++## The y_hint a car in the air looks for the ground with, from its height
++## last frame: only a deck it was at or over then counts, so it lands on a
++## deck by coming down onto it, never from under it (Ground.STEP is a
++## wheel's step up a deck's edge on the ground, not a reach in the air).
++static func air_hint(y_prev: float) -> float:
++	return y_prev - Ground.STEP
 +
 +
 +func _take_off(y: float, vy: float) -> void:
@@ -1189,6 +1248,16 @@ index af590f1..40e735d 100644
 +	global_position.y = y
 +	_last_y = y
 +	took_off.emit(self)
++
++
++## How the player gets out (player.gd asks, as it asks a helicopter):
++## "bail" while the car is in the air more than EXIT_BAIL m over the ground
++## under it (out of a jumping car is a fall), "" otherwise.
++func exit_check() -> String:
++	if not airborne:
++		return ""
++	var p := global_position
++	return "bail" if p.y - Ground.height(p.x, p.z, p.y) > EXIT_BAIL else ""
 +
 +
 +## In the air: no grip and no engine. The car keeps its horizontal velocity
@@ -1222,7 +1291,7 @@ index af590f1..40e735d 100644
 +	var p := global_position
 +	var y := _y_set + air_vy * delta
 +	var base := Terrain.height(p.x, p.z) - _ground_drop(delta)
-+	var g := Ground.surface(p.x, p.z, base, _y_set)
++	var g := Ground.surface(p.x, p.z, base, air_hint(_y_set))
 +	var deck = Ground.hit
 +	var grad: Vector2 = Ground.hit_grad if deck != null else Ground.terrain_grad(p.x, p.z)
 +	if y > g: # (false for a NaN: it lands)
@@ -1261,7 +1330,7 @@ index af590f1..40e735d 100644
 +	air_vy = 0.0
 +	_y_set = g
 +	_xz_set = Vector2(p.x, p.z)
-+	_grad = grad
++	_grad = grad if deck != null else terrain_climb(_xz_set, flat)
 +	_deck_id = deck.id if deck != null else ""
 +	_deck_n = Vector3(-grad.x, 1.0, -grad.y).normalized() if deck != null else Vector3.ZERO
 +	global_position.y = g
@@ -1298,7 +1367,7 @@ index af590f1..40e735d 100644
  ## Speed (m/s) at which this model's heading turns as fast as a car on a
  ## CORNER_RADIUS circle at full lock: v = R * turn * (1 - steer_fade * v /
  ## max_speed), solved for v, and no faster than its tyres hold that
-@@ -1552,7 +1780,7 @@ func _throw_rider(fling: Vector3) -> void:
+@@ -1552,7 +1847,7 @@ func _throw_rider(fling: Vector3) -> void:
  
  ## The ground's slope along and across the car (it lies on the hill).
  func _ground_slope(delta: float) -> void:
@@ -1307,7 +1376,7 @@ index af590f1..40e735d 100644
  	var want := Vector2.ZERO
  	if n.y < 0.9999:
  		var fwd := -global_basis.z
-@@ -1686,7 +1914,7 @@ func _effects(delta: float) -> void:
+@@ -1686,7 +1981,7 @@ func _effects(delta: float) -> void:
  	var moving := v.length()
  	_exhaust(delta)
  	_tyres(delta, v, moving)
@@ -1316,7 +1385,7 @@ index af590f1..40e735d 100644
  		_splash_time -= delta
  		if _splash_time <= 0.0:
  			_splash_time = 0.16
-@@ -1815,7 +2043,7 @@ func _tyres(delta: float, v: Vector3, moving: float) -> void:
+@@ -1815,7 +2110,7 @@ func _tyres(delta: float, v: Vector3, moving: float) -> void:
  			front = moving
  	if _emit.pops and throttle > 0.9 and pace < 7.0 and _load > 0.4 and driver == Driver.PLAYER:
  		rear = maxf(rear, 10.0 - pace)
@@ -1327,10 +1396,10 @@ index af590f1..40e735d 100644
  		faint = false
 diff --git a/game/tests/ground_tests.gd b/game/tests/ground_tests.gd
 new file mode 100644
-index 0000000..8af88fc
+index 0000000..6f03304
 --- /dev/null
 +++ b/game/tests/ground_tests.gd
-@@ -0,0 +1,502 @@
+@@ -0,0 +1,784 @@
 +extends RefCounted
 +## The ground layer (scripts/ground.gd), the vehicle air state (vehicle.gd)
 +## and the stunt jumps (scripts/stunts.gd). Run from tests/test_runner.gd
@@ -1338,7 +1407,8 @@ index 0000000..8af88fc
 +
 +const TESTS := ["test_ground_without_decks_is_terrain", "test_ground_deck_from_above_not_below",
 +	"test_ground_cut_lets_the_floor_win", "test_car_drives_along_a_deck", "test_car_flies_off_a_ramp",
-+	"test_highway_speed_stays_on_the_road", "test_person_walks_up_a_ramp", "test_stunt_jump_pays_once_and_saves"]
++	"test_highway_speed_stays_on_the_road", "test_hill_roads_never_launch", "test_car_under_a_deck_never_lands_on_it",
++	"test_bail_out_of_a_flying_car", "test_person_walks_up_a_ramp", "test_stunt_jump_pays_once_and_saves"]
 +const Ground = preload("res://scripts/ground.gd")
 +const Terrain = preload("res://scripts/terrain.gd")
 +const Vehicle = preload("res://scripts/vehicle.gd")
@@ -1360,6 +1430,13 @@ index 0000000..8af88fc
 +	Vector2(159.0, -1639.0), Vector2(164.6, -1633.4), Vector2(169.7, -1627.2), Vector2(173.8, -1620.3),
 +	Vector2(177.4, -1613.2), Vector2(181.0, -1606.1), Vector2(184.5, -1598.9), Vector2(187.9, -1591.7),
 +	Vector2(189.9, -1584.0)]
++## West Ridge Track's straight over two notches in the grid (one at
++## (479, -3023): 687.56, 686.99, 687.70 m over 4 m).
++const WEST_RIDGE := [Vector2(501.3, -3010.1), Vector2(497.8, -3012.0), Vector2(494.2, -3013.8), Vector2(490.6, -3015.6),
++	Vector2(487.1, -3017.4), Vector2(483.6, -3019.3), Vector2(480.2, -3021.4), Vector2(476.9, -3023.8),
++	Vector2(473.9, -3026.4), Vector2(471.1, -3029.2), Vector2(468.2, -3031.9), Vector2(465.3, -3034.7),
++	Vector2(462.6, -3037.7), Vector2(460.2, -3040.9)]
++const NOTCH := Vector2(478.5, -3022.6)
 +## A test tunnel under the climb at the start of that straight.
 +const TUNNEL_A := Vector2(79.3, -1727.8)
 +const TUNNEL_B := Vector2(102.5, -1695.5)
@@ -1400,11 +1477,14 @@ index 0000000..8af88fc
 +## it has landed from a flight and settled for `settle` frames, or `seconds`
 +## pass, or `each` (called with the car every frame) returns true. Returns
 +## what happened: "took" take-offs, "landed" landings, "nan" (a non-finite
-+## position or velocity), "below" (most the car sank under the surface, m),
-+## "air" frames airborne, "top" (fastest m/s), "upright" (the body's up
-+## against the ground's normal under it at the end), "path" (metres driven).
++## position or velocity), "below" (most the car sank under the surface it
++## stands on, m), "sunk" (most it sat under the top deck over it, m, looked
++## for from above: -INF with no deck over it; a car under a bridge is under
++## it by design), "air" frames airborne, "top" (fastest m/s), "upright"
++## (the body's up against the ground's normal under it at the end), "path"
++## (metres driven).
 +func _run(t, car, pts: PackedVector3Array, v: float, seconds: float, settle := 60, each := Callable()) -> Dictionary:
-+	var out := {"took": 0, "landed": 0, "nan": false, "below": -INF, "air": 0, "top": 0.0, "upright": 1.0, "path": 0.0}
++	var out := {"took": 0, "landed": 0, "nan": false, "below": -INF, "sunk": -INF, "air": 0, "top": 0.0, "upright": 1.0, "path": 0.0}
 +	car.took_off.connect(func(_c): out.took += 1)
 +	car.air_landed.connect(func(_c, _a, _d, _h): out.landed += 1)
 +	await t._frames(2)
@@ -1422,6 +1502,9 @@ index 0000000..8af88fc
 +		out.path += Vector2(p.x - last.x, p.z - last.z).length()
 +		last = p
 +		out.below = maxf(out.below, Ground.height(p.x, p.z, p.y) - p.y)
++		var top := Ground.surface(p.x, p.z, -1.0e9)
++		if Ground.hit != null:
++			out.sunk = maxf(out.sunk, top - p.y)
 +		out.top = maxf(out.top, Vector2(car.velocity.x, car.velocity.z).length())
 +		if car.airborne:
 +			out.air += 1
@@ -1476,9 +1559,47 @@ index 0000000..8af88fc
 +		bad.append(p)
 +
 +
++## Where a car held to `pts` (x z) at `v` m/s first leaves the ground,
++## stepped frame by frame (60 fps) as _ride_ground steps it, without driving
++## it (no steering, no speed lost on a climb): Vector3(x, lift over the
++## ground, z), not finite if it never does. Adds the frames to `frames[0]`.
++func _first_launch(pts: PackedVector2Array, v: float, frames: Array) -> Vector3:
++	var dt := 1.0 / 60.0
++	var at := pts[0]
++	var y := Ground.surface(at.x, at.y, Terrain.height(at.x, at.y))
++	var climb := Vehicle.terrain_climb(at, pts[1] - at)
++	var i := 0
++	while i < pts.size() - 1:
++		var nxt := at
++		var left := v * dt
++		while i < pts.size() - 1:
++			var dd := nxt.distance_to(pts[i + 1])
++			if dd >= left and dd > 0.0:
++				nxt += (pts[i + 1] - nxt) / dd * left
++				left = 0.0
++				break
++			left -= dd
++			nxt = pts[i + 1]
++			i += 1
++		if left > 0.0:
++			break
++		var move := nxt - at
++		var g := Ground.surface(nxt.x, nxt.y, Terrain.height(nxt.x, nxt.y), y)
++		var deck = Ground.hit
++		var grad := Ground.hit_grad
++		var lift := Vehicle.take_off_height(y, climb, move, nxt, g, dt)
++		if not is_nan(lift):
++			return Vector3(nxt.x, lift - g, nxt.y)
++		frames[0] += 1
++		y = g
++		climb = grad if deck != null else Vehicle.terrain_climb(nxt, move)
++		at = nxt
++	return Vector3.INF
++
++
 +func test_ground_without_decks_is_terrain(t) -> void:
 +	await t._new_game(false)
-+	_stunts(t)
++	var s = _stunts(t)
 +	await t._frames(1)
 +	var ramps := 0
 +	for id: String in Ground.ids():
@@ -1500,6 +1621,52 @@ index 0000000..8af88fc
 +			n += 1
 +			_same_as_terrain(p, rng, bad)
 +	t.check(n > 3000 and bad.is_empty(), "away from any deck Ground is exactly the terrain (%d points), off at %s" % [n, bad.slice(0, 3)])
++	# Near a ramp but off it (its grid cells, so its segments are walked):
++	# beside it, before its foot and past its lip it is still the terrain.
++	var near := PackedVector2Array()
++	for j in Stunts.JUMPS:
++		var site: Dictionary = s.sites[j.id]
++		var foot := Vector2(site.foot.x, site.foot.z)
++		var hw: float = j.width * 0.5
++		var k0 := near.size()
++		while near.size() < k0 + 400:
++			var along := rng.randf_range(-12.0, j.length + 12.0)
++			var across := rng.randf_range(-hw - 12.0, hw + 12.0)
++			if along > -0.1 and along < j.length + 0.1 and absf(across) < hw + 0.1:
++				continue
++			near.append(foot + site.fwd * along + site.right * across)
++	bad.clear()
++	for p in near:
++		_same_as_terrain(p, rng, bad)
++	t.check(bad.is_empty(), "near each ramp but off it Ground is exactly the terrain (%d points), off at %s" % [near.size(), bad.slice(0, 3)])
++	# What a look-up costs, 10k each: the grid alone, then Ground (the grid
++	# plus the deck walk) away from decks and in a ramp's cells, and
++	# Ground.height (which adds Terrain.drop) both ways.
++	var far := PackedVector2Array()
++	while far.size() < 10000:
++		var p := Vector2(rng.randf_range(lo.x, hi.x), rng.randf_range(lo.y, hi.y))
++		if p.distance_to(Vector2(2640.0, -2970.0)) > 300.0:
++			far.append(p)
++	var close := PackedVector2Array()
++	for i in 10000:
++		close.append(near[i % near.size()])
++	var us := []
++	var t0 := Time.get_ticks_usec()
++	for p in far:
++		Terrain.height(p.x, p.y)
++	us.append(Time.get_ticks_usec() - t0)
++	for pts: PackedVector2Array in [far, close]:
++		t0 = Time.get_ticks_usec()
++		for p in pts:
++			Ground.surface(p.x, p.y, Terrain.height(p.x, p.y), 300.0)
++		us.append(Time.get_ticks_usec() - t0)
++	for pts: PackedVector2Array in [far, close]:
++		t0 = Time.get_ticks_usec()
++		for p in pts:
++			Ground.height(p.x, p.y, 300.0)
++		us.append(Time.get_ticks_usec() - t0)
++	t.check(us[2] < 300000, "10k look-ups (ms): grid %.1f; Ground.surface far %.1f, by a ramp %.1f; Ground.height far %.1f, by a ramp %.1f"
++			% [us[0] / 1000.0, us[1] / 1000.0, us[2] / 1000.0, us[3] / 1000.0, us[4] / 1000.0])
 +	# Gone with the game, the ramps leave nothing behind: the stunt site is
 +	# plain terrain again.
 +	await t._free_game()
@@ -1604,6 +1771,21 @@ index 0000000..8af88fc
 +		return false)
 +	t.check(seen.frames > 60 and seen.off < 0.02 and r.took == 0, "a car drives the tunnel floor (%d frames, %.3f m off it)" % [seen.frames, seen.off])
 +	car.queue_free()
++	# A floor that stops halfway: past its end, still in the bore, there is
++	# no floor and no jump up to the hilltop either; the asker keeps its own
++	# height (from the top it is the hill).
++	Ground.remove("test_floor")
++	var mid := (TUNNEL_A + TUNNEL_B) * 0.5
++	Ground.add_strip("test_floor", PackedVector2Array([TUNNEL_A, mid]), PackedFloat32Array([ta - 8.0, floor_y]), 7.0, "floor")
++	var past := TUNNEL_A.lerp(TUNNEL_B, 0.75)
++	var y_past := lerpf(ta, tb, 0.75) - 8.0
++	var hill_past := _terrain(past.x, past.y)
++	var got := Ground.height(past.x, past.y, y_past)
++	t.check(got <= y_past + 0.001 and Ground.hit == null, "past a short floor's end in the bore the asker keeps its height, got %.2f (its %.2f, hill %.2f)" % [got, y_past, hill_past])
++	t.check(Ground.height(past.x, past.y) == hill_past, "and from the top there it is the hill")
++	var on := TUNNEL_A.lerp(TUNNEL_B, 0.25)
++	var y_on := lerpf(ta, tb, 0.25) - 8.0
++	t.check(absf(Ground.height(on.x, on.y, y_on + 0.1) - y_on) < 0.001, "short of its end the floor is the ground")
 +	Ground.remove("test_bore")
 +	Ground.remove("test_floor")
 +
@@ -1638,7 +1820,7 @@ index 0000000..8af88fc
 +		var off: float = (Vector2(f.from.x, f.from.z) - BRIDGE_A).dot(d)
 +		t.check(absf(off - length) < 1.5, "from the end of the deck, %.1f m along (deck %.1f m)" % [off, length])
 +		t.check(f.height > 10.0 and f.time > 1.0, "and drops to the hillside below (%.1f m, %.1f s)" % [f.height, f.time])
-+	t.check(not r.nan and r.below < 0.35, "never under the surface (%.2f m) and no NaN" % r.below)
++	t.check(not r.nan and r.below < 0.35 and r.sunk < 0.35, "never under the surface (%.2f m) nor the deck (%.2f m) and no NaN" % [r.below, r.sunk])
 +	car.queue_free()
 +	Ground.remove(BRIDGE)
 +
@@ -1669,6 +1851,32 @@ index 0000000..8af88fc
 +				if absf(got - want) > 0.001:
 +					off.append([j.id, snappedf(along, 0.1), across, snappedf(got - want, 0.01)])
 +	t.check(off.is_empty(), "each ramp is its profile, straight between stations, edge to edge; off at %s" % [off.slice(0, 4)])
++	# Rivals race the Copperback road past the ramps up to 1.4 m off its
++	# centreline: the centreline keeps 2.6 m (that and a car's half width)
++	# from every ramp's collider (its deck's footprint, 0.3 m wider a side).
++	var country = t.game.city.country
++	var clear := {}
++	for j in Stunts.JUMPS:
++		clear[j.id] = INF
++	for rd: Dictionary in country.roads:
++		if not (rd.name in ["Copperback Cut", "Copperback Track"]):
++			continue
++		for k in rd.nodes.size() - 1:
++			var a: Vector2 = country.node_pos[rd.nodes[k]]
++			var b: Vector2 = country.node_pos[rd.nodes[k + 1]]
++			var n := maxi(ceili(a.distance_to(b) / 0.25), 1)
++			for m in n + 1:
++				var q := a.lerp(b, float(m) / n)
++				for j in Stunts.JUMPS:
++					var site: Dictionary = s.sites[j.id]
++					var rel := q - Vector2(site.foot.x, site.foot.z)
++					var along := rel.dot(site.fwd)
++					var ex := maxf(absf(rel.dot(site.right)) - (j.width * 0.5 + 0.3), 0.0)
++					var ez := maxf(maxf(-along, along - j.length), 0.0)
++					clear[j.id] = minf(clear[j.id], Vector2(ex, ez).length())
++	var tight: Array = clear.keys().filter(func(id): return not (clear[id] >= 2.6))
++	t.check(tight.is_empty(), "the race road's centreline clears every ramp's collider by 2.6 m: %s"
++			% ", ".join(clear.keys().map(func(id): return "%s %.2f m" % [id, clear[id]])))
 +	for run in [["bend", 25.0], ["crest", 30.0], ["hump", 20.0]]:
 +		var id: String = run[0]
 +		var v: float = run[1]
@@ -1692,7 +1900,7 @@ index 0000000..8af88fc
 +		t.check(f.time > 0.5 and f.height > 1.0, "%s: air %.2f s, %.1f m high" % [id, f.time, f.height])
 +		t.check(to.dot(fwd) > 5.0 and absf(to.dot(site.right)) < 6.0 and s.in_zone(id, f.to),
 +				"%s: lands ahead in the landing zone (%.1f m on, %.1f m across)" % [id, to.dot(fwd), to.dot(site.right)])
-+		t.check(not r.nan and r.below < 0.35, "%s: never under the surface (%.2f m) and no NaN" % [id, r.below])
++		t.check(not r.nan and r.below < 0.35 and r.sunk < 0.35, "%s: never under the surface (%.2f m) nor the ramp (%.2f m) and no NaN" % [id, r.below, r.sunk])
 +		t.check(r.upright > 0.9 and not car.wrecked and car.health > car.max_health * 0.5,
 +				"%s: lands upright and whole (up %.3f, health %d)" % [id, r.upright, car.health])
 +		_drop(t, car)
@@ -1708,8 +1916,8 @@ index 0000000..8af88fc
 +		on = Vector2(sf.to.x - site.lip.x, sf.to.z - site.lip.z).dot(site.fwd)
 +	t.check(r.landed >= 1 and on >= 0.0 and on < 10.0 and not s.in_zone("crest", sf.get("to", Vector3.ZERO)),
 +			"at 6 m/s it drops off the lip short of the zone (%.1f m on)" % on)
-+	t.check(not r.nan and r.below < 0.35 and not slow.wrecked and slow.health > slow.max_health * 0.5,
-+			"and is whole, never under the surface (%.2f m)" % r.below)
++	t.check(not r.nan and r.below < 0.35 and r.sunk < 0.35 and not slow.wrecked and slow.health > slow.max_health * 0.5,
++			"and is whole, never under the surface (%.2f m) nor the ramp (%.2f m)" % [r.below, r.sunk])
 +	_drop(t, slow)
 +	CountryTiles.clearings = kept
 +
@@ -1727,6 +1935,149 @@ index 0000000..8af88fc
 +		t.check(not r.nan and r.below < 0.35, "on the road, never under it (%.2f m)" % r.below)
 +		car.queue_free()
 +		await t._frames(1)
++	# Over the notch in West Ridge Track's grid (a half-metre dip and a
++	# steep far wall in 4 m), which once threw a car off its own road.
++	for back in [false, true]:
++		var pts: Array = WEST_RIDGE.duplicate()
++		if back:
++			pts.reverse()
++		var car = _car(t, "sports", pts[0], _yaw(pts[1] - pts[0]))
++		var seen := {"v": 0.0}
++		var r := await _run(t, car, _path(pts.slice(1)), 31.0, 4.0, 1, func(c):
++			var p: Vector3 = c.global_position
++			if Vector2(p.x, p.z).distance_to(NOTCH) < 4.0:
++				seen.v = maxf(seen.v, Vector2(c.velocity.x, c.velocity.z).length())
++			return c.path_index >= c.path.size() - 1)
++		t.check(r.took == 0 and r.air == 0 and seen.v > 26.0,
++				"%s over West Ridge Track's notch at %.0f m/s the car never flies (%d take-offs)" % ["back" if back else "on", seen.v, r.took])
++		t.check(not r.nan and r.below < 0.35, "on the road, never under it (%.2f m)" % r.below)
++		car.queue_free()
++		await t._frames(1)
++
++
++## Every hill road (any node 3 m or more up), both ways at 25, 31 and 40
++## m/s along its centreline: the road surface alone never launches a car.
++## Stepped as _ride_ground steps a car, without driving one (_first_launch);
++## a kicker deck on a road launches at its end, so the sweep can see one.
++func test_hill_roads_never_launch(t) -> void:
++	await t._new_game(false)
++	var country = t.game.city.country
++	var roads := 0
++	var metres := 0.0
++	var frames := [0]
++	var launches := []
++	var t0 := Time.get_ticks_msec()
++	for rd: Dictionary in country.roads:
++		var pts := PackedVector2Array()
++		var hill := false
++		for n: int in rd.nodes:
++			var q: Vector2 = country.node_pos[n]
++			pts.append(q)
++			hill = hill or Terrain.height(q.x, q.y) >= 3.0
++		if not hill or pts.size() < 2:
++			continue
++		roads += 1
++		for k in pts.size() - 1:
++			metres += pts[k].distance_to(pts[k + 1])
++		var back := pts.duplicate()
++		back.reverse()
++		for v in [25.0, 31.0, 40.0]:
++			for line: PackedVector2Array in [pts, back]:
++				var at := _first_launch(line, v, frames)
++				if at.is_finite():
++					launches.append("%s at %d m/s (%.0f, %.0f) %.2f m up" % [rd.name, v, at.x, at.z, at.y])
++	t.check(roads > 200 and metres > 50000.0, "the hill roads: %d, %.1f km (%d frames stepped in %d ms)"
++			% [roads, metres / 1000.0, frames[0], Time.get_ticks_msec() - t0])
++	t.check(launches.is_empty(), "no hill road launches a car off its own surface; %d do: %s" % [launches.size(), launches.slice(0, 6)])
++	# A 2.5 m kicker laid on Crest Drive launches at its end.
++	var a: Vector2 = CREST_DRIVE[10]
++	var b: Vector2 = CREST_DRIVE[13]
++	Ground.add_strip("test_kicker", PackedVector2Array([a, b]), PackedFloat32Array([_terrain(a.x, a.y), _terrain(b.x, b.y) + 2.5]), 8.0)
++	var at := _first_launch(PackedVector2Array(CREST_DRIVE.slice(8, 18)), 25.0, frames)
++	t.check(at.is_finite() and Vector2(at.x, at.z).distance_to(b) < 1.5 and at.y > 0.3,
++			"a kicker deck on the road launches at its end, got %s (end %s)" % [at, b])
++	Ground.remove("test_kicker")
++
++
++## A car flying up to just under a deck over it (inside a wheel's step of
++## it) never lands on that deck: in the air only a deck it came down onto
++## counts. Dropped onto the deck from over it, it lands there.
++func test_car_under_a_deck_never_lands_on_it(t) -> void:
++	await t._new_game(false)
++	var road := _terrain(DIP.x, DIP.y)
++	var lid := road + 2.0
++	var across := Vector2(-0.7071, 0.7071)
++	Ground.add_strip("test_lid", PackedVector2Array([DIP - across * 8.0, DIP + across * 8.0]), PackedFloat32Array([lid, lid]), 10.0)
++	var car = _car(t, "sedan", DIP, _yaw(Vector2(0.7071, 0.7071)), road + 0.1)
++	await t._frames(2)
++	t.check(absf(car.global_position.y - road) < 0.01, "put on the road under the deck, %.2f m (road %.2f)" % [car.global_position.y, road])
++	var seen := {"top": -INF, "landed": 0}
++	car.air_landed.connect(func(_c, _a, _d, _h): seen.landed += 1)
++	# Up 1.5 m at 3 m/s: the top of its hop is about 0.07 m under the deck.
++	car._take_off(road + 1.5, 3.0)
++	for i in 90:
++		await t.get_tree().physics_frame
++		seen.top = maxf(seen.top, car.global_position.y)
++	var y: float = car.global_position.y
++	t.check(seen.top < lid - 0.01 and seen.top > lid - 0.1, "it rises to %.2f m under the deck and no higher" % (lid - seen.top))
++	t.check(seen.landed == 1 and not car.airborne and absf(y - road) < 0.05,
++			"and comes down on the road, not the deck (%d landings, at %.2f m; road %.2f, deck %.2f)" % [seen.landed, y, road, lid])
++	car._take_off(lid + 1.0, 0.0)
++	for i in 60:
++		await t.get_tree().physics_frame
++	y = car.global_position.y
++	t.check(seen.landed == 2 and not car.airborne and absf(y - lid) < 0.01, "dropped from 1 m over the deck it lands on it (at %.2f m)" % y)
++	car.queue_free()
++	Ground.remove("test_lid")
++
++
++## Out of a car in the air high over the ground is a bail (a fall), as out
++## of a helicopter; out of it on a deck is not.
++func test_bail_out_of_a_flying_car(t) -> void:
++	await t._new_game(false)
++	Ground.add_strip(BRIDGE, PackedVector2Array([BRIDGE_A, BRIDGE_B]), PackedFloat32Array([BRIDGE_Y, BRIDGE_Y]), 10.0, "bridge")
++	var d := (BRIDGE_B - BRIDGE_A).normalized()
++	var length := BRIDGE_A.distance_to(BRIDGE_B)
++	var car = _car(t, "sedan", BRIDGE_A + d * 3.0, _yaw(d), BRIDGE_Y + 1.0)
++	var p = t.game.player
++	var seen := {"deck": 0, "wrong": [], "air": "", "over": 0.0, "from": -INF}
++	var r := await _run(t, car, _path([BRIDGE_A + d * 10.0, BRIDGE_B, BRIDGE_B + d * 60.0]), 15.0, 9.0, 1, func(c):
++		var q: Vector3 = c.global_position
++		if not c.airborne:
++			seen.deck += 1
++			if c.exit_check() != "":
++				seen.wrong.append(c.exit_check())
++			return false
++		var along := (Vector2(q.x, q.z) - BRIDGE_A).dot(d)
++		if seen.from == -INF:
++			seen.from = along
++		seen.over = q.y - _terrain(q.x, q.z)
++		if seen.over > 4.0 and along > length + 2.0:
++			seen.air = c.exit_check()
++			return true
++		return false)
++	t.check(seen.deck > 60 and seen.wrong.is_empty(), "on the deck getting out is a step out (%d frames, %s)" % [seen.deck, seen.wrong])
++	t.check(r.took == 1 and absf(seen.from - length) < 1.5 and seen.air == "bail",
++			"off its end (%.1f m along, deck %.1f m), %.1f m up, it is a bail (%s)" % [seen.from, length, seen.over, seen.air])
++	# The player gets in only now: riding from the start, the country streams
++	# in round them and its colliders reach up through this test deck.
++	p.enter_vehicle(car)
++	await t._frames(1)
++	p.exit_vehicle()
++	t.check(p.vehicle == null and p._fall_from > 3.0, "the player bails out and falls from %.1f m" % p._fall_from)
++	var down := -1
++	for i in 180:
++		await t.get_tree().physics_frame
++		if p._fall <= 0.0:
++			down = i
++			break
++	await t._frames(2)
++	var at: Vector3 = p.global_position
++	var under := Ground.height(at.x, at.z, at.y)
++	t.check(down >= 0 and absf(at.y - under) < 0.3 and at.y < BRIDGE_Y - 3.0,
++			"and lands on the hillside under it (%d frames, %.2f m over the ground)" % [down, at.y - under])
++	car.queue_free()
++	Ground.remove(BRIDGE)
 +
 +
 +func test_person_walks_up_a_ramp(t) -> void:

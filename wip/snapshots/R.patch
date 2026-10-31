@@ -167,14 +167,14 @@ index 0000000..01afbb8
 + 	return vehicle if vehicle != null else self
 diff --git a/HANDOFF-races.md b/HANDOFF-races.md
 new file mode 100644
-index 0000000..7bae2bc
+index 0000000..5ab9d38
 --- /dev/null
 +++ b/HANDOFF-races.md
-@@ -0,0 +1,72 @@
+@@ -0,0 +1,76 @@
 +# Package R: races and cycling (decisions note)
 +
 +Phase 3 of HANDOFF-hill-content.md. Files in game/: scripts/races.gd (module),
-+scripts/race_course.gd (courses), tests/race_tests.gd (19 tests), tests/race_shots.*
++scripts/race_course.gd (courses), tests/race_tests.gd (20 tests), tests/race_shots.*
 +(8 shots), tests/race_calib.* (manual pace probe, not run by the suite), a
 +TEST_MODULES line in test_runner.gd.
 +
@@ -193,7 +193,7 @@ index 0000000..7bae2bc
 +
 +`test_races_wired_into_the_game` FAILS until the patch is applied: its first
 +check is `game.get("races") != null` (no skipping). That is intended. With the
-+patch applied all 19 race tests pass.
++patch applied all 20 race tests pass.
 +
 +## Decisions
 +
@@ -229,6 +229,10 @@ index 0000000..7bae2bc
 +  / ENTER). TRIAL_RANGE is 10 m and a hired bike appears RENT_ARC (16 m) down
 +  the trail facing the top, so getting off it does not start the trial; a hired
 +  bike left > 60 m from the stand and > 40 m from the player is freed.
++- Jacked rivals (second review): the night pot is paid on the field at the start
++  (`_field`); dropped cars are kept in `_dropped` and freed by `_clear_rivals`
++  unless the player is in one; `recover_rival`/`_replace_rival` return a flag and
++  never edit `rivals` (`_update_rivals` drops after its loop).
 +- `_player_ok` rechecks the ride (NO_RACE, bicycle only in the trial, not a cab
 +  passenger) and gates count only in a ride. HUD place is cached (0.25 s); the
 +  beam shader is one static Shader; the dead `5.4 if i >= 0` is gone.
@@ -267,10 +271,10 @@ index 0000000..1aa7a0e
 @@ -0,0 +1 @@
 +uid://denp81oscqdw0
 diff --git a/wip/R/races.gd b/game/scripts/races.gd
-similarity index 81%
+similarity index 79%
 rename from wip/R/races.gd
 rename to game/scripts/races.gd
-index 16217a6..9992785 100644
+index 16217a6..2fcae92 100644
 --- a/wip/R/races.gd
 +++ b/game/scripts/races.gd
 @@ -28,10 +28,19 @@ const LAPS := 2
@@ -313,16 +317,18 @@ index 16217a6..9992785 100644
  ]
  
  const BEAM_SHADER := """
-@@ -109,6 +122,8 @@ var recoveries := 0
+@@ -109,6 +122,10 @@ var recoveries := 0
  
  var _courses := {}
  var _count := 0.0
 +var _place_shown := 1 # the HUD's place, refreshed a few times a second
++var _field := 1 # the field size at the start (the night pot is paid on it)
++var _dropped: Array = [] # rival cars the player jacked: freed at the end unless he is in one
 +var _place_clock := 0.0
  var _since_gate := 0.0
  var _off_vehicle := 0.0
  var _done_time := 0.0
-@@ -210,6 +225,8 @@ func _player_pos() -> Vector3:
+@@ -210,6 +227,8 @@ func _player_pos() -> Vector3:
  	return game.player.focus_node().global_position
  
  
@@ -331,7 +337,7 @@ index 16217a6..9992785 100644
  func _say(text: String) -> void:
  	if game != null and game.get("hud") != null and game.hud != null:
  		game.hud.show_message(text)
-@@ -247,7 +264,17 @@ func medal_time(m: int) -> float:
+@@ -247,7 +266,17 @@ func medal_time(m: int) -> float:
  
  # --- Prompts --------------------------------------------------------------------
  
@@ -350,7 +356,7 @@ index 16217a6..9992785 100644
  func prompt() -> Array:
  	if state != State.IDLE or game == null or not is_instance_valid(game.player) or game.player.dead:
  		return []
-@@ -256,40 +283,40 @@ func prompt() -> Array:
+@@ -256,40 +285,40 @@ func prompt() -> Array:
  	if car == null:
  		if _stand_at != Vector3.ZERO and _flat(here, _stand_at) <= STAND_RANGE and not _rented_ready():
  			if game.cash < RENT_PRICE:
@@ -404,7 +410,7 @@ index 16217a6..9992785 100644
  
  
  # --- Starting and stopping ---------------------------------------------------------
-@@ -303,6 +330,9 @@ func start_race(race_mode: String) -> bool:
+@@ -303,6 +332,9 @@ func start_race(race_mode: String) -> bool:
  	var car = game.player.vehicle
  	if c.is_empty() or car == null or car.kind in NO_RACE or not (race_mode in ["day", "night"]):
  		return false
@@ -414,7 +420,7 @@ index 16217a6..9992785 100644
  	if (race_mode == "night") != night_race_open():
  		return false
  	if Wanted.level > 0:
-@@ -313,17 +343,19 @@ func start_race(race_mode: String) -> bool:
+@@ -313,17 +345,19 @@ func start_race(race_mode: String) -> bool:
  	if night:
  		buy_in = wager_for(game.cash)
  		if buy_in < WAGER_MIN:
@@ -437,7 +443,7 @@ index 16217a6..9992785 100644
  	return true
  
  
-@@ -336,6 +368,9 @@ func start_trial() -> bool:
+@@ -336,6 +370,9 @@ func start_trial() -> bool:
  	var car = game.player.vehicle
  	if c.is_empty() or car == null or car.get("kind") != "bicycle":
  		return false
@@ -447,7 +453,7 @@ index 16217a6..9992785 100644
  	mode = "bike"
  	course = c
  	stake = 0
-@@ -343,7 +378,7 @@ func start_trial() -> bool:
+@@ -343,7 +380,7 @@ func start_trial() -> bool:
  	var at := RaceCourse.at_arc(c, 1.5)
  	put_car(car, at.pos, RaceCourse.yaw_of(at.dir))
  	_clear_rivals()
@@ -456,16 +462,17 @@ index 16217a6..9992785 100644
  	return true
  
  
-@@ -360,6 +395,8 @@ func _begin(car) -> void:
+@@ -360,6 +397,9 @@ func _begin(car) -> void:
  	_player_car = car
  	recoveries = 0
  	result = {}
 +	_place_shown = 1
 +	_place_clock = 0.0
++	_field = 1
  	_clear_rivals()
  	_show_gates()
  
-@@ -387,12 +424,13 @@ func put_car(car, pos: Vector3, yaw: float) -> void:
+@@ -387,16 +427,18 @@ func put_car(car, pos: Vector3, yaw: float) -> void:
  
  
  func _spawn_rivals(specs: Array) -> void:
@@ -480,7 +487,12 @@ index 16217a6..9992785 100644
  		put_car(car, slot.pos, slot.yaw)
  		var full := RaceCourse.offset_path(course.rival, float(s.off))
  		rivals.append({"car": car, "name": s.name, "skill": float(s.skill), "off": float(s.off), "spec": s, "passed": 0, "base": 0,
-@@ -407,10 +445,16 @@ func _new_rival_car(s: Dictionary):
+ 			"stall": 0.0, "far": 0.0, "finish": INF, "full": full, "path": full})
++	_field = rivals.size() + 1
+ 
+ 
+ func _new_rival_car(s: Dictionary):
+@@ -407,10 +449,16 @@ func _new_rival_car(s: Dictionary):
  	return car
  
  
@@ -497,7 +509,26 @@ index 16217a6..9992785 100644
  	for r in rivals:
  		if is_instance_valid(r.car):
  			r.car.drive_path(r.path, 0.7)
-@@ -451,7 +495,8 @@ func _physics_process(delta: float) -> void:
+@@ -428,11 +476,17 @@ func cancel(msg := "") -> void:
+ 		_say(msg)
+ 
+ 
++## Frees the rivals and the cars the player jacked from them, except the one he
++## is in: that stays, an ordinary car now.
+ func _clear_rivals() -> void:
+ 	for r in rivals:
+-		if is_instance_valid(r.car) and (game == null or not is_instance_valid(game.player) or r.car != game.player.vehicle):
++		if is_instance_valid(r.car) and not _is_players(r.car):
+ 			r.car.queue_free()
+ 	rivals.clear()
++	for car in _dropped:
++		if is_instance_valid(car) and not _is_players(car):
++			car.queue_free()
++	_dropped.clear()
+ 
+ 
+ # --- The race ---------------------------------------------------------------------
+@@ -451,7 +505,8 @@ func _physics_process(delta: float) -> void:
  			time += delta
  			_since_gate += delta
  			if _player_ok(delta):
@@ -507,7 +538,7 @@ index 16217a6..9992785 100644
  				if state == State.RACING:
  					_update_rivals(delta)
  					if mode == "night":
-@@ -475,6 +520,22 @@ func _process(delta: float) -> void:
+@@ -475,6 +530,22 @@ func _process(delta: float) -> void:
  		for l in [_arch_label, _arch_back]:
  			l.text = text
  			l.modulate = tint
@@ -530,7 +561,7 @@ index 16217a6..9992785 100644
  
  
  ## Holds a car on the grid through the countdown.
-@@ -494,20 +555,32 @@ func _player_ok(delta: float) -> bool:
+@@ -494,20 +565,32 @@ func _player_ok(delta: float) -> bool:
  	if car == null:
  		_off_vehicle += delta
  		if _off_vehicle > OFF_VEHICLE_TIME:
@@ -566,7 +597,16 @@ index 16217a6..9992785 100644
  func _check_gate() -> void:
  	var gates: Array = course.gates
  	var radius := BIKE_GATE_RADIUS if mode == "bike" else GATE_RADIUS
-@@ -559,6 +632,7 @@ func _finish() -> void:
+@@ -547,7 +630,7 @@ func _finish() -> void:
+ 		"day":
+ 			prize = int(PRIZE[pl - 1]) if pl <= PRIZE.size() else 0
+ 		"night":
+-			prize = stake * (rivals.size() + 1) if pl == 1 else 0
++			prize = stake * _field if pl == 1 else 0 # a jacked rival does not shrink the pot
+ 		"bike":
+ 			got = medal_for(time)
+ 			if got > medal:
+@@ -559,6 +642,7 @@ func _finish() -> void:
  	result = {"mode": mode, "place": pl, "time": time, "prize": prize, "medal": got, "best": float(best.get(mode, time)),
  		"new_best": new_best, "stake": stake}
  	_hide_gates()
@@ -574,7 +614,7 @@ index 16217a6..9992785 100644
  	var line := ""
  	if mode == "bike":
  		line = "%s   %s" % [MEDAL_NAMES[got].capitalize(), fmt_time(time)]
-@@ -576,7 +650,27 @@ func _finish() -> void:
+@@ -576,17 +660,39 @@ func _finish() -> void:
  
  # --- Rivals -----------------------------------------------------------------------
  
@@ -602,44 +642,81 @@ index 16217a6..9992785 100644
  	var vlim: PackedFloat32Array = course.vlim
  	var rival_i: PackedInt32Array = course.rival_i
  	var gates: Array = course.gates
-@@ -608,12 +702,28 @@ func _update_rivals(delta: float) -> void:
- 			recover_rival(r)
- 
- 
+ 	var player_arc := player_arc_now()
++	var out: Array = [] # rivals the player took mid-loop: removed after it
+ 	for r in rivals:
+ 		var car = r.car
+ 		if not is_instance_valid(car):
+ 			continue
+ 		if car.wrecked:
+-			_replace_rival(r)
++			if not _replace_rival(r):
++				out.append(r)
+ 			continue
+ 		var k: int = clampi(int(r.base) + car.path_index, 0, vlim.size() - 1)
+ 		var rival_arc: float = course.cum[rival_i[k]]
+@@ -605,15 +711,42 @@ func _update_rivals(delta: float) -> void:
+ 		var want: Vector3 = path[clampi(car.path_index, 0, path.size() - 1)]
+ 		r.far = r.far + delta if _flat(car.global_position, want) > OFF_ROUTE else 0.0
+ 		if r.stall > STUCK_TIME or r.far > 3.0:
+-			recover_rival(r)
++			if not recover_rival(r):
++				out.append(r)
++	for r in out:
++		_drop(r)
++
++
 +## Whether `car` is the one the player sits in (a rival he has jacked).
 +func _is_players(car) -> bool:
-+	return is_instance_valid(car) and is_instance_valid(game.player) and (car == game.player.vehicle or car.driver == Vehicle.Driver.PLAYER)
++	return is_instance_valid(car) and game != null and is_instance_valid(game.player) \
++			and (car == game.player.vehicle or car.driver == Vehicle.Driver.PLAYER)
++
++
++## Takes rival `r` out of the field. Its car is remembered so the end of the
++## race frees it (unless the player is still in it).
++func _drop(r: Dictionary) -> void:
++	_dropped.append(r.car)
++	rivals.erase(r)
 +
 +
 +## A rival car the player has taken is out of the race: the race never drives,
-+## recovers, replaces or frees it again.
++## recovers or replaces it again.
 +func _drop_jacked_rivals() -> void:
 +	for i in range(rivals.size() - 1, -1, -1):
 +		if _is_players(rivals[i].car):
-+			rivals.remove_at(i)
-+
-+
++			_drop(rivals[i])
+ 
+ 
  ## Puts a stuck or lost rival back on its line, a point behind its target,
- ## and sends it on.
+-## and sends it on.
 -func recover_rival(r: Dictionary) -> void:
-+func recover_rival(r: Dictionary, from := -1) -> void:
++## and sends it on. False, and nothing done, when the player is in its car (the
++## caller drops it from the field; this never edits `rivals`).
++func recover_rival(r: Dictionary, from := -1) -> bool:
  	var car = r.car
 +	if _is_players(car):
-+		rivals.erase(r)
-+		return
++		return false
  	var full: PackedVector3Array = r.full
 -	var k: int = clampi(int(r.base) + car.path_index - 1, 0, full.size() - 2)
 +	var k: int = clampi(int(r.base) + car.path_index - 1 if from < 0 else from, 0, full.size() - 2)
  	var a: Vector3 = full[k]
  	var b: Vector3 = full[k + 1]
  	var d := Vector3(b.x - a.x, 0.0, b.z - a.z).normalized()
-@@ -629,14 +739,19 @@ func recover_rival(r: Dictionary) -> void:
- ## A rival that burnt out gives way to a fresh car of the same model.
- func _replace_rival(r: Dictionary) -> void:
+@@ -624,19 +757,25 @@ func recover_rival(r: Dictionary) -> void:
+ 	r.stall = 0.0
+ 	r.far = 0.0
+ 	recoveries += 1
++	return true
+ 
+ 
+-## A rival that burnt out gives way to a fresh car of the same model.
+-func _replace_rival(r: Dictionary) -> void:
++## A rival that burnt out gives way to a fresh car of the same model. False,
++## and nothing done, when the player is in its car (see recover_rival).
++func _replace_rival(r: Dictionary) -> bool:
  	var old = r.car
 +	if _is_players(old):
-+		rivals.erase(r)
-+		return
++		return false
 +	var progress: int = int(r.base) + old.path_index - 1 # the fresh car restarts here, not at the last recovery
  	var fresh = _new_rival_car(r.spec)
  	game.add_child(fresh)
@@ -650,11 +727,11 @@ index 16217a6..9992785 100644
  	put_car(fresh, old.global_position, old.rotation.y)
  	old.queue_free()
 -	recover_rival(r)
-+	recover_rival(r, progress)
++	return recover_rival(r, progress)
  
  
  ## How far along the course the player is (m): the last checkpoint's distance
-@@ -702,7 +817,7 @@ func _police_tick(delta: float) -> void:
+@@ -702,7 +841,7 @@ func _police_tick(delta: float) -> void:
  	if police_sees():
  		_flagged = true
  		Wanted.report_crime(1)
@@ -663,7 +740,7 @@ index 16217a6..9992785 100644
  
  
  ## Whether a police car or an officer has a clear line to the player within
-@@ -719,11 +834,15 @@ func police_sees() -> bool:
+@@ -719,11 +858,15 @@ func police_sees() -> bool:
  	for car in get_tree().get_nodes_in_group("vehicles"):
  		if car == game.player.vehicle or car.get("is_police") != true or car.wrecked:
  			continue
@@ -680,7 +757,7 @@ index 16217a6..9992785 100644
  				if _clear_line(space, cop.global_position + Vector3(0.0, 1.4, 0.0), target, sight):
  					return true
  	return false
-@@ -740,11 +859,11 @@ func _clear_line(space: PhysicsDirectSpaceState3D, eye: Vector3, target: Vector3
+@@ -740,11 +883,11 @@ func _clear_line(space: PhysicsDirectSpaceState3D, eye: Vector3, target: Vector3
  
  func _rented_ready() -> bool:
  	return _rented != null and is_instance_valid(_rented) and not _rented.wrecked \
@@ -695,7 +772,7 @@ index 16217a6..9992785 100644
  func rent_bike() -> bool:
  	var c := trail_course()
  	if c.is_empty() or game == null or game.player.vehicle != null:
-@@ -760,11 +879,13 @@ func rent_bike() -> bool:
+@@ -760,11 +903,13 @@ func rent_bike() -> bool:
  	bike.body_color = Color(0.1, 0.62, 0.5)
  	bike.city = game.city
  	game.add_child(bike)
@@ -712,7 +789,7 @@ index 16217a6..9992785 100644
  	return true
  
  
-@@ -785,7 +906,7 @@ func hud_text() -> String:
+@@ -785,7 +930,7 @@ func hud_text() -> String:
  				bottom = "%s   best %s" % [fmt_time(time), fmt_time(float(best.get("bike", INF)))]
  			else:
  				top = "%s   lap %d/%d   checkpoint %d/%d" % [title, lap(), LAPS, mini(next_gate + 1, gates), gates]
@@ -721,7 +798,7 @@ index 16217a6..9992785 100644
  						fmt_time(float(best.get(mode, INF)))]
  			return top + "\n" + bottom
  		State.DONE:
-@@ -847,8 +968,8 @@ func _build_props() -> void:
+@@ -847,8 +992,8 @@ func _build_props() -> void:
  		_stand = _make_stand(RaceCourse.yaw_of(at.dir))
  		_stand.position = p
  		add_child(_stand)
@@ -732,7 +809,7 @@ index 16217a6..9992785 100644
  		g.visible = false
  		add_child(g)
  		_gates.append(g)
-@@ -940,6 +1061,10 @@ func _make_stand(yaw: float) -> Node3D:
+@@ -940,6 +1085,10 @@ func _make_stand(yaw: float) -> Node3D:
  
  
  ## A translucent column of light.
@@ -743,7 +820,7 @@ index 16217a6..9992785 100644
  func _beam(base: Vector3, radius: float, height: float, tint: Color) -> MeshInstance3D:
  	var col := CylinderMesh.new()
  	col.top_radius = radius
-@@ -948,9 +1073,10 @@ func _beam(base: Vector3, radius: float, height: float, tint: Color) -> MeshInst
+@@ -948,9 +1097,10 @@ func _beam(base: Vector3, radius: float, height: float, tint: Color) -> MeshInst
  	col.cap_top = false
  	col.cap_bottom = false
  	var mat := ShaderMaterial.new()
@@ -1002,10 +1079,10 @@ index 0000000..3cf2845
 +script = ExtResource("1")
 diff --git a/game/tests/race_tests.gd b/game/tests/race_tests.gd
 new file mode 100644
-index 0000000..35deab2
+index 0000000..e07055f
 --- /dev/null
 +++ b/game/tests/race_tests.gd
-@@ -0,0 +1,876 @@
+@@ -0,0 +1,907 @@
 +extends RefCounted
 +## Races and cycling (scripts/races.gd, scripts/race_course.gd): the hill
 +## loop built from the real roads, the start prompt, checkpoints and prizes,
@@ -1020,7 +1097,8 @@ index 0000000..35deab2
 +	"test_bike_rental_and_trial", "test_bike_medals_and_best_time", "test_bike_rides_the_trail",
 +	"test_race_save_and_load", "test_races_wired_into_the_game",
 +	"test_race_start_needs_a_stopped_ride_and_a_free_player", "test_race_jacked_rival_leaves_the_field",
-+	"test_race_ride_swap_in_the_grace_window", "test_bike_hire_bike_is_not_at_the_line"]
++	"test_race_ride_swap_in_the_grace_window", "test_bike_hire_bike_is_not_at_the_line",
++	"test_race_night_pot_ignores_a_jacked_rival"]
 +const Races = preload("res://scripts/races.gd")
 +const RaceCourse = preload("res://scripts/race_course.gd")
 +const Vehicle = preload("res://scripts/vehicle.gd")
@@ -1784,18 +1862,48 @@ index 0000000..35deab2
 +	await t._frames(4)
 +	t.check(not races.rivals.has(r1) and races.recoveries == 0, "a jacked rival is never recovered (%d rescues)" % races.recoveries)
 +	t.check(second.global_position.distance_to(spot) < 3.0, "and it stays where the player took it, moved %.1f m" % second.global_position.distance_to(spot))
-+	# 3. The calls themselves refuse a car the player is in.
++	# 3. The calls themselves refuse a car the player is in, and leave the list alone.
 +	var r2: Dictionary = races.rivals[0]
 +	var third = r2.car
 +	game.player.exit_vehicle()
 +	game.player.enter_vehicle(third)
-+	races._replace_rival(r2)
-+	t.check(is_instance_valid(third) and not third.is_queued_for_deletion() and not races.rivals.has(r2), "a jacked rival's car is never replaced or freed")
-+	r2 = {"car": third, "full": PackedVector3Array(), "base": 0}
-+	races.recover_rival(r2)
-+	t.check(races.recoveries == 0, "nor recovered by a direct call")
++	var count: int = races.rivals.size()
++	t.check(not races._replace_rival(r2) and is_instance_valid(third) and not third.is_queued_for_deletion(), "a jacked rival's car is never replaced or freed (the call says so)")
++	var fake := {"car": third, "full": PackedVector3Array(), "base": 0}
++	t.check(not races.recover_rival(fake) and races.recoveries == 0, "nor recovered by a direct call")
++	t.check(races.rivals.size() == count and races.rivals.has(r2), "neither call edits the field: the loop that called it does")
++	t.check(races._dropped.size() == 2 and races._dropped.has(stolen) and races._dropped.has(second), "the two cars he took earlier are remembered")
++	# The end of the race frees the cars he left, not the one he is in.
 +	races.cancel()
-+	t.check(is_instance_valid(mine) and is_instance_valid(stolen) and not stolen.is_queued_for_deletion(), "cancelling frees none of the cars the player took")
++	await t._frames(3)
++	t.check(is_instance_valid(mine) and is_instance_valid(third) and game.player.vehicle == third, "cancelling leaves his own car and the one he is in")
++	t.check(not is_instance_valid(stolen) or stolen.is_queued_for_deletion(), "the first car he took and left is freed")
++	t.check(not is_instance_valid(second) or second.is_queued_for_deletion(), "so is the second")
++	t.check(races._dropped.is_empty() and races.rivals.is_empty(), "nothing is left on the books")
++
++
++## Jacking a rival does not shrink the night pot: it is paid on the field the
++## race started with.
++func test_race_night_pot_ignores_a_jacked_rival(t) -> void:
++	var races = await _races(t, 23.0)
++	var game = t.game
++	await _driver(t, races)
++	game.cash = 1000
++	races.set_wager(200)
++	t.check(races.try_interact() and races.mode == "night" and races.rivals.size() == 3, "the night run starts with three rivals")
++	var stolen = races.rivals[0].car
++	game.player.exit_vehicle()
++	game.player.enter_vehicle(stolen)
++	await _start_wait(t, races)
++	var gates: Array = races.course.gates
++	for i in gates.size():
++		await _to_gate(t, races, i)
++		if races.state != Races.State.RACING:
++			break
++	t.check(races.rivals.size() == 2, "one rival is out of the field")
++	t.check(races.state == Races.State.DONE and races.result.place == 1, "he wins, got %s" % [races.result])
++	t.check(races.result.prize == 800 and game.cash == 1600, "the pot is the stake x the starting field of 4 ($800), cash %d" % game.cash)
++	races.cancel()
 +
 +
 +## Runs the countdown out.
