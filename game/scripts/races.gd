@@ -28,10 +28,19 @@ const LAPS := 2
 const NIGHT_FROM := 21.0
 const NIGHT_TO := 4.0
 ## How close (m) to the start line, the rental stand and the trail's top the
-## prompts appear.
+## prompts appear. A rented bike appears RENT_ARC metres down the trail, facing
+## the top, which is outside TRIAL_RANGE: getting off it does not start a trial.
 const START_RANGE := 22.0
 const STAND_RANGE := 5.5
-const TRIAL_RANGE := 30.0
+const TRIAL_RANGE := 10.0
+const RENT_ARC := 16.0
+## A vehicle is offered a start only when it is this slow (m/s): E starts the
+## race when stopped on the line and gets out of a moving ride as always.
+const START_SPEED := 3.0
+## A rented bike left this far from the stand (m) and this far from the player
+## is taken back.
+const STRAY_BIKE := 60.0
+const STRAY_PLAYER := 40.0
 ## A checkpoint counts when the car comes within this many metres of it.
 const GATE_RADIUS := 15.0
 const BIKE_GATE_RADIUS := 11.0
@@ -113,6 +122,8 @@ var recoveries := 0
 
 var _courses := {}
 var _count := 0.0
+var _place_shown := 1 # the HUD's place, refreshed a few times a second
+var _place_clock := 0.0
 var _since_gate := 0.0
 var _off_vehicle := 0.0
 var _done_time := 0.0
@@ -253,7 +264,17 @@ func medal_time(m: int) -> float:
 
 # --- Prompts --------------------------------------------------------------------
 
-## The HUD's prompt: [text, button] or [].
+## Whether a mission or a taxi trip has the player's attention: no race then.
+func _busy() -> bool:
+	if game.get("missions") != null and game.missions != null and game.missions.active != null:
+		return true
+	return game.get("taxi") != null and game.taxi != null and game.taxi.state != game.taxi.State.IDLE
+
+
+## The HUD's prompt: [text, button] or []. The button is what E does: a text
+## that only explains a refusal names the button E really is (EXIT in a ride,
+## ENTER on foot). A ride is offered a start only when nearly stopped, and
+## never during a mission or a taxi trip.
 func prompt() -> Array:
 	if state != State.IDLE or game == null or not is_instance_valid(game.player) or game.player.dead:
 		return []
@@ -262,40 +283,40 @@ func prompt() -> Array:
 	if car == null:
 		if _stand_at != Vector3.ZERO and _flat(here, _stand_at) <= STAND_RANGE and not _rented_ready():
 			if game.cash < RENT_PRICE:
-				return ["Bike hire is $%d: you are short" % RENT_PRICE, "RENT"]
+				return ["Bike hire is $%d: you are short" % RENT_PRICE, "ENTER"]
 			return ["Rent a bike for $%d: E / RENT" % RENT_PRICE, "RENT"]
 		return []
-	if game.player.passenger:
+	if game.player.passenger or _busy():
 		return []
 	if car.kind == "bicycle":
-		if not trail_course().is_empty() and _flat(here, trail_course().top) <= TRIAL_RANGE:
+		if not trail_course().is_empty() and _flat(here, trail_course().top) <= TRIAL_RANGE and absf(car.speed) <= START_SPEED:
 			return ["Calder downhill trial: E / START", "START"]
 		return []
-	if car.kind in NO_RACE:
+	if car.kind in NO_RACE or absf(car.speed) > START_SPEED:
 		return []
 	if _arch_at != Vector3.ZERO and (_flat(here, _arch_at) <= START_RANGE or _flat(here, Vector3(RaceCourse.START.x, 0, RaceCourse.START.y)) <= START_RANGE):
+		if Wanted.level > 0:
+			return ["Lose the police first", "EXIT"]
 		if night_race_open():
 			var w := wager_for(game.cash)
 			if w < WAGER_MIN:
-				return ["Night run: you need $%d to buy in" % WAGER_MIN, "RACE"]
+				return ["Night run: you need $%d to buy in" % WAGER_MIN, "EXIT"]
 			return ["Night run, $%d buy-in: E / RACE" % w, "RACE"]
 		return ["Hill race: E / RACE", "RACE"]
 	return []
 
 
-## E: acts on the prompt. True when there was one (so nothing else takes the
-## press), whether or not it came off.
+## E: acts on the prompt. True only when something started (a race, a trial, a
+## hired bike), so a refusal leaves E to do what it always did: get out.
 func try_interact() -> bool:
 	if prompt().is_empty():
 		return false
 	var car = game.player.vehicle
 	if car == null:
-		rent_bike()
-	elif car.kind == "bicycle":
-		start_trial()
-	else:
-		start_race("night" if night_race_open() else "day")
-	return true
+		return rent_bike()
+	if car.kind == "bicycle":
+		return start_trial()
+	return start_race("night" if night_race_open() else "day")
 
 
 # --- Starting and stopping ---------------------------------------------------------
@@ -308,6 +329,9 @@ func start_race(race_mode: String) -> bool:
 	var c := hill_course()
 	var car = game.player.vehicle
 	if c.is_empty() or car == null or car.kind in NO_RACE or not (race_mode in ["day", "night"]):
+		return false
+	if _busy() or game.player.passenger:
+		_say("Finish your job first")
 		return false
 	if (race_mode == "night") != night_race_open():
 		return false
@@ -344,6 +368,9 @@ func start_trial() -> bool:
 	var car = game.player.vehicle
 	if c.is_empty() or car == null or car.get("kind") != "bicycle":
 		return false
+	if _busy():
+		_say("Finish your job first")
+		return false
 	mode = "bike"
 	course = c
 	stake = 0
@@ -368,6 +395,8 @@ func _begin(car) -> void:
 	_player_car = car
 	recoveries = 0
 	result = {}
+	_place_shown = 1
+	_place_clock = 0.0
 	_clear_rivals()
 	_show_gates()
 
@@ -425,6 +454,7 @@ func _go() -> void:
 	state = State.RACING
 	time = 0.0
 	_since_gate = 0.0
+	_drop_jacked_rivals()
 	for r in rivals:
 		if is_instance_valid(r.car):
 			r.car.drive_path(r.path, 0.7)
@@ -465,7 +495,8 @@ func _physics_process(delta: float) -> void:
 			time += delta
 			_since_gate += delta
 			if _player_ok(delta):
-				_check_gate()
+				if game.player.vehicle != null:
+					_check_gate() # on foot in the grace window, nothing counts
 				if state == State.RACING:
 					_update_rivals(delta)
 					if mode == "night":
@@ -489,6 +520,22 @@ func _process(delta: float) -> void:
 		for l in [_arch_label, _arch_back]:
 			l.text = text
 			l.modulate = tint
+	_free_stray_bike()
+
+
+## A rented bike left far from the stand and from the player goes back to the
+## stand's keeper, so the next hire is offered and nothing piles up on the hill.
+func _free_stray_bike() -> void:
+	if _rented == null:
+		return
+	if not is_instance_valid(_rented):
+		_rented = null
+		return
+	if state != State.IDLE or not is_instance_valid(game.player) or _rented == game.player.vehicle:
+		return
+	if _flat(_rented.global_position, _stand_at) > STRAY_BIKE and _flat(_rented.global_position, _player_pos()) > STRAY_PLAYER:
+		_rented.queue_free()
+		_rented = null
 
 
 ## Holds a car on the grid through the countdown.
@@ -511,6 +558,9 @@ func _player_ok(delta: float) -> bool:
 			cancel("Left your ride")
 			return false
 	else:
+		if not _ride_ok(car):
+			cancel("Wrong ride")
+			return false
 		_off_vehicle = 0.0
 		_player_car = car
 		if car.wrecked:
@@ -520,6 +570,15 @@ func _player_ok(delta: float) -> bool:
 		cancel("Lost the course")
 		return false
 	return true
+
+
+## Whether `car` may carry the player through this race: a bicycle in the
+## trial, a road vehicle (not NO_RACE) in a race, never as a cab passenger.
+func _ride_ok(car) -> bool:
+	if game.player.passenger:
+		return false
+	var kind: String = str(car.get("kind"))
+	return kind == "bicycle" if mode == "bike" else not (kind in NO_RACE)
 
 
 func _check_gate() -> void:
@@ -605,8 +664,13 @@ func _pass_through_player() -> void:
 
 
 func _update_rivals(delta: float) -> void:
+	_drop_jacked_rivals()
 	if rivals.is_empty():
 		return # the bike trial is against the clock: no field, no speed profile
+	_place_clock -= delta
+	if _place_clock <= 0.0:
+		_place_clock = 0.25
+		_place_shown = place()
 	var vlim: PackedFloat32Array = course.vlim
 	var rival_i: PackedInt32Array = course.rival_i
 	var gates: Array = course.gates
@@ -638,10 +702,26 @@ func _update_rivals(delta: float) -> void:
 			recover_rival(r)
 
 
+## Whether `car` is the one the player sits in (a rival he has jacked).
+func _is_players(car) -> bool:
+	return is_instance_valid(car) and is_instance_valid(game.player) and (car == game.player.vehicle or car.driver == Vehicle.Driver.PLAYER)
+
+
+## A rival car the player has taken is out of the race: the race never drives,
+## recovers, replaces or frees it again.
+func _drop_jacked_rivals() -> void:
+	for i in range(rivals.size() - 1, -1, -1):
+		if _is_players(rivals[i].car):
+			rivals.remove_at(i)
+
+
 ## Puts a stuck or lost rival back on its line, a point behind its target,
 ## and sends it on.
 func recover_rival(r: Dictionary, from := -1) -> void:
 	var car = r.car
+	if _is_players(car):
+		rivals.erase(r)
+		return
 	var full: PackedVector3Array = r.full
 	var k: int = clampi(int(r.base) + car.path_index - 1 if from < 0 else from, 0, full.size() - 2)
 	var a: Vector3 = full[k]
@@ -659,6 +739,9 @@ func recover_rival(r: Dictionary, from := -1) -> void:
 ## A rival that burnt out gives way to a fresh car of the same model.
 func _replace_rival(r: Dictionary) -> void:
 	var old = r.car
+	if _is_players(old):
+		rivals.erase(r)
+		return
 	var progress: int = int(r.base) + old.path_index - 1 # the fresh car restarts here, not at the last recovery
 	var fresh = _new_rival_car(r.spec)
 	game.add_child(fresh)
@@ -751,11 +834,15 @@ func police_sees() -> bool:
 	for car in get_tree().get_nodes_in_group("vehicles"):
 		if car == game.player.vehicle or car.get("is_police") != true or car.wrecked:
 			continue
+		# police_manager.gd's rule: a car is watching with a driver on duty or
+		# an officer out of it; an empty parked patrol car sees nothing.
+		if car.get("driver") != Vehicle.Driver.POLICE and car.get("_deployed") != true:
+			continue
 		if _clear_line(space, car.global_position + Vector3(0.0, 1.4, 0.0), target, sight):
 			return true
 	if game.get("police") != null and game.police != null:
 		for cop in game.police.cops:
-			if is_instance_valid(cop) and not cop.dead:
+			if is_instance_valid(cop) and cop.active and not cop.dead:
 				if _clear_line(space, cop.global_position + Vector3(0.0, 1.4, 0.0), target, sight):
 					return true
 	return false
@@ -772,11 +859,11 @@ func _clear_line(space: PhysicsDirectSpaceState3D, eye: Vector3, target: Vector3
 
 func _rented_ready() -> bool:
 	return _rented != null and is_instance_valid(_rented) and not _rented.wrecked \
-			and _flat(_rented.global_position, _stand_at) < 60.0
+			and _flat(_rented.global_position, _stand_at) < STRAY_BIKE
 
 
-## Hires a bicycle for RENT_PRICE: it appears at the top of the trail and the
-## player gets on. True when it did.
+## Hires a bicycle for RENT_PRICE: it appears on the trail, RENT_ARC metres
+## below the top, and the player gets on. True when it did.
 func rent_bike() -> bool:
 	var c := trail_course()
 	if c.is_empty() or game == null or game.player.vehicle != null:
@@ -792,8 +879,10 @@ func rent_bike() -> bool:
 	bike.body_color = Color(0.1, 0.62, 0.5)
 	bike.city = game.city
 	game.add_child(bike)
-	var at := RaceCourse.at_arc(c, 2.0)
-	put_car(bike, at.pos, RaceCourse.yaw_of(at.dir))
+	# Outside TRIAL_RANGE of the top, facing it: the first E gets off, and the
+	# trial starts only when the rider has pedalled up to the line and stopped.
+	var at := RaceCourse.at_arc(c, RENT_ARC)
+	put_car(bike, at.pos, RaceCourse.yaw_of(-at.dir))
 	_rented = bike
 	game.player.enter_vehicle(bike)
 	_say("Bike hired: $%d" % RENT_PRICE)
@@ -817,7 +906,7 @@ func hud_text() -> String:
 				bottom = "%s   best %s" % [fmt_time(time), fmt_time(float(best.get("bike", INF)))]
 			else:
 				top = "%s   lap %d/%d   checkpoint %d/%d" % [title, lap(), LAPS, mini(next_gate + 1, gates), gates]
-				bottom = "%s of %d   %s   best %s" % [ordinal(place()), rivals.size() + 1, fmt_time(time),
+				bottom = "%s of %d   %s   best %s" % [ordinal(_place_shown), rivals.size() + 1, fmt_time(time),
 						fmt_time(float(best.get(mode, INF)))]
 			return top + "\n" + bottom
 		State.DONE:
@@ -879,8 +968,8 @@ func _build_props() -> void:
 		_stand = _make_stand(RaceCourse.yaw_of(at.dir))
 		_stand.position = p
 		add_child(_stand)
-	for i in 3:
-		var g := _make_gate(5.4 if i >= 0 else 4.0)
+	for _i in 3:
+		var g := _make_gate(5.4)
 		g.visible = false
 		add_child(g)
 		_gates.append(g)
@@ -972,6 +1061,10 @@ func _make_stand(yaw: float) -> Node3D:
 
 
 ## A translucent column of light.
+## One shader for every beam (each beam has its own material and colour).
+static var _beam_shader: Shader
+
+
 func _beam(base: Vector3, radius: float, height: float, tint: Color) -> MeshInstance3D:
 	var col := CylinderMesh.new()
 	col.top_radius = radius
@@ -980,9 +1073,10 @@ func _beam(base: Vector3, radius: float, height: float, tint: Color) -> MeshInst
 	col.cap_top = false
 	col.cap_bottom = false
 	var mat := ShaderMaterial.new()
-	var sh := Shader.new()
-	sh.code = BEAM_SHADER
-	mat.shader = sh
+	if _beam_shader == null:
+		_beam_shader = Shader.new()
+		_beam_shader.code = BEAM_SHADER
+	mat.shader = _beam_shader
 	mat.set_shader_parameter("color", tint)
 	var inst := MeshInstance3D.new()
 	inst.mesh = col

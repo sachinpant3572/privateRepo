@@ -112,6 +112,9 @@ func _run() -> void:
 	races.try_interact()
 	await _frames(30)
 	await _shot("race_7_bike_rented.png")
+	# The hired bike stands below the top: pedal up to the line, then start.
+	_on_course(game.player.vehicle, races.trail_course(), 3.0, 0.0)
+	await _frames(10)
 	races.try_interact()
 	for i in 220:
 		await _frames(1)

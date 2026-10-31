@@ -1,5 +1,5 @@
 diff --git a/game/scripts/hud.gd b/game/scripts/hud.gd
-index e96f4e9..952a89a 100644
+index e96f4e9..097beb4 100644
 --- a/game/scripts/hud.gd
 +++ b/game/scripts/hud.gd
 @@ -30,6 +30,7 @@ var _stars: Control
@@ -29,23 +29,29 @@ index e96f4e9..952a89a 100644
  	_phone_button.visible = game.missions != null and game.missions.phone_unlocked
  	# The gear takes PHONE's slot until the story unlocks the phone.
  	settings_button.offset_left = -196.0 if _phone_button.visible else -76.0
-@@ -267,6 +273,10 @@ func _process(delta: float) -> void:
+@@ -245,6 +251,7 @@ func _process(delta: float) -> void:
+ 		_ride_id = ride_id
+ 		_ride_name_time = 2.5
+ 	_ride_name_time -= delta
++	var race_prompt: Array = game.races.prompt() if game.races != null else [] # once a frame
+ 	if player.passenger:
+ 		_prompt.text = "" # the taxi's own panel and ride bar
+ 	elif flying:
+@@ -267,6 +274,9 @@ func _process(delta: float) -> void:
  		touch.set_label("brake", "BRAKE")
  		touch.set_label("interact", "EXIT")
  		touch.set_label("sprint", "DRIFT")
-+		var race_prompt: Array = game.races.prompt() if game.races != null else []
 +		if not race_prompt.is_empty():
 +			_prompt.text = race_prompt[0]
 +			touch.set_label("interact", race_prompt[1])
  	elif context_prompt.size() == 2:
  		_prompt.text = context_prompt[0]
  		touch.set_label("interact", context_prompt[1])
-@@ -281,6 +291,11 @@ func _process(delta: float) -> void:
+@@ -281,6 +291,10 @@ func _process(delta: float) -> void:
  		_prompt.text = hunt_prompt[0]
  		touch.set_label("interact", hunt_prompt[1])
  		touch.set_label("sprint", "RUN")
-+	elif game.races != null and not game.races.prompt().is_empty():
-+		var race_prompt: Array = game.races.prompt()
++	elif not race_prompt.is_empty():
 +		_prompt.text = race_prompt[0]
 +		touch.set_label("interact", race_prompt[1])
 +		touch.set_label("sprint", "RUN")

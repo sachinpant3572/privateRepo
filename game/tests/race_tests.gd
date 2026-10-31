@@ -10,7 +10,9 @@ const TESTS := ["test_race_course_follows_the_hill_roads", "test_race_start_prom
 	"test_race_places_pay_by_place", "test_race_rivals_drive_the_course", "test_race_rivals_finish_the_course",
 	"test_race_stuck_rival_recovers", "test_night_race_hours_wager_and_pot", "test_night_race_police_star",
 	"test_bike_rental_and_trial", "test_bike_medals_and_best_time", "test_bike_rides_the_trail",
-	"test_race_save_and_load", "test_races_wired_into_the_game"]
+	"test_race_save_and_load", "test_races_wired_into_the_game",
+	"test_race_start_needs_a_stopped_ride_and_a_free_player", "test_race_jacked_rival_leaves_the_field",
+	"test_race_ride_swap_in_the_grace_window", "test_bike_hire_bike_is_not_at_the_line"]
 const Races = preload("res://scripts/races.gd")
 const RaceCourse = preload("res://scripts/race_course.gd")
 const Vehicle = preload("res://scripts/vehicle.gd")
@@ -400,7 +402,7 @@ func test_night_race_hours_wager_and_pot(t) -> void:
 			and races.wager_for(350) == 100, "the buy-in is a quarter of the cash in hundreds, $100 to $500")
 	game.cash = 40
 	t.check(races.prompt()[0].contains("you need $100"), "too poor for the buy-in, the prompt says so")
-	t.check(races.try_interact() and races.state == Races.State.IDLE and game.cash == 40, "and the press takes nothing and starts nothing")
+	t.check(not races.try_interact() and races.state == Races.State.IDLE and game.cash == 40, "and the press takes nothing, starts nothing and is left to E (get out)")
 	game.cash = 1000
 	races.set_wager(450)
 	t.check(races.wager_for(1000) == 500 or races.wager_for(1000) == 400, "a chosen buy-in is rounded to hundreds, got %d" % races.wager_for(1000))
@@ -469,10 +471,15 @@ func test_night_race_police_star(t) -> void:
 	far.global_position = Vector3(me.x + 90.0, Terrain.height(me.x + 90.0, me.z), me.z)
 	await t._frames(60)
 	t.check(Wanted.level == 0, "a patrol car 90 m off does not see a thing")
-	# One close by with a clear line.
+	# One close by with a clear line, but empty and parked (the trap car of
+	# events.gd): it sees nothing.
 	far.global_position = Vector3(me.x + 14.0, Terrain.height(me.x + 14.0, me.z), me.z)
+	await t._frames(60)
+	t.check(Wanted.level == 0 and not races.police_sees(), "an empty parked patrol car 14 m off sees nothing, got %d" % Wanted.level)
+	# With an officer out of it (police_manager.gd's rule) it does.
+	far._deployed = true
 	await t._frames(45)
-	t.check(Wanted.level == 1, "a patrol car 14 m off sees the street race: one star, got %d" % Wanted.level)
+	t.check(Wanted.level == 1, "a patrol car with its officer out 14 m off sees the street race: one star, got %d" % Wanted.level)
 	t.check(races.state == Races.State.RACING, "the race goes on")
 	races.cancel()
 	Wanted.clear()
@@ -515,17 +522,19 @@ func test_bike_rental_and_trial(t) -> void:
 	p.reset_physics_interpolation()
 	game.cash = 5
 	var pr: Array = races.prompt()
-	t.check(pr.size() == 2 and pr[1] == "RENT" and pr[0].contains("short"), "too poor: the stand says so, got %s" % [pr])
-	t.check(races.try_interact() and p.vehicle == null and game.cash == 5, "no bike without the $10")
+	t.check(pr.size() == 2 and pr[1] == "ENTER" and pr[0].contains("short"), "too poor: the stand says so, got %s" % [pr])
+	t.check(not races.try_interact() and p.vehicle == null and game.cash == 5, "no bike without the $10, and E is left to its other jobs")
 	game.cash = 50
 	pr = races.prompt()
 	t.check(pr.size() == 2 and pr[0] == "Rent a bike for $10: E / RENT", "with the cash it offers a bike, got %s" % [pr])
 	t.check(races.try_interact(), "E rents it")
 	t.check(p.vehicle != null and p.vehicle.kind == "bicycle" and game.cash == 40, "the player is on a bicycle, $10 poorer (cash %d)" % game.cash)
-	t.check(p.vehicle.global_position.distance_to(top) < 15.0, "the bike is at the top of the trail")
+	t.check(p.vehicle.global_position.distance_to(top) < 40.0, "the bike is on the trail below the top")
+	var bike = p.vehicle
+	var up: Dictionary = RaceCourse.at_arc(trail, 3.0)
+	races.put_car(bike, up.pos, RaceCourse.yaw_of(up.dir))
 	pr = races.prompt()
 	t.check(pr.size() == 2 and pr[0] == "Calder downhill trial: E / START" and pr[1] == "START", "on the bike at the top: the trial is offered, got %s" % [pr])
-	var bike = p.vehicle
 	# Far from the top the bike is just a bike.
 	races.put_car(bike, top + Vector3(0.0, 0.0, 200.0), 0.0)
 	t.check(races.prompt().is_empty(), "away from the top no trial is offered")
@@ -668,9 +677,8 @@ func test_race_save_and_load(t) -> void:
 func test_races_wired_into_the_game(t) -> void:
 	await t._new_game(false)
 	var game = t.game
-	if game.get("races") == null:
-		t.check(true, "main.gd does not make the races module yet (patch in HANDOFF-races.md)")
-		return
+	# Fails until the main session applies HANDOFF-races-wiring.patch (intended).
+	t.check(game.get("races") != null, "main.gd makes the races module (patch: HANDOFF-races-wiring.patch)")
 	var races = game.races
 	game.atmosphere.minutes_per_second = 0.0
 	game.atmosphere.hour = 12.0
@@ -684,6 +692,14 @@ func test_races_wired_into_the_game(t) -> void:
 	game.hud._process(0.016)
 	t.check(game.hud._race.text.begins_with("HILL RACE"), "the race panel is on the HUD, got %s" % [game.hud._race.text])
 	races.cancel()
+	# Wanted, in a car at the line: the race cannot start, so E gets out.
+	Wanted.report_crime(1)
+	await t._frames(3)
+	game.hud._process(0.016)
+	t.check(game.hud._prompt.text == "Lose the police first", "the HUD says why there is no race, got %s" % [game.hud._prompt.text])
+	await t._press("interact")
+	t.check(game.player.vehicle == null and races.state == Races.State.IDLE, "wanted at the line: E gets out of the car, it does not start a race")
+	Wanted.clear()
 	# The save goes through the mission manager.
 	races.best = {"day": 123.5}
 	races.medal = 1
@@ -700,3 +716,161 @@ func test_races_wired_into_the_game(t) -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(mm.save_path))
 	var markers: Array = game.map_markers().filter(func(m): return m.get("label", "") == "Hill race")
 	t.check(markers.size() == 1, "the start line is on the map")
+
+
+## The start is offered to a nearly stopped ride only, and never during a
+## mission or a taxi trip; a refused press is left to E (getting out).
+func test_race_start_needs_a_stopped_ride_and_a_free_player(t) -> void:
+	var races = await _races(t, 12.0)
+	var game = t.game
+	var car = await _driver(t, races, "sports", 6.0)
+	t.check(not races.prompt().is_empty(), "stopped on the line: the race is offered")
+	car.speed = 14.0
+	t.check(races.prompt().is_empty() and not races.try_interact() and races.state == Races.State.IDLE, "rolling through at 14 m/s: no offer, E is not taken")
+	car.speed = 2.0
+	t.check(not races.prompt().is_empty(), "crawling at 2 m/s: offered")
+	car.speed = 0.0
+	# Wanted: the prompt explains, the press is not taken (E gets out).
+	Wanted.report_crime(1)
+	var pr: Array = races.prompt()
+	t.check(pr.size() == 2 and pr[0] == "Lose the police first" and pr[1] == "EXIT", "wanted: the prompt says so and the button is EXIT, got %s" % [pr])
+	t.check(not races.try_interact() and races.state == Races.State.IDLE and game.player.vehicle == car, "wanted: the press starts nothing and is left to E")
+	Wanted.clear()
+	# A mission or a taxi trip has the player's attention.
+	game.missions.active = RefCounted.new()
+	t.check(races.prompt().is_empty() and not races.try_interact() and not races.start_race("day"), "no race during a mission")
+	game.missions.active = null
+	t.check(not races.prompt().is_empty(), "the mission over: offered again")
+	var idle: int = game.taxi.state
+	game.taxi.state = game.taxi.State.RIDING
+	t.check(races.prompt().is_empty() and not races.start_race("day"), "no race during a taxi trip")
+	game.taxi.state = idle
+	t.check(races.try_interact() and races.state == Races.State.COUNTDOWN, "free again: E starts it")
+	races.cancel()
+
+
+## A rival the player has jacked is out of the race: never driven, recovered,
+## replaced or freed by it.
+func test_race_jacked_rival_leaves_the_field(t) -> void:
+	var races = await _races(t, 12.0)
+	var game = t.game
+	await _driver(t, races)
+	t.check(races.try_interact() and races.rivals.size() == 3, "a race with three rivals")
+	# 1. In the grace window of the countdown: out of the car, into a rival's.
+	var mine = game.player.vehicle
+	var r0: Dictionary = races.rivals[0]
+	var stolen = r0.car
+	game.player.exit_vehicle()
+	game.player.enter_vehicle(stolen)
+	await _start_wait(t, races)
+	t.check(races.state == Races.State.RACING and races.rivals.size() == 2 and not races.rivals.has(r0), "the jacked rival leaves the field, %d left" % races.rivals.size())
+	t.check(is_instance_valid(stolen) and stolen.driver == Vehicle.Driver.PLAYER and game.player.vehicle == stolen, "GO does not drive the stolen car off with the player in it")
+	# 2. Mid-race: another rival is taken; it is not teleported back or freed.
+	var r1: Dictionary = races.rivals[0]
+	var second = r1.car
+	game.player.exit_vehicle()
+	game.player.enter_vehicle(second)
+	var spot: Vector3 = second.global_position
+	r1.stall = 99.0
+	r1.far = 99.0
+	await t._frames(4)
+	t.check(not races.rivals.has(r1) and races.recoveries == 0, "a jacked rival is never recovered (%d rescues)" % races.recoveries)
+	t.check(second.global_position.distance_to(spot) < 3.0, "and it stays where the player took it, moved %.1f m" % second.global_position.distance_to(spot))
+	# 3. The calls themselves refuse a car the player is in.
+	var r2: Dictionary = races.rivals[0]
+	var third = r2.car
+	game.player.exit_vehicle()
+	game.player.enter_vehicle(third)
+	races._replace_rival(r2)
+	t.check(is_instance_valid(third) and not third.is_queued_for_deletion() and not races.rivals.has(r2), "a jacked rival's car is never replaced or freed")
+	r2 = {"car": third, "full": PackedVector3Array(), "base": 0}
+	races.recover_rival(r2)
+	t.check(races.recoveries == 0, "nor recovered by a direct call")
+	races.cancel()
+	t.check(is_instance_valid(mine) and is_instance_valid(stolen) and not stolen.is_queued_for_deletion(), "cancelling frees none of the cars the player took")
+
+
+## Runs the countdown out.
+func _start_wait(t, races) -> void:
+	for i in 260:
+		if races.state == Races.State.RACING:
+			break
+		await t._frames(1)
+
+
+## Leaving the car in the grace window: a helicopter (or any ride a race bars)
+## ends the race, and nothing counts on foot.
+func test_race_ride_swap_in_the_grace_window(t) -> void:
+	var races = await _races(t, 12.0)
+	var game = t.game
+	await _driver(t, races)
+	t.check(races.try_interact(), "a race starts")
+	await _start_wait(t, races)
+	t.check(races.state == Races.State.RACING, "racing")
+	# On foot at checkpoint 1: it does not count.
+	game.player.exit_vehicle()
+	var g: Dictionary = races.course.gates[0]
+	game.player.global_position = g.pos
+	game.player.reset_physics_interpolation()
+	await t._frames(3)
+	t.check(races.state == Races.State.RACING and races.next_gate == 0, "a checkpoint walked through on foot does not count, next gate %d" % races.next_gate)
+	# Into a ride the race bars (a tipper truck, like a helicopter): over.
+	var barred = Vehicle.new()
+	barred.kind = "tipper"
+	barred.city = game.city
+	game.add_child(barred)
+	game.player.enter_vehicle(barred)
+	await t._frames(3)
+	t.check(races.state == Races.State.IDLE, "taking a barred ride in the grace window ends the race")
+	game.player.exit_vehicle()
+	# The trial wants a bicycle: a car does not do.
+	var bike = Vehicle.new()
+	bike.kind = "bicycle"
+	bike.city = game.city
+	game.add_child(bike)
+	game.player.enter_vehicle(bike)
+	var at: Dictionary = RaceCourse.at_arc(races.trail_course(), 3.0)
+	races.put_car(bike, at.pos, RaceCourse.yaw_of(at.dir))
+	t.check(races.try_interact() and races.mode == "bike", "the trial starts")
+	game.player.exit_vehicle()
+	var car = Vehicle.new()
+	car.kind = "sports"
+	car.city = game.city
+	game.add_child(car)
+	game.player.enter_vehicle(car)
+	await t._frames(3)
+	t.check(races.state == Races.State.IDLE, "a car is no good for the downhill trial")
+
+
+## The hired bike stands below the top, outside the trial range and facing it:
+## the first E gets off; the bike left far away is taken back.
+func test_bike_hire_bike_is_not_at_the_line(t) -> void:
+	var races = await _races(t, 12.0)
+	var game = t.game
+	var top: Vector3 = races.trail_top()
+	var p = game.player
+	var s: Vector3 = races.stand_pos()
+	p.global_position = s + Vector3(0.0, 0.0, 3.0)
+	p.reset_physics_interpolation()
+	game.cash = 50
+	t.check(races.try_interact(), "E hires a bike")
+	var bike = p.vehicle
+	var d := Vector2(bike.global_position.x - top.x, bike.global_position.z - top.z).length()
+	t.check(d > Races.TRIAL_RANGE, "the hired bike is %.0f m from the top, outside the %.0f m trial range" % [d, Races.TRIAL_RANGE])
+	t.check(races.prompt().is_empty() and not races.try_interact(), "so on the new bike E is not taken: it gets off")
+	# Pedalled up to the line and stopped, it is offered; rolling, it is not.
+	var up: Dictionary = RaceCourse.at_arc(races.trail_course(), 3.0)
+	races.put_car(bike, up.pos, RaceCourse.yaw_of(up.dir))
+	t.check(not races.prompt().is_empty(), "stopped at the top: the trial is offered")
+	bike.speed = 6.0
+	t.check(races.prompt().is_empty(), "rolling through the top: it is not")
+	bike.speed = 0.0
+	# Left a long way off, with the player on foot elsewhere, the bike goes.
+	p.exit_vehicle()
+	races.put_car(bike, top + Vector3(0.0, 0.0, 300.0), 0.0)
+	p.global_position = s + Vector3(0.0, 0.0, 3.0)
+	p.reset_physics_interpolation()
+	await t._frames(80)
+	t.check(not is_instance_valid(bike) or bike.is_queued_for_deletion(), "a bike left 300 m away is taken back")
+	var pr: Array = races.prompt()
+	t.check(pr.size() == 2 and pr[1] == "RENT", "and the stand hires another, got %s" % [pr])
