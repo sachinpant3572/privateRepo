@@ -319,7 +319,18 @@
     {"id": "pine_knob", "name": "Pine Knob", "type": "peak", "pos": [5990, 3010], "phase": 2, "elev": 205, "detail": true},
     {"id": "calder_knob", "name": "Calder Knob", "type": "peak", "pos": [7230, 5050], "phase": 2, "elev": 458, "detail": true},
     {"id": "larkspur_knob", "name": "Larkspur Knob", "type": "peak", "pos": [7930, 4730], "phase": 2, "elev": 333, "detail": true},
-    {"id": "calder_summit", "name": "Mount Calder summit (restaurant, helipad, viewing deck)", "type": "viewpoint", "pos": [7135, 3982], "phase": 2}
+    {"id": "tallow_knob", "name": "Tallow Knob", "type": "peak", "pos": [8726, 2682], "phase": 2, "elev": 136, "detail": true},
+    {"id": "whistler_hill", "name": "Whistler Hill", "type": "peak", "pos": [8686, 2994], "phase": 2, "elev": 168, "detail": true},
+    {"id": "copperback", "name": "Copperback", "type": "peak", "pos": [8750, 3930], "phase": 2, "elev": 132, "detail": true},
+    {"id": "fernmoor_hill", "name": "Fernmoor Hill", "type": "peak", "pos": [8094, 1946], "phase": 2, "elev": 118, "detail": true},
+    {"id": "calder_summit", "name": "Mount Calder summit (restaurant, helipad, viewing deck)", "type": "viewpoint", "pos": [7135, 3982], "phase": 2},
+    {"id": "view_tallow_knob", "name": "Tallow Knob viewpoint", "type": "viewpoint", "pos": [8726, 2682], "phase": 2, "detail": true},
+    {"id": "view_whistler_hill", "name": "Whistler Hill viewpoint", "type": "viewpoint", "pos": [8686, 2994], "phase": 2, "detail": true},
+    {"id": "view_copperback", "name": "Copperback viewpoint", "type": "viewpoint", "pos": [8750, 3930], "phase": 2, "detail": true},
+    {"id": "view_fernmoor_hill", "name": "Fernmoor Hill viewpoint", "type": "viewpoint", "pos": [8094, 1946], "phase": 2, "detail": true},
+    {"id": "view_east_peak", "name": "Eastgate Peak viewpoint", "type": "viewpoint", "pos": [7910, 3770], "phase": 2, "detail": true},
+    {"id": "view_raven_peak", "name": "Raven Peak viewpoint", "type": "viewpoint", "pos": [6590, 3462], "phase": 2, "detail": true},
+    {"id": "view_hawk_peak", "name": "Hawk Peak viewpoint", "type": "viewpoint", "pos": [6226, 4148], "phase": 2, "detail": true}
   ],
   "expansions": [
     {"id": "porto_brisa", "name": "Porto Brisa", "expansion": 1, "inspired_by": "Rio de Janeiro", "where": "south, across the Gulf of Solvera (off this map)", "theme": "Beach city between green mountains and the sea: hillside favelas, Praia Dourada, a cable car, the old port", "links": ["Gulf ferry from Ironwharf", "flights from Bellerive International and Sovereign International", "the smugglers' speedboat route from the Keys"], "factions": ["mare", "corvos"], "story": "Jules's past as a getaway driver; Lua Ferreira; the Sentinel's Light; the Maré and Corvos war at home"}

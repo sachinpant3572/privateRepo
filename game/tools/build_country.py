@@ -75,7 +75,7 @@ BELT_STRAIGHT_MAX = 600.0   # self_check: no straight run longer than this
 URBAN_BOX_MAX = 0.8         # self_check: the urban outline fills less of its bbox
 LEAD_SHORT = 450.0          # a route ending this near the city is led on in to an exit
 # The Bellerive Hills' road tags (tools/mountain.py).
-MTN_TAGS = ("freeway", "crest", "canyon", "observatory", "fire_road", "letters_trail", "calder", "track", "trail")
+MTN_TAGS = ("freeway", "crest", "canyon", "observatory", "fire_road", "letters_trail", "calder", "track", "trail", "hills")
 HOME_TOP = 400.0  # no hillside homes higher than this (m)
 # The fillet the range's planned ways get where a city exit joins them.
 MTN_FILLET = {"highway": 200.0, "road": 45.0, "lane": 30.0, "track": 12.0, "trail": 15.0}

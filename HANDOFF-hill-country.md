@@ -59,27 +59,40 @@ reached: ~1.86 km². The range is a steep dome; only a thin ring is gentle,
 and the east and north-east apron (x 2400-3450, y -4400..-1500, 0-60 m,
 gentle, in the mountain zone and the play area) has no road at all.
 
-## Design (step 0)
+## Design (built 2026-10-31)
 
-- **East Hills**, new: the east apron becomes rolling hills. Three new
-  knobs on short crests, linked by saddles to East Peak (1760,-2880):
-  Tallow Knob (2750,-3700) ~300 m, Whistler Hill (3050,-2750) ~240 m,
-  Copperback (2700,-2050) ~200 m. The ground between them rolls at
-  60-180 m with slopes mostly <= 0.35, easing to 0 at the play-area edge
-  (x ~3450) and keeping the Larkspur village flat (2350,-950).
-- **Roads**: East Hills Road (lane class, paved) from Larkspur north
-  through the saddles to the north side of the range; a dirt track up to
-  each new knob; two 4x4 shortcut tracks over saddles (Whistler-Copperback,
-  Tallow-East Peak); trails along the crests.
-- **Viewpoints**: a gravel pull-out with a rail and a bench and a map
-  icon on each new knob, plus Raven Peak, East Peak and Hawk Peak (each
-  on its own road or track). The summit deck stays data only (#113).
-- **Target**: hill ground >= 5.0 km² overall and the 50-450 m band
-  reached >= 3.0 km² (from 1.86). The tests pin the new peaks, the
-  roads' grade caps and the hill-ground figure.
+- **Corridor first.** The east apron is not empty: Route 1, Route 3,
+  Route 9's dead end (2100,-4050), Old Post Road, the Pinecrest Logging
+  Road, the Corran Commuter and Solvera rails and the fence all run there.
+  So the hills sit west of that corridor, capped at
+  CLEAR_SLOPE 0.3 x (distance - CLEAR_W 60 m) from every one of those ways,
+  the fence (CLEAR_FENCE) and the grid's north and east edges (CLEAR_EDGES,
+  else the taper left a step). tools/mountain.py HILLS (rounded tents like
+  CRESTS, slope 0.24) + the cap, soft-min/max blended into the massif.
+- **Hills as built** (true tops, not the chain points; the cap pulled the
+  tops west, so the labels moved onto them): Whistler Hill (2536,-3656)
+  168 m, Tallow Knob (2576,-3968) 136 m, Fernmoor Hill (1944,-4704) 118 m,
+  Copperback (2600,-2720) 132 m, a shoulder under the East Ridge (like
+  Larkspur Knob). Designed 165-265 m; the cap keeps them lower.
+- **Roads** (mountain_plan.py, tag "hills" except the two shortcuts):
+  East Hills Road (lane, 2.6 km) from Old Post Road (2750,-2010) up the
+  hills' east side to Route 9's end; a track to each top (Copperback,
+  Whistler, Tallow, Fernmoor, plus Tallow Top and Whistler Top to the true
+  tops); shortcuts Copperback Cut (Whistler-Copperback) and Spur Track
+  (Tallow up the north-east spur to East Peak, 3.8 km of switchbacks);
+  Tallow Trail along the crest. "hills" is in build_country MTN_TAGS
+  (else _grade_rest graded them again as suburb streets).
+- **Viewpoints** (mountain.py VIEWPOINTS): a 20 x 12 m level pull-out on
+  Tallow, Whistler, Copperback, Fernmoor and East Peak, at the end of the
+  track(s) that climb there (their last VIEW_FLAT 20 m level, as Calder
+  Road into the summit car park), and beside the way on Raven (440,-3188)
+  and Hawk (76,-2502) peaks (15 m clear, at their own ground). Each is a
+  "view_<peak>" site (country.json mountain.sites) and a viewpoint
+  landmark on the map. No rail or bench meshes: the summit deck is data
+  only too (#113); props come with the content step.
 - **Not in this step** (later, on Sachin's word): rivers, lakes and ponds
-  in the valleys (the design keeps the valleys open for them), the huge
-  forest, places, wildlife, events. Bridges and tunnels need #110.
+  in the valleys, the huge forest, places, wildlife, events. Bridges and
+  tunnels need #110.
 
 ## Decisions
 
