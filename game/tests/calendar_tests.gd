@@ -584,6 +584,7 @@ func test_calendar_event_lights_share_the_lamp_budget(t) -> void:
 			most = n
 	t.check(most >= 4, "4 lamps stand together somewhere, best %d" % most)
 	t._place_player_at(best.global_position + Vector3(2.0, 300.0, 0.0))
+	await t._frames(2)
 	var lit := func() -> int:
 		var n := 0
 		for l in g._lamp_lights:
