@@ -20,6 +20,22 @@ const CROWD := [["general", 28], ["office", 16], ["worker", 10], ["tourist", 10]
 ## On the hill trails (country.gd trail_walks): hikers, trail runners and
 ## hunters.
 const TRAIL_CROWD := [["hiker", 6], ["athlete", 3], ["hunter", 2]]
+## How many walk the trail together, by category: [size, weight]. Hikers
+## come alone, as couples or in groups; runners alone or in pairs; hunters
+## alone or two in single file.
+const TRAIL_PARTY := {
+	"hiker": [[1, 40], [2, 35], [3, 15], [4, 10]],
+	"athlete": [[1, 70], [2, 30]],
+	"hunter": [[1, 60], [2, 40]],
+}
+## Where each follower walks off the leader, (right, behind) in m, by party
+## size: a couple side by side, a group in a loose knot, hunters in file.
+const PARTY_SLOTS := {
+	2: [Vector2(0.9, 0.2)],
+	3: [Vector2(0.9, 0.3), Vector2(0.4, 2.3)],
+	4: [Vector2(0.9, 0.3), Vector2(0.0, 2.2), Vector2(0.9, 2.5)],
+}
+const FILE_SLOT := Vector2(0.0, 3.2)
 ## Things each category stops to do on the sidewalk (Rig gestures, plus
 ## "chat" with someone close by).
 const PAUSES := {
@@ -49,6 +65,10 @@ var threat = null
 var brave := false
 var loop_index := 0
 var point_index := 0
+## The party's leader on a hill trail (join_party): followers keep their
+## slot off it instead of walking the loop on their own.
+var leader = null
+var slot := Vector2.ZERO
 var step := 1
 ## What the current pause is ("chat", or a gesture).
 var pause_kind := ""
@@ -214,10 +234,13 @@ func _think(delta: float) -> void:
 	match state:
 		State.WANDER:
 			_pause_clock -= delta
-			if _pause_clock <= 0.0:
-				_try_pause()
-			if state == State.WANDER:
-				_wander(delta, walk_speed * (1.35 if _rain_hurry else 1.0))
+			if _following():
+				_follow(delta)
+			else:
+				if _pause_clock <= 0.0:
+					_try_pause()
+				if state == State.WANDER:
+					_wander(delta, walk_speed * (1.35 if _rain_hurry else 1.0))
 		State.FLEE, State.FIGHT:
 			if state_time <= 0.0 or not is_instance_valid(threat) or threat.dead:
 				_set_state(State.WANDER)
@@ -245,6 +268,77 @@ func _think(delta: float) -> void:
 			else:
 				_pause(delta)
 	style = _gait()
+
+
+## A trail party: (category, size) for a new group of trail people.
+static func pick_party(rand: RandomNumberGenerator) -> Array:
+	var category := _pick_category(rand, TRAIL_CROWD)
+	var rows: Array = TRAIL_PARTY.get(category, [[1, 1]])
+	var total := 0
+	for row in rows:
+		total += row[1]
+	var r := rand.randi_range(0, total - 1)
+	for row in rows:
+		r -= row[1]
+		if r < 0:
+			return [category, row[0]]
+	return [category, 1]
+
+
+## Slot `k` (1 = first follower) off the leader in a party of `size`.
+static func party_slot(category: String, size: int, k: int) -> Vector2:
+	if category == "hunter":
+		return FILE_SLOT * k
+	var slots: Array = PARTY_SLOTS.get(size, PARTY_SLOTS[4])
+	return slots[mini(k - 1, slots.size() - 1)]
+
+
+## Walks with `lead` from now on, at its pace, `at` off it (party_slot).
+func join_party(lead, at: Vector2) -> void:
+	leader = lead
+	slot = at
+	walk_speed = lead.walk_speed
+	step = lead.step
+	loop_index = lead.loop_index
+	point_index = lead.point_index
+	global_position = party_spot()
+
+
+func _following() -> bool:
+	if leader == null:
+		return false
+	if not is_instance_valid(leader) or leader.dead or leader.loop_index != loop_index \
+			or leader.global_position.distance_to(global_position) > 25.0:
+		leader = null
+		return false
+	return true
+
+
+## Where the slot is now: off the leader along its way to its next point.
+func party_spot() -> Vector3:
+	var ahead: Vector3 = city.sidewalk_loops[leader.loop_index][leader.point_index] - leader.global_position
+	ahead.y = 0.0
+	if ahead.length() < 0.1:
+		ahead = leader.forward()
+		ahead.y = 0.0
+	ahead = ahead.normalized()
+	return leader.global_position - ahead * slot.y + ahead.cross(Vector3.UP) * slot.x
+
+
+## A follower keeps its slot: catches up when behind, eases off when
+## ahead, and stands by while the leader stops.
+func _follow(delta: float) -> void:
+	point_index = leader.point_index
+	var to: Vector3 = party_spot() - global_position
+	to.y = 0.0
+	var d := to.length()
+	if d > 1.5 or (d > 0.35 and leader.state != State.PAUSE):
+		walk(to / d, minf(run_speed, leader.walk_speed * clampf(d, 0.5, 1.6)), delta)
+	else:
+		walk(Vector3.ZERO, 0.0, delta)
+		var facing: Vector3 = leader.forward()
+		facing.y = 0.0
+		face(facing, delta)
 
 
 ## Along the sidewalk loop at `speed`, stepping round street furniture.

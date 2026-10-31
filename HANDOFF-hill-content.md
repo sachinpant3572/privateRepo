@@ -93,9 +93,15 @@ on top; built in phases, each committed; `/effort xhigh` suits it.
 
 ## Status
 - Phase 1 committed: hill_kit (e3f7d00, review fixes in), TEST_MODULES
-  hook (a708f59). Hikers/hunters on trail loops: code in, waits on the
-  country rebuild (trail_walks). Hunting store opens as a place (type
-  hunting_store, door from hill_kit, room _hunting_store, icon R).
+  hook (a708f59). Hikers/hunters on 14 trail loops (trail_walks read
+  self.trails; round joins, mitred bends stuck out 6 m). Hunting store
+  opens as a place (type hunting_store, door from hill_kit, icon R).
+- Sachin 10-31: "It can be single hikers, couples or group of hikers, not
+  same all the time" -> trail parties (Pedestrian.TRAIL_PARTY/pick_party,
+  join_party slots; population queues bodies by party). Hikers 1-4,
+  runners 1-2, hunters 1-2 in file.
+- hunting.gd + shop rows + save in (tests/hunting_tests.gd); shooting
+  waits on the wildlife API.
 
 ## Phase 2 plan (life)
 

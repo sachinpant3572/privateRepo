@@ -39,9 +39,13 @@ var _first_pass := true
 ## [PeopleBuilder ticket, category] per body on order, oldest first.
 var _coming: Array = []
 ## Bodies for the hill trails' hikers, runners and hunters, built while
-## trail spots keep coming up (_trail_wanted ticks after the last one).
+## trail spots keep coming up (_trail_wanted ticks after the last one):
+## [ticket, category, party number], a party's members one after another
+## (Pedestrian.pick_party), so they come out together.
 var _trail_coming: Array = []
 var _trail_wanted := 0
+var _party_count := 0
+## Parties kept on order.
 const TRAIL_AHEAD := 2
 const TRAIL_WANT_TICKS := 240
 ## Junction controls, speed limits, demand and the district mix (Traffic).
@@ -79,14 +83,15 @@ func _physics_process(delta: float) -> void:
 	if peds.size() < PED_COUNT and (_body_ready() or _body_ready(_trail_coming)):
 		var spot: Array = game.city.random_sidewalk_between(center, PED_SPAWN.x, PED_SPAWN.y * r, rng, out_of_view)
 		if not spot.is_empty():
-			# Hikers, runners and hunters on the hill trails, the crowd on
-			# the sidewalks: each from its own queue of built bodies.
+			# Hikers, runners and hunters on the hill trails, alone or in
+			# parties, the crowd on the sidewalks: each from its own queue of
+			# built bodies.
 			var trail: bool = game.city.loop_kind(spot[0]) == "trail"
 			if trail:
 				_trail_wanted = TRAIL_WANT_TICKS
-			var queue: Array = _trail_coming if trail else _coming
-			if _body_ready(queue):
-				_add_ped(spot[0], spot[1], _take_body(queue))
+				_add_party(spot[0], spot[1])
+			elif _body_ready():
+				_add_ped(spot[0], spot[1], _take_body())
 	_order_bodies()
 	if cars.size() < traffic.budget():
 		_spawn_traffic(center, r)
@@ -136,6 +141,27 @@ func _add_ped(loop: int, point: int, body := {}):
 	return ped
 
 
+## The next trail party, once all its bodies are built: the first walks
+## the loop, the rest join it (Pedestrian.join_party), as many as there is
+## room for (the rest come out as a smaller party later).
+func _add_party(loop: int, point: int) -> Array:
+	if not _body_ready(_trail_coming):
+		return []
+	var party: int = _trail_coming[0][2]
+	var size := 0
+	while size < _trail_coming.size() and _trail_coming[size][2] == party:
+		if not PeopleBuilder.ready(_trail_coming[size][0]):
+			return []
+		size += 1
+	var lead = _add_ped(loop, point, _take_body(_trail_coming))
+	var out := [lead]
+	for k in range(1, mini(size, PED_COUNT + 2 - peds.size() + 1)):
+		var ped = _add_ped(loop, point, _take_body(_trail_coming))
+		ped.join_party(lead, Pedestrian.party_slot(lead.category, size, k))
+		out.append(ped)
+	return out
+
+
 func _body_ready(queue = null) -> bool:
 	if queue == null:
 		queue = _coming
@@ -159,9 +185,15 @@ func _order_bodies() -> void:
 		_coming.append([PeopleBuilder.request(CharacterKit.category_look(rng, category)), category])
 	if _trail_wanted > 0:
 		_trail_wanted -= 1
-		while _trail_coming.size() < TRAIL_AHEAD:
-			var category := Pedestrian._pick_category(rng, Pedestrian.TRAIL_CROWD)
-			_trail_coming.append([PeopleBuilder.request(CharacterKit.category_look(rng, category)), category])
+		var parties := {}
+		for e in _trail_coming:
+			parties[e[2]] = true
+		while parties.size() < TRAIL_AHEAD:
+			var pick: Array = Pedestrian.pick_party(rng)
+			_party_count += 1
+			parties[_party_count] = true
+			for k in pick[1]:
+				_trail_coming.append([PeopleBuilder.request(CharacterKit.category_look(rng, pick[0])), pick[0], _party_count])
 
 
 ## Sets a car off out of view, more often on the arterials than the side

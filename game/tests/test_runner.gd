@@ -5306,6 +5306,7 @@ func test_country_tiles_stream() -> void:
 ## the people put on them are hikers, runners and hunters, not the
 ## street crowd.
 func test_hikers_walk_the_trails() -> void:
+	var Pedestrian = preload("res://scripts/pedestrian.gd")
 	await _new_game(true)
 	var city = game.city
 	var trail: Array = []
@@ -5331,6 +5332,38 @@ func test_hikers_walk_the_trails() -> void:
 			break
 	_check(street >= 0 and not (game.population._add_ped(street, 0).category in ["hiker", "hunter"]),
 		"the street crowd stays as it was")
+	# Alone, as couples or in groups (Sachin: "not same all the time"):
+	# runners and hunters at most in pairs.
+	var rand := RandomNumberGenerator.new()
+	rand.seed = 7
+	var sizes := {}
+	var most := {}
+	for k in 600:
+		var pick: Array = Pedestrian.pick_party(rand)
+		sizes[pick[1]] = int(sizes.get(pick[1], 0)) + 1
+		most[pick[0]] = maxi(int(most.get(pick[0], 0)), pick[1])
+	_check(sizes.has(1) and sizes.has(2) and (sizes.has(3) or sizes.has(4)) and most.get("athlete", 0) <= 2
+		and most.get("hunter", 0) <= 2 and most.get("hiker", 0) == 4,
+		"trail parties vary from one to four, runners and hunters in twos at most, got %s %s" % [sizes, most])
+	# A follower keeps to its slot off the leader as they walk the trail.
+	var p0: Vector3 = city.sidewalk_loops[trail[0]][0]
+	_place_player_at(Vector3(p0.x + 6.0, Terrain.height(p0.x + 6.0, p0.z) + 1.0, p0.z))
+	await _frames(30)
+	var lead = game.population._add_ped(trail[0], 0)
+	var mate = game.population._add_ped(trail[0], 0)
+	mate.join_party(lead, Pedestrian.party_slot("hiker", 2, 1))
+	var start: Vector3 = lead.global_position
+	var worst := 0.0
+	for f in 600:
+		await get_tree().physics_frame
+		if f > 120:
+			var gap: Vector3 = mate.party_spot() - mate.global_position
+			gap.y = 0.0
+			worst = maxf(worst, gap.length())
+	var moved: Vector3 = lead.global_position - start
+	moved.y = 0.0
+	_check(moved.length() > 4.0 and mate.leader == lead and worst < 2.5,
+		"a couple walks the trail together: the leader went %.1f m, the follower stayed within %.2f m of its slot" % [moved.length(), worst])
 	# A trail loop runs on the trail, not off in the trees: the hills'
 	# ground is drawn lower everywhere but on roads, paths and trails.
 	var on := 0

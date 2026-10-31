@@ -4500,14 +4500,16 @@ class Country:
             if line.length < TRAIL_WALK_MIN:
                 continue
             self.trail_walk_ids.append(len(self.walks))
-            self._village_loop(line, "trail", 0.0, line.length, edge=TRAIL_EDGE)
+            self._village_loop(line, "trail", 0.0, line.length, edge=TRAIL_EDGE, join=1)
         print("trail walks: %d" % len(self.trail_walk_ids))
 
-    def _village_loop(self, line, cls, t0, t1, edge=VILLAGE_SHOULDER):
+    def _village_loop(self, line, cls, t0, t1, edge=VILLAGE_SHOULDER, join=2):
         """One village loop: line from t0 to t1, both shoulders (edge m out
-        from the road's side; a negative edge keeps it on the way)."""
+        from the road's side; a negative edge keeps it on the way). join is
+        shapely's join_style: mitred (2) for the village streets, round (1)
+        for the winding trails, whose mitred bends stuck out off the way."""
         sub = substring(line, max(0.0, t0), min(line.length, t1))
-        strip = sub.buffer(CLASSES[cls]["w"] * 0.5 + edge, cap_style=2, join_style=2)
+        strip = sub.buffer(CLASSES[cls]["w"] * 0.5 + edge, cap_style=2, join_style=join)
         ring = list(orient(strip.simplify(0.5), 1.0).exterior.coords)[:-1]
         pts = []
         for k, a in enumerate(ring):
