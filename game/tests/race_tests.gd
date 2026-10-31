@@ -12,7 +12,8 @@ const TESTS := ["test_race_course_follows_the_hill_roads", "test_race_start_prom
 	"test_bike_rental_and_trial", "test_bike_medals_and_best_time", "test_bike_rides_the_trail",
 	"test_race_save_and_load", "test_races_wired_into_the_game",
 	"test_race_start_needs_a_stopped_ride_and_a_free_player", "test_race_jacked_rival_leaves_the_field",
-	"test_race_ride_swap_in_the_grace_window", "test_bike_hire_bike_is_not_at_the_line"]
+	"test_race_ride_swap_in_the_grace_window", "test_bike_hire_bike_is_not_at_the_line",
+	"test_race_night_pot_ignores_a_jacked_rival"]
 const Races = preload("res://scripts/races.gd")
 const RaceCourse = preload("res://scripts/race_course.gd")
 const Vehicle = preload("res://scripts/vehicle.gd")
@@ -776,18 +777,48 @@ func test_race_jacked_rival_leaves_the_field(t) -> void:
 	await t._frames(4)
 	t.check(not races.rivals.has(r1) and races.recoveries == 0, "a jacked rival is never recovered (%d rescues)" % races.recoveries)
 	t.check(second.global_position.distance_to(spot) < 3.0, "and it stays where the player took it, moved %.1f m" % second.global_position.distance_to(spot))
-	# 3. The calls themselves refuse a car the player is in.
+	# 3. The calls themselves refuse a car the player is in, and leave the list alone.
 	var r2: Dictionary = races.rivals[0]
 	var third = r2.car
 	game.player.exit_vehicle()
 	game.player.enter_vehicle(third)
-	races._replace_rival(r2)
-	t.check(is_instance_valid(third) and not third.is_queued_for_deletion() and not races.rivals.has(r2), "a jacked rival's car is never replaced or freed")
-	r2 = {"car": third, "full": PackedVector3Array(), "base": 0}
-	races.recover_rival(r2)
-	t.check(races.recoveries == 0, "nor recovered by a direct call")
+	var count: int = races.rivals.size()
+	t.check(not races._replace_rival(r2) and is_instance_valid(third) and not third.is_queued_for_deletion(), "a jacked rival's car is never replaced or freed (the call says so)")
+	var fake := {"car": third, "full": PackedVector3Array(), "base": 0}
+	t.check(not races.recover_rival(fake) and races.recoveries == 0, "nor recovered by a direct call")
+	t.check(races.rivals.size() == count and races.rivals.has(r2), "neither call edits the field: the loop that called it does")
+	t.check(races._dropped.size() == 2 and races._dropped.has(stolen) and races._dropped.has(second), "the two cars he took earlier are remembered")
+	# The end of the race frees the cars he left, not the one he is in.
 	races.cancel()
-	t.check(is_instance_valid(mine) and is_instance_valid(stolen) and not stolen.is_queued_for_deletion(), "cancelling frees none of the cars the player took")
+	await t._frames(3)
+	t.check(is_instance_valid(mine) and is_instance_valid(third) and game.player.vehicle == third, "cancelling leaves his own car and the one he is in")
+	t.check(not is_instance_valid(stolen) or stolen.is_queued_for_deletion(), "the first car he took and left is freed")
+	t.check(not is_instance_valid(second) or second.is_queued_for_deletion(), "so is the second")
+	t.check(races._dropped.is_empty() and races.rivals.is_empty(), "nothing is left on the books")
+
+
+## Jacking a rival does not shrink the night pot: it is paid on the field the
+## race started with.
+func test_race_night_pot_ignores_a_jacked_rival(t) -> void:
+	var races = await _races(t, 23.0)
+	var game = t.game
+	await _driver(t, races)
+	game.cash = 1000
+	races.set_wager(200)
+	t.check(races.try_interact() and races.mode == "night" and races.rivals.size() == 3, "the night run starts with three rivals")
+	var stolen = races.rivals[0].car
+	game.player.exit_vehicle()
+	game.player.enter_vehicle(stolen)
+	await _start_wait(t, races)
+	var gates: Array = races.course.gates
+	for i in gates.size():
+		await _to_gate(t, races, i)
+		if races.state != Races.State.RACING:
+			break
+	t.check(races.rivals.size() == 2, "one rival is out of the field")
+	t.check(races.state == Races.State.DONE and races.result.place == 1, "he wins, got %s" % [races.result])
+	t.check(races.result.prize == 800 and game.cash == 1600, "the pot is the stake x the starting field of 4 ($800), cash %d" % game.cash)
+	races.cancel()
 
 
 ## Runs the countdown out.

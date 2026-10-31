@@ -123,6 +123,8 @@ var recoveries := 0
 var _courses := {}
 var _count := 0.0
 var _place_shown := 1 # the HUD's place, refreshed a few times a second
+var _field := 1 # the field size at the start (the night pot is paid on it)
+var _dropped: Array = [] # rival cars the player jacked: freed at the end unless he is in one
 var _place_clock := 0.0
 var _since_gate := 0.0
 var _off_vehicle := 0.0
@@ -397,6 +399,7 @@ func _begin(car) -> void:
 	result = {}
 	_place_shown = 1
 	_place_clock = 0.0
+	_field = 1
 	_clear_rivals()
 	_show_gates()
 
@@ -435,6 +438,7 @@ func _spawn_rivals(specs: Array) -> void:
 		var full := RaceCourse.offset_path(course.rival, float(s.off))
 		rivals.append({"car": car, "name": s.name, "skill": float(s.skill), "off": float(s.off), "spec": s, "passed": 0, "base": 0,
 			"stall": 0.0, "far": 0.0, "finish": INF, "full": full, "path": full})
+	_field = rivals.size() + 1
 
 
 func _new_rival_car(s: Dictionary):
@@ -472,11 +476,17 @@ func cancel(msg := "") -> void:
 		_say(msg)
 
 
+## Frees the rivals and the cars the player jacked from them, except the one he
+## is in: that stays, an ordinary car now.
 func _clear_rivals() -> void:
 	for r in rivals:
-		if is_instance_valid(r.car) and (game == null or not is_instance_valid(game.player) or r.car != game.player.vehicle):
+		if is_instance_valid(r.car) and not _is_players(r.car):
 			r.car.queue_free()
 	rivals.clear()
+	for car in _dropped:
+		if is_instance_valid(car) and not _is_players(car):
+			car.queue_free()
+	_dropped.clear()
 
 
 # --- The race ---------------------------------------------------------------------
@@ -620,7 +630,7 @@ func _finish() -> void:
 		"day":
 			prize = int(PRIZE[pl - 1]) if pl <= PRIZE.size() else 0
 		"night":
-			prize = stake * (rivals.size() + 1) if pl == 1 else 0
+			prize = stake * _field if pl == 1 else 0 # a jacked rival does not shrink the pot
 		"bike":
 			got = medal_for(time)
 			if got > medal:
@@ -675,12 +685,14 @@ func _update_rivals(delta: float) -> void:
 	var rival_i: PackedInt32Array = course.rival_i
 	var gates: Array = course.gates
 	var player_arc := player_arc_now()
+	var out: Array = [] # rivals the player took mid-loop: removed after it
 	for r in rivals:
 		var car = r.car
 		if not is_instance_valid(car):
 			continue
 		if car.wrecked:
-			_replace_rival(r)
+			if not _replace_rival(r):
+				out.append(r)
 			continue
 		var k: int = clampi(int(r.base) + car.path_index, 0, vlim.size() - 1)
 		var rival_arc: float = course.cum[rival_i[k]]
@@ -699,29 +711,40 @@ func _update_rivals(delta: float) -> void:
 		var want: Vector3 = path[clampi(car.path_index, 0, path.size() - 1)]
 		r.far = r.far + delta if _flat(car.global_position, want) > OFF_ROUTE else 0.0
 		if r.stall > STUCK_TIME or r.far > 3.0:
-			recover_rival(r)
+			if not recover_rival(r):
+				out.append(r)
+	for r in out:
+		_drop(r)
 
 
 ## Whether `car` is the one the player sits in (a rival he has jacked).
 func _is_players(car) -> bool:
-	return is_instance_valid(car) and is_instance_valid(game.player) and (car == game.player.vehicle or car.driver == Vehicle.Driver.PLAYER)
+	return is_instance_valid(car) and game != null and is_instance_valid(game.player) \
+			and (car == game.player.vehicle or car.driver == Vehicle.Driver.PLAYER)
+
+
+## Takes rival `r` out of the field. Its car is remembered so the end of the
+## race frees it (unless the player is still in it).
+func _drop(r: Dictionary) -> void:
+	_dropped.append(r.car)
+	rivals.erase(r)
 
 
 ## A rival car the player has taken is out of the race: the race never drives,
-## recovers, replaces or frees it again.
+## recovers or replaces it again.
 func _drop_jacked_rivals() -> void:
 	for i in range(rivals.size() - 1, -1, -1):
 		if _is_players(rivals[i].car):
-			rivals.remove_at(i)
+			_drop(rivals[i])
 
 
 ## Puts a stuck or lost rival back on its line, a point behind its target,
-## and sends it on.
-func recover_rival(r: Dictionary, from := -1) -> void:
+## and sends it on. False, and nothing done, when the player is in its car (the
+## caller drops it from the field; this never edits `rivals`).
+func recover_rival(r: Dictionary, from := -1) -> bool:
 	var car = r.car
 	if _is_players(car):
-		rivals.erase(r)
-		return
+		return false
 	var full: PackedVector3Array = r.full
 	var k: int = clampi(int(r.base) + car.path_index - 1 if from < 0 else from, 0, full.size() - 2)
 	var a: Vector3 = full[k]
@@ -734,14 +757,15 @@ func recover_rival(r: Dictionary, from := -1) -> void:
 	r.stall = 0.0
 	r.far = 0.0
 	recoveries += 1
+	return true
 
 
-## A rival that burnt out gives way to a fresh car of the same model.
-func _replace_rival(r: Dictionary) -> void:
+## A rival that burnt out gives way to a fresh car of the same model. False,
+## and nothing done, when the player is in its car (see recover_rival).
+func _replace_rival(r: Dictionary) -> bool:
 	var old = r.car
 	if _is_players(old):
-		rivals.erase(r)
-		return
+		return false
 	var progress: int = int(r.base) + old.path_index - 1 # the fresh car restarts here, not at the last recovery
 	var fresh = _new_rival_car(r.spec)
 	game.add_child(fresh)
@@ -751,7 +775,7 @@ func _replace_rival(r: Dictionary) -> void:
 	r.far = 0.0
 	put_car(fresh, old.global_position, old.rotation.y)
 	old.queue_free()
-	recover_rival(r, progress)
+	return recover_rival(r, progress)
 
 
 ## How far along the course the player is (m): the last checkpoint's distance

@@ -1,7 +1,7 @@
 # Package R: races and cycling (decisions note)
 
 Phase 3 of HANDOFF-hill-content.md. Files in game/: scripts/races.gd (module),
-scripts/race_course.gd (courses), tests/race_tests.gd (19 tests), tests/race_shots.*
+scripts/race_course.gd (courses), tests/race_tests.gd (20 tests), tests/race_shots.*
 (8 shots), tests/race_calib.* (manual pace probe, not run by the suite), a
 TEST_MODULES line in test_runner.gd.
 
@@ -20,7 +20,7 @@ only in that file.
 
 `test_races_wired_into_the_game` FAILS until the patch is applied: its first
 check is `game.get("races") != null` (no skipping). That is intended. With the
-patch applied all 19 race tests pass.
+patch applied all 20 race tests pass.
 
 ## Decisions
 
@@ -56,6 +56,10 @@ patch applied all 19 race tests pass.
   / ENTER). TRIAL_RANGE is 10 m and a hired bike appears RENT_ARC (16 m) down
   the trail facing the top, so getting off it does not start the trial; a hired
   bike left > 60 m from the stand and > 40 m from the player is freed.
+- Jacked rivals (second review): the night pot is paid on the field at the start
+  (`_field`); dropped cars are kept in `_dropped` and freed by `_clear_rivals`
+  unless the player is in one; `recover_rival`/`_replace_rival` return a flag and
+  never edit `rivals` (`_update_rivals` drops after its loop).
 - `_player_ok` rechecks the ride (NO_RACE, bicycle only in the trial, not a cab
   passenger) and gates count only in a ride. HUD place is cached (0.25 s); the
   beam shader is one static Shader; the dead `5.4 if i >= 0` is gone.
