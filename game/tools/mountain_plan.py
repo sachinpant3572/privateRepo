@@ -502,7 +502,7 @@ SPECS = [
          tag="track", way=[("on", "whistler_track", (2560, -3330)), (2640, -3000), ("on", "copperback_track", (2600, -2720))],
          gmax=0.20, hairpin_r=8.0, hairpin_cost=150.0),
     dict(id="spur_track", separate=True, cls="track", name="Spur Track", tag="track",
-         way=[("on", "tallow_track", (2420, -3990)), (1950, -3750), (1760, -2880)], gmax=0.20, hairpin_r=8.0,
+         way=[("on", "tallow_track", (2420, -3990)), (1760, -2880)], gmax=0.20, hairpin_r=8.0,
          hairpin_cost=150.0),
     dict(id="tallow_trail", cls="trail", name="Tallow Trail", tag="trail",
          way=[("on", "whistler_track", (2560, -3330)), (2640, -3640), ("on", "tallow_track", (2420, -3990))],
