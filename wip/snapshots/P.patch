@@ -1,3 +1,88 @@
+diff --git a/HANDOFF-air-sports.md b/HANDOFF-air-sports.md
+new file mode 100644
+index 0000000..4f1d6a5
+--- /dev/null
++++ b/HANDOFF-air-sports.md
+@@ -0,0 +1,79 @@
++# Air sports (package P): parachuting and bungee
++Decisions note for package P (wip/briefs/package_P.md), branch `worktree-agent-a917178cc1affb0a5`.
++
++## What is built
++
++- `game/scripts/parachute.gd`: a bail 40 m or more over the land free-falls (terminal 50 m/s), opens on
++  E or by itself at `open_height(v)`, flies a canopy (5 m/s down, 8 ahead, stick steers, E brakes,
++  flare at 4 m) and lands. BASE exit near (1035, -2740) with a marker: "E: BASE JUMP".
++  API: `take_bail(p, start, v0)`, `drive(p, delta)`, `cancel()`, `prompt()`, `try_interact()`,
++  `base_site()`, `static ground_under(x, z)`, `last_landing`, `auto_open` (test hook).
++- `game/scripts/bungee.gd`: jump arm at the Calder lot, $60; states climb, walk_out, ready, fall,
++  winch, flip, walk_back, down. API: `site()`, `prompt()`, `try_interact()`, `drive()`, `cancel()`,
++  `lows`/`highs`, `static fit_rope()`, `static rope_step()`.
++- `game/scripts/kits/air_sports_kit.gd`: canopy, risers, BASE marker, jump arm, rope meshes.
++- `game/scripts/player.gd` (bail/fall code and hooks only): `air` (controller driving the player),
++  `flies`/`above_land` (read by the camera), `_chute_bail()` in exit_vehicle, `_air_sport_interact()`
++  in _think, `air.cancel()` in respawn and stand_at.
++- `game/tests/air_sports_tests.gd` (7 tests, in TEST_MODULES); `game/tests/air_sports_shots.tscn`.
++
++## Decisions
++
++- Landing height goes through one function, `Parachute.ground_under(x, z)` = Terrain.height -
++  Terrain.drop. Switch its body to package G's `Ground.height(x, z, y_hint)` when that lands.
++- Auto-open height = 32 m + fall during the 0.6 s delay + the slowing (0.6 s tau) + 5 m/s x 1.8 s
++  inflation; without the last term the full canopy came only about 20 m up. Opens about 77 m up.
++- The flare lets go above 8 m (FLARE_OFF): a low pass over a ridge had latched it (1.2 m/s glide).
++- Bungee arm up to 40 m (38 m used): a terrain scan found no sheer 60 m cliff within 600 m of the
++  lot (about 1.5 m down per m out). Cheaper option: ARM_MAX 20 gives a 35-40 m drop.
++- The rope is fitted: damping and drag left the energy-sum rope about 15 m short, so `fit_rope`
++  simulates the first fall with the game's own step and moves the aim. Head stops 3-4 m up.
++- Site searches (BASE 60-70 ms, bungee 150-170 ms) run on a WorkerThreadPool task from 1200 m out,
++  so the clearings are in `Tiles.clearings` before those tiles build, with no frame hitch.
++
++## Traps
++
++- Euler round trip: setting `global_position` makes Godot re-read `rotation` from the basis; past a
++  quarter pitch it reads (0, yaw + PI, PI), so setting only `rotation.x = -PI` flipped the jumper
++  upright every other frame. bungee.gd writes `p.basis` from its own `_yaw`/`_pitch`, and the test
++  checks head-down on every frame. parachute.gd keeps pitch in [-PI/2, 0], where it is safe.
++- The BASE glide is long (about 135 s, 637 m down); tests give it 9000 frames.
++- main.gd resets `Tiles.clearings` each new game (line 74); the nodes append theirs later.
++- user:// is shared between builders: tests set cash and never rely on saves.
++
++## Open items
++
++- The main.gd and hud.gd patches below are not applied; until then tests and shots make the nodes.
++- No camera patch needed: top_down_camera.gd reads `flies`/`above_land` (lines 651, 705, 801).
++
++## Patches for the main session
++
++main.gd, after line 17 (`const Hunting = ...`):
++
++    const Parachute = preload("res://scripts/parachute.gd")
++    const Bungee = preload("res://scripts/bungee.gd")
++
++main.gd, after line 42 (`var hunting`): `var parachute` and `var bungee`.
++
++main.gd, after lines 91-92 (`hunting = Hunting.new()`, `add_child(hunting)`):
++
++    	parachute = Parachute.new()
++    	parachute.game = self
++    	add_child(parachute)
++    	bungee = Bungee.new()
++    	bungee.game = self
++    	add_child(bungee)
++
++hud.gd, before line 270 (`elif context_prompt.size() == 2:`), plus a helper:
++
++    	elif not _air_prompt().is_empty():
++    		var air_prompt: Array = _air_prompt()
++    		_prompt.text = air_prompt[0]
++    		touch.set_label("interact", air_prompt[1])
++    		touch.set_label("sprint", "RUN")
++
++    func _air_prompt() -> Array:
++    	for node in [game.get("parachute"), game.get("bungee")]:
++    		if node != null and not node.prompt().is_empty():
++    			return node.prompt()
++    	return []
 diff --git a/game/scripts/bungee.gd b/game/scripts/bungee.gd
 new file mode 100644
 index 0000000..c573b09
@@ -1498,10 +1583,10 @@ index ebd43a5..5a95028 100644
  	if not dead and knocked_time > 0.0:
 diff --git a/game/tests/air_sports_shots.gd b/game/tests/air_sports_shots.gd
 new file mode 100644
-index 0000000..5ce8717
+index 0000000..2f272fc
 --- /dev/null
 +++ b/game/tests/air_sports_shots.gd
-@@ -0,0 +1,143 @@
+@@ -0,0 +1,126 @@
 +extends Node
 +## Screenshots of parachuting and bungee (HANDOFF-air-sports.md): a free
 +## fall after a bail, the canopy open and flaring to land, the BASE lip and
@@ -1513,7 +1598,6 @@ index 0000000..5ce8717
 +const MainScene = preload("res://main.tscn")
 +const Parachute = preload("res://scripts/parachute.gd")
 +const Bungee = preload("res://scripts/bungee.gd")
-+const Tiles = preload("res://scripts/country_tiles.gd")
 +
 +var out_dir := "user://"
 +var game
@@ -1601,24 +1685,8 @@ index 0000000..5ce8717
 +		jump.try_interact()
 +		await _until(func(): return jump.lows.size() >= 1, 2400)
 +		await _shot("air_7_bungee_low.png")
-+		print("PROBE body up %s feet %s anchor %s cam %s cam fwd %s" % [p.global_basis.y, p.global_position,
-+				jump._anchor(), game.camera.global_position, -game.camera.global_basis.z])
 +	print("shots done")
 +	get_tree().quit()
-+
-+
-+var _was := [false, false]
-+var _frame := 0
-+func _physics_process(_d: float) -> void:
-+	_frame += 1
-+	if game == null or jump == null:
-+		return
-+	var c = game.city.country
-+	var now := [c._loaded.has(c.tile_key(Vector3(685.4, 0.0, -2732.9))), jump._site_done]
-+	if now != _was:
-+		print("PROBE frame %d tip tile loaded %s site done %s clearings %d player %s" % [_frame, now[0], now[1],
-+				Tiles.clearings.size(), game.player.global_position])
-+		_was = now
 +
 +
 +func _put(p, pos: Vector3, yaw: float) -> void:
@@ -1645,6 +1713,13 @@ index 0000000..5ce8717
 +func _frames(n: int) -> void:
 +	for i in n:
 +		await get_tree().physics_frame
+diff --git a/game/tests/air_sports_shots.gd.uid b/game/tests/air_sports_shots.gd.uid
+new file mode 100644
+index 0000000..8e453e6
+--- /dev/null
++++ b/game/tests/air_sports_shots.gd.uid
+@@ -0,0 +1 @@
++uid://cdi1c52odd4gc
 diff --git a/game/tests/air_sports_shots.tscn b/game/tests/air_sports_shots.tscn
 new file mode 100644
 index 0000000..4cc49ee
@@ -2007,6 +2082,13 @@ index 0000000..566c328
 +	t.check(game.cash == Bungee.PRICE - 1 and jump.state == "" and game.player.air == null,
 +			"broke: refused, cash kept (%d), no jump" % game.cash)
 +	t.check(game.hud._message.text.contains("$%d" % Bungee.PRICE), "the HUD says what it costs: %s" % game.hud._message.text)
+diff --git a/game/tests/air_sports_tests.gd.uid b/game/tests/air_sports_tests.gd.uid
+new file mode 100644
+index 0000000..c910c59
+--- /dev/null
++++ b/game/tests/air_sports_tests.gd.uid
+@@ -0,0 +1 @@
++uid://b1eyi5d6xnftt
 diff --git a/game/tests/test_runner.gd b/game/tests/test_runner.gd
 index 6271d63..96a2518 100644
 --- a/game/tests/test_runner.gd
