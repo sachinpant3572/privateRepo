@@ -213,22 +213,41 @@ index 0000000..1aa7a0e
 @@ -0,0 +1 @@
 +uid://denp81oscqdw0
 diff --git a/wip/R/races.gd b/game/scripts/races.gd
-similarity index 93%
+similarity index 80%
 rename from wip/R/races.gd
 rename to game/scripts/races.gd
-index 16217a6..b9b8424 100644
+index 16217a6..267bad7 100644
 --- a/wip/R/races.gd
 +++ b/game/scripts/races.gd
-@@ -33,7 +33,7 @@ const START_RANGE := 22.0
+@@ -31,9 +31,12 @@ const NIGHT_TO := 4.0
+ ## prompts appear.
+ const START_RANGE := 22.0
  const STAND_RANGE := 5.5
- const TRIAL_RANGE := 30.0
+-const TRIAL_RANGE := 30.0
++const TRIAL_RANGE := 14.0
++## The start prompts only show once the ride is nearly stopped (m/s), so a
++## press at speed still gets out of the car.
++const STOP_SPEED := 3.0
  ## A checkpoint counts when the car comes within this many metres of it.
 -const GATE_RADIUS := 15.0
 +const GATE_RADIUS := 12.0
  const BIKE_GATE_RADIUS := 11.0
  const COUNT_TIME := 3.0
  const RESULT_TIME := 8.0
-@@ -58,19 +58,24 @@ const OFF_VEHICLE_TIME := 8.0
+@@ -42,6 +45,12 @@ const PRIZE := [400, 200, 80]
+ ## Night buy-in limits; the winner takes everyone's stake.
+ const WAGER_MIN := 100
+ const WAGER_MAX := 500
++## E at the night start opens a pick of the buy-in: each press steps through
++## WAGERS, and the run starts PICK_TIME seconds after the last press.
++const WAGERS := [100, 200, 300, 500]
++const PICK_TIME := 4.0
++## The panel's place is worked out this often (s), not every frame.
++const PLACE_TICK := 0.25
+ const RENT_PRICE := 10
+ ## Rides that cannot run the road races.
+ const NO_RACE := ["heli", "police_heli", "bicycle", "scooter", "tipper", "semi", "box_truck"]
+@@ -58,19 +67,24 @@ const OFF_VEHICLE_TIME := 8.0
  ## line for 3 s, is put back on the course.
  const STUCK_TIME := 5.0
  const OFF_ROUTE := 30.0
@@ -258,7 +277,7 @@ index 16217a6..b9b8424 100644
  ]
  
  const BEAM_SHADER := """
-@@ -99,7 +104,7 @@ var wager := 0
+@@ -99,7 +113,7 @@ var wager := 0
  var stake := 0
  ## The last race's result: {mode, place, time, prize, medal, best, new_best}.
  var result := {}
@@ -267,7 +286,183 @@ index 16217a6..b9b8424 100644
  var rivals: Array = []
  ## The checkpoint the player must pass next (the number passed so far).
  var next_gate := 0
-@@ -343,7 +348,7 @@ func start_trial() -> bool:
+@@ -107,8 +121,17 @@ var course := {}
+ ## How many times a rival was put back on the course in this race.
+ var recoveries := 0
+ 
++## How many times the HUD's place was worked out (a test hook).
++var place_runs := 0
++
+ var _courses := {}
+ var _count := 0.0
++var _pick := 0.0
++var _place_cache := 1
++var _place_at := -1.0
++var _place_gate := -1
++var _place_n := -1
++var _wrecks: Array = []
+ var _since_gate := 0.0
+ var _off_vehicle := 0.0
+ var _done_time := 0.0
+@@ -247,49 +270,90 @@ func medal_time(m: int) -> float:
+ 
+ # --- Prompts --------------------------------------------------------------------
+ 
+-## The HUD's prompt: [text, button] or [].
+-func prompt() -> Array:
++## Why a race or the trial cannot start now ("" when it can).
++func _start_block() -> String:
++	if Wanted.level > 0:
++		return "Lose the police first"
++	if game.get("missions") != null and game.missions != null and game.missions.active != null:
++		return "Finish the job first"
++	return ""
++
++
++## What E does here: {text, button, act}, {} when there is nothing. `act` is
++## "" for a notice (E then does what it always does: gets out), else "rent",
++## "trial", "day", "night" or "pick".
++func _offer() -> Dictionary:
+ 	if state != State.IDLE or game == null or not is_instance_valid(game.player) or game.player.dead:
+-		return []
++		return {}
+ 	var here := _player_pos()
+ 	var car = game.player.vehicle
+ 	if car == null:
+ 		if _stand_at != Vector3.ZERO and _flat(here, _stand_at) <= STAND_RANGE and not _rented_ready():
+ 			if game.cash < RENT_PRICE:
+-				return ["Bike hire is $%d: you are short" % RENT_PRICE, "RENT"]
+-			return ["Rent a bike for $%d: E / RENT" % RENT_PRICE, "RENT"]
+-		return []
+-	if game.player.passenger:
+-		return []
++				return {"text": "Bike hire is $%d: you are short" % RENT_PRICE, "button": "ENTER", "act": ""}
++			return {"text": "Rent a bike for $%d: E / RENT" % RENT_PRICE, "button": "RENT", "act": "rent"}
++		return {}
++	# A ride moving at speed is not at the line: E gets out as ever.
++	if game.player.passenger or absf(car.speed) >= STOP_SPEED:
++		return {}
++	var why := _start_block()
+ 	if car.kind == "bicycle":
+-		if not trail_course().is_empty() and _flat(here, trail_course().top) <= TRIAL_RANGE:
+-			return ["Calder downhill trial: E / START", "START"]
+-		return []
++		if trail_course().is_empty() or _flat(here, trail_course().top) > TRIAL_RANGE:
++			return {}
++		if why != "":
++			return {"text": why, "button": "EXIT", "act": ""}
++		return {"text": "Calder downhill trial: E / START", "button": "START", "act": "trial"}
+ 	if car.kind in NO_RACE:
+-		return []
+-	if _arch_at != Vector3.ZERO and (_flat(here, _arch_at) <= START_RANGE or _flat(here, Vector3(RaceCourse.START.x, 0, RaceCourse.START.y)) <= START_RANGE):
+-		if night_race_open():
+-			var w := wager_for(game.cash)
+-			if w < WAGER_MIN:
+-				return ["Night run: you need $%d to buy in" % WAGER_MIN, "RACE"]
+-			return ["Night run, $%d buy-in: E / RACE" % w, "RACE"]
+-		return ["Hill race: E / RACE", "RACE"]
+-	return []
+-
+-
+-## E: acts on the prompt. True when there was one (so nothing else takes the
+-## press), whether or not it came off.
++		return {}
++	var at_line := _arch_at != Vector3.ZERO and (_flat(here, _arch_at) <= START_RANGE \
++			or _flat(here, Vector3(RaceCourse.START.x, 0, RaceCourse.START.y)) <= START_RANGE)
++	if not at_line:
++		return {}
++	if why != "":
++		return {"text": why, "button": "EXIT", "act": ""}
++	if not night_race_open():
++		return {"text": "Hill race: E / RACE", "button": "RACE", "act": "day"}
++	var w := wager_for(game.cash)
++	if w < WAGER_MIN:
++		return {"text": "Night run: you need $%d to buy in" % WAGER_MIN, "button": "EXIT", "act": ""}
++	if _pick > 0.0:
++		return {"text": "Buy-in $%d: E changes it" % w, "button": "STAKE", "act": "pick"}
++	return {"text": "Night run, $%d buy-in: E / RACE" % w, "button": "RACE", "act": "night"}
++
++
++## The HUD's prompt: [text, button] or [].
++func prompt() -> Array:
++	var o := _offer()
++	return [] if o.is_empty() else [o.text, o.button]
++
++
++## E: acts on the prompt. True when it did something, so nothing else takes
++## the press; a notice, a refusal or no prompt at all is false and E goes on
++## to do its usual thing (get out).
+ func try_interact() -> bool:
+-	if prompt().is_empty():
+-		return false
+-	var car = game.player.vehicle
+-	if car == null:
+-		rent_bike()
+-	elif car.kind == "bicycle":
+-		start_trial()
+-	else:
+-		start_race("night" if night_race_open() else "day")
+-	return true
++	match str(_offer().get("act", "")):
++		"rent":
++			return rent_bike()
++		"trial":
++			return start_trial()
++		"day":
++			return start_race("day")
++		"night":
++			# The first press opens the buy-in pick; the run starts when it times out.
++			_pick = PICK_TIME
++			return true
++		"pick":
++			# Each press steps to the next buy-in the cash covers.
++			var have := wager_for(game.cash)
++			var next := 0
++			for w in WAGERS:
++				if int(w) > have and int(w) <= game.cash - game.cash % 100:
++					next = int(w)
++					break
++			set_wager(next if next > 0 else int(WAGERS[0]))
++			_pick = PICK_TIME
++			return true
++	return false
+ 
+ 
+ # --- Starting and stopping ---------------------------------------------------------
+@@ -305,8 +369,9 @@ func start_race(race_mode: String) -> bool:
+ 		return false
+ 	if (race_mode == "night") != night_race_open():
+ 		return false
+-	if Wanted.level > 0:
+-		_say("Lose the police first")
++	var why := _start_block()
++	if why != "":
++		_say(why)
+ 		return false
+ 	var night: bool = race_mode == "night"
+ 	var buy_in := 0
+@@ -316,6 +381,9 @@ func start_race(race_mode: String) -> bool:
+ 			_say("A night run takes a $%d buy-in" % WAGER_MIN)
+ 			return false
+ 		game.cash -= buy_in
++		# The stake is gone from the moment it is taken: a game killed mid-race
++		# must not hand it back.
++		_save_now()
+ 	stake = buy_in
+ 	mode = race_mode
+ 	course = c
+@@ -336,6 +404,10 @@ func start_trial() -> bool:
+ 	var car = game.player.vehicle
+ 	if c.is_empty() or car == null or car.get("kind") != "bicycle":
+ 		return false
++	var why := _start_block()
++	if why != "":
++		_say(why)
++		return false
+ 	mode = "bike"
+ 	course = c
+ 	stake = 0
+@@ -343,12 +415,13 @@ func start_trial() -> bool:
  	var at := RaceCourse.at_arc(c, 1.5)
  	put_car(car, at.pos, RaceCourse.yaw_of(at.dir))
  	_clear_rivals()
@@ -276,7 +471,13 @@ index 16217a6..b9b8424 100644
  	return true
  
  
-@@ -396,7 +401,8 @@ func _spawn_rivals(specs: Array) -> void:
+ func _begin(car) -> void:
+ 	state = State.COUNTDOWN
++	_pick = 0.0
+ 	_count = COUNT_TIME
+ 	time = 0.0
+ 	next_gate = 0
+@@ -396,7 +469,8 @@ func _spawn_rivals(specs: Array) -> void:
  		put_car(car, slot.pos, slot.yaw)
  		var full := RaceCourse.offset_path(course.rival, float(s.off))
  		rivals.append({"car": car, "name": s.name, "skill": float(s.skill), "off": float(s.off), "spec": s, "passed": 0, "base": 0,
@@ -286,7 +487,7 @@ index 16217a6..b9b8424 100644
  
  
  func _new_rival_car(s: Dictionary):
-@@ -407,6 +413,18 @@ func _new_rival_car(s: Dictionary):
+@@ -407,7 +481,60 @@ func _new_rival_car(s: Dictionary):
  	return car
  
  
@@ -295,17 +496,93 @@ index 16217a6..b9b8424 100644
 +## They still meet the player, traffic and the world.
 +func _ghost_rivals() -> void:
 +	for a in rivals:
++		if not is_instance_valid(a.car):
++			continue
++		var others: Array = []
 +		for b in rivals:
-+			if a != b and is_instance_valid(a.car) and is_instance_valid(b.car):
-+				a.car.add_collision_exception_with(b.car)
-+				if a.car.get("_ahead") != null:
-+					a.car._ahead.add_exception(b.car)
++			if a != b and is_instance_valid(b.car):
++				others.append(b.car)
++		for w in _wrecks:
++			if is_instance_valid(w):
++				others.append(w)
++		for o in others:
++			a.car.add_collision_exception_with(o)
++			if a.car.get("_ahead") != null:
++				a.car._ahead.add_exception(o)
++
++
++## Frees the burnt-out rivals once they are far from the player and out of
++## view.
++func _sweep_wrecks() -> void:
++	var keep: Array = []
++	for w in _wrecks:
++		if not is_instance_valid(w):
++			continue
++		var gone := false
++		if game != null and is_instance_valid(game.player):
++			gone = _flat(w.global_position, _player_pos()) > 80.0
++			if gone and game.get("population") != null and game.population != null:
++				gone = game.population.out_of_view(w.global_position)
++		if gone:
++			w.queue_free()
++		else:
++			keep.append(w)
++	_wrecks = keep
++
++
++## A rival car the player has taken the wheel of leaves the field: the AI
++## must not drive it, rescue it or score it.
++func _drop_taken() -> void:
++	if game == null or not is_instance_valid(game.player):
++		return
++	var i := rivals.size() - 1
++	while i >= 0:
++		var c = rivals[i].car
++		if not is_instance_valid(c) or c == game.player.vehicle or c.driver == Vehicle.Driver.PLAYER:
++			rivals.remove_at(i)
++		i -= 1
 +
 +
  func _go() -> void:
++	_drop_taken()
  	state = State.RACING
  	time = 0.0
-@@ -494,16 +512,16 @@ func _player_ok(delta: float) -> bool:
+ 	_since_gate = 0.0
+@@ -441,8 +568,18 @@ func _physics_process(delta: float) -> void:
+ 	if game == null or not is_instance_valid(game.player):
+ 		return
+ 	match state:
++		State.IDLE:
++			if _pick > 0.0:
++				if str(_offer().get("act", "")) != "pick":
++					_pick = 0.0 # drove off, or the offer is gone
++				else:
++					_pick -= delta
++					if _pick <= 0.0:
++						_pick = 0.0
++						start_race("night")
+ 		State.COUNTDOWN:
+ 			if _player_ok(delta):
++				_drop_taken()
+ 				_hold(_player_car)
+ 				_count -= delta
+ 				if _count <= 0.0:
+@@ -468,6 +605,7 @@ func _process(delta: float) -> void:
+ 	if _clock > 0.0:
+ 		return
+ 	_clock = 0.5
++	_sweep_wrecks()
+ 	if _arch_label != null and game != null and game.get("atmosphere") != null:
+ 		var night := night_race_open()
+ 		var text := "NIGHT RUN" if night else "HILL RACE"
+@@ -490,20 +628,23 @@ func _player_ok(delta: float) -> bool:
+ 	if p.dead or game.get("respawning") == true:
+ 		cancel("Race abandoned")
+ 		return false
++	if game.get("missions") != null and game.missions != null and game.missions.active != null:
++		cancel("Race off: a job started")
++		return false
+ 	var car = p.vehicle
  	if car == null:
  		_off_vehicle += delta
  		if _off_vehicle > OFF_VEHICLE_TIME:
@@ -325,16 +602,17 @@ index 16217a6..b9b8424 100644
  		return false
  	return true
  
-@@ -577,6 +595,8 @@ func _finish() -> void:
+@@ -577,6 +718,9 @@ func _finish() -> void:
  # --- Rivals -----------------------------------------------------------------------
  
  func _update_rivals(delta: float) -> void:
++	_drop_taken()
 +	if rivals.is_empty() or mode == "bike":
 +		return
  	var vlim: PackedFloat32Array = course.vlim
  	var rival_i: PackedInt32Array = course.rival_i
  	var gates: Array = course.gates
-@@ -602,9 +622,23 @@ func _update_rivals(delta: float) -> void:
+@@ -602,9 +746,23 @@ func _update_rivals(delta: float) -> void:
  		else:
  			r.stall = 0.0
  		var path: PackedVector3Array = r.path
@@ -359,7 +637,7 @@ index 16217a6..b9b8424 100644
  			recover_rival(r)
  
  
-@@ -619,10 +653,12 @@ func recover_rival(r: Dictionary) -> void:
+@@ -619,10 +777,12 @@ func recover_rival(r: Dictionary) -> void:
  	var d := Vector3(b.x - a.x, 0.0, b.z - a.z).normalized()
  	put_car(car, a, RaceCourse.yaw_of(d))
  	r.base = k
@@ -372,19 +650,23 @@ index 16217a6..b9b8424 100644
  	recoveries += 1
  
  
-@@ -634,8 +670,11 @@ func _replace_rival(r: Dictionary) -> void:
+@@ -634,8 +794,14 @@ func _replace_rival(r: Dictionary) -> void:
  	r.car = fresh
  	r.stall = 0.0
  	r.far = 0.0
 +	r.idle = 0.0
  	put_car(fresh, old.global_position, old.rotation.y)
+-	old.queue_free()
 +	fresh.path_index = old.path_index # so the rescue puts it back where the wreck was
- 	old.queue_free()
++	# The burning wreck stays where it is (a car does not vanish in front of
++	# the player); it is freed once it is far and out of sight. The field drives
++	# through it, so a rival put back beside it does not crash into it again.
++	_wrecks.append(old)
 +	_ghost_rivals()
  	recover_rival(r)
  
  
-@@ -702,7 +741,7 @@ func _police_tick(delta: float) -> void:
+@@ -702,7 +868,7 @@ func _police_tick(delta: float) -> void:
  	if police_sees():
  		_flagged = true
  		Wanted.report_crime(1)
@@ -393,7 +675,7 @@ index 16217a6..b9b8424 100644
  
  
  ## Whether a police car or an officer has a clear line to the player within
-@@ -764,7 +803,7 @@ func rent_bike() -> bool:
+@@ -764,7 +930,7 @@ func rent_bike() -> bool:
  	put_car(bike, at.pos, RaceCourse.yaw_of(at.dir))
  	_rented = bike
  	game.player.enter_vehicle(bike)

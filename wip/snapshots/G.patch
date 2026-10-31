@@ -1,6 +1,6 @@
 diff --git a/HANDOFF-ground.md b/HANDOFF-ground.md
 new file mode 100644
-index 0000000..77ea458
+index 0000000..ae17c27
 --- /dev/null
 +++ b/HANDOFF-ground.md
 @@ -0,0 +1,76 @@
@@ -20,8 +20,8 @@ index 0000000..77ea458
 +## Decisions
 +- Take-off: the car carries its last slope; if that line, less a frame of gravity, is more than
 +  `AIR_LIFT 0.3 + AIR_KINK 0.5 * step` over the ground, it flies with vy = slope x speed. The step term is what keeps
-+  the sharpest road crest (West Ridge Track near (489, -3016): 0.33 m gap at 30 m/s) on the ground; the lip of a
-+  ramp (slope 0.35+ to ground below) clears it at any speed over ~8 m/s.
++  the sharpest road crest on the ground (West Ridge Track near (489, -3016): carry 0.445 m vs a 0.57 m threshold at
++  33 m/s; tight from ~45 m/s). A ramp lip (1.5-1.8 m down to the ground) always launches.
 +- "Placed" movers (code moved y, or xz by > 3 m car / 2 m person) snap with their placed y as the hint; they never fly.
 +- Landing impact = speed into the surface along its normal; over AIR_SAFE 12 m/s: Fx.crash + 2.5 hp per m/s; a
 +  rider is thrown from 1.6 x the class's throw speed; tyres scrub 1.5 % per m/s (max 30 %).
@@ -689,7 +689,7 @@ index 0000000..ae827f6
 +uid://d2j0yxfj05ld7
 diff --git a/game/scripts/stunts.gd b/game/scripts/stunts.gd
 new file mode 100644
-index 0000000..bd3c709
+index 0000000..c858c0f
 --- /dev/null
 +++ b/game/scripts/stunts.gd
 @@ -0,0 +1,310 @@
@@ -899,14 +899,14 @@ index 0000000..bd3c709
 +	var dn = d.get("done", [])
 +	if typeof(dn) == TYPE_ARRAY:
 +		for id in dn:
-+			if ids.has(String(id)):
-+				done[String(id)] = true
++			if typeof(id) == TYPE_STRING and ids.has(id):
++				done[id] = true
 +	var b = d.get("best", {})
 +	if typeof(b) == TYPE_DICTIONARY:
 +		for id in b:
 +			var r = b[id]
-+			if ids.has(String(id)) and typeof(r) == TYPE_DICTIONARY:
-+				best[String(id)] = {"time": clampf(float(r.get("time", 0.0)), 0.0, 60.0),
++			if typeof(id) == TYPE_STRING and ids.has(id) and typeof(r) == TYPE_DICTIONARY:
++				best[id] = {"time": clampf(float(r.get("time", 0.0)), 0.0, 60.0),
 +					"distance": clampf(float(r.get("distance", 0.0)), 0.0, 2000.0),
 +					"height": clampf(float(r.get("height", 0.0)), 0.0, 500.0)}
 +
@@ -1362,10 +1362,10 @@ index af590f1..7106570 100644
  		faint = false
 diff --git a/game/tests/ground_tests.gd b/game/tests/ground_tests.gd
 new file mode 100644
-index 0000000..1a0b054
+index 0000000..76b3869
 --- /dev/null
 +++ b/game/tests/ground_tests.gd
-@@ -0,0 +1,517 @@
+@@ -0,0 +1,544 @@
 +extends RefCounted
 +## The ground layer (scripts/ground.gd), the vehicles' air state
 +## (vehicle.gd), people on decks and ledges (humanoid.gd) and the stunt
@@ -1374,7 +1374,7 @@ index 0000000..1a0b054
 +
 +const TESTS := ["test_ground_matches_terrain_without_decks", "test_ground_deck_from_above_not_below",
 +	"test_ground_cut_lets_floor_deck_win", "test_car_drives_along_deck_strip", "test_car_flies_off_a_ramp",
-+	"test_highway_speed_stays_on_the_road", "test_person_walks_up_ramp_and_off_ledges", "test_stunt_jumps_pay_once_and_save"]
++	"test_highway_speed_stays_on_the_road", "test_person_walks_up_ramp_and_off_ledges", "test_stunt_jumps_pay_once_and_save", "test_debug_jump"]
 +const Ground = preload("res://scripts/ground.gd")
 +const Terrain = preload("res://scripts/terrain.gd")
 +const Vehicle = preload("res://scripts/vehicle.gd")
@@ -1883,6 +1883,33 @@ index 0000000..1a0b054
 +	car.queue_free()
 +	await t._frames(1)
 +	return rec
++
++
++func test_debug_jump(t) -> void:
++	await t._new_game(false)
++	var s = _stunts(t)
++	for k in [1, 3]:
++		var j: Dictionary = Stunts.JUMPS[k]
++		var lay := Stunts.layout(j)
++		print("DBG ", j.id, " foot ", lay.foot, " lip ", lay.lip, " yaw ", lay.yaw, " deck ", lay.deck, " gl ", lay.ground_l, " gr ", lay.ground_r)
++		var start: Vector2 = lay.foot - Vector2(lay.fwd) * 14.0
++		var pos := Vector3(start.x, Ground.height(start.x, start.y), start.y)
++		t.game.city.stream_now(pos)
++		var car = _car(t, "sports", pos, lay.yaw, 20.0)
++		t.game.player.enter_vehicle(car)
++		for i in 240:
++			_cruise(car, 20.0)
++			await t._frames(1)
++			if i % 6 == 0:
++				var p: Vector3 = car.global_position
++				print("DBG %d p %s air %s spd %.1f vel %s gap %.2f deck %s g %.2f" % [i, p, car.airborne, car.speed, car.get_real_velocity(), car.ground_gap, car._deck_id, Ground.height(p.x, p.z, p.y)])
++			for c in car.get_slide_collision_count():
++				var col = car.get_slide_collision(c)
++				var o = col.get_collider()
++				print("DBG hit %d %s at %s n %s" % [i, (o.get_path() if o is Node else str(o)), col.get_position(), col.get_normal()])
++		t.game.player.exit_vehicle()
++		car.queue_free()
++		await t._frames(1)
 diff --git a/game/tests/ground_tests.gd.uid b/game/tests/ground_tests.gd.uid
 new file mode 100644
 index 0000000..a917bca

@@ -1,9 +1,9 @@
 diff --git a/HANDOFF-air-sports.md b/HANDOFF-air-sports.md
 new file mode 100644
-index 0000000..fce8d62
+index 0000000..89ba5ee
 --- /dev/null
 +++ b/HANDOFF-air-sports.md
-@@ -0,0 +1,70 @@
+@@ -0,0 +1,79 @@
 +# HANDOFF: air sports (phase 3 of the hill content, package P)
 +
 +Parachuting (helicopter bails, the BASE exit) and the bungee jump.
@@ -19,41 +19,36 @@ index 0000000..fce8d62
 +  replaces the walk while set; `_chute_bail()` in `exit_vehicle`;
 +  `_air_sport_interact()` on E; `air.cancel()` in `respawn`/`stand_at`.
 +- `game/tests/air_sports_tests.gd` (7 tests), `tests/air_sports_shots.tscn`.
++- `wip/P/main_hud.patch`: the main.gd and hud.gd hooks (not applied here).
 +
 +## Decisions
 +
 +- Both nodes join group `air_sports` (player.gd's E reaches them without
 +  main.gd); the parachute also joins `parachute` (player.gd's bail looks it
 +  up). No parachute node = old fall everywhere.
-+- MIN_HEIGHT 40 m over the ground (Terrain.height - drop) at the bail.
-+  Below it, player.gd's fall is untouched. Killed in the air: hand the body
-+  to player.gd's fall (`_hand_to_fall`).
++- MIN_HEIGHT 40 m over the ground at the bail; below it player.gd's fall
++  is untouched. Killed in the air: the body goes to player.gd's fall.
 +- Free fall: quadratic drag, terminal 50 m/s; stick tracks up to 12 m/s.
-+  OPEN (E) any time; auto-open at `open_height(v)` = 32 m + the distance
-+  the 0.6 s line stretch and the 0.6 s braking take, so the canopy is fully
-+  flying about 32 m up. Canopy: 5 m/s down, 8 m/s ahead, stick turns it
++  OPEN (E) any time; auto-open at `open_height(v)` so the canopy flies
++  fully about 32 m up. Canopy: 5 m/s down, 8 ahead, stick turns it
 +  (1.4 rad/s), E brakes 2 s (3 down, 4 ahead), flare under 4 m (1.2 down,
-+  3 ahead). Landing damage uses player.gd's formula on the impact's
-+  equivalent drop (v²/2g): 7 m/s or less costs nothing; > 2.5 m/s stumbles.
-+- Canopy landings on a roof or in water move to open dry ground nearby
-+  (`_open_ground_near`, as the helicopter's).
++  3 ahead; it ends again over 8 m, so a BASE lip does not latch it).
++  Landing damage: player.gd's formula on v²/2g; 7 m/s or less is free.
++  A landing on a roof or in water moves to open dry ground nearby.
 +- BASE exit: best lip within 40 m of (1035, -2740): level behind, ≥ 8 m
-+  down in 8 m, ≥ 20 in 16, ≥ 45 in 64. Found at (1056, 981, -2720), facing
-+  east, 70 m down in 64 m. The jump throws the canopy at once (no free
-+  fall: the ground is right there).
-+- Bungee: the hillside by the pad falls about 1.5 m per metre (8 m terrain
-+  grid, no sheer cliff); a 20 m arm hung only 35 m up, and a cliff with
-+  ≥ 60 m of drop is 215 m away (and still needs a 30 m arm). So the arm is a
-+  long jib from the pad edge: the shortest of 12-40 m that hangs WANT_DROP
-+  (60 m) over the highest ground within 2.5 m of the tip. Found: root
-+  (721, 900, -2723), 36 m long, 60 m drop. Price $60.
++  down in 8, ≥ 20 in 16, ≥ 45 in 64. Found at (1056, 981, -2720), facing
++  east, 70 m down in 64 m. The jump throws the canopy at once. The glide
++  (1.6 : 1) about matches the hill (1.5 : 1): hands off, it follows the
++  slope 10-140 m up and lands about 1 km east, 640 m down, after 135 s.
++- Bungee: the hillside by the pad falls about 1.5 m per metre (8 m grid,
++  no sheer cliff); a cliff with ≥ 60 m of drop is 215 m away. So the arm
++  is a jib from the pad edge: the shortest of 12-40 m that hangs 60 m over
++  the ground near the tip. Found: root (721, 900, -2723), 36 m, 60 m; $60.
 +- Rope from the measured drop: reach = drop - BODY 2.6 - CLEAR 3 - MARGIN
-+  1; slack l0 = 0.42 reach; stiffness from energy (undamped the ankles
-+  just reach `reach`); damping 0.12 of critical, air drag. Ends after 4
-+  lows (or 30 s), winch at up to 4 m/s, flip onto the catwalk, walk back.
-+- Sites are measured once when the player comes within 1200 m (well
-+  before the country's tiles there build, so the clearings keep trees off
-+  the arm and the plank). Cost: about 40 ms (BASE) and 70-150 ms (arm).
++  1; slack 0.42 reach; stiffness from energy; damping 0.12 of critical,
++  air drag. 4 lows (or 30 s), winch up to 4 m/s, onto the catwalk, back.
++- Sites are measured once within 1200 m (before the tiles there build, so
++  the clearings keep trees off). Cost: about 40 ms (BASE), 70-150 ms (arm).
 +- Ground for landings: `Parachute.ground_under(x, z)` = Terrain.height -
 +  Terrain.drop. **Switch it to Ground.height(x, z, y_hint) when package G
 +  lands** (one function; bungee.gd's walk-down uses it too).
@@ -63,17 +58,31 @@ index 0000000..fce8d62
 +- player.gd's `_physics_process` returns before `super()` while `air` is
 +  set: humanoid physics, knock-down timers and the ground snap do not run.
 +  `_release()` restores layers, rotation and `_drop_at`.
-+- The camera on foot follows the stick only when `player.velocity` moves:
-+  the flight keeps its own `velocity`, so the view holds still while
-+  steering (world_move stays consistent).
++- The camera follows the stick on foot only when `player.velocity` moves:
++  the flight keeps its own velocity, so the view holds while steering.
++- Golden Flats' pivot centre has a 3 m tower (a "roof"): FLATS is off it.
 +
 +## Patches for the main session
 +
-+See the package report (main.gd, hud.gd). camera.gd: none needed.
++Apply `wip/P/main_hud.patch` from the repo root: main.gd makes `parachute`
++and `bungee` beside `hunting`; hud.gd shows `player.air.prompt()` in the
++air (after the vehicle branch) and `_air_prompt()` (BASE lip, bungee
++steps) after the hunting branch, in player.gd's E order. camera.gd: none.
++
++## Results (2026-10-31)
++
++- 7 tests: 67 checks passed, 0 failed. With the patch applied (then
++  reverted), plus test_heli_exit_only_when_low, test_heli_touch_controls,
++  test_wasted_respawns_at_hospital, two hunting tests, test_mount_calder:
++  163 passed, 0 failed.
++- 13 shots (patch applied): HUD reads "E: BASE JUMP", "Free fall ALT 227 m
++  Open: E / OPEN", "Bungee: E ($60)"; canopy, plank, jib, rope draw.
 +
 +## Open items
 +
 +- The lot's name says "129 m drop"; the jump is 60 m (data not regenerated).
++- The bungee's first low leaves 16 m to the ground (damping and drag take
++  some reach); k could rise for a closer dip, keeping CLEAR 3 m.
 diff --git a/game/scripts/bungee.gd b/game/scripts/bungee.gd
 new file mode 100644
 index 0000000..65ad140
@@ -547,6 +556,13 @@ index 0000000..65ad140
 +	if player != null:
 +		_release(player)
 +	state = ""
+diff --git a/game/scripts/bungee.gd.uid b/game/scripts/bungee.gd.uid
+new file mode 100644
+index 0000000..35200a1
+--- /dev/null
++++ b/game/scripts/bungee.gd.uid
+@@ -0,0 +1 @@
++uid://cr6pu6f0pmq8b
 diff --git a/game/scripts/kits/air_sports_kit.gd b/game/scripts/kits/air_sports_kit.gd
 new file mode 100644
 index 0000000..46822ec
@@ -773,6 +789,13 @@ index 0000000..46822ec
 +	var x := u.cross(Vector3.FORWARD if absf(u.z) < 0.9 else Vector3.RIGHT).normalized()
 +	var z := x.cross(u)
 +	return Basis(x, u * l, z)
+diff --git a/game/scripts/kits/air_sports_kit.gd.uid b/game/scripts/kits/air_sports_kit.gd.uid
+new file mode 100644
+index 0000000..c55e960
+--- /dev/null
++++ b/game/scripts/kits/air_sports_kit.gd.uid
+@@ -0,0 +1 @@
++uid://c5vicg6hjdxhj
 diff --git a/game/scripts/parachute.gd b/game/scripts/parachute.gd
 new file mode 100644
 index 0000000..6d6e77c
@@ -1326,6 +1349,13 @@ index 0000000..6d6e77c
 +	_from = _site.drop
 +	GameLog.event("base_jump", {"at": start, "drop": _site.drop})
 +	return true
+diff --git a/game/scripts/parachute.gd.uid b/game/scripts/parachute.gd.uid
+new file mode 100644
+index 0000000..deeacd2
+--- /dev/null
++++ b/game/scripts/parachute.gd.uid
+@@ -0,0 +1 @@
++uid://c4kqkam3tesb
 diff --git a/game/scripts/player.gd b/game/scripts/player.gd
 index ebd43a5..5a95028 100644
 --- a/game/scripts/player.gd
@@ -1421,10 +1451,10 @@ index ebd43a5..5a95028 100644
  	if not dead and knocked_time > 0.0:
 diff --git a/game/tests/air_sports_shots.gd b/game/tests/air_sports_shots.gd
 new file mode 100644
-index 0000000..e32aa62
+index 0000000..0344c36
 --- /dev/null
 +++ b/game/tests/air_sports_shots.gd
-@@ -0,0 +1,140 @@
+@@ -0,0 +1,146 @@
 +extends Node
 +## Screenshots of the air sports (HANDOFF-air-sports.md): the BASE lip and
 +## its marker, the jump's canopy opening and flying down the face, a
@@ -1476,7 +1506,7 @@ index 0000000..e32aa62
 +	await _put(s.stand)
 +	p.rotation.y = atan2(-s.dir.x, -s.dir.z)
 +	await _frames(60)
-+	print("prompt at the lip: ", chute.prompt())
++	print("prompt at the lip: ", chute.prompt(), " hud: ", _hud_line())
 +	await _shot("air_1_base_lip.png")
 +	await _close(p.global_position + Vector3(0.0, 1.0, 0.0), 14.0, "air_2_base_lip_close.png")
 +	# Off the lip: the canopy opening, then flying down the face.
@@ -1501,7 +1531,7 @@ index 0000000..e32aa62
 +	await _put(over)
 +	chute.take_bail(p, over + Vector3(0.0, 260.0, 0.0), Vector3(0.0, 0.0, -6.0))
 +	await _frames(150)
-+	print("free fall: ", chute.state, " ", snappedf(-chute.velocity.y, 0.1), " m/s, ", snappedf(p.above_land, 0.1), " m up")
++	print("free fall: ", chute.state, " ", snappedf(-chute.velocity.y, 0.1), " m/s, ", snappedf(p.above_land, 0.1), " m up, hud: ", _hud_line())
 +	await _shot("air_7_free_fall.png")
 +	await _close(p.global_position + Vector3(0.0, 0.5, 0.0), 8.0, "air_8_free_fall_close.png")
 +	while chute.state == "free" or chute.state == "opening":
@@ -1514,7 +1544,7 @@ index 0000000..e32aa62
 +	p.revive(b.gate)
 +	await _put(b.gate)
 +	await _frames(30)
-+	print("prompt at the steps: ", bungee.prompt())
++	print("prompt at the steps: ", bungee.prompt(), " hud: ", _hud_line())
 +	var mid: Vector3 = b.root + b.dir * (float(b.length) * 0.5)
 +	await _close(mid + Vector3(0.0, -6.0, 0.0), 60.0, "air_10_bungee_arm.png")
 +	game.cash = 500
@@ -1562,9 +1592,22 @@ index 0000000..e32aa62
 +	print("saved ", file)
 +
 +
++## The HUD's prompt line (hud.gd's air sports branch once patched in).
++func _hud_line() -> String:
++	var l = game.hud.get("_prompt")
++	return l.text if l != null else "?"
++
++
 +func _frames(n: int) -> void:
 +	for i in n:
 +		await get_tree().physics_frame
+diff --git a/game/tests/air_sports_shots.gd.uid b/game/tests/air_sports_shots.gd.uid
+new file mode 100644
+index 0000000..8f52f66
+--- /dev/null
++++ b/game/tests/air_sports_shots.gd.uid
+@@ -0,0 +1 @@
++uid://2jxk5c6rpab6
 diff --git a/game/tests/air_sports_shots.tscn b/game/tests/air_sports_shots.tscn
 new file mode 100644
 index 0000000..4cc49ee
@@ -1934,6 +1977,13 @@ index 0000000..a2a52ea
 +	await t._frames(30)
 +	var gate: Vector3 = s.gate
 +	t.check(Vector2(p.global_position.x - gate.x, p.global_position.z - gate.z).length() < 0.5, "and stays at the steps")
+diff --git a/game/tests/air_sports_tests.gd.uid b/game/tests/air_sports_tests.gd.uid
+new file mode 100644
+index 0000000..fcdaa40
+--- /dev/null
++++ b/game/tests/air_sports_tests.gd.uid
+@@ -0,0 +1 @@
++uid://obnq44lv7yxg
 diff --git a/game/tests/test_runner.gd b/game/tests/test_runner.gd
 index 6271d63..96a2518 100644
 --- a/game/tests/test_runner.gd
@@ -1947,3 +1997,85 @@ index 6271d63..96a2518 100644
  const KIT_TESTS := ["test_body_kit_builds_bodies", "test_body_seams_hats_and_build_time", "test_people_wear_modern_clothes"]
  
  var game
+diff --git a/wip/P/main_hud.patch b/wip/P/main_hud.patch
+new file mode 100644
+index 0000000..13e6685
+--- /dev/null
++++ b/wip/P/main_hud.patch
+@@ -0,0 +1,76 @@
++--- a/game/scripts/main.gd
+++++ b/game/scripts/main.gd
++@@ -15,6 +15,8 @@
++ const MissionManager = preload("res://scripts/missions/mission_manager.gd")
++ const Interiors = preload("res://scripts/interiors.gd")
++ const Hunting = preload("res://scripts/hunting.gd")
+++const Parachute = preload("res://scripts/parachute.gd")
+++const Bungee = preload("res://scripts/bungee.gd")
++ const Inventory = preload("res://scripts/inventory.gd")
++ const Taxi = preload("res://scripts/taxi.gd")
++ const Graphics = preload("res://scripts/graphics.gd")
++@@ -40,6 +42,8 @@
++ var missions
++ var interiors
++ var hunting
+++var parachute # bails, the canopy and the BASE exit (parachute.gd)
+++var bungee # the Calder platform's jump (bungee.gd)
++ var taxi
++ var heliports
++ var calendar
++@@ -90,6 +94,10 @@
++ 	atmosphere.calendar = calendar
++ 	hunting = Hunting.new()
++ 	add_child(hunting)
+++	parachute = Parachute.new()
+++	add_child(parachute)
+++	bungee = Bungee.new()
+++	add_child(bungee)
++ 
++ 	missions = MissionManager.new()
++ 	missions.game = self
++--- a/game/scripts/hud.gd
+++++ b/game/scripts/hud.gd
++@@ -267,6 +267,12 @@
++ 		touch.set_label("brake", "BRAKE")
++ 		touch.set_label("interact", "EXIT")
++ 		touch.set_label("sprint", "DRIFT")
+++	elif player.get("air") != null:
+++		# In the air (parachute.gd, bungee.gd): the sport's own line.
+++		var air_line: Array = player.air.prompt()
+++		_prompt.text = air_line[0] if air_line.size() == 2 else ""
+++		touch.set_label("interact", air_line[1] if air_line.size() == 2 else "ENTER")
+++		touch.set_label("sprint", "RUN")
++ 	elif context_prompt.size() == 2:
++ 		_prompt.text = context_prompt[0]
++ 		touch.set_label("interact", context_prompt[1])
++@@ -281,6 +287,11 @@
++ 		_prompt.text = hunt_prompt[0]
++ 		touch.set_label("interact", hunt_prompt[1])
++ 		touch.set_label("sprint", "RUN")
+++	elif not _air_prompt().is_empty():
+++		var air_line: Array = _air_prompt() # the BASE lip, the bungee steps
+++		_prompt.text = air_line[0]
+++		touch.set_label("interact", air_line[1])
+++		touch.set_label("sprint", "RUN")
++ 	elif game.interiors != null and not game.interiors.prompt().is_empty():
++ 		var place_prompt: Array = game.interiors.prompt()
++ 		_prompt.text = place_prompt[0]
++@@ -297,6 +308,17 @@
++ 		touch.set_label("sprint", "RUN")
++ 
++ 
+++## The air sports' line on foot, in player.gd's E order: the BASE lip
+++## (parachute.gd) or the bungee steps (bungee.gd); [] when neither.
+++func _air_prompt() -> Array:
+++	for sport in [game.get("parachute"), game.get("bungee")]:
+++		if sport != null:
+++			var line: Array = sport.prompt()
+++			if not line.is_empty():
+++				return line
+++	return []
+++
+++
++ func _toggle_look_up() -> void:
++ 	game.camera.set_look_up(not game.camera.looking_up)
++ 
