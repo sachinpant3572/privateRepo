@@ -7,8 +7,8 @@
 set -eu
 root=$(git -C "$(dirname "$0")/.." rev-parse --show-toplevel)
 mkdir -p "$root/wip/snapshots"
-# worktree dir suffix -> package letter (agent ids of session 3)
-declare -A pkg=([a51e54d60601755b1]=G [a33a1bd59f718629f]=P [a9c0ec2e48144bf73]=R)
+# worktree dir suffix -> package letter (agent ids of session 4)
+declare -A pkg=([a69e1efc71ef57b4d]=G [a917178cc1affb0a5]=P [acaa1ad497ea74309]=R)
 for id in "${!pkg[@]}"; do
 	w="$root/.claude/worktrees/agent-$id"
 	[ -d "$w" ] || { echo "${pkg[$id]}: no worktree"; continue; }
