@@ -483,6 +483,37 @@ SPECS = [
     dict(id="raven_trail", cls="trail", name="Raven Trail", tag="trail",
          way=[("on", "route_9", (-700, -2700)), (60, -2470), (400, -3180), M.SUMMIT_SITES["deck"][:2]], gmax=0.24,
          hairpin_r=5.0, hairpin_cost=60.0, cut=2.0, pin_cut=4.0),
+    # The East Hills (HANDOFF-hill-country.md): East Hills Road from Old Post
+    # Road north up the hills' east side to Route 9's end, a dirt track up
+    # each knob, two 4x4 shortcuts (Whistler to Copperback along the crest,
+    # Tallow up the north-east spur to East Peak) and a crest trail.
+    dict(id="east_hills_road", cls="lane", name="East Hills Road", tag="hills",
+         way=[("on", "old_post_road", (2750, -2010)), (2790, -2650), (2790, -3250), (2700, -3700),
+              ("on", "route_9", (2100, -4050))], gmax=0.10, hairpin_r=12.0),
+    dict(id="copperback_track", cls="track", name="Copperback Track", tag="hills",
+         way=[("on", "east_hills_road", (2790, -2650)), (2600, -2720)], gmax=0.18, hairpin_r=8.0),
+    dict(id="whistler_track", cls="track", name="Whistler Track", tag="hills",
+         way=[("on", "east_hills_road", (2790, -3250)), (2560, -3330)], gmax=0.18, hairpin_r=8.0),
+    dict(id="tallow_track", cls="track", name="Tallow Track", tag="hills",
+         way=[("on", "east_hills_road", (2700, -3700)), (2420, -3990)], gmax=0.18, hairpin_r=8.0),
+    dict(id="fernmoor_track", cls="track", name="Fernmoor Track", tag="hills",
+         way=[("on", "route_9", (1950, -4100)), (2080, -4560), (1944, -4704)], gmax=0.18, hairpin_r=8.0),
+    dict(id="copperback_cut", separate=True, apart=("east_hills_road",), cls="track", name="Copperback Cut",
+         tag="track", way=[("on", "whistler_track", (2560, -3330)), (2640, -3000), ("on", "copperback_track", (2600, -2720))],
+         gmax=0.20, hairpin_r=8.0, hairpin_cost=150.0),
+    dict(id="spur_track", separate=True, cls="track", name="Spur Track", tag="track",
+         way=[("on", "tallow_track", (2420, -3990)), (1950, -3750), (1760, -2880)], gmax=0.20, hairpin_r=8.0,
+         hairpin_cost=150.0),
+    dict(id="tallow_trail", cls="trail", name="Tallow Trail", tag="trail",
+         way=[("on", "whistler_track", (2560, -3330)), (2640, -3640), ("on", "tallow_track", (2420, -3990))],
+         gmax=0.24, hairpin_r=5.0, hairpin_cost=60.0, cut=2.0, pin_cut=4.0),
+    # Up to Tallow's and Whistler's true tops (the clearance cap round the
+    # highways and the rail pulled them off the knob points above), each
+    # ending in its viewpoint's pull-out.
+    dict(id="tallow_top", cls="track", name="Tallow Top Track", tag="hills",
+         way=[("on", "tallow_track", (2508, -3831)), (2576, -3968)], gmax=0.18, hairpin_r=8.0),
+    dict(id="whistler_top", cls="track", name="Whistler Top Track", tag="hills",
+         way=[("on", "east_hills_road", (2640, -3760)), (2536, -3656)], gmax=0.18, hairpin_r=8.0),
 ]
 # The rail pass (Morrow Freight Line round the range): a shelf on the
 # Morrow gorge's inner wall round the range's west and north foot (the river

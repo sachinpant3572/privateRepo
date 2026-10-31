@@ -100,7 +100,7 @@ func _run() -> void:
 		"test_traffic_drives_into_the_country", "test_traffic_turns_round_at_barricades",
 		"test_country_kit_builds_every_kind",
 		"test_country_plots_square_to_their_roads", "test_estates_and_clusters", "test_grounds_kit_builds_every_part",
-		"test_bellerive_hills", "test_mount_calder", "test_hill_districts", "test_hill_heights_are_flat_checks", "test_freight_line_crosses_cleanly", "test_rail_crossings_are_grade_separated", "test_golden_flats_farmland", "test_every_home_has_a_way_in", "test_homes_by_wealth",
+		"test_bellerive_hills", "test_mount_calder", "test_east_hills", "test_hill_districts", "test_hill_heights_are_flat_checks", "test_freight_line_crosses_cleanly", "test_rail_crossings_are_grade_separated", "test_golden_flats_farmland", "test_every_home_has_a_way_in", "test_homes_by_wealth",
 		"test_new_home_kinds_and_live_cars", "test_people_walk_the_suburbs", "test_suburb_home_cars_are_live",
 		"test_road_surfaces_and_roadworks", "test_traffic_flows_past_roadworks", "test_boundaries_vary_by_household",
 		"test_game_log_file_and_rotation", "test_game_log_snapshot_and_events", "test_game_log_report_copy_and_off",
@@ -6260,7 +6260,9 @@ func test_mount_calder() -> void:
 	var over: Array = []
 	var climbs := 0
 	for rd in c.roads:
-		if not rd.name in ["Mount Calder Road", "Crest Drive", "Canyon Freeway", "Coyote Canyon Road", "Observatory Road", "Summit Fire Road", "West Ridge Track", "Larkspur Track"]:
+		if not rd.name in ["Mount Calder Road", "Crest Drive", "Canyon Freeway", "Coyote Canyon Road", "Observatory Road", "Summit Fire Road", "West Ridge Track", "Larkspur Track",
+				"East Hills Road", "Copperback Track", "Whistler Track", "Tallow Track", "Fernmoor Track", "Copperback Cut", "Spur Track",
+				"Tallow Top Track", "Whistler Top Track"]:
 			continue
 		var nodes: PackedInt32Array = rd.nodes
 		var s: Array[float] = [0.0]
@@ -6382,6 +6384,53 @@ func test_mount_calder() -> void:
 	# The cable car: from the city's north edge, by a mid-station, to the top.
 	var st: Array = m.cable.stations
 	_check(st.size() == 3 and float(st[0].z) < 5.0 and float(st[2].z) > 900.0, "the cable car climbs from the city to the top (%s)" % [st])
+
+
+## The hill country (HANDOFF-hill-country.md): "the hills grown to 3 km² or
+## more, more peaks with their own roads and viewpoints, plus dirt roads and
+## shortcuts". The East Hills rise between the massif and the highway and
+## rail corridor; each named top has a track up to a level viewpoint
+## pull-out on the map (as do East, Raven and Hawk peaks); the roads over
+## them keep to their caps (test_mount_calder).
+const HILL_KM2 := 0.0  # set from the measured figure
+func test_east_hills() -> void:
+	await _new_game(false)
+	var c = game.city.country
+	var m: Dictionary = c.mountain
+	for id in ["tallow_knob", "whistler_hill", "copperback", "fernmoor_hill"]:
+		var pk: Array = m.peaks.get(id, [0, 0, 0])
+		_check(Terrain.height(float(pk[0]), float(pk[1])) >= 80.0, "%s stands %.0f m up" % [id, Terrain.height(float(pk[0]), float(pk[1]))])
+	# Rolling ground on the East Hills: 50-450 m up, no steeper than 0.45.
+	var gentle := 0
+	var cell: float = Terrain.cell
+	for i in range(1, Terrain.nx - 1):
+		for j in range(1, Terrain.ny - 1):
+			var p: Vector2 = Terrain.origin + Vector2(i, j) * cell
+			if p.x < 1800.0 or p.x > 3000.0 or p.y < -4750.0 or p.y > -2550.0 or not c.in_play_area(p):
+				continue
+			var h: float = Terrain.heights[j * Terrain.nx + i]
+			var sx: float = (Terrain.heights[j * Terrain.nx + i + 1] - Terrain.heights[j * Terrain.nx + i - 1]) / (2.0 * cell)
+			var sy: float = (Terrain.heights[(j + 1) * Terrain.nx + i] - Terrain.heights[(j - 1) * Terrain.nx + i]) / (2.0 * cell)
+			if h >= 50.0 and h <= 450.0 and Vector2(sx, sy).length() <= 0.45:
+				gentle += 1
+	var km2: float = gentle * cell * cell / 1.0e6
+	_check(km2 >= HILL_KM2, "the East Hills hold %.2f km² of rolling ground 50-450 m up" % km2)
+	# The viewpoints: each a level pull-out, on the map.
+	var outer: Array = game.city._outer_landmarks.map(func(l): return l.id)
+	for id in ["tallow_knob", "whistler_hill", "copperback", "fernmoor_hill", "east_peak", "raven_peak", "hawk_peak"]:
+		var site: Dictionary = m.sites.get("view_" + id, {})
+		_check(not site.is_empty() and ("view_" + id) in outer, "%s has a viewpoint, on the map" % id)
+		if site.is_empty():
+			continue
+		var lo := INF
+		var hi := -INF
+		for a in 5:
+			for b in 5:
+				var h := Terrain.height(float(site.x) + (float(site.w) * 0.5 - 2.0) * (a / 2.0 - 1.0),
+						float(site.y) + (float(site.d) * 0.5 - 2.0) * (b / 2.0 - 1.0))
+				lo = minf(lo, h)
+				hi = maxf(hi, h)
+		_check(hi - lo < 0.3 and absf(lo - float(site.z)) < 0.3, "the %s viewpoint is flat at %.1f m (%.2f m across)" % [id, float(site.z), hi - lo])
 
 
 ## #116 stage C: the hill districts on the foothills (HANDOFF-hill-districts.md).

@@ -250,7 +250,8 @@ for o in w["routes"]:
 # The range's peaks.
 NAMES = {"mount_calder": "Mount Calder", "raven_peak": "Raven Peak", "east_peak": "Eastgate Peak",
          "north_knob": "North Knob", "hawk_peak": "Hawk Peak", "pine_knob": "Pine Knob", "calder_knob": "Calder Knob",
-         "larkspur_knob": "Larkspur Knob"}
+         "larkspur_knob": "Larkspur Knob", "tallow_knob": "Tallow Knob", "whistler_hill": "Whistler Hill",
+         "copperback": "Copperback", "fernmoor_hill": "Fernmoor Hill"}
 ids = set(NAMES)
 w["landmarks"] = [l for l in w["landmarks"] if l["id"] not in ids and l["id"] != "calder_summit"]
 for k, (x, y) in M.PEAKS.items():
@@ -259,6 +260,11 @@ for k, (x, y) in M.PEAKS.items():
 sx, sy = M.SUMMIT_SITES["deck"][:2]
 w["landmarks"].append({"id": "calder_summit", "name": "Mount Calder summit (restaurant, helipad, viewing deck)",
                        "type": "viewpoint", "pos": [round(sx + OX), round(sy + OY)], "phase": 2})
+# The viewpoints' pull-outs on the hills and peaks.
+w["landmarks"] = [l for l in w["landmarks"] if not l["id"].startswith("view_")]
+for k, ((x, y), _roads) in M.VIEWPOINTS.items():
+    w["landmarks"].append({"id": "view_" + k, "name": NAMES[k] + " viewpoint", "type": "viewpoint",
+                           "pos": [round(x + OX), round(y + OY)], "phase": 2, "detail": True})
 # The cable car.
 w["routes"] = [r for r in w["routes"] if r["id"] != "calder_cable"]
 w["routes"].append({"id": "calder_cable", "name": "Calder Aerial Tramway", "type": "cable", "phase": 2,

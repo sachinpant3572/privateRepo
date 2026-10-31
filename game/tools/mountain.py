@@ -105,10 +105,52 @@ CRESTS = [
     # North-east spur.
     ([(950, -2750, 990), (1350, -3150, 720), (1650, -3450, 560), (1950, -3750, 280), (2150, -3950, 60)], 0.45),
 ]
+# The East Hills (HANDOFF-hill-country.md): rolling hills on the range's
+# north-east and east apron, round-topped (rounded over the last value, m),
+# with gentler sides than the crests. [(x, y, height)...], side slope, round.
+HILLS = [
+    # Tallow Knob: off the north-east spur over a saddle, then down toward
+    # the north-east fence.
+    ([(1950, -3750, 280), (2200, -3830, 185), (2420, -3990, 265), (2560, -4250, 160), (2500, -4560, 60)], 0.24, 150.0),
+    # Whistler Hill: on the east apron, a saddle north to Tallow.
+    ([(2250, -3150, 300), (2560, -3330, 215), (2660, -3640, 140), (2420, -3990, 265)], 0.24, 150.0),
+    # Copperback: a knoll below the East Ridge's end, a saddle north to Whistler.
+    ([(2450, -2700, 250), (2600, -2720, 200), (2690, -2960, 175), (2560, -3330, 215)], 0.24, 150.0),
+    # Fernmoor Hill: north of Route 9, up to the north fence.
+    ([(1550, -4560, 60), (1800, -4620, 150), (2080, -4560, 165), (2250, -4450, 90)], 0.24, 150.0),
+]
+# The hills keep off the ways and the fence they would bury (by name in
+# world_map.json): no higher than CLEAR_SLOPE x (distance - CLEAR_W).
+CLEAR_WAYS = ("Route 1 Gulf Highway", "Route 3 Capital Turnpike", "Route 9 River Road", "Corran Commuter",
+              "Solvera Line (high-speed, being built)", "Concordia Metro Red Line", "Morrow Freight Line",
+              "Pinecrest Logging Road", "Old Post Road", "Avenue streetcar")
+# The play area's fence round the north-east (country.json "area").
+CLEAR_FENCE = [(2326, -4800), (2748, -4500), (3004, -4200), (3174, -3900), (3299, -3600), (3372, -3300), (3400, -3000),
+               (3399, -2700), (3350, -2400), (3262, -2100), (3136, -1800)]
+# And the height grid's north and east edges (past the fence), where the
+# ground must be back at 0 (grid() tapers its last cells to it).
+CLEAR_EDGES = [[(-900, -5100), (3440, -5100), (3440, -200)]]
+CLEAR_W = 60.0
+CLEAR_SLOPE = 0.3
 # The range's named tops (x, y): for the map and the tests.
 PEAKS = {"mount_calder": SUMMIT, "raven_peak": (400, -3180), "east_peak": (1760, -2880), "north_knob": (1090, -3580),
          "hawk_peak": (60, -2470), "pine_knob": (-160, -3640), "calder_knob": (1080, -1600),
-         "larkspur_knob": (1780, -1920)}
+         "larkspur_knob": (1780, -1920), "tallow_knob": (2576, -3968), "whistler_hill": (2536, -3656),
+         "copperback": (2600, -2720), "fernmoor_hill": (1944, -4704)}
+# Viewpoints: a level gravel pull-out on a top, for the view (the map marks
+# each): ((x, y), the tracks that end in it). Where tracks end at the top
+# the pull-out is at their end and height, their last VIEW_FLAT m level (as
+# Mount Calder Road into the summit car park); over a top a trail or track
+# only passes, it stands clear of it (half width + 15 m, as the summit
+# sites) at its own ground.
+VIEW_SIZE = (20.0, 12.0)
+VIEW_FLAT = 20.0
+VIEWPOINTS = {"tallow_knob": (PEAKS["tallow_knob"], ("tallow_top",)),
+              "whistler_hill": (PEAKS["whistler_hill"], ("whistler_top",)),
+              "copperback": (PEAKS["copperback"], ("copperback_track", "copperback_cut")),
+              "fernmoor_hill": (PEAKS["fernmoor_hill"], ("fernmoor_track",)),
+              "east_peak": (PEAKS["east_peak"], ("spur_track",)),
+              "raven_peak": ((440.0, -3188.0), ()), "hawk_peak": ((76.0, -2502.0), ())}
 # The summit plateau's sites (x, y, w, d): the car park Mount Calder Road
 # ends in, the restaurant, the helipad, the viewing deck the trails end at
 # and the cable car's top station, each on a flat pad round the summit's rim.
@@ -155,7 +197,9 @@ LINES = Path(__file__).resolve().parent / "mountain_lines.json"
 # build order: a later road's junctions take an earlier one's height. The
 # map routes it re-laid (tag "route") go back into world_map.json.
 ROAD_ORDER = ["freeway", "crest", "canyon", "observatory", "calder", "fire_road", "west_ridge_track",
-              "larkspur_track", "calder_trail", "raven_trail"]
+              "larkspur_track", "east_hills_road", "copperback_track", "whistler_track", "tallow_track",
+              "tallow_top", "whistler_top", "fernmoor_track", "copperback_cut", "spur_track", "calder_trail",
+              "raven_trail", "tallow_trail"]
 # The cable car: from Cable Hill at the city's edge, by a mid-station on the
 # south-west spur, to the summit's rim.
 CABLE = {"bottom": (0.0, -430.0), "mid": (475.0, -1590.0), "top": SUMMIT_SITES["cable_top"][:2]}
@@ -206,6 +250,10 @@ class Mountain:
         ka = np.fft.rfft(np.array(APRON[1], dtype=float))
         self._cone_k = (k, kp, ka)
         self._water(world)
+        ways = [LineString([(x - o[0], y - o[1]) for x, y in rt["line"]])
+                for rt in world.get("routes", []) if rt["name"] in CLEAR_WAYS]
+        self.clear = unary_union(ways + [LineString(CLEAR_FENCE)] + [LineString(e) for e in CLEAR_EDGES])
+        shapely.prepare(self.clear)
         self.profiles = []  # [LineString, s samples, z samples, half width, bank, spans]
         self.rail_lines = []  # the graded rails' lines (profiles that are rails)
         # Grade separations on the rails: (rail line, s on it, 'b' rail over the
@@ -319,6 +367,11 @@ class Mountain:
             # gentler slopes into the flats.
             s = slope * (1.0 + CREST_STEEP * np.clip(hc / 1000.0, 0.0, 1.0))
             massif = _smax(massif, hc - s * (np.sqrt(d * d + CREST_ROUND ** 2) - CREST_ROUND), SMAX)
+        if HILLS:
+            cap = CLEAR_SLOPE * np.maximum(shapely.distance(self.clear, pts_) - CLEAR_W, 0.0)
+            for pts, slope, rnd in HILLS:
+                d, hc = self._along(xs, ys, pts)
+                massif = _smax(massif, _smin(hc - slope * (np.sqrt(d * d + rnd * rnd) - rnd), cap, 20.0), SMAX)
         massif = np.maximum(massif, 0.0) * keep
         kx, ky, kh = KNOB
         massif = massif + kh * np.exp(-((xs - kx) ** 2 + (ys - ky) ** 2) / (24.0 ** 2))

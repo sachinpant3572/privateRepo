@@ -49,6 +49,7 @@ import farmland  # noqa: E402
 import wealth  # noqa: E402
 from mountain import Mountain, roads as mountain_roads, lines as mountain_lines, OBSERVATORY, OBSERVATORY_SIZE, OBSERVATORY_ROAD_END, LETTERS, LETTERS_SIZE, MASTS, MAST_SIZE  # noqa: E402
 from mountain import GRADE, SUMMIT_SITES, PEAKS, CABLE, CABLE_MID_SIZE, CELL as MTN_CELL  # noqa: E402
+from mountain import VIEWPOINTS, VIEW_SIZE, VIEW_FLAT  # noqa: E402
 import numpy as np  # noqa: E402
 import contourpy  # noqa: E402
 
@@ -1757,8 +1758,9 @@ class Country:
             if ident != "letters_trail":
                 if cls == "trail":
                     spans = sorted(spans + self._underpasses(line, spans))
-                # Mount Calder Road ends level in the summit car park.
-                flat = 60.0 if ident == "calder" else 0.0
+                # Mount Calder Road ends level in the summit car park, a
+                # track up to a viewpoint in its pull-out.
+                flat = 60.0 if ident == "calder" else VIEW_FLAT if any(ident in v[1] for v in VIEWPOINTS.values()) else 0.0
                 self.mtn_grades.append((name, round(self.mtn.grade(line, cls, spans=spans, cap=MTN_CAP.get(ident),
                                                                    flat_end=flat), 3)))
             self._note_structures(line, cls, name, spans)
@@ -2070,6 +2072,12 @@ class Country:
                 h = self.mtn_sites["car_park"]["z"]
             h = h if h is not None else self.mtn.raw_at((x, y))
             self.mtn_sites[k] = {"x": x, "y": y, "w": sw, "d": sd, "z": round(h, 2)}
+        # The viewpoints' pull-outs: at the end of the tracks that climb to
+        # them (on its level), or at their own ground beside the way.
+        for k, ((x, y), roads) in VIEWPOINTS.items():
+            h = self.mtn.profile_near((x, y), 20.0) if roads else None
+            h = h if h is not None else self.mtn.raw_at((x, y))
+            self.mtn_sites["view_" + k] = {"x": x, "y": y, "w": VIEW_SIZE[0], "d": VIEW_SIZE[1], "z": round(h, 2)}
         mx, my = CABLE["mid"]
         self.mtn_sites["cable_mid"] = {"x": mx, "y": my, "w": CABLE_MID_SIZE[0], "d": CABLE_MID_SIZE[1],
                                        "z": round(self.mtn.raw_at((mx, my)), 2)}
