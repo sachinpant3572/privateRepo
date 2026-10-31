@@ -143,5 +143,11 @@ reviewer could not measure in_city cost on a device.
   and bungee; Opus xhigh, physics). Wave B after G: bridges and tunnels
   (Opus). Main session wires each into main.gd/hud.gd and merges.
   Cheaper option named for Sachin: all in the main session, sequential.
+- Session 3 (2026-10-31): wave A started while the step-1 suite ran (the
+  builders work in their own worktrees and wait on /tmp/godot.lock, so
+  they change nothing the suite or the step-2 review checks). 3 agents:
+  R Sonnet xhigh, G Opus xhigh, P Opus xhigh; rough cost each 1.5-3 h
+  plus a 20-40 min Opus review. Briefs got worktree-relative paths
+  (c53c27b).
 
 Phase 2 package plan: HANDOFF-hill-content-archive.md.
