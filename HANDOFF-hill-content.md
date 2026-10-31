@@ -107,8 +107,8 @@ not pushed; base 236c09c). Their briefs: wip/briefs/ (paths made
 worktree-relative in c53c27b).
 | pkg | builder | worktree (.claude/worktrees/) | files so far |
 | G ground/air/stunts | Opus xhigh | agent-a721ea34355c032ed | ground.gd, ramp_kit.gd, vehicle.gd, humanoid.gd |
-| P parachute/bungee | Opus xhigh | agent-a36839f94834eb721 | parachute.gd, bungee.gd, kits/air_sports_kit.gd, player.gd |
-| R races/cycling | Sonnet xhigh | agent-a8e49a24b2d9859ff | DONE df9c56b (15 tests, 152/0); Opus review running; wiring in its HANDOFF-races.patch |
+| P parachute/bungee | Opus xhigh | agent-a36839f94834eb721 | DONE 74be212 (7 tests, 67/0); Opus review running; wiring in its wip/P/main_hud.patch |
+| R races/cycling | Sonnet xhigh | agent-a8e49a24b2d9859ff | DONE df9c56b (15 tests, 152/0); review fixes sent back to R; wiring in its HANDOFF-races.patch |
 - R had edited main.gd, hud.gd, player.gd, mission_manager.gd against its
   brief; told to revert them and report patches instead.
 - `wip/snapshot.sh` saves each worktree's work (commits, uncommitted,
