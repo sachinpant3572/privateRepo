@@ -58,6 +58,8 @@ func _physics_process(delta: float) -> void:
 			var game = get_tree().get_first_node_in_group("game") if passenger else null
 			if game != null and game.taxi != null:
 				game.taxi.request_exit() # the cab pulls up and you pay
+			elif _races_take_press():
+				pass # the race start line or the Calder trial
 			elif vehicle.has_method("exit_check") and vehicle.exit_check() == "roof":
 				# Nobody stands on a roof here: land on open ground first.
 				var g = get_tree().get_first_node_in_group("game")
@@ -113,8 +115,16 @@ func _think(delta: float) -> void:
 			pass
 		elif game != null and game.hunting != null and game.hunting.try_interact():
 			pass
+		elif _races_take_press():
+			pass # the bike hire stand
 		elif game == null or game.interiors == null or not game.interiors.try_interact():
 			try_enter_vehicle()
+
+
+## E at a race start line, or at the bike hire stand (races.gd).
+func _races_take_press() -> bool:
+	var g = get_tree().get_first_node_in_group("game")
+	return g != null and g.races != null and g.races.try_interact()
 
 
 ## The node the camera and police should track.

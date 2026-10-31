@@ -15,6 +15,7 @@ const Atmosphere = preload("res://scripts/atmosphere.gd")
 const MissionManager = preload("res://scripts/missions/mission_manager.gd")
 const Interiors = preload("res://scripts/interiors.gd")
 const Hunting = preload("res://scripts/hunting.gd")
+const Races = preload("res://scripts/races.gd")
 const Inventory = preload("res://scripts/inventory.gd")
 const Taxi = preload("res://scripts/taxi.gd")
 const Graphics = preload("res://scripts/graphics.gd")
@@ -40,6 +41,7 @@ var graphics
 var missions
 var interiors
 var hunting
+var races
 var taxi
 var heliports
 var calendar
@@ -90,6 +92,9 @@ func _ready() -> void:
 	atmosphere.calendar = calendar
 	hunting = Hunting.new()
 	add_child(hunting)
+	races = Races.new()
+	races.game = self
+	add_child(races)
 
 	missions = MissionManager.new()
 	missions.game = self
@@ -267,6 +272,8 @@ func map_markers() -> Array:
 		list.append_array(missions.markers)
 	if taxi:
 		list.append_array(taxi.map_markers())
+	if races:
+		list.append_array(races.map_markers())
 	if heliports:
 		for port in heliports.ports:
 			list.append({"pos": port.pos, "color": Color(0.35, 0.8, 1.0), "label": port.name, "gps": false, "icon": "H"})

@@ -30,6 +30,7 @@ var _stars: Control
 var _perf: Label
 var bug_button: Button
 var _prompt: Label
+var _race: Label
 var _message: Label
 var _message_tween: Tween
 var _district: Label
@@ -170,6 +171,10 @@ func _ready() -> void:
 	_message.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_message.modulate.a = 0.0
 
+	_race = _label(root, 26)
+	_anchor(_race, Vector2(0.5, 0), Rect2(-330, 132, 660, 80))
+	_race.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
 	_district = _label(root, 30)
 	_anchor(_district, Vector2(0.5, 0), Rect2(-300, 84, 600, 44))
 	_district.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -227,6 +232,7 @@ func _process(delta: float) -> void:
 	_shown_cash = move_toward(_shown_cash, game.cash, maxf(absf(game.cash - _shown_cash) * 3.0, 50.0) * delta)
 	_cash.text = "$%d" % int(_shown_cash)
 	_clock.text = game.atmosphere.clock_text()
+	_race.text = game.races.hud_text() if game.races != null else ""
 	_phone_button.visible = game.missions != null and game.missions.phone_unlocked
 	# The gear takes PHONE's slot until the story unlocks the phone.
 	settings_button.offset_left = -196.0 if _phone_button.visible else -76.0
@@ -245,6 +251,7 @@ func _process(delta: float) -> void:
 		_ride_id = ride_id
 		_ride_name_time = 2.5
 	_ride_name_time -= delta
+	var race_prompt: Array = game.races.prompt() if game.races != null else [] # once a frame
 	if player.passenger:
 		_prompt.text = "" # the taxi's own panel and ride bar
 	elif flying:
@@ -267,6 +274,9 @@ func _process(delta: float) -> void:
 		touch.set_label("brake", "BRAKE")
 		touch.set_label("interact", "EXIT")
 		touch.set_label("sprint", "DRIFT")
+		if not race_prompt.is_empty():
+			_prompt.text = race_prompt[0]
+			touch.set_label("interact", race_prompt[1])
 	elif context_prompt.size() == 2:
 		_prompt.text = context_prompt[0]
 		touch.set_label("interact", context_prompt[1])
@@ -280,6 +290,10 @@ func _process(delta: float) -> void:
 		var hunt_prompt: Array = game.hunting.prompt()
 		_prompt.text = hunt_prompt[0]
 		touch.set_label("interact", hunt_prompt[1])
+		touch.set_label("sprint", "RUN")
+	elif not race_prompt.is_empty():
+		_prompt.text = race_prompt[0]
+		touch.set_label("interact", race_prompt[1])
 		touch.set_label("sprint", "RUN")
 	elif game.interiors != null and not game.interiors.prompt().is_empty():
 		var place_prompt: Array = game.interiors.prompt()

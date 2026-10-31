@@ -312,7 +312,7 @@ func save_game() -> void:
 	if not save_enabled:
 		return
 	var data := {"version": SAVE_VERSION, "done": done, "cash": game.cash, "phone": phone_unlocked,
-		"settings": game.settings, "inventory": game.inventory.to_save(), "hunting": game.hunting.to_save(), "calendar": game.calendar.to_save()}
+		"settings": game.settings, "inventory": game.inventory.to_save(), "hunting": game.hunting.to_save(), "races": game.races.to_save(), "calendar": game.calendar.to_save()}
 	var f := FileAccess.open(save_path, FileAccess.WRITE)
 	if f:
 		f.store_string(JSON.stringify(data))
@@ -334,6 +334,8 @@ func load_game() -> void:
 	game.inventory.load_save(inv if typeof(inv) == TYPE_DICTIONARY else {})
 	var hunt = data.get("hunting")
 	game.hunting.load_save(hunt if typeof(hunt) == TYPE_DICTIONARY else {})
+	var rc = data.get("races")
+	game.races.load_save(rc if typeof(rc) == TYPE_DICTIONARY else {})
 	var cal = data.get("calendar")
 	game.calendar.load_save(cal if typeof(cal) == TYPE_DICTIONARY else {})
 	GameLog.event("load", {"version": int(data.get("version", 1)), "done": done.size(), "cash": game.cash})
@@ -347,6 +349,7 @@ func reset_progress() -> void:
 	game.cash = 0
 	game.inventory.bag.clear()
 	game.hunting.load_save({})
+	game.races.load_save({})
 	game.calendar.load_save({})
 	save_game()
 	changed.emit()
