@@ -56,3 +56,16 @@ at different points in its history, then watches what happens.
    revenue, to decide between using AI and no AI.
 6. [ ] **Next steps**: choose engine/tech stack, MVP scope (human mode, a few
    eras), and art style.
+
+### Godot resources to review (added Nov 3, 2026)
+
+If we build with Godot, check the official **Godot Asset Store** for assets and
+plugins before making our own:
+<https://store.godotengine.org/search/?query=%233d> (that link filters by the
+`#3d` tag; look at the 2D tags as well, since launch scope is 2D).
+
+- [ ] Browse it for art, animation, UI and tool plugins that fit the art style.
+- [ ] Check each asset's license (MIT / CC0 / CC-BY) before using it in a
+  commercial release.
+- [ ] Note: paid assets were reported as "planned", not live. Confirm the
+  current status on the site.
