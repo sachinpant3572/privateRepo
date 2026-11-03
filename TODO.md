@@ -69,3 +69,30 @@ plugins before making our own:
   commercial release.
 - [ ] Note: paid assets were reported as "planned", not live. Confirm the
   current status on the site.
+
+**What the store had on Nov 3, 2026 (in beta):** 378 results for `#3d` and 298
+for `#2d`. Every asset is a free download, and some link to a donation page.
+Filters: license (MIT, CC0, Apache 2.0, GPL v3) and **Uses AI / No AI**.
+Each asset lists the Godot versions it supports. Some assets use custom or
+proprietary licenses, so read each LICENSE.
+
+Shortlist for buildings and environments:
+
+| Asset | Publisher / license | Why it matters |
+| --- | --- | --- |
+| Medieval Village MegaKit | Quaternius / CC0 | 300+ grid-snapping modular walls, floors, roofs and stairs. The free "Standard" build is a subset; the full version is on quaternius.com |
+| Modular Sci-Fi MegaKit | Quaternius / CC0 | The same modular approach for late-game or starfaring eras |
+| Fantasy Props MegaKit, Stylized Nature MegaKit | Quaternius / CC0 | Props, trees, rocks and plants to fill scenes |
+| Free Fantasy Medieval Houses and Props Pack | EmacE Art / custom license | Houses and inns with 3 LODs and colliders. Has no approved version yet |
+| Kominka Modular Home Pack, Lowpoly Street Props | Rice Studio Lab, Polybuild / MIT | Modular Japanese homes and modern street furniture |
+| Egyptian Temple, Chinese pavilion and garden wall | Shimon Ayalon (CC BY 4.0), VVaytoyek (CC0) | Historical-era set pieces |
+| Starter Kit City Builder | Kenney / MIT | City-builder template: placement, GridMap/MeshLibrary, save/load |
+| Modular Builder, CSG Blockout, MeshBuilder | various / CC0, MIT | Snap-together building and graybox tools inside the editor |
+| Terrain3D, Sky3D, ProtonScatter, Road Generator | various / MIT | Terrain, day/night sky, procedural scattering, roads |
+| RTS Camera 3D | Alfred Reinold Baudisch / MIT | Strategy-style camera |
+| Universal Animation Library | Quaternius / CC0 | 120+ retargetable humanoid animations |
+| Global Illumination, Decals, Tonemapping, HLOD demos | Godot Foundation / MIT | Official references for lighting and performance |
+| dddpix PixelArt Renderer | 888wing / MIT | Renders 3D as pixel art, for the "3D rendered as 2D" route |
+
+For the 2D launch, `#2d` has Aseprite importers, Lit (2D lighting),
+SmartShape2D, Breakable 2D Sprites and a few medieval and RPG sprite packs.
