@@ -10,6 +10,7 @@ extends Node3D
 ## then the nearest standing street lamps. Everything further off keeps the
 ## cheap painted pools of light on the ground (ground_glow_material).
 
+const Events = preload("res://scripts/events.gd")
 const QUALITIES := ["low", "medium", "high", "ultra"]
 ## What each preset sets. cars and lamps are how many real lights each
 ## gets; car_shadow gives the player's headlights a shadow; scale is the 3D
@@ -147,7 +148,10 @@ func _light_cars(at: Vector3, night: float) -> void:
 
 func _light_lamps(at: Vector3, night: float) -> void:
 	var want: Array = []
-	if lamps > 0 and night > 0.05:
+	# Lights an event holds (a rave's neons, a cult fire) come out of the
+	# same budget: the lamps get what is left.
+	var budget := maxi(lamps - Events.lights_used, 0)
+	if budget > 0 and night > 0.05:
 		var near: Array = []
 		for shape in get_tree().get_nodes_in_group("lamps"):
 			var info: Dictionary = shape.get_meta("brk")
@@ -157,7 +161,7 @@ func _light_lamps(at: Vector3, night: float) -> void:
 			if d < REACH * REACH:
 				near.append([d, shape])
 		near.sort_custom(func(a, b): return a[0] < b[0])
-		for i in mini(lamps, near.size()):
+		for i in mini(budget, near.size()):
 			want.append(near[i][1])
 	while _lamp_lights.size() < want.size():
 		var light := OmniLight3D.new()

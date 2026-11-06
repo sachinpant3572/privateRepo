@@ -10,8 +10,9 @@ extends Node
 ## the first night a rave; the deer season is open.
 ##
 ## The count is days since the game began (0 on the first day) and is saved
-## (to_save/load_save). The moon uses the sky's own formula (sky.gd) so the
-## night sky and the events agree; see `atmosphere.sky.day` in the patch.
+## (to_save/load_save). It is the game's only day count: sky.gd reads it
+## (atmosphere.calendar) and uses the same moon formula, so the night sky and
+## the events agree.
 ##
 ## Hunting reads is_open_season(); events.gd reads weekday() and the moon.
 
@@ -34,12 +35,13 @@ const PHASE0 := 0.08
 const FULL_MOON_BAND := 0.0625
 
 ## What may be hunted when: kind -> the seasons it is open in. A kind not
-## listed is never open (and a mountain lion is closed all year).
+## listed is never open (and a mountain lion is closed all year). Keys are
+## wildlife.gd's kinds ("lion" is the mountain lion).
 const OPEN_SEASONS := {
 	"deer": ["autumn"],
 	"rabbit": ["spring", "summer", "autumn", "winter"],
 	"coyote": ["spring", "summer", "autumn", "winter"],
-	"mountain_lion": [],
+	"lion": [],
 }
 
 ## The main game (sets atmosphere through it); tests may set `atmosphere`.
@@ -69,6 +71,16 @@ func tick(hour: float) -> void:
 		_day += 1
 		day_changed.emit(_day)
 	_last_hour = hour
+
+
+## `n` whole days pass at once (Atmosphere.advance); `hour` is the clock
+## after them, so the next tick is not taken for another wrap.
+func add_days(n: int, hour: float) -> void:
+	_last_hour = hour
+	if n <= 0:
+		return
+	_day += n
+	day_changed.emit(_day)
 
 
 ## Days since the game began.
@@ -166,7 +178,7 @@ static func season_of(d: int) -> String:
 
 
 static func season_allows(kind: String, season_name: String) -> bool:
-	var key := kind.to_lower().replace(" ", "_")
+	var key := kind.to_lower().replace(" ", "_").trim_prefix("mountain_")
 	return OPEN_SEASONS.has(key) and season_name in OPEN_SEASONS[key]
 
 

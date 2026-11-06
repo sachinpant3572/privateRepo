@@ -597,7 +597,7 @@ func _game_tab() -> void:
 		"Auto changes through the day; or hold it Clear, Rain or Storm.")
 	var tb: Button = phone._button("Skip 3 hours (now %s)" % game.atmosphere.clock_text(), Callable())
 	tb.pressed.connect(func():
-		game.atmosphere.hour = fmod(game.atmosphere.hour + 3.0, 24.0)
+		game.atmosphere.advance(3.0)
 		tb.text = "Skip 3 hours (now %s)" % game.atmosphere.clock_text())
 	_row(tb, "Moves the clock on. The preview shows the new light and headlights.")
 	_row(phone._toggle("Blood", s.get("blood", true), func(on): s["blood"] = on; game.apply_settings()),

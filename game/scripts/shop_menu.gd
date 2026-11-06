@@ -139,8 +139,6 @@ func _hunting_rows() -> void:
 		parts.append("%d %s" % [h.pelts[k], h.PELT_NAMES.get(k, k)])
 	info.add_child(_text("Pelts", 21, Color.WHITE))
 	var note := "none carried" if parts.is_empty() else ", ".join(parts)
-	if h.pelts.has("lion"):
-		note += "   (no mountain lion: never in season)"
 	info.add_child(_text(note, 17, Color(0.7, 0.72, 0.78)))
 	row.add_child(info)
 	row.add_child(_buy_button("SELL $%d" % h.pelt_value(), h.pelt_value() > 0, func(): on_buy.call("pelts", "sell")))

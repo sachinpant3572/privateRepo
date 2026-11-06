@@ -299,9 +299,9 @@ static func _legs(mb: MeshBuilder, s: Dictionary, front: Array, rear: Array, rad
 
 static func _deer(mb: MeshBuilder, buck: bool) -> Dictionary:
 	var s := {"swish": 0.08, "swing": 1.0, "hop": false}
-	var hide := Color(0.62, 0.44, 0.27) if not buck else Color(0.52, 0.36, 0.22)
-	var low := Color(0.56, 0.42, 0.3) if not buck else Color(0.47, 0.34, 0.24)
-	var grey := Color(0.56, 0.45, 0.34) if not buck else Color(0.46, 0.37, 0.28)
+	var hide := Color(0.55, 0.45, 0.35) if not buck else Color(0.47, 0.39, 0.31)
+	var low := Color(0.52, 0.44, 0.36) if not buck else Color(0.44, 0.37, 0.3)
+	var grey := Color(0.53, 0.46, 0.39) if not buck else Color(0.45, 0.39, 0.33)
 	var k := 1.0 if not buck else 1.08
 	mb.set_tag("")
 	mb.smooth_ball(Vector3(0.0, 0.74, 0.0) * k, Vector3(0.16, 0.19, 0.5) * k, hide, 8, 4)
@@ -376,9 +376,9 @@ static func _rabbit(mb: MeshBuilder) -> Dictionary:
 
 static func _coyote(mb: MeshBuilder) -> Dictionary:
 	var s := {"swish": 0.12, "swing": 1.0, "hop": false}
-	var fur := Color(0.66, 0.57, 0.43)
-	var saddle := Color(0.42, 0.37, 0.31)
-	var tan := Color(0.78, 0.68, 0.52)
+	var fur := Color(0.52, 0.47, 0.4)
+	var saddle := Color(0.33, 0.31, 0.28)
+	var tan := Color(0.66, 0.58, 0.47)
 	mb.set_tag("")
 	mb.smooth_ball(Vector3(0.0, 0.5, 0.0), Vector3(0.1, 0.13, 0.33), fur, 8, 4)
 	mb.smooth_ball(Vector3(0.0, 0.52, -0.24), Vector3(0.11, 0.15, 0.2), fur, 8, 4)
@@ -411,8 +411,8 @@ static func _coyote(mb: MeshBuilder) -> Dictionary:
 
 static func _lion(mb: MeshBuilder) -> Dictionary:
 	var s := {"swish": 0.38, "swing": 0.95, "hop": false}
-	var fur := Color(0.74, 0.56, 0.34)
-	var pale := Color(0.86, 0.77, 0.6)
+	var fur := Color(0.62, 0.5, 0.37)
+	var pale := Color(0.78, 0.72, 0.62)
 	var dark := Color(0.3, 0.22, 0.16)
 	mb.set_tag("")
 	mb.smooth_ball(Vector3(0.0, 0.67, 0.0), Vector3(0.15, 0.17, 0.4), fur, 8, 4)

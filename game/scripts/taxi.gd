@@ -617,7 +617,7 @@ func _run_skip(delta: float) -> void:
 				cab.reset_physics_interpolation()
 				# The trip took time.
 				var secs: float = trip.length / CRUISE
-				game.atmosphere.hour = fmod(game.atmosphere.hour + secs * game.atmosphere.minutes_per_second / 60.0, 24.0)
+				game.atmosphere.advance(secs * game.atmosphere.minutes_per_second / 60.0)
 				_skip_frames = 0
 		1:
 			# Let physics see the streamed street before stepping out.

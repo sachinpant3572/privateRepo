@@ -12,6 +12,7 @@ const SKID_COUNT := 700
 const PUFFS := {"low": 90, "medium": 160, "high": 260, "ultra": 260}
 ## Loud bursts (crashes, knocked props, fights) startle nearby birds.
 const Birds = preload("res://scripts/birds.gd")
+const Wildlife = preload("res://scripts/wildlife.gd")
 const GameLog = preload("res://scripts/game_log.gd")
 const Blood = preload("res://scripts/blood.gd")
 const Puffs = preload("res://scripts/puffs.gd")
@@ -75,6 +76,7 @@ func _process(_delta: float) -> void:
 func hit(pos: Vector3, strong: bool, involves_player: bool) -> void:
 	_burst("spark", pos + Vector3(0, 1.2, 0), 1.6 if strong else 1.0)
 	Birds.startle(pos, 14.0 if strong else 9.0)
+	Wildlife.startle(pos, 28.0 if strong else 18.0)
 	if involves_player:
 		hit_stop(0.09 if strong else 0.05)
 		shake(0.35 if strong else 0.15)
@@ -88,6 +90,7 @@ func crash(pos: Vector3, impact: float, involves_player: bool) -> void:
 	preload("res://scripts/senses.gd").emit(get_tree(), "crash", pos, null, {"loud": 0.5 + strength}) # people react
 	_burst("spark", pos + Vector3(0, 0.6, 0), 1.0 + strength)
 	Birds.startle(pos, 20.0 + 30.0 * strength)
+	Wildlife.startle(pos, 20.0 + 30.0 * strength)
 	if impact > 9.0:
 		_burst("debris", pos + Vector3(0, 0.6, 0), 1.0)
 	if involves_player:
@@ -110,6 +113,7 @@ func explosion(pos: Vector3, scale := 1.0, ground := NAN) -> void:
 	# come to look.
 	preload("res://scripts/senses.gd").emit(get_tree(), "explosion", pos, null, {"loud": clampf(scale, 0.4, 1.5)})
 	Birds.startle(pos, 60.0 * scale)
+	Wildlife.startle(pos, 60.0 * scale)
 	boom.blast(pos, scale, ground)
 	var player = get_tree().get_first_node_in_group("player")
 	if player != null:
@@ -125,6 +129,7 @@ func knock(pos: Vector3, kind: String, involves_player: bool) -> void:
 	GameLog.event("prop_down", {"prop": kind, "player": involves_player, "at": pos})
 	_burst("debris", pos, 0.8)
 	Birds.startle(pos, 25.0)
+	Wildlife.startle(pos, 25.0)
 	preload("res://scripts/senses.gd").emit(get_tree(), "crash", pos, null, {"loud": 0.6}) # people react
 	match kind:
 		"street_tree", "crepe_myrtle":
